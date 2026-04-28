@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 /* ─── Design tokens ──────────────────────────────────────────────────────── */
@@ -95,7 +95,7 @@ function OracleMark({size=28}:{size?:number}){
 /* ─── Nav icon ───────────────────────────────────────────────────────────── */
 function NavIcon({id,active}:{id:string,active:boolean}){
   const c = active ? T.gold : T.t2
-  const icons:Record<string,JSX.Element> = {
+  const icons:Record<string,React.ReactElement> = {
     bestsellers: <><path d="M6 20l4-7 4 5 3-4 3 6" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="9" cy="8" r="1.5" fill={c}/></>,
     new:         <><rect x="6" y="6" width="8" height="8" rx="1.5" stroke={c} strokeWidth="1.5"/><path d="M14 12h6M14 16h4M14 20h6" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
     trending:    <><path d="M5 19l5-6 4 3 5-8" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M15 8h4v4" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
