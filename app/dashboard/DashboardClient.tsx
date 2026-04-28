@@ -71,15 +71,16 @@ function fmt(n: number) {
 }
 function fmtInt(n: number) { return Math.round(n).toLocaleString('pt-BR') }
 
-/* ─── Amazon-style sales badge ───────────────────────────────────────────── */
-function SalesBadge({ sales }: { sales: number }) {
-  if (sales <= 0) return null
-  const label = sales >= 1000 ? `${(sales / 1000).toFixed(0)}mil+` : `${sales}+`
+/* ─── Sales estimate badge ───────────────────────────────────────────────── */
+function SalesBadge({ sales, bsr }: { sales: number; bsr: number }) {
+  if (sales <= 0 || bsr <= 0) return null
+  const label  = sales >= 1000 ? `~${(sales / 1000).toFixed(0)}k` : `~${sales}`
+  const color  = sales >= 1000 ? '#10B981' : sales >= 300 ? '#F0B429' : '#94A3B8'
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(240,180,41,0.12)', border: '1px solid rgba(240,180,41,0.3)', borderRadius: 6, padding: '4px 10px' }}>
-      <span style={{ fontSize: 13 }}>🛒</span>
-      <span style={{ fontSize: 12, fontWeight: 800, color: '#F0B429' }}>{label} comprados</span>
-      <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 500 }}>no último mês</span>
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: `${color}12`, border: `1px solid ${color}35`, borderRadius: 6, padding: '4px 10px' }}>
+      <span style={{ fontSize: 11 }}>📦</span>
+      <span style={{ fontSize: 12, fontWeight: 800, color }}>{label} vendas/mês</span>
+      <span style={{ fontSize: 10, color: '#475569', fontWeight: 500 }}>est. BSR #{bsr.toLocaleString('pt-BR')}</span>
     </div>
   )
 }
@@ -127,8 +128,8 @@ function ProductCard({ product, onClick }: { product: any; onClick: () => void }
       </div>
 
       <div style={{ padding: '12px 14px 14px' }}>
-        {/* Amazon-style sales badge */}
-        {sales > 0 && <div style={{ marginBottom: 10 }}><SalesBadge sales={sales} /></div>}
+        {/* Sales estimate badge */}
+        {sales > 0 && bsr > 0 && <div style={{ marginBottom: 10 }}><SalesBadge sales={sales} bsr={bsr} /></div>}
 
         <p style={{ fontSize: 12, color: '#E2E8F0', fontWeight: 600, lineHeight: 1.45, marginBottom: 10, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as any, overflow: 'hidden' }}>
           {product.title}
@@ -246,11 +247,10 @@ function ProductDetailModal({ product, onClose }: { product: any; onClose: () =>
           <button onClick={onClose} style={{ background: 'rgba(100,116,139,0.15)', border: 'none', color: '#94A3B8', fontSize: 18, width: 36, height: 36, borderRadius: 8, cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
 
-        {/* ── Amazon-style sales badge ── */}
-        {sales > 0 && (
-          <div style={{ padding: '12px 28px', borderBottom: '1px solid rgba(30,30,48,0.6)', background: 'rgba(240,180,41,0.04)' }}>
-            <SalesBadge sales={sales} />
-            <span style={{ marginLeft: 12, fontSize: 11, color: '#475569' }}>estimativa baseada no BSR #{bsr > 0 ? fmtInt(bsr) : '—'}</span>
+        {/* ── Sales badge ── */}
+        {sales > 0 && bsr > 0 && (
+          <div style={{ padding: '12px 28px', borderBottom: '1px solid rgba(30,30,48,0.6)', background: 'rgba(30,30,48,0.3)' }}>
+            <SalesBadge sales={sales} bsr={bsr} />
           </div>
         )}
 
