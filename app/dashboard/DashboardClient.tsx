@@ -1,5 +1,5 @@
 'use client'
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 /* ─── Design tokens ──────────────────────────────────────────────────────── */
@@ -432,21 +432,31 @@ export default function DashboardClient({user}:{user:any}){
   const [page,    setPage]     = useState(1)
   const PAGE = 20
 
-  async function load(n=nav, c=cat, query=''){
+  const loadedTabs = useRef<Set<string>>(new Set())
+
+  async function load(n=nav, c=cat, query='', bust=false){
     if(n==='search'&&!query.trim()) return
     setLoading(true); setDone(false); setPage(1)
     try{
-      const r = await fetch(`/api/products?${new URLSearchParams({type:n,category:c,q:query})}`)
+      const params = new URLSearchParams({type:n, category:c, q:query})
+      if(bust) params.set('bust','1')
+      const r = await fetch(`/api/products?${params}`)
       const d = await r.json()
       setProds(d.products||[])
+      loadedTabs.current.add(`${n}__${c}`)
     }catch{ setProds([]) }
     setLoading(false); setDone(true)
   }
 
+  // Auto-load primeira aba ao abrir o dashboard
+  useEffect(() => { load('bestsellers', cat) }, []) // eslint-disable-line
+
   function goNav(id:string){
     setNav(id); setPage(1)
     if(id==='search'){ setProds([]); setDone(false); return }
-    load(id,cat)
+    // Se já carregou essa combinação aba+categoria, não refaz automaticamente
+    // (evita calls desnecessários; usuário pode clicar Atualizar se quiser novos)
+    load(id, cat)
   }
 
   const planColors:Record<string,string> = {lifetime:T.g, annual:T.gold, monthly:T.pur, free:T.t3}
@@ -634,7 +644,7 @@ export default function DashboardClient({user}:{user:any}){
                   {done&&totalP>1&&<> · pág. <span style={{color:T.t4}}>{page}/{totalP}</span></>}
                 </p>
               </div>
-              <button onClick={()=>load()}
+              <button onClick={()=>load(nav,cat,'',true)}
                 style={{display:'flex',alignItems:'center',gap:7,background:'none',border:`1px solid ${T.line}`,color:T.t3,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
                 onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
                 onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
@@ -657,7 +667,7 @@ export default function DashboardClient({user}:{user:any}){
                 ):(
                   <>
                     <p style={{fontSize:13,color:T.t4,textAlign:'center' as const,maxWidth:240,lineHeight:1.6}}>Clique abaixo para carregar os melhores produtos desta aba.</p>
-                    <button onClick={()=>load()}
+                    <button onClick={()=>load(nav,cat,'',true)}
                       style={{background:T.goldG,color:'#02020A',fontWeight:700,fontSize:11,padding:'12px 28px',borderRadius:9,border:'none',cursor:'pointer',letterSpacing:'0.1em',textTransform:'uppercase' as const,boxShadow:'0 4px 20px rgba(240,180,41,0.3)'}}>
                       Iniciar Análise
                     </button>

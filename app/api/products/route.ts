@@ -13,12 +13,15 @@ export async function GET(req: NextRequest) {
   const type     = searchParams.get('type')     || 'bestsellers'
   const category = searchParams.get('category') || 'electronics'
   const q        = searchParams.get('q')        || ''
+  const bust     = searchParams.get('bust')     || ''
 
   try {
     const params = new URLSearchParams({ type, category, q })
+    if (bust === '1') params.set('bust', '1')
+
     const res = await fetch(`${BACKEND}/api/product/search?${params}`, {
       headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' },
-      cache: 'no-store', // sem cache no Next.js — o backend já faz cache de 5 min
+      cache: 'no-store',
     })
 
     if (!res.ok) throw new Error(`Backend ${res.status}`)
