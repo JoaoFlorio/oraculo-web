@@ -24,10 +24,10 @@ const T = {
   a:       '#F59E0B',
   r:       '#EF4444',
   /* text */
-  t1:      '#F2F2FC',
-  t2:      '#6464A0',
-  t3:      '#30304A',
-  t4:      '#9898C8',
+  t1:      '#F2F2FC',   /* primary — bright white */
+  t2:      '#A0A0C8',   /* secondary — clearly readable */
+  t3:      '#686890',   /* muted — still legible */
+  t4:      '#C8C8E8',   /* near-primary secondary */
   /* purple accent */
   pur:     '#8B78FF',
 }
