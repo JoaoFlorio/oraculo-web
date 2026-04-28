@@ -386,9 +386,12 @@ export default function DashboardClient({ user }: { user: any }) {
   const [search,         setSearch]         = useState('')
   const [sidebarOpen,    setSidebarOpen]    = useState(true)
   const [detail,         setDetail]         = useState<any>(null)
+  const [page,           setPage]           = useState(1)
+  const PAGE_SIZE = 20
 
   async function fetchProducts(nav = activeNav, cat = activeCategory, q = '') {
-    setLoading(true); setSearched(false)
+    if (nav === 'search' && !q.trim()) return   // search sem query = não faz nada
+    setLoading(true); setSearched(false); setPage(1)
     try {
       const params = new URLSearchParams({ type: nav, category: cat, q })
       const res  = await fetch(`/api/products?${params}`)
@@ -396,6 +399,17 @@ export default function DashboardClient({ user }: { user: any }) {
       setProducts(data.products || [])
     } catch { setProducts([]) }
     setLoading(false); setSearched(true)
+  }
+
+  function handleNavClick(navId: string) {
+    setActiveNav(navId)
+    setPage(1)
+    if (navId === 'search') {
+      // Só muda a aba, não busca — espera o usuário digitar
+      setProducts([]); setSearched(false)
+      return
+    }
+    fetchProducts(navId, activeCategory)
   }
 
   async function logout() {
@@ -425,7 +439,7 @@ export default function DashboardClient({ user }: { user: any }) {
           <nav style={{ padding: '12px 8px', flex: 1, overflowY: 'auto' }}>
             {NAV.map(n => (
               <button key={n.id}
-                onClick={() => { setActiveNav(n.id); fetchProducts(n.id, activeCategory) }}
+                onClick={() => handleNavClick(n.id)}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 10px', borderRadius: 10, border: 'none', cursor: 'pointer', marginBottom: 4, background: activeNav === n.id ? 'rgba(240,180,41,0.12)' : 'transparent', color: activeNav === n.id ? '#F0B429' : '#64748B', fontSize: 13, fontWeight: activeNav === n.id ? 700 : 500, fontFamily: 'inherit', textAlign: 'left', transition: 'all .15s' }}>
                 <span style={{ fontSize: 16, flexShrink: 0 }}>{n.icon}</span>
                 {sidebarOpen && n.label}
@@ -435,7 +449,7 @@ export default function DashboardClient({ user }: { user: any }) {
             {sidebarOpen && <div style={{ fontSize: 10, color: '#334155', letterSpacing: '0.1em', fontWeight: 700, padding: '16px 10px 8px', textTransform: 'uppercase' }}>Categorias</div>}
             {CATEGORIES.map(c => (
               <button key={c.id}
-                onClick={() => { setActiveCategory(c.id); fetchProducts(activeNav, c.id) }}
+                onClick={() => { setActiveCategory(c.id); setPage(1); if (activeNav !== 'search') fetchProducts(activeNav, c.id) }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, border: 'none', cursor: 'pointer', marginBottom: 2, background: activeCategory === c.id ? 'rgba(240,180,41,0.08)' : 'transparent', color: activeCategory === c.id ? '#F0B429' : '#64748B', fontSize: 12, fontWeight: activeCategory === c.id ? 700 : 400, fontFamily: 'inherit', textAlign: 'left', whiteSpace: 'nowrap', overflow: 'hidden' }}>
                 <span style={{ flexShrink: 0 }}>{c.label.split(' ')[0]}</span>
                 {sidebarOpen && c.label.split(' ').slice(1).join(' ')}
@@ -485,8 +499,10 @@ export default function DashboardClient({ user }: { user: any }) {
                   {NAV.find(n => n.id === activeNav)?.icon} {NAV.find(n => n.id === activeNav)?.label}
                 </h1>
                 <p style={{ fontSize: 13, color: '#64748B' }}>
-                  {CATEGORIES.find(c => c.id === activeCategory)?.label}
-                  {searched ? ` · ${products.length} produtos encontrados` : ' · Clique em Atualizar para carregar'}
+                  {(activeNav === 'bestsellers' || activeNav === 'trending')
+                    ? 'Todas as categorias'
+                    : CATEGORIES.find(c => c.id === activeCategory)?.label}
+                  {searched ? ` · ${products.length} produtos · pág. ${page}/${Math.max(1,Math.ceil(products.length/PAGE_SIZE))}` : ''}
                 </p>
               </div>
               <button onClick={() => fetchProducts()}
@@ -495,16 +511,26 @@ export default function DashboardClient({ user }: { user: any }) {
               </button>
             </div>
 
-            {/* Empty */}
+            {/* Empty / search prompt */}
             {!searched && !loading && (
               <div style={{ textAlign: 'center', padding: '80px 24px' }}>
-                <div style={{ fontSize: 56, marginBottom: 16 }}>🔮</div>
-                <h2 style={{ fontSize: 20, fontWeight: 700, color: '#E2E8F0', marginBottom: 8 }}>Pronto para minerar produtos?</h2>
-                <p style={{ fontSize: 14, color: '#64748B', maxWidth: 400, margin: '0 auto 28px' }}>Selecione uma categoria e clique em Atualizar para ver os produtos.</p>
-                <button onClick={() => fetchProducts()}
-                  style={{ background: 'linear-gradient(135deg,#F0B429,#C8960C)', color: '#0A0A0F', fontWeight: 800, fontSize: 13, padding: '14px 32px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 0 30px rgba(240,180,41,0.3)' }}>
-                  COMEÇAR ANÁLISE →
-                </button>
+                {activeNav === 'search' ? (
+                  <>
+                    <div style={{ fontSize: 56, marginBottom: 16 }}>🔍</div>
+                    <h2 style={{ fontSize: 20, fontWeight: 700, color: '#E2E8F0', marginBottom: 8 }}>Buscar produto na Amazon</h2>
+                    <p style={{ fontSize: 14, color: '#64748B', maxWidth: 400, margin: '0 auto 0' }}>Digite o nome do produto ou ASIN na barra de busca acima e pressione Enter.</p>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 56, marginBottom: 16 }}>🔮</div>
+                    <h2 style={{ fontSize: 20, fontWeight: 700, color: '#E2E8F0', marginBottom: 8 }}>Pronto para minerar produtos?</h2>
+                    <p style={{ fontSize: 14, color: '#64748B', maxWidth: 400, margin: '0 auto 28px' }}>Selecione uma aba no menu lateral e clique em Atualizar.</p>
+                    <button onClick={() => fetchProducts()}
+                      style={{ background: 'linear-gradient(135deg,#F0B429,#C8960C)', color: '#0A0A0F', fontWeight: 800, fontSize: 13, padding: '14px 32px', borderRadius: 12, border: 'none', cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 0 30px rgba(240,180,41,0.3)' }}>
+                      COMEÇAR ANÁLISE →
+                    </button>
+                  </>
+                )}
               </div>
             )}
 
@@ -517,12 +543,42 @@ export default function DashboardClient({ user }: { user: any }) {
               </div>
             )}
 
-            {/* Grid */}
-            {!loading && searched && products.length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
-                {products.map(p => <ProductCard key={p.asin} product={p} onClick={() => setDetail(p)} />)}
-              </div>
-            )}
+            {/* Grid paginado */}
+            {!loading && searched && products.length > 0 && (() => {
+              const totalPages = Math.ceil(products.length / PAGE_SIZE)
+              const paged = products.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+              return (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+                    {paged.map(p => <ProductCard key={p.asin} product={p} onClick={() => setDetail(p)} />)}
+                  </div>
+
+                  {/* Paginação */}
+                  {totalPages > 1 && (
+                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 32, paddingBottom: 8 }}>
+                      <button onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo(0, 0) }}
+                        disabled={page === 1}
+                        style={{ background: page === 1 ? 'rgba(30,30,48,0.4)' : 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.2)', color: page === 1 ? '#334155' : '#F0B429', fontWeight: 700, fontSize: 13, padding: '8px 16px', borderRadius: 8, cursor: page === 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                        ← Anterior
+                      </button>
+
+                      {Array.from({ length: totalPages }).map((_, i) => (
+                        <button key={i} onClick={() => { setPage(i + 1); window.scrollTo(0, 0) }}
+                          style={{ background: page === i + 1 ? 'rgba(240,180,41,0.2)' : 'rgba(30,30,48,0.6)', border: `1px solid ${page === i + 1 ? 'rgba(240,180,41,0.5)' : 'rgba(30,30,48,0.9)'}`, color: page === i + 1 ? '#F0B429' : '#64748B', fontWeight: page === i + 1 ? 800 : 500, fontSize: 13, width: 38, height: 38, borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {i + 1}
+                        </button>
+                      ))}
+
+                      <button onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo(0, 0) }}
+                        disabled={page === totalPages}
+                        style={{ background: page === totalPages ? 'rgba(30,30,48,0.4)' : 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.2)', color: page === totalPages ? '#334155' : '#F0B429', fontWeight: 700, fontSize: 13, padding: '8px 16px', borderRadius: 8, cursor: page === totalPages ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}>
+                        Próxima →
+                      </button>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
 
             {/* No results */}
             {!loading && searched && products.length === 0 && (
