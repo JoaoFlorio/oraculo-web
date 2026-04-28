@@ -624,7 +624,7 @@ export default function DashboardClient({user}:{user:any}){
               <div>
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
                   <span style={{fontSize:10,color:T.t3,letterSpacing:'0.04em'}}>Mineração</span>
-                  <span style={{color:T.t3,fontSize:10}}/>/</span>
+                  <span style={{color:T.t3,fontSize:10}}>/</span>
                   <span style={{fontSize:10,color:T.t4}}>{curNav?.label}</span>
                 </div>
                 <h1 style={{fontSize:18,fontWeight:700,color:T.t1,letterSpacing:'-0.03em',marginBottom:4,lineHeight:1}}>{curNav?.label}</h1>
