@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     res.cookies.set(COOKIE, token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 60 * 60 * 24 * 30, path: '/' })
     return res
   } catch (e: any) {
-    console.error('[register]', e)
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
+    console.error('[register]', e.message, e.stack)
+    return NextResponse.json({ error: e.message || 'Erro interno' }, { status: 500 })
   }
 }
