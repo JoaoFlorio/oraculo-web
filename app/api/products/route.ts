@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     const params = new URLSearchParams({ type, category, q })
     const res = await fetch(`${BACKEND}/api/product/search?${params}`, {
       headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' },
-      next: { revalidate: 300 }, // cache 5 min
+      cache: 'no-store', // sem cache no Next.js — o backend já faz cache de 5 min
     })
 
     if (!res.ok) throw new Error(`Backend ${res.status}`)
