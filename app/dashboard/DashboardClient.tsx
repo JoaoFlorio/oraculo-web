@@ -555,7 +555,12 @@ export default function DashboardClient({user}:{user:any}){
                   {CATS.map(c=>{
                     const active=cat===c.id
                     return(
-                      <button key={c.id} onClick={()=>{setCat(c.id);setPage(1);if(nav!=='search')load(nav,c.id)}}
+                      <button key={c.id} onClick={()=>{
+                        setCat(c.id); setPage(1)
+                        const target = nav === 'search' ? 'bestsellers' : nav
+                        if (nav === 'search') setNav('bestsellers')
+                        load(target, c.id)
+                      }}
                         style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 20px',borderRadius:7,border:'none',cursor:'pointer',marginBottom:1,
                           background:active?`${T.gold}08`:'none',fontFamily:'inherit',textAlign:'left' as const}}>
                         <div style={{width:4,height:4,borderRadius:'50%',background:active?T.gold:T.t3,flexShrink:0}}/>
