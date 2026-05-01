@@ -5,6 +5,14 @@ export const dynamic = 'force-dynamic'
 
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
 
+// Limite de produtos por plano (server-side — não depende do cliente)
+const PLAN_LIMIT: Record<string, number> = {
+  free:     6,
+  monthly:  20,
+  annual:   60,
+  lifetime: 60,
+}
+
 export async function GET(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
@@ -14,6 +22,11 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get('category') || 'electronics'
   const q        = searchParams.get('q')        || ''
   const bust     = searchParams.get('bust')     || ''
+
+  // Plano gratuito só pode acessar Mais Vendidos
+  if (user.plan === 'free' && type !== 'bestsellers' && type !== 'search') {
+    return NextResponse.json({ products: [], locked: true })
+  }
 
   try {
     const params = new URLSearchParams({ type, category, q })
@@ -26,7 +39,16 @@ export async function GET(req: NextRequest) {
 
     if (!res.ok) throw new Error(`Backend ${res.status}`)
     const data = await res.json()
-    return NextResponse.json(data)
+
+    // Aplica limite de produtos por plano
+    const limit    = PLAN_LIMIT[user.plan] ?? 6
+    const products = (data.products || []).slice(0, limit)
+
+    return NextResponse.json({
+      products,
+      plan:  user.plan,
+      total: data.products?.length ?? 0,
+    })
   } catch (e: any) {
     console.error('[products]', e.message)
     return NextResponse.json({ products: [] })
