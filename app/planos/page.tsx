@@ -7,9 +7,9 @@ export const metadata: Metadata = {
 
 // ── Links do Hotmart — atualize com seus links reais ──────────────────────────
 const LINKS = {
-  monthly:  'https://pay.hotmart.com/SEU-LINK-MENSAL',
-  annual:   'https://pay.hotmart.com/SEU-LINK-ANUAL',
-  lifetime: 'https://pay.hotmart.com/SEU-LINK-VITALICIO',
+  monthly:  'https://pay.hotmart.com/T105514334O?off=cffcrkey',
+  annual:   'https://pay.hotmart.com/T105514334O?off=b92zaedd',
+  lifetime: 'https://pay.hotmart.com/T105514334O?off=2yii0s4k',
 }
 
 const gold   = '#F0B429'

@@ -33,9 +33,9 @@ const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:numbe
 }
 // Hotmart checkout links por plano (atualize com seus links reais)
 const HOTMART: Record<string,string> = {
-  monthly:  'https://pay.hotmart.com/SEU-LINK-MENSAL',
-  annual:   'https://pay.hotmart.com/SEU-LINK-ANUAL',
-  lifetime: 'https://pay.hotmart.com/SEU-LINK-VITALICIO',
+  monthly:  'https://pay.hotmart.com/T105514334O?off=cffcrkey',
+  annual:   'https://pay.hotmart.com/T105514334O?off=b92zaedd',
+  lifetime: 'https://pay.hotmart.com/T105514334O?off=2yii0s4k',
 }
 
 /* ─── Data ───────────────────────────────────────────────────────────────── */
