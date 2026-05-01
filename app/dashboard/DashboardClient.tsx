@@ -27,9 +27,9 @@ const T = {
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean;search:boolean}> = {
   free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,  tabs:['bestsellers'],                                     modal:false, export:false, search:false },
-  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:20, tabs:['bestsellers','new','trending','generics','search'],   modal:true,  export:false, search:true  },
-  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:60, tabs:['bestsellers','new','trending','generics','search'],   modal:true,  export:true,  search:true  },
-  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:60, tabs:['bestsellers','new','trending','generics','search'],   modal:true,  export:true,  search:true  },
+  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','search'],   modal:true,  export:false, search:true  },
+  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','search'],   modal:true,  export:true,  search:true  },
+  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','search'],   modal:true,  export:true,  search:true  },
 }
 // Hotmart checkout links por plano (atualize com seus links reais)
 const HOTMART: Record<string,string> = {

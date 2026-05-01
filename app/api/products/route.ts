@@ -8,9 +8,9 @@ const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.u
 // Limite de produtos por plano (server-side — não depende do cliente)
 const PLAN_LIMIT: Record<string, number> = {
   free:     6,
-  monthly:  20,
-  annual:   60,
-  lifetime: 60,
+  monthly:  9999,
+  annual:   9999,
+  lifetime: 9999,
 }
 
 export async function GET(req: NextRequest) {
