@@ -4,10 +4,9 @@ import { prisma } from '@/lib/db'
 import { Resend } from 'resend'
 import crypto from 'crypto'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://oraculo-web-production.up.railway.app'
-
 export async function POST(req: NextRequest) {
+  const resend   = new Resend(process.env.RESEND_API_KEY)
+  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://oraculo-web-production.up.railway.app'
   try {
     const { email } = await req.json()
     if (!email) return NextResponse.json({ error: 'E-mail obrigatório' }, { status: 400 })
