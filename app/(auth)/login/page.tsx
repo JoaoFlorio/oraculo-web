@@ -101,9 +101,14 @@ export default function LoginPage(){
               </button>
             </form>
 
-            <div style={{borderTop:`1px solid ${line}`,marginTop:24,paddingTop:20,textAlign:'center' as const,fontSize:12,color:t4}}>
-              Não tem conta?{' '}
-              <Link href="/register" style={{color:gold,fontWeight:600,textDecoration:'none'}}>Criar conta</Link>
+            <div style={{borderTop:`1px solid ${line}`,marginTop:24,paddingTop:20,textAlign:'center' as const,fontSize:12,color:t4,display:'flex',flexDirection:'column' as const,gap:10}}>
+              <Link href="/forgot-password" style={{color:t4,textDecoration:'none',fontSize:12}}>
+                Esqueceu sua senha?
+              </Link>
+              <span>
+                Não tem conta?{' '}
+                <Link href="/register" style={{color:gold,fontWeight:600,textDecoration:'none'}}>Criar conta</Link>
+              </span>
             </div>
           </div>
         </div>
