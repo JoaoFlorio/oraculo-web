@@ -74,6 +74,14 @@ const fmtN =(n:number)=>Math.round(n).toLocaleString('pt-BR')
 const fmtR =(n:number)=>n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 const sColor=(s:number)=>s>=70?T.g:s>=50?T.a:T.r
 const dInfo =(s:number)=>s>=2000?{l:'Muito Alta',c:T.g}:s>=800?{l:'Alta',c:T.g}:s>=300?{l:'Média',c:T.a}:s>=100?{l:'Baixa',c:T.a}:{l:'Muito Baixa',c:T.r}
+// Score para cards: usa BSR + vendas estimadas + genérico (sem margem — não disponível no card)
+function cardScore(bsr:number,salesEst:number,isGeneric:boolean):number{
+  const b=bsr<=50?40:bsr<=200?35:bsr<=500?28:bsr<=1000?22:bsr<=3000?16:bsr<=10000?10:bsr<=30000?6:2
+  const s=salesEst>=600?35:salesEst>=280?28:salesEst>=200?22:salesEst>=140?16:salesEst>=100?12:salesEst>=65?8:salesEst>=35?5:2
+  const g=isGeneric?14:0
+  return Math.min(100,Math.max(5,b+s+g+11))
+}
+// Score para modal de análise: usa BSR + margem calculada pelo usuário
 function oScore(bsr:number,m:number){const b=bsr<500?40:bsr<2000?30:bsr<10000?20:bsr<50000?10:5;const mg=m>=35?40:m>=25?32:m>=15?22:m>=5?12:4;return Math.min(100,b+mg+20)}
 
 /* ─── CSV export ─────────────────────────────────────────────────────────── */
@@ -82,7 +90,7 @@ function exportCSV(products: any[], category: string) {
     ['ASIN','Título','Marca','Categoria','BSR','Vendas/mês Estimadas','Score'],
     ...products.map(p => [
       p.asin, `"${(p.title||'').replace(/"/g,'""')}"`, p.brand||'', p.category||'',
-      p.bsr||0, p.salesEst||bsrSales(p.bsr||0), oScore(p.bsr||0, 25),
+      p.bsr||0, p.salesEst||bsrSales(p.bsr||0), cardScore(p.bsr||0,p.salesEst||0,!p.brand),
     ])
   ]
   const csv  = rows.map(r=>r.join(',')).join('\n')
@@ -374,10 +382,10 @@ function Card({product,onClick,locked}:{product:any;onClick:()=>void;locked?:boo
   const [hov,setHov]=useState(false)
   const bsr=product.bsr||0
   const sales=product.salesEst||bsrSales(bsr)
-  const score=oScore(bsr,25)
+  const isGeneric=!product.brand||product.brand.trim()===''||product.brand.toLowerCase()==='genérico'
+  const score=cardScore(bsr,sales,isGeneric)
   const sc=sColor(score)
   const salesColor=sales>=1000?T.g:sales>=300?T.a:T.t4
-  const isGeneric=!product.brand||product.brand.toLowerCase()==='genérico'
 
   return(
     <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
