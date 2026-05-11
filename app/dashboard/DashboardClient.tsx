@@ -398,7 +398,7 @@ function Card({product,onClick,locked}:{product:any;onClick:()=>void;locked?:boo
         {product.images?.[0]?<img src={product.images[0]} alt="" style={{maxHeight:138,maxWidth:'88%',objectFit:'contain',transition:'transform .3s cubic-bezier(.34,1.56,.64,1)',transform:hov?'scale(1.08)':'scale(1)'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>:<div style={{width:44,height:44,background:'#e8e8f0',borderRadius:8}}/>}
       </div>
       <div style={{padding:'14px 14px 16px',flex:1,display:'flex',flexDirection:'column',gap:0}}>
-        {sales>0&&bsr>0&&<div style={{display:'flex',alignItems:'baseline',gap:5,marginBottom:8}}><span style={{fontSize:22,fontWeight:700,color:salesColor,letterSpacing:'-0.03em',lineHeight:1}}>~{fmtK(sales)}</span><span style={{fontSize:10,color:T.t3,fontWeight:500}}>vendas/mês</span></div>}
+        {sales>0&&bsr>0&&<div style={{display:'flex',alignItems:'baseline',gap:5,marginBottom:8}}><span style={{fontSize:22,fontWeight:700,color:salesColor,letterSpacing:'-0.03em',lineHeight:1}}>~{fmtK(sales)}</span><span style={{fontSize:10,color:T.t3,fontWeight:500}}>est./mês</span></div>}
         <p style={{fontSize:12,fontWeight:500,color:T.t1,lineHeight:1.58,flex:1,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any,overflow:'hidden',marginBottom:10}}>{product.title}</p>
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
           {bsr>0&&<span style={{fontSize:10,color:T.t3}}>BSR <strong style={{color:T.t2,fontWeight:600}}>#{fmtN(bsr)}</strong></span>}
@@ -537,7 +537,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
 
         const bsrColor=p.bsr>0&&p.bsr<5000?T.g:p.bsr<30000?T.a:T.r
         const salesColor=p.salesEst>=500?T.g:p.salesEst>=100?T.a:T.r
-        const salesLabel=p.fromTag?`+${fmtN(p.salesEst)}/mês ✓`:`~${fmtK(p.salesEst)}/mês`
+        const salesLabel=`~${fmtK(p.salesEst)}/mês est.`
 
         const compList: any[] = data.competitors || []
         const salesChart = compList.slice(0,8).map((c:any,i:number)=>({
@@ -560,7 +560,6 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
                 <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
                   <span style={{background:`${T.t3}18`,color:T.t3,border:`1px solid ${T.t3}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>ASIN {data.asin}</span>
                   {p.brand&&<span style={{background:`${T.pur}18`,color:T.pur,border:`1px solid ${T.pur}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>{p.brand}</span>}
-                  {p.fromTag&&<span style={{background:`${T.g}15`,color:T.g,border:`1px solid ${T.g}30`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>✓ Dado real Amazon</span>}
                 </div>
               </div>
             </div>
@@ -569,7 +568,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
               {[
                 {v:p.bsr>0?`#${fmtN(p.bsr)}`:'—',              l:'BSR Amazon',            c:bsrColor},
-                {v:salesLabel,                                    l:p.fromTag?'Compras/mês ✓ Real':'Vendas Estimadas', c:salesColor},
+                {v:salesLabel,                                    l:'Vendas Estimadas (BSR)', c:salesColor},
                 {v:`${mkt.competitorCount||0} rivais`,            l:'Anúncios Concorrentes', c:(mkt.competitorCount||0)<=5?T.g:(mkt.competitorCount||0)<=12?T.a:T.r},
                 {v:p.listingAge||'—',                             l:'Período do Anúncio',   c:T.pur},
               ].map((k,i)=>(
