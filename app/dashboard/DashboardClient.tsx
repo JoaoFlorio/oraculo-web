@@ -25,11 +25,11 @@ const T = {
 }
 
 /* ─── Plan config ────────────────────────────────────────────────────────── */
-const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean;search:boolean}> = {
-  free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,  tabs:['bestsellers'],                                     modal:false, export:false, search:false },
-  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','search','competitor'],   modal:true,  export:false, search:true  },
-  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','search','competitor'],   modal:true,  export:true,  search:true  },
-  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','search','competitor'],   modal:true,  export:true,  search:true  },
+const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
+  free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers'],                                             modal:false, export:false },
+  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor'],     modal:true,  export:false },
+  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor'],     modal:true,  export:true  },
+  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor'],     modal:true,  export:true  },
 }
 // Hotmart checkout links por plano (atualize com seus links reais)
 const HOTMART: Record<string,string> = {
@@ -56,7 +56,6 @@ const NAV = [
   { id:'new',         label:'Recém Adicionados' },
   { id:'trending',    label:'Em Alta'           },
   { id:'generics',    label:'Genéricos'         },
-  { id:'search',      label:'Buscar Produto'    },
   { id:'competitor',  label:'Análise Rival'     },
 ]
 const REF: Record<string,number> = {
@@ -736,7 +735,6 @@ export default function DashboardClient({user}:{user:any}){
   const [prods,    setProds]    = useState<any[]>([])
   const [loading,  setLoading]  = useState(false)
   const [done,     setDone]     = useState(false)
-  const [q,        setQ]        = useState('')
   const [sideOpen, setSideOpen] = useState(true)
   const [catOpen,  setCatOpen]  = useState(false)
   const [detail,   setDetail]   = useState<any>(null)
@@ -753,7 +751,6 @@ export default function DashboardClient({user}:{user:any}){
   const expiringSoon = daysLeft !== null && daysLeft <= 7 && user.plan !== 'lifetime'
 
   async function load(n=nav, c=cat, query='', bust=false){
-    if(n==='search'&&!query.trim()) return
     setLoading(true); setDone(false); setPage(1)
     try{
       const params = new URLSearchParams({type:n,category:c,q:query})
@@ -770,7 +767,7 @@ export default function DashboardClient({user}:{user:any}){
   function goNav(id:string){
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}
     setNav(id); setPage(1)
-    if(id==='search'||id==='competitor'){setProds([]);setDone(false);return}
+    if(id==='competitor'){setProds([]);setDone(false);return}
     load(id,cat)
   }
 
@@ -916,30 +913,6 @@ export default function DashboardClient({user}:{user:any}){
 
           {/* Topbar */}
           <header style={{height:60,background:T.sidebar,borderBottom:`1px solid ${T.line}`,display:'flex',alignItems:'center',gap:12,padding:'0 24px',flexShrink:0}}>
-            <div style={{flex:1,position:'relative',maxWidth:480}}>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{position:'absolute',left:12,top:'50%',transform:'translateY(-50%)',color:T.t3,pointerEvents:'none'}}>
-                <circle cx="6" cy="6" r="4.5" stroke="currentColor" strokeWidth="1.4"/>
-                <path d="M9.5 9.5L13 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-              </svg>
-              <input value={q} onChange={e=>setQ(e.target.value)}
-                onKeyDown={e=>{if(e.key==='Enter'&&q.trim()){
-                  if(!cfg.search){setUpgrade(true);return}
-                  setNav('search');load('search',cat,q)
-                }}}
-                placeholder={cfg.search?'Buscar produto ou ASIN na Amazon…':'Busca disponível a partir do plano Mensal'}
-                disabled={!cfg.search}
-                style={{width:'100%',background:T.bg,border:`1px solid ${T.line}`,borderRadius:9,padding:'9px 14px 9px 36px',color:T.t1,fontSize:12,outline:'none',transition:'border-color .15s',opacity:cfg.search?1:.5,cursor:cfg.search?'text':'not-allowed'}}
-                onFocus={e=>cfg.search&&((e.target as HTMLElement).style.borderColor=T.lineG)}
-                onBlur={e=>(e.target as HTMLElement).style.borderColor=T.line}
-              />
-            </div>
-            <button onClick={()=>{
-              if(!cfg.search){setUpgrade(true);return}
-              if(q.trim()){setNav('search');load('search',cat,q)}
-            }}
-              style={{background:cfg.search?T.goldG:`${T.t3}40`,color:cfg.search?'#02020A':T.t3,fontWeight:700,fontSize:10,padding:'9px 18px',borderRadius:8,border:'none',cursor:cfg.search?'pointer':'not-allowed',letterSpacing:'0.1em',textTransform:'uppercase' as const,flexShrink:0,boxShadow:cfg.search?'0 2px 12px rgba(240,180,41,0.3)':undefined}}>
-              Buscar
-            </button>
             {/* Export CSV — only annual/lifetime */}
             {cfg.export&&done&&prods.length>0&&(
               <button onClick={()=>exportCSV(prods,cat)}
