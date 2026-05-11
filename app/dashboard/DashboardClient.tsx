@@ -566,20 +566,35 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
               </div>
             </div>
 
-            {/* KPIs */}
+            {/* KPIs — linha 1 */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
               {[
-                {v:p.bsr>0?`#${fmtN(p.bsr)}`:'—',     l:'BSR Amazon',           c:bsrColor},
-                {v:salesLabel,                           l:p.fromTag?'Compras/mês (real)':'Vendas Estimadas', c:salesColor},
-                {v:`${mkt.competitorCount||0}`,          l:'Anúncios Rivais',      c:(mkt.competitorCount||0)<=5?T.g:(mkt.competitorCount||0)<=12?T.a:T.r},
-                {v:mkt.avgSales>0?`~${fmtK(mkt.avgSales)}`:'—', l:'Média Rivais/mês', c:T.t2},
+                {v:p.bsr>0?`#${fmtN(p.bsr)}`:'—',              l:'BSR Amazon',            c:bsrColor},
+                {v:salesLabel,                                    l:p.fromTag?'Compras/mês ✓ Real':'Vendas Estimadas', c:salesColor},
+                {v:`${mkt.competitorCount||0} rivais`,            l:'Anúncios Concorrentes', c:(mkt.competitorCount||0)<=5?T.g:(mkt.competitorCount||0)<=12?T.a:T.r},
+                {v:p.listingAge||'—',                             l:'Período do Anúncio',   c:T.pur},
               ].map((k,i)=>(
                 <div key={i} style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:12,padding:'16px',textAlign:'center' as const}}>
-                  <div style={{fontSize:i===1?14:22,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1.2}}>{k.v}</div>
+                  <div style={{fontSize:i===3?11:i===1?14:20,fontWeight:700,color:k.c,letterSpacing:'-0.01em',marginBottom:4,lineHeight:1.3}}>{k.v}</div>
                   <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const}}>{k.l}</div>
                 </div>
               ))}
             </div>
+            {/* KPIs — linha 2: faturamento */}
+            {(p.monthlyRevenue>0||p.annualRevenue>0)&&(
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+                {[
+                  {v:`R$ ${fmtN(p.monthlyRevenue)}`,  l:'Faturamento Estimado/mês',  c:T.gold},
+                  {v:`R$ ${fmtN(p.annualRevenue)}`,   l:'Faturamento Estimado/ano',  c:T.g},
+                  {v:p.price>0?`R$ ${p.price.toFixed(2)}`:'—', l:'Preço de Venda (Buy Box)', c:T.t1},
+                ].map((k,i)=>(
+                  <div key={i} style={{background:`${T.gold}06`,border:`1px solid ${T.lineG}`,borderRadius:12,padding:'16px',textAlign:'center' as const}}>
+                    <div style={{fontSize:18,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1}}>{k.v}</div>
+                    <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const}}>{k.l}</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {/* Scores + Sales comparison */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1.4fr',gap:12}}>
@@ -650,16 +665,38 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
               </div>
             </div>
 
-            {/* Recommendations */}
+            {/* Recommendations — educacionais e personalizadas */}
             <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
-              <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:16}}>Plano de Ação para Superar os Concorrentes</div>
-              <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                {(data.recommendations||[]).map((rec:string,i:number)=>(
-                  <div key={i} style={{display:'flex',gap:12,alignItems:'flex-start',background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px 16px'}}>
-                    <div style={{width:22,height:22,borderRadius:'50%',background:`${T.gold}15`,border:`1px solid ${T.gold}30`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:10,fontWeight:700,color:T.gold}}>{i+1}</div>
-                    <span style={{fontSize:12,color:T.t4,lineHeight:1.65,flex:1}}>{rec}</span>
-                  </div>
-                ))}
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:4}}>Plano de Ação Personalizado — {p.title?.split(' ').slice(0,4).join(' ')}</div>
+                <div style={{fontSize:11,color:T.t3}}>O Oráculo analisou o anúncio e criou um guia específico para você superar estes concorrentes 👇</div>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                {(data.recommendations||[]).map((rec:any,i:number)=>{
+                  const priorityColor = rec.priority==='alta'?T.r:rec.priority==='média'?T.a:T.g
+                  return(
+                    <div key={i} style={{background:T.bg,border:`1px solid ${T.line}`,borderRadius:12,overflow:'hidden'}}>
+                      {/* Header */}
+                      <div style={{display:'flex',gap:12,alignItems:'center',padding:'14px 16px',borderBottom:`1px solid ${T.line}`}}>
+                        <div style={{fontSize:20,flexShrink:0}}>{rec.icon||'•'}</div>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:13,fontWeight:600,color:T.t1,lineHeight:1.4}}>{rec.title}</div>
+                        </div>
+                        <div style={{background:`${priorityColor}15`,border:`1px solid ${priorityColor}30`,borderRadius:99,padding:'2px 10px',fontSize:8,fontWeight:700,color:priorityColor,letterSpacing:'0.1em',textTransform:'uppercase' as const,flexShrink:0}}>
+                          {rec.priority}
+                        </div>
+                      </div>
+                      {/* Detail */}
+                      <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:8}}>
+                        <p style={{fontSize:12,color:T.t4,lineHeight:1.7,margin:0}}>{rec.detail}</p>
+                        <div style={{display:'flex',gap:8,alignItems:'flex-start',background:`${T.gold}06`,border:`1px solid ${T.lineG}`,borderRadius:8,padding:'8px 12px'}}>
+                          <span style={{fontSize:11,flexShrink:0}}>💡</span>
+                          <p style={{fontSize:11,color:T.gold,lineHeight:1.6,margin:0,fontStyle:'italic' as const}}><strong>Por que isso importa:</strong> {rec.why}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
 
