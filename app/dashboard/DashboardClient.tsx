@@ -26,10 +26,10 @@ const T = {
 
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
-  free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers'],                                             modal:false, export:false },
-  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor'],     modal:true,  export:false },
-  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor'],     modal:true,  export:true  },
-  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor'],     modal:true,  export:true  },
+  free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers','extension'],                                                      modal:false, export:false },
+  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension'],     modal:true,  export:false },
+  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension'],     modal:true,  export:true  },
+  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension'],     modal:true,  export:true  },
 }
 // Hotmart checkout links por plano (atualize com seus links reais)
 const HOTMART: Record<string,string> = {
@@ -57,6 +57,7 @@ const NAV = [
   { id:'trending',    label:'Em Alta'           },
   { id:'generics',    label:'Genéricos'         },
   { id:'competitor',  label:'Análise Rival'     },
+  { id:'extension',   label:'Extensão'          },
 ]
 const REF: Record<string,number> = {
   electronics:.08, computers:.08, health:.08, tools:.12, toys:.16,
@@ -157,6 +158,7 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     generics:    <><circle cx="16" cy="16" r="10" stroke={c} strokeWidth="1.5"/><path d="M13 13h6M13 16h6M13 19h4" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
     search:      <><circle cx="14" cy="14" r="7" stroke={c} strokeWidth="1.5"/><path d="M19.5 19.5L26 26" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
     competitor: <><circle cx="16" cy="10" r="4" stroke={c} strokeWidth="1.5"/><circle cx="10" cy="20" r="3" stroke={c} strokeWidth="1.5"/><circle cx="22" cy="20" r="3" stroke={c} strokeWidth="1.5"/><path d="M13 13l-1.5 4M19 13l1.5 4" stroke={c} strokeWidth="1.3" strokeLinecap="round"/></>,
+    extension:  <><rect x="5" y="5" width="18" height="18" rx="3" stroke={c} strokeWidth="1.5"/><path d="M11 5v4a2 2 0 01-2 2H5M19 14h-2a2 2 0 00-2 2v2" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
   }
   return(
     <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0}}>
@@ -864,9 +866,13 @@ export default function DashboardClient({user}:{user:any}){
   const [done,     setDone]     = useState(false)
   const [sideOpen, setSideOpen] = useState(true)
   const [catOpen,  setCatOpen]  = useState(false)
-  const [detail,   setDetail]   = useState<any>(null)
-  const [upgrade,  setUpgrade]  = useState(false)
-  const [page,     setPage]     = useState(1)
+  const [detail,     setDetail]     = useState<any>(null)
+  const [upgrade,    setUpgrade]    = useState(false)
+  const [page,       setPage]       = useState(1)
+  const [licKey,     setLicKey]     = useState<string|null>(null)
+  const [licPlan,    setLicPlan]    = useState<string|null>(null)
+  const [licLoading, setLicLoading] = useState(false)
+  const [keyCopied,  setKeyCopied]  = useState(false)
   const PAGE = 30
 
   const cfg = PLAN_CFG[user.plan] ?? PLAN_CFG.free
@@ -895,6 +901,16 @@ export default function DashboardClient({user}:{user:any}){
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}
     setNav(id); setPage(1)
     if(id==='competitor'){setProds([]);setDone(false);return}
+    if(id==='extension'){
+      setProds([]);setDone(false)
+      if(!licKey){
+        setLicLoading(true)
+        fetch('/api/my-license').then(r=>r.json()).then(d=>{
+          if(d.key){setLicKey(d.key);setLicPlan(d.plan)}
+        }).finally(()=>setLicLoading(false))
+      }
+      return
+    }
     load(id,cat)
   }
 
@@ -1064,8 +1080,70 @@ export default function DashboardClient({user}:{user:any}){
               <CompetitorPanel user={user} isFree={isFree} onUpgrade={()=>setUpgrade(true)}/>
             )}
 
+            {/* Extension Panel */}
+            {nav==='extension'&&(
+              <div style={{maxWidth:560,margin:'0 auto',paddingTop:40}}>
+                <div style={{textAlign:'center' as const,marginBottom:36}}>
+                  <div style={{fontSize:40,marginBottom:12}}>🧩</div>
+                  <h2 style={{fontSize:22,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Extensão Chrome</h2>
+                  <p style={{fontSize:13,color:T.t3,lineHeight:1.6}}>Analise qualquer produto Amazon diretamente na página com nossa extensão. Instale e ative com sua chave de licença.</p>
+                </div>
+
+                {/* Chave de licença */}
+                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'24px',marginBottom:16}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:12}}>🔑 Sua Chave de Licença</div>
+                  {licLoading?(
+                    <div style={{height:48,background:T.bg,borderRadius:10,animation:'pulse 1.5s infinite'}}/>
+                  ):licKey?(
+                    <>
+                      <div style={{background:T.bg,border:`1px solid ${T.lineG}`,borderRadius:10,padding:'14px 18px',marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
+                        <span style={{fontFamily:'monospace',fontSize:16,fontWeight:800,color:T.gold,letterSpacing:'0.06em',wordBreak:'break-all' as const}}>{licKey}</span>
+                        <button onClick={()=>{navigator.clipboard.writeText(licKey);setKeyCopied(true);setTimeout(()=>setKeyCopied(false),2000)}}
+                          style={{flexShrink:0,background:keyCopied?T.g:T.goldG,border:'none',color:'#03030A',fontWeight:700,fontSize:10,padding:'8px 14px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',transition:'all .2s',whiteSpace:'nowrap' as const}}>
+                          {keyCopied?'✓ Copiado!':'Copiar'}
+                        </button>
+                      </div>
+                      <div style={{fontSize:11,color:T.t3}}>
+                        Plano: <span style={{color:T.gold,fontWeight:600,textTransform:'capitalize' as const}}>{licPlan}</span>
+                        {' · '}Funciona em até <span style={{color:T.t4,fontWeight:600}}>2 dispositivos</span>
+                      </div>
+                    </>
+                  ):(
+                    <div style={{textAlign:'center' as const,padding:'20px 0'}}>
+                      <div style={{fontSize:12,color:T.t3,marginBottom:8}}>Nenhuma licença encontrada para este e-mail.</div>
+                      <div style={{fontSize:11,color:T.t3}}>Se você acabou de comprar, aguarde alguns minutos e atualize a página.</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Botão instalar */}
+                <a href="https://chromewebstore.google.com/detail/or%C3%A1culo-amazon-intelligen/jggkabmggnkaobhjmhhcikipbhhnoapp"
+                  target="_blank" rel="noreferrer"
+                  style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,background:T.goldG,color:'#03030A',fontWeight:800,fontSize:13,padding:'16px',borderRadius:12,textDecoration:'none',letterSpacing:'0.06em',boxShadow:'0 4px 24px rgba(240,180,41,0.3)',marginBottom:16}}>
+                  <span style={{fontSize:18}}>🧩</span>
+                  INSTALAR EXTENSÃO NO CHROME
+                </a>
+
+                {/* Passos */}
+                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:14}}>Como ativar</div>
+                  {[
+                    'Clique em "Instalar Extensão no Chrome" acima',
+                    'Abra qualquer produto na Amazon.com.br',
+                    'Clique no ícone do Oráculo na barra do Chrome',
+                    'Cole sua chave de licença e clique em Ativar',
+                  ].map((s,i)=>(
+                    <div key={i} style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:i<3?10:0}}>
+                      <div style={{width:22,height:22,borderRadius:'50%',background:'rgba(240,180,41,0.1)',border:'1px solid rgba(240,180,41,0.25)',color:T.gold,fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{i+1}</div>
+                      <span style={{fontSize:12,color:T.t3,lineHeight:1.6,paddingTop:2}}>{s}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&<>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
               <div>
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
