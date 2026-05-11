@@ -27,9 +27,9 @@ const T = {
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean;search:boolean}> = {
   free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,  tabs:['bestsellers'],                                     modal:false, export:false, search:false },
-  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','search'],   modal:true,  export:false, search:true  },
-  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','search'],   modal:true,  export:true,  search:true  },
-  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','search'],   modal:true,  export:true,  search:true  },
+  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','search','competitor'],   modal:true,  export:false, search:true  },
+  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','search','competitor'],   modal:true,  export:true,  search:true  },
+  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','search','competitor'],   modal:true,  export:true,  search:true  },
 }
 // Hotmart checkout links por plano (atualize com seus links reais)
 const HOTMART: Record<string,string> = {
@@ -57,6 +57,7 @@ const NAV = [
   { id:'trending',    label:'Em Alta'           },
   { id:'generics',    label:'Genéricos'         },
   { id:'search',      label:'Buscar Produto'    },
+  { id:'competitor',  label:'Análise Rival'     },
 ]
 const REF: Record<string,number> = {
   electronics:.08, computers:.08, health:.08, tools:.12, toys:.16,
@@ -130,6 +131,7 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     trending:    <><path d="M5 19l5-6 4 3 5-8" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M15 8h4v4" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
     generics:    <><circle cx="16" cy="16" r="10" stroke={c} strokeWidth="1.5"/><path d="M13 13h6M13 16h6M13 19h4" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
     search:      <><circle cx="14" cy="14" r="7" stroke={c} strokeWidth="1.5"/><path d="M19.5 19.5L26 26" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
+    competitor: <><circle cx="16" cy="10" r="4" stroke={c} strokeWidth="1.5"/><circle cx="10" cy="20" r="3" stroke={c} strokeWidth="1.5"/><circle cx="22" cy="20" r="3" stroke={c} strokeWidth="1.5"/><path d="M13 13l-1.5 4M19 13l1.5 4" stroke={c} strokeWidth="1.3" strokeLinecap="round"/></>,
   }
   return(
     <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0}}>
@@ -421,6 +423,232 @@ function SkeletonCard({i}:{i:number}){
   return<div style={{background:T.card,borderRadius:14,overflow:'hidden',border:`1px solid ${T.line}`,animationDelay:`${i*.05}s`,animation:'pulse 1.8s ease-in-out infinite'}}><div style={{background:'#F8F8FC',height:162}}/><div style={{padding:'14px 14px 16px',display:'flex',flexDirection:'column',gap:10}}><div style={{height:10,background:T.t3,borderRadius:4,width:'50%',opacity:.5}}/><div style={{height:8,background:T.t3,borderRadius:4,width:'90%',opacity:.3}}/><div style={{height:8,background:T.t3,borderRadius:4,width:'70%',opacity:.3}}/></div></div>
 }
 
+/* ─── Competitor Panel ───────────────────────────────────────────────────── */
+function GaugeArc({value,max=100,color,label,size=90}:{value:number;max?:number;color:string;label:string;size?:number}){
+  const pct=Math.min(value/max,1);const r=34;const circ=Math.PI*r;const dash=circ*pct
+  return(
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
+      <svg width={size} height={size/2+10} viewBox={`0 0 80 46`}>
+        <path d="M8 40 A32 32 0 0 1 72 40" fill="none" stroke={T.line} strokeWidth="7" strokeLinecap="round"/>
+        <path d="M8 40 A32 32 0 0 1 72 40" fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
+          strokeDasharray={`${dash} ${circ}`} style={{transition:'stroke-dasharray 1s ease'}}/>
+        <text x="40" y="36" textAnchor="middle" fontSize="13" fontWeight="800" fill={color} fontFamily="inherit">{value}</text>
+      </svg>
+      <span style={{fontSize:9,color:T.t3,letterSpacing:'0.1em',textTransform:'uppercase' as const,fontWeight:600}}>{label}</span>
+    </div>
+  )
+}
+
+function BarChart({items,color}:{items:{label:string;value:number;sub?:string}[];color:string}){
+  const max=Math.max(...items.map(i=>i.value),1)
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:8}}>
+      {items.map((item,i)=>(
+        <div key={i} style={{display:'flex',alignItems:'center',gap:10}}>
+          <div style={{width:70,fontSize:10,color:T.t3,textAlign:'right' as const,flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{item.label}</div>
+          <div style={{flex:1,height:22,background:T.bg,borderRadius:4,overflow:'hidden',position:'relative' as const}}>
+            <div style={{height:'100%',width:`${(item.value/max)*100}%`,background:color,borderRadius:4,opacity:.85,transition:'width 1s ease',minWidth:item.value>0?4:0}}/>
+            <span style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:9,color:T.t4,fontWeight:600}}>
+              R$ {item.value.toFixed(2)}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgrade:()=>void}){
+  const [asin,    setAsin]    = useState('')
+  const [loading, setLoading] = useState(false)
+  const [data,    setData]    = useState<any>(null)
+  const [error,   setError]   = useState('')
+
+  async function analyze(){
+    const a = asin.trim().toUpperCase()
+    if(!a){setError('Digite um ASIN');return}
+    if(!/^[A-Z0-9]{10}$/.test(a)){setError('ASIN inválido — deve ter 10 caracteres (ex: B08N5WRWNW)');return}
+    if(isFree){onUpgrade();return}
+    setLoading(true);setError('');setData(null)
+    try{
+      const r = await fetch(`/api/competitor?asin=${a}`)
+      const d = await r.json()
+      if(!r.ok){setError(d.error||'Erro ao buscar dados');return}
+      setData(d)
+    }catch{setError('Erro de conexão')}
+    finally{setLoading(false)}
+  }
+
+  const fmtN=(n:number)=>Math.round(n).toLocaleString('pt-BR')
+  const fmtK=(n:number)=>n>=1000?`${(n/1000).toFixed(1).replace('.0','')}k`:`${n}`
+
+  return(
+    <div style={{flex:1,overflowY:'auto',padding:'24px'}}>
+      {/* Header */}
+      <div style={{marginBottom:24}}>
+        <h2 style={{fontSize:18,fontWeight:700,color:T.t1,letterSpacing:'-0.03em',marginBottom:6}}>Análise de Concorrentes</h2>
+        <p style={{fontSize:12,color:T.t2}}>Cole o ASIN do produto que deseja analisar — o Oráculo vai buscar todos os concorrentes e gerar um relatório completo.</p>
+      </div>
+
+      {/* ASIN Input */}
+      <div style={{background:T.card,border:`1px solid ${T.lineG}`,borderRadius:14,padding:'20px 24px',marginBottom:24}}>
+        <div style={{display:'flex',gap:12,alignItems:'flex-end'}}>
+          <div style={{flex:1}}>
+            <label style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',display:'block',marginBottom:8,textTransform:'uppercase' as const}}>ASIN do Produto</label>
+            <input
+              value={asin} onChange={e=>setAsin(e.target.value.toUpperCase())}
+              onKeyDown={e=>e.key==='Enter'&&analyze()}
+              placeholder="Ex: B08N5WRWNW"
+              maxLength={10}
+              style={{width:'100%',background:T.bg,border:`1px solid ${T.line}`,borderRadius:9,padding:'12px 16px',color:T.t1,fontSize:15,fontFamily:'inherit',fontWeight:600,letterSpacing:'0.1em',outline:'none'}}
+            />
+            <p style={{fontSize:10,color:T.t3,marginTop:6}}>Encontre o ASIN na URL da Amazon: amazon.com.br/dp/<strong style={{color:T.gold}}>XXXXXXXXXX</strong></p>
+          </div>
+          <button onClick={analyze} disabled={loading}
+            style={{background:loading?T.t3:T.goldG,color:loading?'#666':'#02020A',border:'none',cursor:loading?'not-allowed':'pointer',fontFamily:'inherit',fontWeight:700,fontSize:11,letterSpacing:'0.1em',padding:'12px 28px',borderRadius:9,textTransform:'uppercase' as const,boxShadow:loading?'none':'0 4px 20px rgba(240,180,41,0.3)',transition:'all .15s',flexShrink:0,whiteSpace:'nowrap' as const}}>
+            {loading?'Analisando…':'Analisar →'}
+          </button>
+        </div>
+        {error&&<div style={{marginTop:10,fontSize:12,color:T.r,background:`${T.r}10`,border:`1px solid ${T.r}25`,borderRadius:7,padding:'8px 12px'}}>{error}</div>}
+      </div>
+
+      {/* Loading skeleton */}
+      {loading&&(
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
+          {[200,160,240].map((h,i)=>(
+            <div key={i} style={{background:T.card,borderRadius:14,height:h,border:`1px solid ${T.line}`,animation:'pulse 1.8s ease-in-out infinite',animationDelay:`${i*.1}s`}}/>
+          ))}
+        </div>
+      )}
+
+      {/* Results */}
+      {data&&!loading&&(()=>{
+        const p   = data.product
+        const pr  = data.pricing
+        const an  = data.analysis
+        const opp = an.opportunityScore
+        const comp= an.competitionScore
+        const oppColor  = opp>=70?T.g:opp>=50?T.a:T.r
+        const compColor = comp>=70?T.g:comp>=50?T.a:T.r
+
+        const verdict = opp>=70?{l:'Excelente Oportunidade 🚀',c:T.g,s:'Baixa concorrência e boa demanda — vale entrar neste mercado agora.'}
+          :opp>=55?{l:'Boa Oportunidade ✅',c:T.g,s:'Mercado com potencial. Diferencie-se para conquistar espaço.'}
+          :opp>=38?{l:'Oportunidade Moderada ⚠️',c:T.a,s:'Concorrência relevante. Estude bem os líderes antes de entrar.'}
+          :{l:'Alta Barreira de Entrada 🚫',c:T.r,s:'Mercado saturado ou demanda baixa. Considere outro produto.'}
+
+        const bsrColor=p.bsr<2000?T.g:p.bsr<10000?T.a:T.r
+        const selChart = data.sellers.slice(0,6).map((s:any,i:number)=>({
+          label: s.isFBA?`FBA #${i+1}`:`MBM #${i+1}`,
+          value: s.total,
+        }))
+
+        return(
+          <div style={{display:'flex',flexDirection:'column',gap:16}}>
+
+            {/* Product card */}
+            <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px',display:'flex',gap:20,alignItems:'flex-start'}}>
+              <div style={{width:80,height:80,background:'#F8F8FC',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                {p.image?<img src={p.image} alt="" style={{maxWidth:68,maxHeight:68,objectFit:'contain'}}/>:<div style={{width:36,height:36,background:'#e0e0e0',borderRadius:6}}/>}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{fontSize:14,fontWeight:600,color:T.t1,lineHeight:1.55,marginBottom:10,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any,overflow:'hidden'}}>{p.title}</p>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
+                  <span style={{background:`${T.t3}18`,color:T.t3,border:`1px solid ${T.t3}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>ASIN {data.asin}</span>
+                  {p.brand&&<span style={{background:`${T.pur}18`,color:T.pur,border:`1px solid ${T.pur}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>{p.brand}</span>}
+                  {p.category&&<span style={{background:`${T.gold}18`,color:T.gold,border:`1px solid ${T.gold}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>{p.category}</span>}
+                </div>
+              </div>
+            </div>
+
+            {/* KPIs */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
+              {[
+                {v:p.bsr>0?`#${fmtN(p.bsr)}`:'—',  l:'BSR Amazon',        c:bsrColor},
+                {v:`~${fmtK(p.salesEst)}/mês`,      l:'Vendas Estimadas',  c:p.salesEst>=500?T.g:p.salesEst>=100?T.a:T.r},
+                {v:`${pr.totalSellers}`,              l:'Concorrentes',     c:pr.totalSellers<=5?T.g:pr.totalSellers<=12?T.a:T.r},
+                {v:`${pr.fbaCount} FBA`,              l:'Usam FBA',         c:pr.fbaCount===0?T.g:T.a},
+              ].map((k,i)=>(
+                <div key={i} style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:12,padding:'16px',textAlign:'center' as const}}>
+                  <div style={{fontSize:22,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1}}>{k.v}</div>
+                  <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const}}>{k.l}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Scores + Price chart */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+              {/* Scores */}
+              <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
+                <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:18}}>Scores de Análise</div>
+                <div style={{display:'flex',justifyContent:'space-around'}}>
+                  <GaugeArc value={opp}  color={oppColor}  label="Oportunidade"/>
+                  <GaugeArc value={comp} color={compColor} label="Dificuldade"/>
+                </div>
+                <div style={{marginTop:14,fontSize:11,color:T.t4,textAlign:'center' as const,lineHeight:1.6}}>
+                  FBA ratio: <strong style={{color:an.fbaRatio>70?T.r:T.a}}>{an.fbaRatio}%</strong> ·
+                  Preço médio: <strong style={{color:T.gold}}> R$ {pr.average.toFixed(2)}</strong>
+                </div>
+              </div>
+              {/* Price chart */}
+              <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
+                <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:16}}>Comparativo de Preços</div>
+                {selChart.length>0
+                  ?<BarChart items={selChart} color={T.pur}/>
+                  :<p style={{fontSize:12,color:T.t3,textAlign:'center' as const,marginTop:20}}>Sem dados de preço disponíveis</p>
+                }
+              </div>
+            </div>
+
+            {/* Verdict */}
+            <div style={{background:`${verdict.c}08`,border:`1px solid ${verdict.c}20`,borderRadius:14,padding:'20px 24px',display:'flex',alignItems:'center',gap:20}}>
+              <GaugeArc value={opp} color={verdict.c} label="Score" size={100}/>
+              <div style={{flex:1}}>
+                <div style={{fontSize:15,fontWeight:700,color:verdict.c,marginBottom:6}}>{verdict.l}</div>
+                <div style={{fontSize:12,color:T.t4,lineHeight:1.65}}>{verdict.s}</div>
+              </div>
+            </div>
+
+            {/* Recommendations */}
+            <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
+              <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:16}}>Plano de Ação para Superar os Concorrentes</div>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                {(data.recommendations||[]).map((rec:string,i:number)=>(
+                  <div key={i} style={{display:'flex',gap:12,alignItems:'flex-start',background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px 16px'}}>
+                    <div style={{width:22,height:22,borderRadius:'50%',background:`${T.gold}15`,border:`1px solid ${T.gold}30`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:10,fontWeight:700,color:T.gold}}>{i+1}</div>
+                    <span style={{fontSize:12,color:T.t4,lineHeight:1.65,flex:1}}>{rec}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div style={{display:'flex',gap:10}}>
+              <a href={`https://www.amazon.com.br/dp/${data.asin}`} target="_blank" rel="noreferrer"
+                style={{flex:1,display:'block',textAlign:'center' as const,background:T.goldG,color:'#03030A',fontWeight:700,fontSize:11,padding:'14px',borderRadius:9,letterSpacing:'0.1em',textDecoration:'none',textTransform:'uppercase' as const,boxShadow:'0 4px 20px rgba(240,180,41,0.25)'}}>
+                Ver Produto na Amazon →
+              </a>
+              <button onClick={()=>{setData(null);setAsin('')}}
+                style={{flex:1,background:'none',border:`1px solid ${T.line}`,color:T.t2,fontWeight:500,fontSize:11,padding:'14px',borderRadius:9,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase' as const}}>
+                Nova Análise
+              </button>
+            </div>
+
+          </div>
+        )
+      })()}
+
+      {/* Empty state */}
+      {!data&&!loading&&(
+        <div style={{textAlign:'center' as const,padding:'60px 20px',color:T.t3}}>
+          <div style={{fontSize:48,marginBottom:16,opacity:.4}}>🔍</div>
+          <div style={{fontSize:14,fontWeight:600,color:T.t2,marginBottom:8}}>Cole um ASIN acima para começar</div>
+          <div style={{fontSize:12,color:T.t3}}>O Oráculo vai analisar todos os concorrentes e te dizer se vale a pena entrar neste mercado.</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
 export default function DashboardClient({user}:{user:any}){
   const router = useRouter()
@@ -435,7 +663,7 @@ export default function DashboardClient({user}:{user:any}){
   const [detail,   setDetail]   = useState<any>(null)
   const [upgrade,  setUpgrade]  = useState(false)
   const [page,     setPage]     = useState(1)
-  const PAGE = 20
+  const PAGE = 30
 
   const cfg = PLAN_CFG[user.plan] ?? PLAN_CFG.free
   const isFree = user.plan === 'free'
@@ -463,7 +691,7 @@ export default function DashboardClient({user}:{user:any}){
   function goNav(id:string){
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}
     setNav(id); setPage(1)
-    if(id==='search'){setProds([]);setDone(false);return}
+    if(id==='search'||id==='competitor'){setProds([]);setDone(false);return}
     load(id,cat)
   }
 
@@ -650,9 +878,15 @@ export default function DashboardClient({user}:{user:any}){
           </header>
 
           {/* Content */}
-          <main style={{flex:1,overflowY:'auto',padding:'28px 28px 40px',position:'relative' as const}}>
+          <main style={{flex:1,overflowY:'auto',padding:nav==='competitor'?'0':'28px 28px 40px',position:'relative' as const,display:'flex',flexDirection:'column'}}>
 
-            {/* Page header */}
+            {/* Competitor Panel */}
+            {nav==='competitor'&&(
+              <CompetitorPanel user={user} isFree={isFree} onUpgrade={()=>setUpgrade(true)}/>
+            )}
+
+            {/* Page header + product content (hidden when competitor tab active) */}
+            {nav!=='competitor'&&<>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
               <div>
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
@@ -667,7 +901,7 @@ export default function DashboardClient({user}:{user:any}){
                   {done&&totalP>1&&<> · pág. <span style={{color:T.t4}}>{page}/{totalP}</span></>}
                 </p>
               </div>
-              <button onClick={()=>load(nav,cat,'',true)}
+              <button onClick={()=>load(nav,cat,q,true)}
                 style={{display:'flex',alignItems:'center',gap:7,background:'none',border:`1px solid ${T.line}`,color:T.t3,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
                 onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
                 onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
@@ -736,6 +970,7 @@ export default function DashboardClient({user}:{user:any}){
 
             {/* No results */}
             {!loading&&done&&prods.length===0&&<div style={{textAlign:'center' as const,padding:'80px 24px',color:T.t3,fontSize:13}}>Nenhum produto encontrado. Tente outra busca ou categoria.</div>}
+            </>}
           </main>
         </div>
       </div>
