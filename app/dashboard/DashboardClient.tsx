@@ -68,12 +68,12 @@ const DEF_P: Record<string,number> = {
 }
 
 /* ─── Utils ──────────────────────────────────────────────────────────────── */
-const bsrSales=(b:number)=>{if(!b)return 0;if(b<=100)return 5000;if(b<=500)return 2000;if(b<=1000)return 1200;if(b<=3000)return 600;if(b<=5000)return 400;if(b<=10000)return 180;if(b<=30000)return 80;if(b<=50000)return 40;if(b<=100000)return 20;return 8}
+const bsrSales=(b:number)=>{if(!b)return 0;if(b<=50)return 600;if(b<=150)return 280;if(b<=300)return 200;if(b<=600)return 140;if(b<=1000)return 100;if(b<=2000)return 65;if(b<=5000)return 35;if(b<=10000)return 20;if(b<=30000)return 10;if(b<=60000)return 5;if(b<=100000)return 3;return 1}
 const fmtK =(n:number)=>n>=1000?`${(n/1000).toFixed(1).replace('.0','')}k`:`${n}`
 const fmtN =(n:number)=>Math.round(n).toLocaleString('pt-BR')
 const fmtR =(n:number)=>n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 const sColor=(s:number)=>s>=70?T.g:s>=50?T.a:T.r
-const dInfo =(s:number)=>s>=2000?{l:'Muito Alta',c:T.g}:s>=800?{l:'Alta',c:T.g}:s>=300?{l:'Média',c:T.a}:s>=100?{l:'Baixa',c:T.a}:{l:'Muito Baixa',c:T.r}
+const dInfo =(s:number)=>s>=500?{l:'Muito Alta',c:T.g}:s>=250?{l:'Alta',c:T.g}:s>=120?{l:'Média',c:T.a}:s>=50?{l:'Baixa',c:T.a}:{l:'Muito Baixa',c:T.r}
 // Score para cards: usa BSR + vendas estimadas + genérico (sem margem — não disponível no card)
 function cardScore(bsr:number,salesEst:number,isGeneric:boolean):number{
   const b=bsr<=50?40:bsr<=200?35:bsr<=500?28:bsr<=1000?22:bsr<=3000?16:bsr<=10000?10:bsr<=30000?6:2
