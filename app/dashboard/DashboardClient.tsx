@@ -241,6 +241,19 @@ function DetailModal({product,onClose}:{product:any;onClose:()=>void}){
   const defP=DEF_P[catId]||99
   const [price,setPrice]=useState(defP)
   const [cost,setCost]=useState(Math.round(defP*.3))
+  const [lsData,setLsData]=useState<any>(null)
+  const [lsLoading,setLsLoading]=useState(true)
+
+  // Busca score real do listing via SP-API
+  useEffect(()=>{
+    if(!product.asin) return
+    setLsLoading(true)
+    fetch(`/api/listing-score?asin=${product.asin}`)
+      .then(r=>r.json())
+      .then(d=>{ if(d.score) setLsData(d) })
+      .catch(()=>{})
+      .finally(()=>setLsLoading(false))
+  },[product.asin])
 
   const bsr=product.bsr||0
   const sales=product.salesEst||bsrSales(bsr)
@@ -252,12 +265,13 @@ function DetailModal({product,onClose}:{product:any;onClose:()=>void}){
   const margin=price>0?+((profit/price)*100).toFixed(1):0
   const roi=cost>0?+((profit/cost)*100).toFixed(1):0
   const modalGeneric=!product.brand||product.brand.trim()===''
-  const score=oScore(bsr,margin,modalGeneric)
+  // Score real do listing (quando carregado) ou estimativa por BSR+margem
+  const score=lsData?.score ?? oScore(bsr,margin,modalGeneric)
   const sc=sColor(score)
-  const verdict=score>=75?{l:'Excelente Oportunidade',c:T.g,s:'Alta demanda e margem sólida — forte potencial para FBA.'}
+  const verdict=score>=75?{l:'Excelente Oportunidade',c:T.g,s:'Alta demanda, bom listing e margem sólida — forte potencial para FBA.'}
     :score>=55?{l:'Boa Oportunidade',c:T.g,s:'Demanda consistente. Vale testar com estoque inicial médio.'}
-    :score>=38?{l:'Potencial Médio',c:T.a,s:'Demanda razoável. Avalie a concorrência antes de entrar.'}
-    :{l:'Baixo Potencial',c:T.r,s:'BSR alto ou margem apertada. Recomendamos explorar outra opção.'}
+    :score>=38?{l:'Potencial Médio',c:T.a,s:'Demanda razoável ou listing fraco. Avalie a concorrência antes de entrar.'}
+    :{l:'Baixo Potencial',c:T.r,s:'BSR alto, listing fraco ou margem apertada. Recomendamos explorar outra opção.'}
 
   return(
     <div onClick={e=>e.target===e.currentTarget&&onClose()}
@@ -280,13 +294,44 @@ function DetailModal({product,onClose}:{product:any;onClose:()=>void}){
         </div>
         {/* KPIs */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',borderBottom:`1px solid ${T.line}`}}>
-          {[{v:bsr>0?`#${fmtN(bsr)}`:'—',l:'BSR Amazon',c:T.t1},{v:`~${fmtK(sales)}/mês`,l:'Vendas estimadas',c:dem.c},{v:dem.l,l:'Nível de Demanda',c:dem.c},{v:`${score}/100`,l:'Score Oráculo',c:sc}].map((k,i)=>(
+          {[{v:bsr>0?`#${fmtN(bsr)}`:'—',l:'BSR Amazon',c:T.t1},{v:`~${fmtK(sales)}/mês`,l:'Vendas estimadas',c:dem.c},{v:dem.l,l:'Nível de Demanda',c:dem.c},{v:lsLoading?'…':`${score}/100`,l:lsData?'Score Real Listing':'Score Oráculo',c:sc}].map((k,i)=>(
             <div key={i} style={{padding:'18px 20px',borderRight:i<3?`1px solid ${T.line}`:'none',textAlign:'center' as const}}>
               <div style={{fontSize:20,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1}}>{k.v}</div>
               <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const}}>{k.l}</div>
             </div>
           ))}
         </div>
+
+        {/* Score breakdown — aparece quando os dados reais do listing chegam */}
+        {lsData?.breakdown&&(
+          <div style={{padding:'16px 28px',borderBottom:`1px solid ${T.line}`,background:`${T.card}80`}}>
+            <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:12}}>Score do Listing — Critérios Reais</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8}}>
+              {([
+                {key:'demand',  icon:'📊', label:'Demanda'},
+                {key:'images',  icon:'🖼️', label:'Imagens'},
+                {key:'bullets', icon:'📝', label:'Bullets'},
+                {key:'title',   icon:'🔤', label:'Título'},
+                {key:'generic', icon:'🏷️', label:'Marca'},
+              ] as const).map(({key,icon,label})=>{
+                const d=lsData.breakdown[key]
+                const pct=Math.round((d.score/d.max)*100)
+                const c=pct>=80?T.g:pct>=50?T.a:T.r
+                return(
+                  <div key={key} style={{background:T.bg,borderRadius:10,padding:'10px 12px',border:`1px solid ${T.line}`}}>
+                    <div style={{fontSize:14,marginBottom:4}}>{icon}</div>
+                    <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.08em',marginBottom:6}}>{label}</div>
+                    <div style={{fontSize:14,fontWeight:700,color:c,marginBottom:4}}>{d.score}<span style={{fontSize:9,color:T.t3,fontWeight:400}}>/{d.max}</span></div>
+                    <div style={{height:3,background:T.card,borderRadius:99,overflow:'hidden'}}>
+                      <div style={{height:'100%',width:`${pct}%`,background:c,borderRadius:99,transition:'width 0.6s ease'}}/>
+                    </div>
+                    <div style={{fontSize:9,color:T.t3,marginTop:5,lineHeight:1.4}}>{d.label}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
         <div style={{padding:'24px 28px',display:'flex',flexDirection:'column',gap:22}}>
           {/* BSR gauge */}
           <div>
