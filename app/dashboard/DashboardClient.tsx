@@ -953,7 +953,7 @@ export default function DashboardClient({user}:{user:any}){
                   {done&&totalP>1&&<> · pág. <span style={{color:T.t4}}>{page}/{totalP}</span></>}
                 </p>
               </div>
-              <button onClick={()=>load(nav,cat,q,true)}
+              <button onClick={()=>load(nav,cat,'',true)}
                 style={{display:'flex',alignItems:'center',gap:7,background:'none',border:`1px solid ${T.line}`,color:T.t3,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
                 onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
                 onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
