@@ -524,29 +524,35 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
       {/* Results */}
       {data&&!loading&&(()=>{
         const p   = data.product
-        const pr  = data.pricing
+        const mkt = data.market || {}
         const an  = data.analysis
         const opp = an.opportunityScore
         const comp= an.competitionScore
         const oppColor  = opp>=70?T.g:opp>=50?T.a:T.r
         const compColor = comp>=70?T.g:comp>=50?T.a:T.r
 
-        const verdict = opp>=70?{l:'Excelente Oportunidade 🚀',c:T.g,s:'Baixa concorrência e boa demanda — vale entrar neste mercado agora.'}
+        const verdict = opp>=70?{l:'Excelente Oportunidade 🚀',c:T.g,s:'Poucos concorrentes e boa demanda — vale entrar neste mercado agora.'}
           :opp>=55?{l:'Boa Oportunidade ✅',c:T.g,s:'Mercado com potencial. Diferencie-se para conquistar espaço.'}
           :opp>=38?{l:'Oportunidade Moderada ⚠️',c:T.a,s:'Concorrência relevante. Estude bem os líderes antes de entrar.'}
           :{l:'Alta Barreira de Entrada 🚫',c:T.r,s:'Mercado saturado ou demanda baixa. Considere outro produto.'}
 
-        const bsrColor=p.bsr<2000?T.g:p.bsr<10000?T.a:T.r
-        const selChart = data.sellers.slice(0,6).map((s:any,i:number)=>({
-          label: s.isFBA?`FBA #${i+1}`:`MBM #${i+1}`,
-          value: s.total,
+        const bsrColor=p.bsr>0&&p.bsr<5000?T.g:p.bsr<30000?T.a:T.r
+        const salesColor=p.salesEst>=500?T.g:p.salesEst>=100?T.a:T.r
+        const salesLabel=p.fromTag?`+${fmtN(p.salesEst)}/mês ✓`:`~${fmtK(p.salesEst)}/mês`
+
+        const compList: any[] = data.competitors || []
+        const salesChart = compList.slice(0,8).map((c:any,i:number)=>({
+          label: c.title?.split(' ').slice(0,2).join(' ')||`Rival ${i+1}`,
+          value: c.salesEst||0,
+          asin:  c.asin,
         }))
+        const maxSales = Math.max(...salesChart.map(s=>s.value), p.salesEst, 1)
 
         return(
           <div style={{display:'flex',flexDirection:'column',gap:16}}>
 
             {/* Product card */}
-            <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px',display:'flex',gap:20,alignItems:'flex-start'}}>
+            <div style={{background:T.card,border:`1px solid ${T.lineG}`,borderRadius:14,padding:'20px 24px',display:'flex',gap:20,alignItems:'flex-start'}}>
               <div style={{width:80,height:80,background:'#F8F8FC',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                 {p.image?<img src={p.image} alt="" style={{maxWidth:68,maxHeight:68,objectFit:'contain'}}/>:<div style={{width:36,height:36,background:'#e0e0e0',borderRadius:6}}/>}
               </div>
@@ -555,7 +561,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
                 <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
                   <span style={{background:`${T.t3}18`,color:T.t3,border:`1px solid ${T.t3}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>ASIN {data.asin}</span>
                   {p.brand&&<span style={{background:`${T.pur}18`,color:T.pur,border:`1px solid ${T.pur}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>{p.brand}</span>}
-                  {p.category&&<span style={{background:`${T.gold}18`,color:T.gold,border:`1px solid ${T.gold}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>{p.category}</span>}
+                  {p.fromTag&&<span style={{background:`${T.g}15`,color:T.g,border:`1px solid ${T.g}30`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>✓ Dado real Amazon</span>}
                 </div>
               </div>
             </div>
@@ -563,41 +569,77 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
             {/* KPIs */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
               {[
-                {v:p.bsr>0?`#${fmtN(p.bsr)}`:'—',  l:'BSR Amazon',        c:bsrColor},
-                {v:`~${fmtK(p.salesEst)}/mês`,      l:'Vendas Estimadas',  c:p.salesEst>=500?T.g:p.salesEst>=100?T.a:T.r},
-                {v:`${pr.totalSellers}`,              l:'Concorrentes',     c:pr.totalSellers<=5?T.g:pr.totalSellers<=12?T.a:T.r},
-                {v:`${pr.fbaCount} FBA`,              l:'Usam FBA',         c:pr.fbaCount===0?T.g:T.a},
+                {v:p.bsr>0?`#${fmtN(p.bsr)}`:'—',     l:'BSR Amazon',           c:bsrColor},
+                {v:salesLabel,                           l:p.fromTag?'Compras/mês (real)':'Vendas Estimadas', c:salesColor},
+                {v:`${mkt.competitorCount||0}`,          l:'Anúncios Rivais',      c:(mkt.competitorCount||0)<=5?T.g:(mkt.competitorCount||0)<=12?T.a:T.r},
+                {v:mkt.avgSales>0?`~${fmtK(mkt.avgSales)}`:'—', l:'Média Rivais/mês', c:T.t2},
               ].map((k,i)=>(
                 <div key={i} style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:12,padding:'16px',textAlign:'center' as const}}>
-                  <div style={{fontSize:22,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1}}>{k.v}</div>
+                  <div style={{fontSize:i===1?14:22,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1.2}}>{k.v}</div>
                   <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const}}>{k.l}</div>
                 </div>
               ))}
             </div>
 
-            {/* Scores + Price chart */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
-              {/* Scores */}
+            {/* Scores + Sales comparison */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1.4fr',gap:12}}>
               <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
                 <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:18}}>Scores de Análise</div>
                 <div style={{display:'flex',justifyContent:'space-around'}}>
                   <GaugeArc value={opp}  color={oppColor}  label="Oportunidade"/>
                   <GaugeArc value={comp} color={compColor} label="Dificuldade"/>
                 </div>
-                <div style={{marginTop:14,fontSize:11,color:T.t4,textAlign:'center' as const,lineHeight:1.6}}>
-                  FBA ratio: <strong style={{color:an.fbaRatio>70?T.r:T.a}}>{an.fbaRatio}%</strong> ·
-                  Preço médio: <strong style={{color:T.gold}}> R$ {pr.average.toFixed(2)}</strong>
+                <div style={{marginTop:14,fontSize:11,color:T.t4,textAlign:'center' as const,lineHeight:1.7}}>
+                  Média de vendas rivais: <strong style={{color:T.pur}}>{mkt.avgSales>0?`~${fmtK(mkt.avgSales)}/mês`:'—'}</strong>
                 </div>
               </div>
-              {/* Price chart */}
+              {/* Sales bar chart */}
               <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
-                <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:16}}>Comparativo de Preços</div>
-                {selChart.length>0
-                  ?<BarChart items={selChart} color={T.pur}/>
-                  :<p style={{fontSize:12,color:T.t3,textAlign:'center' as const,marginTop:20}}>Sem dados de preço disponíveis</p>
-                }
+                <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:14}}>Vendas: Você vs Concorrentes</div>
+                {/* Target product bar */}
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                  <div style={{width:54,fontSize:9,color:T.gold,textAlign:'right' as const,flexShrink:0,fontWeight:700}}>Analisado</div>
+                  <div style={{flex:1,height:20,background:T.bg,borderRadius:4,overflow:'hidden',position:'relative' as const,border:`1px solid ${T.lineG}`}}>
+                    <div style={{height:'100%',width:`${(p.salesEst/maxSales)*100}%`,background:T.gold,borderRadius:4,opacity:.9,transition:'width 1s ease',minWidth:p.salesEst>0?4:0}}/>
+                    <span style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',fontSize:8,color:'#02020A',fontWeight:700}}>{fmtK(p.salesEst)}</span>
+                  </div>
+                </div>
+                {salesChart.map((item,i)=>(
+                  <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                    <div style={{width:54,fontSize:9,color:T.t3,textAlign:'right' as const,flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{item.label}</div>
+                    <div style={{flex:1,height:18,background:T.bg,borderRadius:4,overflow:'hidden',position:'relative' as const}}>
+                      <div style={{height:'100%',width:`${(item.value/maxSales)*100}%`,background:T.pur,borderRadius:4,opacity:.7,transition:'width 1s ease',minWidth:item.value>0?4:0}}/>
+                      <span style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',fontSize:8,color:T.t4,fontWeight:600}}>{fmtK(item.value)}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
+
+            {/* Competitor cards */}
+            {compList.length>0&&(
+              <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
+                <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:14}}>Anúncios Concorrentes ({compList.length})</div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:10}}>
+                  {compList.slice(0,8).map((c:any,i:number)=>{
+                    const sc=c.salesEst>=500?T.g:c.salesEst>=100?T.a:T.r
+                    return(
+                      <a key={i} href={`https://www.amazon.com.br/dp/${c.asin}`} target="_blank" rel="noreferrer"
+                        style={{background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px',textDecoration:'none',display:'flex',flexDirection:'column',gap:8,transition:'border-color .15s',cursor:'pointer'}}>
+                        <div style={{width:'100%',height:70,background:'#F8F8FC',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
+                          {c.image?<img src={c.image} alt="" style={{maxWidth:'80%',maxHeight:60,objectFit:'contain'}}/>:<div style={{width:28,height:28,background:'#e0e0e0',borderRadius:4}}/>}
+                        </div>
+                        <p style={{fontSize:10,color:T.t4,lineHeight:1.5,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any,overflow:'hidden',flex:1}}>{c.title}</p>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                          <span style={{fontSize:11,fontWeight:700,color:sc}}>{c.fromTag?`+${fmtN(c.salesEst)}`:`~${fmtK(c.salesEst)}`}<span style={{fontSize:8,color:T.t3,fontWeight:400}}>/mês</span></span>
+                          {c.bsr>0&&<span style={{fontSize:9,color:T.t3}}>#{fmtN(c.bsr)}</span>}
+                        </div>
+                      </a>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Verdict */}
             <div style={{background:`${verdict.c}08`,border:`1px solid ${verdict.c}20`,borderRadius:14,padding:'20px 24px',display:'flex',alignItems:'center',gap:20}}>
@@ -621,7 +663,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
               </div>
             </div>
 
-            {/* CTA */}
+            {/* CTAs */}
             <div style={{display:'flex',gap:10}}>
               <a href={`https://www.amazon.com.br/dp/${data.asin}`} target="_blank" rel="noreferrer"
                 style={{flex:1,display:'block',textAlign:'center' as const,background:T.goldG,color:'#03030A',fontWeight:700,fontSize:11,padding:'14px',borderRadius:9,letterSpacing:'0.1em',textDecoration:'none',textTransform:'uppercase' as const,boxShadow:'0 4px 20px rgba(240,180,41,0.25)'}}>
