@@ -81,8 +81,13 @@ function cardScore(bsr:number,salesEst:number,isGeneric:boolean):number{
   const g=isGeneric?14:0
   return Math.min(100,Math.max(5,b+s+g+11))
 }
-// Score para modal de análise: usa BSR + margem calculada pelo usuário
-function oScore(bsr:number,m:number){const b=bsr<500?40:bsr<2000?30:bsr<10000?20:bsr<50000?10:5;const mg=m>=35?40:m>=25?32:m>=15?22:m>=5?12:4;return Math.min(100,b+mg+20)}
+// Score para modal: BSR granular + margem real + bônus genérico (atualiza com input do usuário)
+function oScore(bsr:number,m:number,isGeneric=false):number{
+  const b=bsr<=10?45:bsr<=50?40:bsr<=100?34:bsr<=200?28:bsr<=500?22:bsr<=1000?16:bsr<=2000?11:bsr<=5000?7:bsr<=10000?4:bsr<=50000?2:1
+  const mg=m>=40?35:m>=30?28:m>=20?20:m>=10?12:m>=0?6:0
+  const g=isGeneric?10:0
+  return Math.min(100,Math.max(5,b+mg+g+10))
+}
 
 /* ─── CSV export ─────────────────────────────────────────────────────────── */
 function exportCSV(products: any[], category: string) {
@@ -246,7 +251,8 @@ function DetailModal({product,onClose}:{product:any;onClose:()=>void}){
   const profit=+(price-refFee-fba-cost).toFixed(2)
   const margin=price>0?+((profit/price)*100).toFixed(1):0
   const roi=cost>0?+((profit/cost)*100).toFixed(1):0
-  const score=oScore(bsr,margin)
+  const modalGeneric=!product.brand||product.brand.trim()===''
+  const score=oScore(bsr,margin,modalGeneric)
   const sc=sColor(score)
   const verdict=score>=75?{l:'Excelente Oportunidade',c:T.g,s:'Alta demanda e margem sólida — forte potencial para FBA.'}
     :score>=55?{l:'Boa Oportunidade',c:T.g,s:'Demanda consistente. Vale testar com estoque inicial médio.'}
