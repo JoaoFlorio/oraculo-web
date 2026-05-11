@@ -88,6 +88,19 @@ function oScore(bsr:number,m:number,isGeneric=false):number{
   const g=isGeneric?10:0
   return Math.min(100,Math.max(5,b+mg+g+10))
 }
+// Estima idade do anúncio pelo prefixo do ASIN
+function asinToAge(asin:string):string{
+  if(!asin||!asin.startsWith('B'))return'Desconhecido'
+  const p=asin.substring(0,3)
+  if(p<='B07')return'6+ anos'
+  if(p<='B08')return'5-6 anos'
+  if(p<='B09')return'4-5 anos'
+  if(p<='B0B')return'3-4 anos'
+  if(p<='B0C')return'2-3 anos'
+  if(p<='B0D')return'~2 anos'
+  if(p<='B0F')return'~1 ano'
+  return'Recente'
+}
 
 /* ─── CSV export ─────────────────────────────────────────────────────────── */
 function exportCSV(products: any[], category: string) {
@@ -332,6 +345,19 @@ function DetailModal({product,onClose}:{product:any;onClose:()=>void}){
             </div>
           </div>
         )}
+        {/* Listing Info: idade + faturamento anual */}
+        <div style={{padding:'14px 28px',borderBottom:`1px solid ${T.line}`,display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+          <div style={{background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px 16px'}}>
+            <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:6}}>🕐 Idade do Anúncio</div>
+            <div style={{fontSize:18,fontWeight:700,color:T.t1,letterSpacing:'-0.02em'}}>{asinToAge(product.asin||'')}</div>
+            <div style={{fontSize:10,color:T.t3,marginTop:2}}>Estimado pelo prefixo ASIN</div>
+          </div>
+          <div style={{background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px 16px'}}>
+            <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:6}}>💰 Faturamento Anual Est.</div>
+            <div style={{fontSize:18,fontWeight:700,color:T.gold,letterSpacing:'-0.02em'}}>R$ {fmtN(Math.round(sales*price*12))}</div>
+            <div style={{fontSize:10,color:T.t3,marginTop:2}}>~{fmtK(sales)} un/mês × R$ {fmtR(price)} × 12</div>
+          </div>
+        </div>
         <div style={{padding:'24px 28px',display:'flex',flexDirection:'column',gap:22}}>
           {/* BSR gauge */}
           <div>
@@ -399,6 +425,49 @@ function DetailModal({product,onClose}:{product:any;onClose:()=>void}){
               })}
             </div>
           </div>
+          {/* Como Melhorar */}
+          {(()=>{
+            type Rec={priority:'Alta'|'Média';title:string;desc:string;icon:string}
+            const recs:Rec[]=[]
+            if(lsData?.breakdown){
+              const {images,bullets,title:t,demand}=lsData.breakdown
+              if(images.score<16) recs.push({priority:'Alta',title:'Adicione mais imagens',desc:'Anúncio com poucas fotos perde conversão. Use todas as 7 disponíveis: fundo branco, lifestyle, dimensões e diferenciais.',icon:'📸'})
+              if(bullets.score<16) recs.push({priority:'Alta',title:'Complete os bullet points',desc:'Preencha os 5 bullet points destacando benefícios, materiais, diferenciais e para quem é o produto.',icon:'📝'})
+              if(t.score<12) recs.push({priority:'Alta',title:'Otimize o título com palavras-chave',desc:'Título curto perde visibilidade na busca. Inclua as principais keywords que seu cliente digitaria.',icon:'🔤'})
+              if(demand.score<20) recs.push({priority:'Alta',title:'Entre com preço menor para rankear',desc:'BSR alto indica pouca tração. Preço agressivo nas primeiras semanas acelera vendas e melhora o ranking.',icon:'📉'})
+            } else {
+              recs.push(
+                {priority:'Alta',title:'Entre com preço menor para rankear',desc:'Preço competitivo nas primeiras semanas acelera as vendas iniciais e melhora o BSR rapidamente.',icon:'📉'},
+                {priority:'Alta',title:'Adicione imagens profissionais',desc:'Use as 7 fotos disponíveis: fundo branco, lifestyle, dimensões e diferenciais do produto.',icon:'📸'},
+              )
+            }
+            recs.push(
+              {priority:'Média',title:'Ative um cupom de desconto',desc:'Cupons aparecem com destaque nos resultados de busca e aumentam o CTR e a conversão do anúncio.',icon:'🏷️'},
+              {priority:'Média',title:'Adicione Conteúdo A+',desc:'Conteúdo A+ pode aumentar a conversão em até 10%. Disponível para marcas cadastradas no Brand Registry.',icon:'⭐'},
+            )
+            return(
+              <div>
+                <Lbl style={{marginBottom:12}}>Como Melhorar Este Anúncio</Lbl>
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  {recs.map((r,i)=>{
+                    const hc=r.priority==='Alta'?T.r:T.a
+                    return(
+                      <div key={i} style={{display:'flex',gap:12,alignItems:'flex-start',background:T.bg,border:`1px solid ${hc}25`,borderLeft:`3px solid ${hc}`,borderRadius:10,padding:'11px 14px'}}>
+                        <div style={{fontSize:17,lineHeight:1,flexShrink:0,marginTop:1}}>{r.icon}</div>
+                        <div style={{flex:1}}>
+                          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
+                            <span style={{fontSize:12,fontWeight:600,color:T.t1}}>{r.title}</span>
+                            <span style={{fontSize:9,fontWeight:700,color:hc,background:`${hc}15`,padding:'2px 7px',borderRadius:4,letterSpacing:'0.05em',flexShrink:0}}>{r.priority}</span>
+                          </div>
+                          <div style={{fontSize:11,color:T.t3,lineHeight:1.55}}>{r.desc}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
           {/* Verdict */}
           <div style={{background:`${verdict.c}08`,border:`1px solid ${verdict.c}18`,borderRadius:12,padding:'16px 20px',display:'flex',alignItems:'center',gap:16}}>
             <ScoreRing score={score}/>
