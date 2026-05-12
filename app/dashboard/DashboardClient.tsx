@@ -26,10 +26,10 @@ const T = {
 
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
-  free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers','extension'],                                                      modal:false, export:false },
-  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension'],     modal:true,  export:false },
-  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension'],     modal:true,  export:true  },
-  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension'],     modal:true,  export:true  },
+  free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers','extension','agente'],                                                      modal:false, export:false },
+  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente'],     modal:true,  export:false },
+  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente'],     modal:true,  export:true  },
+  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente'],     modal:true,  export:true  },
 }
 // Hotmart checkout links por plano (atualize com seus links reais)
 const HOTMART: Record<string,string> = {
@@ -58,6 +58,7 @@ const NAV = [
   { id:'generics',    label:'Genéricos'         },
   { id:'competitor',  label:'Análise Rival'     },
   { id:'extension',   label:'Extensão'          },
+  { id:'agente',      label:'Agente IA'         },
 ]
 const REF: Record<string,number> = {
   electronics:.08, computers:.08, health:.08, tools:.12, toys:.16,
@@ -159,6 +160,7 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     search:      <><circle cx="14" cy="14" r="7" stroke={c} strokeWidth="1.5"/><path d="M19.5 19.5L26 26" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
     competitor: <><circle cx="16" cy="10" r="4" stroke={c} strokeWidth="1.5"/><circle cx="10" cy="20" r="3" stroke={c} strokeWidth="1.5"/><circle cx="22" cy="20" r="3" stroke={c} strokeWidth="1.5"/><path d="M13 13l-1.5 4M19 13l1.5 4" stroke={c} strokeWidth="1.3" strokeLinecap="round"/></>,
     extension:  <><rect x="5" y="5" width="18" height="18" rx="3" stroke={c} strokeWidth="1.5"/><path d="M11 5v4a2 2 0 01-2 2H5M19 14h-2a2 2 0 00-2 2v2" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
+    agente:     <><circle cx="14" cy="10" r="5" stroke={c} strokeWidth="1.5"/><path d="M10 15c-3 1.5-5 4-5 7h18c0-3-2-5.5-5-7" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><path d="M14 10v3M12 12h4" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
   }
   return(
     <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0}}>
@@ -1142,8 +1144,80 @@ export default function DashboardClient({user}:{user:any}){
               </div>
             )}
 
+            {/* Agente IA Panel */}
+            {nav==='agente'&&(
+              <div style={{maxWidth:600,margin:'0 auto',paddingTop:40}}>
+                {/* Header */}
+                <div style={{textAlign:'center' as const,marginBottom:40}}>
+                  <div style={{fontSize:48,marginBottom:12}}>🤖</div>
+                  <h2 style={{fontSize:24,fontWeight:900,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Agente IA — Criador de Anúncios</h2>
+                  <p style={{fontSize:13,color:T.t3,lineHeight:1.7,maxWidth:440,margin:'0 auto'}}>
+                    Nosso agente especialista em Amazon Brasil cria o anúncio completo pelo ChatGPT — título SEO, bullets, descrição, keywords e até <strong style={{color:T.t1}}>6 imagens profissionais</strong> do seu produto.
+                  </p>
+                </div>
+
+                {/* CTA principal */}
+                <a
+                  href="https://chatgpt.com/g/g-6a02736d422081918e58416c49426a3a-oraculo-ia-especialista-em-marketplace"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{display:'flex',alignItems:'center',justifyContent:'center',gap:12,background:'linear-gradient(135deg,#10A37F 0%,#0D8C6D 100%)',color:'#fff',fontWeight:800,fontSize:14,padding:'18px 24px',borderRadius:14,textDecoration:'none',letterSpacing:'0.04em',boxShadow:'0 4px 32px rgba(16,163,127,0.35)',marginBottom:12,transition:'transform .15s',cursor:'pointer'}}
+                  onMouseEnter={e=>(e.currentTarget.style.transform='translateY(-2px)')}
+                  onMouseLeave={e=>(e.currentTarget.style.transform='translateY(0)')}
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" fill="white" opacity="0.3"/>
+                    <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="1.5"/>
+                    <path d="M8 12l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  ABRIR AGENTE NO CHATGPT
+                </a>
+                <div style={{textAlign:'center' as const,fontSize:11,color:T.t3,marginBottom:32}}>
+                  Abre no ChatGPT — use sua conta existente, sem custos adicionais
+                </div>
+
+                {/* O que o agente faz */}
+                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:16,padding:'24px',marginBottom:16}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:18}}>O que o agente entrega</div>
+                  {[
+                    { icon:'🔍', title:'Análise do Produto', desc:'Pesquisa o produto, identifica público, concorrência e ângulo de ataque antes de criar' },
+                    { icon:'📝', title:'Anúncio Completo',   desc:'Título SEO (3 variações), 5 bullets, descrição e palavras-chave backend otimizados' },
+                    { icon:'🖼️', title:'Pack de 6 Imagens',  desc:'Fundo branco, lifestyle ambientada e 4 imagens de benefícios — prontas para upload' },
+                    { icon:'📊', title:'Estratégia',         desc:'Gatilhos usados, alertas de mercado e sugestões para teste A/B' },
+                  ].map((item,i)=>(
+                    <div key={i} style={{display:'flex',gap:14,marginBottom:i<3?16:0,alignItems:'flex-start'}}>
+                      <div style={{width:38,height:38,borderRadius:10,background:'rgba(16,163,127,0.1)',border:'1px solid rgba(16,163,127,0.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{item.icon}</div>
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:T.t1,marginBottom:3}}>{item.title}</div>
+                        <div style={{fontSize:12,color:T.t3,lineHeight:1.6}}>{item.desc}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Como usar */}
+                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:16,padding:'24px'}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:16}}>Como usar</div>
+                  {[
+                    'Clique em "Abrir Agente no ChatGPT" acima',
+                    'Envie o nome do produto ou ASIN que deseja anunciar',
+                    'Envie uma foto do produto quando solicitado',
+                    'Aguarde — o agente entrega análise, copy e 6 imagens',
+                  ].map((s,i)=>(
+                    <div key={i} style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:i<3?10:0}}>
+                      <div style={{width:22,height:22,borderRadius:'50%',background:'rgba(16,163,127,0.1)',border:'1px solid rgba(16,163,127,0.25)',color:'#10A37F',fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{i+1}</div>
+                      <span style={{fontSize:12,color:T.t3,lineHeight:1.6,paddingTop:2}}>{s}</span>
+                    </div>
+                  ))}
+                  <div style={{marginTop:16,padding:'12px 14px',background:'rgba(16,163,127,0.06)',border:'1px solid rgba(16,163,127,0.15)',borderRadius:10,fontSize:11,color:T.t3,lineHeight:1.6}}>
+                    💡 <strong style={{color:T.t1}}>Dica:</strong> Você precisa de uma conta no ChatGPT (gratuita ou Plus). O agente usa seus próprios créditos do ChatGPT — sem cobranças extras do Oráculo.
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&<>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
               <div>
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
