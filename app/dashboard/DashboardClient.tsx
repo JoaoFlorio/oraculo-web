@@ -1,6 +1,8 @@
 'use client'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import dynamic from 'next/dynamic'
+const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando painel financeiro…</div>})
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 const T = {
@@ -26,10 +28,10 @@ const T = {
 
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
-  free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers','extension','agente'],                                                      modal:false, export:false },
-  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente'],     modal:true,  export:false },
-  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente'],     modal:true,  export:true  },
-  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente'],     modal:true,  export:true  },
+  free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers','extension','agente','financeiro'],                                                      modal:false, export:false },
+  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'],     modal:true,  export:false },
+  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'],     modal:true,  export:true  },
+  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'],     modal:true,  export:true  },
 }
 // Hotmart checkout links por plano (atualize com seus links reais)
 const HOTMART: Record<string,string> = {
@@ -59,6 +61,7 @@ const NAV = [
   { id:'competitor',  label:'Análise Rival'     },
   { id:'extension',   label:'Extensão'          },
   { id:'agente',      label:'Agente IA'         },
+  { id:'financeiro',  label:'Financeiro'        },
 ]
 const REF: Record<string,number> = {
   electronics:.08, computers:.08, health:.08, tools:.12, toys:.16,
@@ -161,6 +164,7 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     competitor: <><circle cx="16" cy="10" r="4" stroke={c} strokeWidth="1.5"/><circle cx="10" cy="20" r="3" stroke={c} strokeWidth="1.5"/><circle cx="22" cy="20" r="3" stroke={c} strokeWidth="1.5"/><path d="M13 13l-1.5 4M19 13l1.5 4" stroke={c} strokeWidth="1.3" strokeLinecap="round"/></>,
     extension:  <><rect x="5" y="5" width="18" height="18" rx="3" stroke={c} strokeWidth="1.5"/><path d="M11 5v4a2 2 0 01-2 2H5M19 14h-2a2 2 0 00-2 2v2" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
     agente:     <><circle cx="14" cy="10" r="5" stroke={c} strokeWidth="1.5"/><path d="M10 15c-3 1.5-5 4-5 7h18c0-3-2-5.5-5-7" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><path d="M14 10v3M12 12h4" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
+    financeiro: <><path d="M6 20V14M10 20V10M14 20V6M18 20V12" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><path d="M6 8l4-3 4 4 4-5" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
   }
   return(
     <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0}}>
@@ -1216,8 +1220,15 @@ export default function DashboardClient({user}:{user:any}){
               </div>
             )}
 
+            {/* Financeiro Panel */}
+            {nav==='financeiro'&&(
+              <div style={{padding:'0 4px'}}>
+                <FinanceiroPanel/>
+              </div>
+            )}
+
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&<>
             <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
               <div>
                 <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
