@@ -392,54 +392,61 @@ export default function FinanceiroPanel(){
       {/* ═══════════════ DASHBOARD (after upload) ═══════════════════════ */}
       {hasData&&(<>
 
-        {/* KPI Cards - Linha 1: Vendas */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))',gap:12,marginBottom:12}}>
-          {salesData&&<>
-            <KPICard icon="💰" label="Faturamento" value={`R$ ${fmtK(receita)}`}
-              sub={salesData.period} color={C.gold}
-              tip="Total de vendas no período antes de qualquer desconto ou taxa. Topo do DRE."/>
-            <KPICard icon="🛒" label="Nº de Vendas" value={String(salesData.orders)}
-              sub={`${salesData.units} unidades vendidas`} color={C.blue}
-              tip="Pedidos confirmados. Unidades = total de itens físicos entregues (um pedido pode ter mais de uma unidade)."/>
-            <KPICard icon="🎫" label="Ticket Médio" value={`R$ ${fmtR(salesData.avgTicket)}`}
-              sub="por pedido" color={C.pur}
-              tip="Valor médio de cada pedido. Aumentar o ticket médio é uma das formas mais eficientes de crescer sem precisar de mais pedidos."/>
-          </>}
-          {receita>0&&<KPICard icon="🏦" label="Líq. Marketplace" value={`R$ ${fmtK(liqMarketplace)}`}
-            sub={`${(liqMarketplace/receita*100).toFixed(1)}% do faturamento`}
-            color={C.t1}
-            tip="Faturamento menos comissão Amazon e taxa FBA. É o valor que a Amazon deposita na sua conta antes de subtrair ads e custo do produto."/>}
+        {/* KPI Cards — 3 linhas x 4 colunas (igual Gestor Seller) */}
+        {/* Linha 1: Receita */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
+          <KPICard icon="💰" label="Faturamento" value={salesData?`R$ ${fmtK(receita)}`:'—'}
+            sub={salesData?.period??'Carregue o relatório de vendas'} color={C.gold}
+            tip="Total de vendas no período antes de qualquer desconto ou taxa. Topo do DRE."/>
+          <KPICard icon="🏦" label="Líq. Marketplace" value={salesData?`R$ ${fmtK(liqMarketplace)}`:'—'}
+            sub={salesData?`${(liqMarketplace/receita*100).toFixed(1)}% do faturamento`:'—'}
+            color={C.blue}
+            tip="Faturamento menos comissão Amazon e FBA. O que a Amazon deposita antes de subtrair CMV e ads."/>
+          <KPICard icon="📊" label="Lucro Bruto" value={salesData?(cfg.cmv>0?`R$ ${fmtK(lucroBrutoSemAds)}`:'informe CMV →'):'—'}
+            sub={salesData&&cfg.cmv>0?`Margem ${margem.toFixed(1)}%`:'Líq. Marketplace − CMV'}
+            color={cfg.cmv>0?(lucroBrutoSemAds>0?C.g:C.r):C.t3}
+            tip="Líq. Marketplace menos o CMV. Mostra a lucratividade antes dos gastos com publicidade. Igual ao 'Lucro Bruto' do Gestor Seller."/>
+          <KPICard icon="📈" label="Margem" value={salesData&&cfg.cmv>0?`${margem.toFixed(2)}%`:'—'}
+            sub={salesData&&cfg.cmv>0?(margem>30?'Excelente ✅':margem>20?'Boa 🟡':'Atenção 🔴'):'Informe o CMV'}
+            color={cfg.cmv>0?(margem>30?C.g:margem>20?C.a:C.r):C.t3}
+            tip="Lucro Bruto ÷ Faturamento. Mede quanto do faturamento vira lucro antes dos ads. Acima de 30% é excelente para Amazon FBA."/>
         </div>
 
-        {/* KPI Cards - Linha 2: Rentabilidade */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))',gap:12,marginBottom:24}}>
-          {receita>0&&cfg.cmv>0&&<>
-            <KPICard icon="📊" label="Lucro Bruto" value={`R$ ${fmtK(lucroBrutoSemAds)}`}
-              sub={`Margem ${margem.toFixed(1)}%`}
-              color={lucroBrutoSemAds>0?C.g:C.r}
-              tip="Líq. Marketplace menos o CMV. Mostra a lucratividade antes de considerar gastos com publicidade."/>
-            <KPICard icon="✨" label="Lucro Pós Ads" value={`R$ ${fmtK(lucroBruto)}`}
-              sub={`MPA ${mpa.toFixed(1)}%`}
-              color={lucroBruto>0?C.g:C.r}
-              tip="Lucro Bruto menos o investimento em ads. MPA (Margem Pós Ads) é a rentabilidade real incluindo custo de aquisição via publicidade."/>
-            <KPICard icon="🏆" label="Lucro Líquido" value={`R$ ${fmtK(lucroLiquido)}`}
-              sub={`${(receita>0?(lucroLiquido/receita*100):0).toFixed(1)}% margem final`}
-              color={lucroColor}
-              tip="O que realmente ficou no bolso depois de pagar todos os custos. Margem acima de 20% é excelente para Amazon FBA."/>
-            <KPICard icon="💹" label="ROI" value={`${roi.toFixed(1)}%`}
-              sub="retorno sobre o CMV" color={roi>100?C.g:roi>50?C.a:C.r}
-              tip="ROI = (Lucro Bruto ÷ CMV) × 100. Para cada R$100 investido em mercadoria, quanto você lucrou. Acima de 100% é excelente."/>
-          </>}
-          {adsData&&<>
-            <KPICard icon="🎯" label="TACOS" value={`${tacos.toFixed(1)}%`}
-              sub={`R$ ${fmtR(ads)} em ads`}
-              color={tacos<10?C.g:tacos<20?C.a:C.r}
-              tip="TACOS = Gasto em Ads ÷ Faturamento Total. Diferente do ACoS que só divide pelas vendas atribuídas. TACOS abaixo de 10% é excelente para Amazon FBA."/>
-            <KPICard icon="🚀" label="ROAS" value={`${adsData.totalRoas.toFixed(2)}x`}
-              sub={`ACoS ${adsData.totalAcos.toFixed(1)}%`}
-              color={adsData.totalRoas>4?C.g:adsData.totalRoas>2?C.a:C.r}
-              tip="ROAS = Vendas via Ads ÷ Gasto. Para cada R$1 investido você gerou X em vendas atribuídas. Acima de 4x é excelente."/>
-          </>}
+        {/* Linha 2: Volume */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
+          <KPICard icon="🛒" label="Nº de Vendas" value={salesData?String(salesData.orders):'—'}
+            sub={salesData?`${salesData.period}`:'—'} color={C.pur}
+            tip="Total de pedidos confirmados no período."/>
+          <KPICard icon="📦" label="Nº de Unidades" value={salesData?String(salesData.units):'—'}
+            sub={salesData?`em ${salesData.orders} pedidos`:'—'} color={C.pur}
+            tip="Total de itens físicos vendidos. Um pedido pode ter mais de uma unidade."/>
+          <KPICard icon="🎫" label="Ticket Médio" value={salesData?`R$ ${fmtR(salesData.avgTicket)}`:'—'}
+            sub="por pedido" color={C.pur}
+            tip="Faturamento ÷ Número de Pedidos. Aumentar o ticket médio é uma das formas mais eficientes de crescer."/>
+          <KPICard icon="💹" label="Retorno s/ Investimento" value={salesData&&cfg.cmv>0?`${roi.toFixed(2)}%`:'—'}
+            sub={cfg.cmv>0?`ROI sobre o CMV`:'Informe o CMV'}
+            color={cfg.cmv>0?(roi>150?C.g:roi>80?C.a:C.r):C.t3}
+            tip="ROI = (Lucro Bruto ÷ CMV) × 100. Para cada R$100 investido em mercadoria, quanto você lucrou. Acima de 100% é excelente."/>
+        </div>
+
+        {/* Linha 3: Publicidade */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:24}}>
+          <KPICard icon="📢" label="Valor em Ads" value={adsData?`R$ ${fmtR(ads)}`:'—'}
+            sub={adsData?`${adsData.campaigns.filter(c=>c.status.toUpperCase()==='ENABLED').length} campanhas ativas`:'Carregue o relatório de ads'}
+            color={C.a}
+            tip="Total investido em Sponsored Products no período."/>
+          <KPICard icon="🎯" label="TACOS" value={adsData&&salesData?`${tacos.toFixed(2)}%`:'—'}
+            sub={adsData&&salesData?(tacos<10?'Excelente ✅':tacos<20?'Bom 🟡':'Alto 🔴'):'—'}
+            color={adsData&&salesData?(tacos<10?C.g:tacos<20?C.a:C.r):C.t3}
+            tip="TACOS = Ads ÷ Faturamento Total. Diferente do ACoS que divide pelas vendas atribuídas. Abaixo de 10% é excelente."/>
+          <KPICard icon="✨" label="Lucro Bruto Pós Ads" value={salesData&&cfg.cmv>0?`R$ ${fmtK(lucroBruto)}`:'—'}
+            sub={salesData&&cfg.cmv>0?`Lucro Bruto − R$ ${fmtR(ads)} em ads`:'Informe o CMV'}
+            color={cfg.cmv>0?(lucroBruto>0?C.g:C.r):C.t3}
+            tip="Lucro Bruto menos o total gasto em publicidade. Mostra o lucro real depois de pagar para aparecer na Amazon."/>
+          <KPICard icon="🏆" label="MPA" value={salesData&&cfg.cmv>0?`${mpa.toFixed(2)}%`:'—'}
+            sub={cfg.cmv>0?(mpa>20?'Excelente ✅':mpa>10?'Razoável 🟡':'Apertado 🔴'):'Margem Pós Ads'}
+            color={cfg.cmv>0?(mpa>20?C.g:mpa>10?C.a:C.r):C.t3}
+            tip="MPA (Margem Pós Ads) = Lucro Pós Ads ÷ Faturamento. Métrica mais importante do dia a dia — mede a rentabilidade real incluindo o custo de aquisição."/>
         </div>
 
         {/* ── Comparativo de receita ────────────────────────────────────── */}
