@@ -302,6 +302,28 @@ function HowTo(){
   )
 }
 
+/* ── localStorage keys ───────────────────────────────────────────────────── */
+const LS_COSTS    = 'oraculo_product_costs_v1'   // { [name]: {unitCost, extraPerUnit} }
+const LS_EXPENSES = 'oraculo_expenses_v1'         // Expense[]
+const LS_CFG      = 'oraculo_dre_cfg_v1'          // DRECfg
+
+function loadSavedCosts(): Record<string,{unitCost:number;extraPerUnit:number}> {
+  try{ return JSON.parse(localStorage.getItem(LS_COSTS)||'{}') }catch{ return {} }
+}
+function saveCosts(products:ProductCost[]){
+  try{
+    const map:Record<string,{unitCost:number;extraPerUnit:number}>={}
+    products.forEach(p=>{ if(p.name)map[p.name.trim().toLowerCase()]={unitCost:p.unitCost,extraPerUnit:p.extraPerUnit} })
+    localStorage.setItem(LS_COSTS,JSON.stringify(map))
+  }catch{}
+}
+function loadSavedExpenses(): Expense[] {
+  try{ return JSON.parse(localStorage.getItem(LS_EXPENSES)||'[]') }catch{ return [] }
+}
+function loadSavedCfg(): DRECfg {
+  try{ return {...{amazonFee:15,fbaFee:12},...JSON.parse(localStorage.getItem(LS_CFG)||'{}')} }catch{ return {amazonFee:15,fbaFee:12} }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -315,16 +337,60 @@ export default function FinanceiroPanel(){
   const [cfg,        setCfg]        = useState<DRECfg>({amazonFee:15,fbaFee:12})
   const [products,   setProducts]   = useState<ProductCost[]>([])
   const [expenses,   setExpenses]   = useState<Expense[]>([])
+  const [savedCount,   setSavedCount]   = useState(0)
+  const [restoredMsg,  setRestoredMsg]  = useState('')  // "X produtos restaurados"
 
-  useEffect(()=>{ setMounted(true) },[])
+  /* ── Load persisted data on mount ──────────────────────────────────────── */
+  useEffect(()=>{
+    setMounted(true)
+    setCfg(loadSavedCfg())
+    const savedExp=loadSavedExpenses()
+    if(savedExp.length>0) setExpenses(savedExp)
+  },[])
+
+  /* ── Persist cfg whenever it changes ──────────────────────────────────── */
+  useEffect(()=>{
+    if(!mounted)return
+    try{ localStorage.setItem(LS_CFG,JSON.stringify(cfg)) }catch{}
+  },[cfg,mounted])
+
+  /* ── Persist expenses whenever they change ─────────────────────────────── */
+  useEffect(()=>{
+    if(!mounted)return
+    try{ localStorage.setItem(LS_EXPENSES,JSON.stringify(expenses)) }catch{}
+  },[expenses,mounted])
+
+  /* ── Persist product costs whenever they change ────────────────────────── */
+  useEffect(()=>{
+    if(!mounted||products.length===0)return
+    saveCosts(products)
+    setSavedCount(c=>c+1)
+  },[products,mounted])
 
   /* ── Auto-populate products from campaigns when ads loaded ─────────────── */
   useEffect(()=>{
     if(!adsData||products.length>0)return
+    const saved=loadSavedCosts()
     const fromCampaigns = adsData.campaigns
       .filter(c=>c.spend>0||c.orders>0)
-      .map(c=>({id:uid(),name:c.name,units:c.orders,unitCost:0,extraPerUnit:0}))
-    if(fromCampaigns.length>0) setProducts(fromCampaigns)
+      .map(c=>{
+        const key=c.name.trim().toLowerCase()
+        const prev=saved[key]
+        return{
+          id:uid(), name:c.name, units:c.orders,
+          unitCost:prev?.unitCost??0,
+          extraPerUnit:prev?.extraPerUnit??0,
+        }
+      })
+    if(fromCampaigns.length>0){
+      setProducts(fromCampaigns)
+      const restored=fromCampaigns.filter(p=>p.unitCost>0).length
+      if(restored>0){
+        setSavedCount(restored+1)
+        setRestoredMsg(`✅ ${restored} produto${restored>1?'s':''} com custo restaurado${restored>1?'s':''} automaticamente`)
+        setTimeout(()=>setRestoredMsg(''),5000)
+      }
+    }
   },[adsData])
 
   const hasData = salesData||adsData
@@ -454,6 +520,18 @@ export default function FinanceiroPanel(){
       {/* ═══════════════ DASHBOARD (após upload) ═══════════════════════ */}
       {hasData&&(<>
 
+        {/* ── Toast restauração ────────────────────────────────────────── */}
+        {restoredMsg&&(
+          <div style={{
+            background:'rgba(34,197,94,0.08)',border:'1px solid rgba(34,197,94,0.25)',
+            borderRadius:10,padding:'10px 16px',marginBottom:12,
+            fontSize:12,fontWeight:600,color:C.g,
+            display:'flex',alignItems:'center',gap:8,
+          }}>
+            {restoredMsg} — custos salvos da última sessão foram aplicados
+          </div>
+        )}
+
         {/* ═══ BLOCO DE CUSTOS ════════════════════════════════════════════ */}
         <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:16,marginBottom:20,overflow:'hidden'}}>
 
@@ -482,6 +560,11 @@ export default function FinanceiroPanel(){
               {!cmvFilled&&(
                 <span style={{fontSize:11,fontWeight:700,color:C.gold,padding:'4px 10px',background:'rgba(240,180,41,0.08)',borderRadius:20}}>
                   💡 Preencha os custos
+                </span>
+              )}
+              {savedCount>1&&(
+                <span style={{fontSize:10,color:C.t3,padding:'4px 10px',background:'rgba(255,255,255,0.03)',borderRadius:20}}>
+                  💾 Salvo automaticamente
                 </span>
               )}
               <span style={{color:C.t3,fontSize:14,transition:'transform .2s',transform:costOpen?'rotate(180deg)':'none'}}>▾</span>
@@ -522,6 +605,8 @@ export default function FinanceiroPanel(){
                     {adsData&&products.length>0&&(
                       <div style={{fontSize:10,color:C.t3}}>
                         Unidades pré-preenchidas com pedidos atribuídos às campanhas — ajuste se necessário
+                        {products.some(p=>p.unitCost>0)&&
+                          <span style={{color:C.g,marginLeft:8}}>· 💾 custos salvos carregados</span>}
                       </div>
                     )}
                   </div>
