@@ -392,6 +392,55 @@ export default function FinanceiroPanel(){
       {/* ═══════════════ DASHBOARD (after upload) ═══════════════════════ */}
       {hasData&&(<>
 
+        {/* ── Banner CMV (aparece quando CMV = 0) ──────────────────────── */}
+        {salesData&&cfg.cmv===0&&(
+          <div style={{background:'rgba(240,180,41,0.06)',border:'1px solid rgba(240,180,41,0.3)',borderRadius:14,padding:'16px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap' as const}}>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{fontSize:12,fontWeight:700,color:C.gold,marginBottom:3}}>💡 Informe o CMV para ver Lucro, Margem, ROI e MPA</div>
+              <div style={{fontSize:11,color:C.t3}}>CMV = custo total dos produtos vendidos no período (compra + frete + importação)</div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span style={{fontSize:11,color:C.t3,whiteSpace:'nowrap' as const}}>CMV Total R$</span>
+              <input type="number" min={0} placeholder="ex: 2500"
+                value={cfg.cmv||''}
+                onChange={e=>setCfg(p=>({...p,cmv:parseFloat(e.target.value)||0}))}
+                style={{width:130,background:C.bg,border:'1.5px solid rgba(240,180,41,0.4)',borderRadius:8,
+                  color:C.t1,fontSize:14,fontWeight:700,padding:'8px 12px',fontFamily:'inherit',outline:'none'}}/>
+              <div style={{fontSize:10,color:C.t3}}>
+                <div>Comissão: <input type="number" min={0} max={30} step={0.5} value={cfg.amazonFee}
+                  onChange={e=>setCfg(p=>({...p,amazonFee:parseFloat(e.target.value)||0}))}
+                  style={{width:44,background:C.bg,border:`1px solid ${C.line}`,borderRadius:5,color:C.t4,fontSize:10,padding:'3px 6px',fontFamily:'inherit',outline:'none'}}/>%</div>
+                <div style={{marginTop:2}}>FBA: <input type="number" min={0} max={30} step={0.5} value={cfg.fbaFee}
+                  onChange={e=>setCfg(p=>({...p,fbaFee:parseFloat(e.target.value)||0}))}
+                  style={{width:44,background:C.bg,border:`1px solid ${C.line}`,borderRadius:5,color:C.t4,fontSize:10,padding:'3px 6px',fontFamily:'inherit',outline:'none'}}/>%</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Config rápida quando CMV já preenchido ──────────────────── */}
+        {salesData&&cfg.cmv>0&&(
+          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,marginBottom:14,padding:'10px 14px',background:'rgba(34,197,94,0.04)',border:'1px solid rgba(34,197,94,0.15)',borderRadius:10}}>
+            <span style={{fontSize:11,color:C.g,fontWeight:700}}>✅ Configurações do período</span>
+            {[
+              {l:'CMV',v:`R$ ${fmtR(cfg.cmv)}`,k:'cmv',t:'number'},
+              {l:'Comissão',v:`${cfg.amazonFee}%`,k:'amazonFee',t:'pct'},
+              {l:'FBA',v:`${cfg.fbaFee}%`,k:'fbaFee',t:'pct'},
+              {l:'Outras despesas',v:`R$ ${fmtR(cfg.otherCosts)}`,k:'otherCosts',t:'number'},
+            ].map((f,i)=>(
+              <div key={i} style={{display:'flex',alignItems:'center',gap:4,fontSize:10}}>
+                <span style={{color:C.t3}}>{f.l}:</span>
+                <input type="number" min={0} step={f.t==='pct'?0.5:100}
+                  value={(cfg as any)[f.k]}
+                  onChange={e=>setCfg(p=>({...p,[f.k]:parseFloat(e.target.value)||0}))}
+                  style={{width:f.t==='pct'?46:80,background:C.bg,border:`1px solid ${C.line}`,borderRadius:5,
+                    color:C.t4,fontSize:10,fontWeight:600,padding:'3px 6px',fontFamily:'inherit',outline:'none'}}/>
+                {f.t==='pct'&&<span style={{color:C.t3}}>%</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* KPI Cards — 3 linhas x 4 colunas (igual Gestor Seller) */}
         {/* Linha 1: Receita */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
