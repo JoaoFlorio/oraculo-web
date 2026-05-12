@@ -63,11 +63,17 @@ function parseSales(text:string):SalesData{
   const periodLine=lines.find(l=>l.startsWith('Data,'))
   const period=periodLine?periodLine.split(',')[1]||'Período atual':'Período atual'
   if(tIdx>=0){
-    for(let i=tIdx+2;i<Math.min(tIdx+10,lines.length);i++){
-      const c=parseCSVLine(lines[i]);if(!c[0])continue
-      if(c[0]==='Este mês, até agora'){orders=parseInt(c[1])||0;revenue=brl(c[3]);avgTicket=brl(c[5])}
-      else if(c[0]==='Mês passado'){lastMonthRevenue=brl(c[3])}
-      else if(c[0]==='Mesmo mês do ano anterior'){lastYearRevenue=brl(c[3])}
+    for(let i=tIdx+2;i<Math.min(tIdx+12,lines.length);i++){
+      const raw=lines[i];if(!raw)continue
+      const c=parseCSVLine(raw)
+      // "Este mês, até agora" tem vírgula no label — após parse: c[0]="Este mês" c[1]="até agora" c[2]=orders c[3]=units c[4]=revenue c[6]=avgTicket
+      if(raw.startsWith('Este mês, até agora,')&&!raw.includes('BRT')){
+        orders=parseInt(c[2])||0; revenue=brl(c[4]); avgTicket=parseFloat(c[6])||0
+      } else if(c[0]==='Mês passado'){
+        lastMonthRevenue=brl(c[3])
+      } else if(c[0]==='Mesmo mês do ano anterior'){
+        lastYearRevenue=brl(c[3])
+      }
     }
   }
   return{period,revenue,orders,avgTicket,daily,lastMonthRevenue,lastYearRevenue}
