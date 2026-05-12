@@ -302,26 +302,40 @@ function HowTo(){
   )
 }
 
-/* ── localStorage keys ───────────────────────────────────────────────────── */
-const LS_COSTS    = 'oraculo_product_costs_v1'   // { [name]: {unitCost, extraPerUnit} }
-const LS_EXPENSES = 'oraculo_expenses_v1'         // Expense[]
-const LS_CFG      = 'oraculo_dre_cfg_v1'          // DRECfg
+/* ── Persistence helpers ─────────────────────────────────────────────────── */
+// Chave no metadata do usuário (banco) e no localStorage (fallback offline)
+const META_KEY = 'financeiro_v1'
 
-function loadSavedCosts(): Record<string,{unitCost:number;extraPerUnit:number}> {
-  try{ return JSON.parse(localStorage.getItem(LS_COSTS)||'{}') }catch{ return {} }
+type SavedMeta = {
+  costs:  Record<string,{unitCost:number;extraPerUnit:number}>
+  expenses: Expense[]
+  cfg: DRECfg
 }
-function saveCosts(products:ProductCost[]){
+
+function costsMap(products:ProductCost[]): Record<string,{unitCost:number;extraPerUnit:number}> {
+  const map:Record<string,{unitCost:number;extraPerUnit:number}>={}
+  products.forEach(p=>{ if(p.name) map[p.name.trim().toLowerCase()]={unitCost:p.unitCost,extraPerUnit:p.extraPerUnit} })
+  return map
+}
+
+// localStorage como cache local rápido (fallback se API falhar)
+const LS_KEY = 'oraculo_fin_meta_v1'
+function lsLoad(): SavedMeta|null {
+  try{ return JSON.parse(localStorage.getItem(LS_KEY)||'null') }catch{ return null }
+}
+function lsSave(m:SavedMeta){ try{ localStorage.setItem(LS_KEY,JSON.stringify(m)) }catch{} }
+
+// API do banco — sem await bloqueante nos effects
+async function apiLoad(): Promise<SavedMeta|null> {
   try{
-    const map:Record<string,{unitCost:number;extraPerUnit:number}>={}
-    products.forEach(p=>{ if(p.name)map[p.name.trim().toLowerCase()]={unitCost:p.unitCost,extraPerUnit:p.extraPerUnit} })
-    localStorage.setItem(LS_COSTS,JSON.stringify(map))
-  }catch{}
+    const r=await fetch(`/api/user/metadata?key=${META_KEY}`)
+    if(!r.ok)return null
+    const {value}=await r.json()
+    return value as SavedMeta|null
+  }catch{ return null }
 }
-function loadSavedExpenses(): Expense[] {
-  try{ return JSON.parse(localStorage.getItem(LS_EXPENSES)||'[]') }catch{ return [] }
-}
-function loadSavedCfg(): DRECfg {
-  try{ return {...{amazonFee:15,fbaFee:12},...JSON.parse(localStorage.getItem(LS_CFG)||'{}')} }catch{ return {amazonFee:15,fbaFee:12} }
+async function apiSave(m:SavedMeta): Promise<void> {
+  try{ await fetch('/api/user/metadata',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:META_KEY,value:m})}) }catch{}
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -338,57 +352,58 @@ export default function FinanceiroPanel(){
   const [products,   setProducts]   = useState<ProductCost[]>([])
   const [expenses,   setExpenses]   = useState<Expense[]>([])
   const [savedCount,   setSavedCount]   = useState(0)
-  const [restoredMsg,  setRestoredMsg]  = useState('')  // "X produtos restaurados"
+  const [restoredMsg,  setRestoredMsg]  = useState('')
+  const saveTimer = useRef<ReturnType<typeof setTimeout>|null>(null)
 
-  /* ── Load persisted data on mount ──────────────────────────────────────── */
+  /* ── Load from DB (ou localStorage como fallback) ao montar ───────────── */
   useEffect(()=>{
     setMounted(true)
-    setCfg(loadSavedCfg())
-    const savedExp=loadSavedExpenses()
-    if(savedExp.length>0) setExpenses(savedExp)
+    ;(async()=>{
+      // Tenta banco primeiro; fallback localStorage
+      let meta = await apiLoad()
+      if(!meta) meta = lsLoad()
+      if(!meta) return
+      if(meta.cfg) setCfg(prev=>({...prev,...meta.cfg}))
+      if(meta.expenses?.length) setExpenses(meta.expenses)
+      // Guarda os custos de produtos para usar quando ads carregar
+      if(meta.costs && Object.keys(meta.costs).length)
+        (window as any).__oraculo_saved_costs = meta.costs
+    })()
   },[])
 
-  /* ── Persist cfg whenever it changes ──────────────────────────────────── */
-  useEffect(()=>{
-    if(!mounted)return
-    try{ localStorage.setItem(LS_CFG,JSON.stringify(cfg)) }catch{}
-  },[cfg,mounted])
+  /* ── Debounced save (banco + localStorage) sempre que dados mudarem ─────── */
+  const persistAll = useCallback((p:ProductCost[], e:Expense[], c:DRECfg)=>{
+    if(saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(()=>{
+      const meta:SavedMeta={costs:costsMap(p),expenses:e,cfg:c}
+      lsSave(meta)
+      apiSave(meta)
+      setSavedCount(x=>x+1)
+    }, 1500)  // salva 1.5s após parar de digitar
+  },[])
 
-  /* ── Persist expenses whenever they change ─────────────────────────────── */
-  useEffect(()=>{
-    if(!mounted)return
-    try{ localStorage.setItem(LS_EXPENSES,JSON.stringify(expenses)) }catch{}
-  },[expenses,mounted])
+  useEffect(()=>{ if(mounted) persistAll(products,expenses,cfg) },[products,expenses,cfg,mounted])
 
-  /* ── Persist product costs whenever they change ────────────────────────── */
-  useEffect(()=>{
-    if(!mounted||products.length===0)return
-    saveCosts(products)
-    setSavedCount(c=>c+1)
-  },[products,mounted])
-
-  /* ── Auto-populate products from campaigns when ads loaded ─────────────── */
+  /* ── Auto-populate products das campanhas quando ads carrega ───────────── */
   useEffect(()=>{
     if(!adsData||products.length>0)return
-    const saved=loadSavedCosts()
+    const saved:Record<string,{unitCost:number;extraPerUnit:number}> =
+      (window as any).__oraculo_saved_costs ?? {}
     const fromCampaigns = adsData.campaigns
       .filter(c=>c.spend>0||c.orders>0)
       .map(c=>{
         const key=c.name.trim().toLowerCase()
         const prev=saved[key]
-        return{
-          id:uid(), name:c.name, units:c.orders,
-          unitCost:prev?.unitCost??0,
-          extraPerUnit:prev?.extraPerUnit??0,
-        }
+        return{ id:uid(), name:c.name, units:c.orders,
+          unitCost:prev?.unitCost??0, extraPerUnit:prev?.extraPerUnit??0 }
       })
     if(fromCampaigns.length>0){
       setProducts(fromCampaigns)
       const restored=fromCampaigns.filter(p=>p.unitCost>0).length
       if(restored>0){
         setSavedCount(restored+1)
-        setRestoredMsg(`✅ ${restored} produto${restored>1?'s':''} com custo restaurado${restored>1?'s':''} automaticamente`)
-        setTimeout(()=>setRestoredMsg(''),5000)
+        setRestoredMsg(`✅ ${restored} produto${restored>1?'s':''} com custo restaurado${restored>1?'s':''} do seu histórico`)
+        setTimeout(()=>setRestoredMsg(''),6000)
       }
     }
   },[adsData])

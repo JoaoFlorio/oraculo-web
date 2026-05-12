@@ -20,6 +20,7 @@ model User {
   sessions        Session[]
   resetToken      String?   @unique
   resetTokenExpAt DateTime?
+  metadata        Json?     @default("{}")
 }
 
 model Session {
