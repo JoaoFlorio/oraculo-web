@@ -18,7 +18,7 @@ const C = {
 /* ── Types ────────────────────────────────────────────────────────────────── */
 interface DailyRow   { day:number; atual:number; anterior:number; anoPassado:number }
 interface SalesData  {
-  period:string; revenue:number; orders:number; avgTicket:number
+  period:string; revenue:number; orders:number; units:number; avgTicket:number
   daily:DailyRow[]; lastMonthRevenue:number; lastYearRevenue:number
 }
 interface Campaign   { name:string; status:string; spend:number; sales:number; acos:number; roas:number; orders:number }
@@ -59,7 +59,7 @@ function parseSales(text:string):SalesData{
       daily.push({day,atual:brl(c[1]),anterior:brl(c[3]),anoPassado:brl(c[5])})
     }
   }
-  let revenue=0,orders=0,avgTicket=0,lastMonthRevenue=0,lastYearRevenue=0
+  let revenue=0,orders=0,units=0,avgTicket=0,lastMonthRevenue=0,lastYearRevenue=0
   const periodLine=lines.find(l=>l.startsWith('Data,'))
   const period=periodLine?periodLine.split(',')[1]||'Período atual':'Período atual'
   if(tIdx>=0){
@@ -68,7 +68,7 @@ function parseSales(text:string):SalesData{
       const c=parseCSVLine(raw)
       // "Este mês, até agora" tem vírgula no label — após parse: c[0]="Este mês" c[1]="até agora" c[2]=orders c[3]=units c[4]=revenue c[6]=avgTicket
       if(raw.startsWith('Este mês, até agora,')&&!raw.includes('BRT')){
-        orders=parseInt(c[2])||0; revenue=brl(c[4]); avgTicket=parseFloat(c[6])||0
+        orders=parseInt(c[2])||0; units=parseInt(c[3])||0; revenue=brl(c[4]); avgTicket=parseFloat(c[6])||0
       } else if(c[0]==='Mês passado'){
         lastMonthRevenue=brl(c[3])
       } else if(c[0]==='Mesmo mês do ano anterior'){
@@ -76,7 +76,7 @@ function parseSales(text:string):SalesData{
       }
     }
   }
-  return{period,revenue,orders,avgTicket,daily,lastMonthRevenue,lastYearRevenue}
+  return{period,revenue,orders,units,avgTicket,daily,lastMonthRevenue,lastYearRevenue}
 }
 
 function parseAds(text:string):AdsData{
@@ -123,13 +123,22 @@ function calcInsights(s:SalesData|null,a:AdsData|null,cfg:DRECfg):Insight[]{
   }
   if(s&&a&&cfg.cmv>0){
     const receita=s.revenue
-    const taxas=receita*(cfg.amazonFee+cfg.fbaFee)/100
-    const lucro=receita-taxas-a.totalSpend-cfg.cmv-cfg.otherCosts
-    const margem=receita>0?(lucro/receita)*100:0
-    if(margem>25)ins.push({type:'g',text:`Margem líquida de ${margem.toFixed(1)}% — acima de 25% é excelente para Amazon FBA 💰`})
-    else if(margem>10)ins.push({type:'a',text:`Margem líquida de ${margem.toFixed(1)}% — razoável, mas há espaço para otimizar custos`})
-    else if(margem>0)ins.push({type:'r',text:`Margem líquida de ${margem.toFixed(1)}% está apertada — revise CMV e redução de ads ineficientes`})
-    else ins.push({type:'r',text:`⚠️ Margem líquida negativa (${margem.toFixed(1)}%) — custos superam receita neste período`})
+    const liqMkt=receita*(1-(cfg.amazonFee+cfg.fbaFee)/100)
+    const lucroBruto=liqMkt-cfg.cmv
+    const lucroPos=lucroBruto-a.totalSpend
+    const lucroLiq=lucroPos-cfg.otherCosts
+    const mpaVal=receita>0?(lucroPos/receita)*100:0
+    const tacosVal=receita>0?(a.totalSpend/receita)*100:0
+    const roiVal=cfg.cmv>0?(lucroBruto/cfg.cmv)*100:0
+    if(mpaVal>20)ins.push({type:'g',text:`MPA de ${mpaVal.toFixed(1)}% — Margem Pós Ads excelente! Negócio muito saudável 💰`})
+    else if(mpaVal>10)ins.push({type:'a',text:`MPA de ${mpaVal.toFixed(1)}% — razoável. Tente reduzir TACOS ou CMV para melhorar`})
+    else if(mpaVal>0)ins.push({type:'r',text:`MPA de ${mpaVal.toFixed(1)}% está apertado — ads ou CMV muito altos para a margem atual`})
+    else ins.push({type:'r',text:`⚠️ MPA negativo (${mpaVal.toFixed(1)}%) — ads + custos superam a receita líquida neste período`})
+    if(tacosVal>0&&tacosVal<10)ins.push({type:'g',text:`TACOS de ${tacosVal.toFixed(1)}% está ótimo — ads eficientes em relação ao faturamento total 🎯`})
+    else if(tacosVal>=10&&tacosVal<20)ins.push({type:'a',text:`TACOS de ${tacosVal.toFixed(1)}% — aceitável. Benchmark ideal é abaixo de 10% do faturamento`})
+    else if(tacosVal>=20)ins.push({type:'r',text:`TACOS de ${tacosVal.toFixed(1)}% está alto — ads estão consumindo mais de 20% do faturamento total`})
+    if(roiVal>200)ins.push({type:'g',text:`ROI de ${roiVal.toFixed(0)}% — retorno excepcional sobre o investimento em mercadoria 🚀`})
+    else if(roiVal>100)ins.push({type:'g',text:`ROI de ${roiVal.toFixed(0)}% — boa rentabilidade sobre o CMV investido ✅`})
   }
   return ins
 }
@@ -278,15 +287,20 @@ export default function FinanceiroPanel(){
   const hasData = salesData||adsData
 
   /* ── DRE calculations ──────────────────────────────────────────────────── */
-  const receita        = salesData?.revenue ?? 0
-  const comissao       = receita*(cfg.amazonFee/100)
-  const fba            = receita*(cfg.fbaFee/100)
-  const ads            = adsData?.totalSpend ?? 0
-  const receitaLiquida = receita - comissao - fba - ads
-  const lucroBruto     = receitaLiquida - cfg.cmv
-  const lucroLiquido   = lucroBruto - cfg.otherCosts
-  const margem         = receita>0 ? (lucroLiquido/receita)*100 : 0
-  const lucroColor     = lucroLiquido>0 ? C.g : C.r
+  const receita          = salesData?.revenue ?? 0
+  const comissao         = receita*(cfg.amazonFee/100)
+  const fba              = receita*(cfg.fbaFee/100)
+  const ads              = adsData?.totalSpend ?? 0
+  const liqMarketplace   = receita - comissao - fba          // líquido antes de ads e CMV
+  const receitaLiquida   = liqMarketplace - ads              // após deduzir ads
+  const lucroBrutoSemAds = liqMarketplace - cfg.cmv          // lucro bruto antes dos ads (= Gestor Seller "Lucro Bruto")
+  const lucroBruto       = receitaLiquida - cfg.cmv          // = lucro bruto pós ads
+  const lucroLiquido     = lucroBruto - cfg.otherCosts
+  const margem           = receita>0 ? (lucroBrutoSemAds/receita)*100 : 0   // margem bruta (sem ads)
+  const mpa              = receita>0 ? (lucroBruto/receita)*100 : 0          // Margem Pós Ads
+  const tacos            = receita>0 ? (ads/receita)*100 : 0                 // TACOS = ads/receita total
+  const roi              = cfg.cmv>0  ? (lucroBrutoSemAds/cfg.cmv)*100 : 0  // ROI sobre o CMV
+  const lucroColor       = lucroLiquido>0 ? C.g : C.r
 
   /* ── Chart data ────────────────────────────────────────────────────────── */
   const dailyChart = (salesData?.daily??[]).filter(d=>d.atual>0||d.anterior>0)
@@ -378,32 +392,54 @@ export default function FinanceiroPanel(){
       {/* ═══════════════ DASHBOARD (after upload) ═══════════════════════ */}
       {hasData&&(<>
 
-        {/* ── KPI Cards ──────────────────────────────────────────────────── */}
-        <div style={{display:'flex',gap:12,flexWrap:'wrap' as const,marginBottom:24}}>
+        {/* KPI Cards - Linha 1: Vendas */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))',gap:12,marginBottom:12}}>
           {salesData&&<>
-            <KPICard icon="💰" label="Receita Bruta" value={`R$ ${fmtK(receita)}`}
+            <KPICard icon="💰" label="Faturamento" value={`R$ ${fmtK(receita)}`}
               sub={salesData.period} color={C.gold}
-              tip="Total de vendas gerado no período antes de qualquer desconto ou taxa. É o topo do seu DRE."/>
-            <KPICard icon="🛒" label="Pedidos" value={String(salesData.orders)}
-              sub={`Ticket médio R$ ${fmtR(salesData.avgTicket)}`} color={C.blue}
-              tip="Quantidade de pedidos confirmados. O ticket médio mostra o valor médio de cada compra."/>
+              tip="Total de vendas no período antes de qualquer desconto ou taxa. Topo do DRE."/>
+            <KPICard icon="🛒" label="Nº de Vendas" value={String(salesData.orders)}
+              sub={`${salesData.units} unidades vendidas`} color={C.blue}
+              tip="Pedidos confirmados. Unidades = total de itens físicos entregues (um pedido pode ter mais de uma unidade)."/>
+            <KPICard icon="🎫" label="Ticket Médio" value={`R$ ${fmtR(salesData.avgTicket)}`}
+              sub="por pedido" color={C.pur}
+              tip="Valor médio de cada pedido. Aumentar o ticket médio é uma das formas mais eficientes de crescer sem precisar de mais pedidos."/>
           </>}
-          {receita>0&&<KPICard icon="💸" label="Receita Líquida" value={`R$ ${fmtK(receitaLiquida)}`}
-            sub={`${(receitaLiquida/receita*100).toFixed(1)}% da receita bruta`}
-            color={receitaLiquida>0?C.t1:C.r}
-            tip="Receita bruta menos comissão Amazon, taxa FBA e investimento em publicidade. O que sobra antes do custo do produto."/>}
+          {receita>0&&<KPICard icon="🏦" label="Líq. Marketplace" value={`R$ ${fmtK(liqMarketplace)}`}
+            sub={`${(liqMarketplace/receita*100).toFixed(1)}% do faturamento`}
+            color={C.t1}
+            tip="Faturamento menos comissão Amazon e taxa FBA. É o valor que a Amazon deposita na sua conta antes de subtrair ads e custo do produto."/>}
+        </div>
+
+        {/* KPI Cards - Linha 2: Rentabilidade */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))',gap:12,marginBottom:24}}>
+          {receita>0&&cfg.cmv>0&&<>
+            <KPICard icon="📊" label="Lucro Bruto" value={`R$ ${fmtK(lucroBrutoSemAds)}`}
+              sub={`Margem ${margem.toFixed(1)}%`}
+              color={lucroBrutoSemAds>0?C.g:C.r}
+              tip="Líq. Marketplace menos o CMV. Mostra a lucratividade antes de considerar gastos com publicidade."/>
+            <KPICard icon="✨" label="Lucro Pós Ads" value={`R$ ${fmtK(lucroBruto)}`}
+              sub={`MPA ${mpa.toFixed(1)}%`}
+              color={lucroBruto>0?C.g:C.r}
+              tip="Lucro Bruto menos o investimento em ads. MPA (Margem Pós Ads) é a rentabilidade real incluindo custo de aquisição via publicidade."/>
+            <KPICard icon="🏆" label="Lucro Líquido" value={`R$ ${fmtK(lucroLiquido)}`}
+              sub={`${(receita>0?(lucroLiquido/receita*100):0).toFixed(1)}% margem final`}
+              color={lucroColor}
+              tip="O que realmente ficou no bolso depois de pagar todos os custos. Margem acima de 20% é excelente para Amazon FBA."/>
+            <KPICard icon="💹" label="ROI" value={`${roi.toFixed(1)}%`}
+              sub="retorno sobre o CMV" color={roi>100?C.g:roi>50?C.a:C.r}
+              tip="ROI = (Lucro Bruto ÷ CMV) × 100. Para cada R$100 investido em mercadoria, quanto você lucrou. Acima de 100% é excelente."/>
+          </>}
           {adsData&&<>
-            <KPICard icon="🎯" label="ACoS Geral" value={`${adsData.totalAcos.toFixed(1)}%`}
-              sub={`R$ ${fmtR(adsData.totalSpend)} investido`}
-              color={adsData.totalAcos<20?C.g:adsData.totalAcos<30?C.a:C.r}
-              tip="ACoS = Gasto em Ads ÷ Vendas Geradas. Quanto menor, mais eficiente. Abaixo de 20% é excelente, 20-30% é bom, acima de 30% precisa atenção."/>
+            <KPICard icon="🎯" label="TACOS" value={`${tacos.toFixed(1)}%`}
+              sub={`R$ ${fmtR(ads)} em ads`}
+              color={tacos<10?C.g:tacos<20?C.a:C.r}
+              tip="TACOS = Gasto em Ads ÷ Faturamento Total. Diferente do ACoS que só divide pelas vendas atribuídas. TACOS abaixo de 10% é excelente para Amazon FBA."/>
             <KPICard icon="🚀" label="ROAS" value={`${adsData.totalRoas.toFixed(2)}x`}
-              sub="retorno por R$1 investido" color={adsData.totalRoas>4?C.g:adsData.totalRoas>2?C.a:C.r}
-              tip="ROAS = Vendas ÷ Gasto. Para cada R$1 investido em ads, você gerou X reais em vendas. Acima de 4x é excelente."/>
+              sub={`ACoS ${adsData.totalAcos.toFixed(1)}%`}
+              color={adsData.totalRoas>4?C.g:adsData.totalRoas>2?C.a:C.r}
+              tip="ROAS = Vendas via Ads ÷ Gasto. Para cada R$1 investido você gerou X em vendas atribuídas. Acima de 4x é excelente."/>
           </>}
-          {receita>0&&cfg.cmv>0&&<KPICard icon="🏆" label="Lucro Líquido" value={`R$ ${fmtK(lucroLiquido)}`}
-            sub={`Margem de ${margem.toFixed(1)}%`} color={lucroColor}
-            tip="O que realmente ficou no bolso depois de pagar todos os custos. Margem acima de 20% é excelente para Amazon FBA."/>}
         </div>
 
         {/* ── Comparativo de receita ────────────────────────────────────── */}
@@ -531,27 +567,30 @@ export default function FinanceiroPanel(){
               </div>
 
               {salesData&&<>
-                <DRERow icon="💰" label="Receita Bruta" value={receita} pctVal={100} color={C.gold} bold
-                  tip="Total de vendas no período. Inclui todas as unidades vendidas × preço de venda. É o ponto de partida do DRE."/>
+                <DRERow icon="💰" label="Receita Bruta (Faturamento)" value={receita} pctVal={100} color={C.gold} bold
+                  tip="Total de vendas no período. Inclui todas as unidades vendidas × preço de venda. É o topo do DRE."/>
                 <DRERow icon="📦" label={`Comissão Amazon (${cfg.amazonFee}%)`} value={-comissao} pctVal={cfg.amazonFee} color={C.r} indent
-                  tip="Amazon cobra uma comissão sobre cada venda. Varia por categoria: geralmente 8% (eletrônicos) a 15% (casa, moda, esportes)."/>
+                  tip="Amazon cobra uma comissão sobre cada venda. Varia por categoria: 8% eletrônicos, 15% casa/moda/esportes."/>
                 <DRERow icon="🏭" label={`Taxa FBA — Fulfillment (${cfg.fbaFee}%)`} value={-fba} pctVal={cfg.fbaFee} color={C.r} indent
-                  tip="Custo de armazenagem no depósito + separação + embalagem + envio ao cliente pelo Amazon FBA. Varia com tamanho e peso do produto."/>
-                {adsData&&<DRERow icon="📢" label="Investimento em Publicidade" value={-ads} pctVal={receita>0?ads/receita*100:0} color={C.a} indent
-                  tip="Total gasto em campanhas Sponsored Products no período. Retirado diretamente do relatório de ads."/>}
-                <DRERow icon="💸" label="Receita Líquida" value={receitaLiquida} pctVal={receita>0?receitaLiquida/receita*100:0}
-                  color={receitaLiquida>0?C.t1:C.r} bold separator
-                  tip="O que sobra depois de pagar as taxas Amazon e a publicidade. Ainda não considera o custo do produto."/>
+                  tip="Custo de armazenagem + separação + embalagem + envio ao cliente pelo Amazon FBA. Varia com tamanho e peso."/>
+                <DRERow icon="🏦" label="Líq. Marketplace" value={liqMarketplace} pctVal={receita>0?liqMarketplace/receita*100:0}
+                  color={C.blue} bold separator
+                  tip="O que a Amazon deposita na sua conta após descontar comissão e FBA. Ainda não considera ads nem custo do produto."/>
                 <DRERow icon="🏷️" label="CMV — Custo da Mercadoria Vendida" value={-cfg.cmv} pctVal={receita>0?cfg.cmv/receita*100:0} color={C.r} indent
-                  tip="Custo total dos produtos que foram vendidos no período. Inclui preço de compra + frete de importação + impostos de importação. Informe o total no campo acima."/>
-                <DRERow icon="✨" label="Lucro Bruto" value={lucroBruto} pctVal={receita>0?lucroBruto/receita*100:0}
+                  tip="Custo total dos produtos vendidos no período: preço de compra + frete de importação + impostos. Informe acima."/>
+                <DRERow icon="📊" label="Lucro Bruto" value={lucroBrutoSemAds} pctVal={receita>0?lucroBrutoSemAds/receita*100:0}
+                  color={lucroBrutoSemAds>0?C.g:C.r} bold separator
+                  tip="Líq. Marketplace menos CMV. Mostra a lucratividade antes de considerar os gastos com publicidade. Equivalente ao 'Lucro Bruto' do Gestor Seller."/>
+                {adsData&&<DRERow icon="📢" label={`Publicidade (TACOS ${tacos.toFixed(1)}%)`} value={-ads} pctVal={receita>0?ads/receita*100:0} color={C.a} indent
+                  tip="Total gasto em campanhas Sponsored Products. TACOS = Ads ÷ Faturamento Total — métrica mais honesta que o ACoS."/>}
+                <DRERow icon="✨" label={`Lucro Pós Ads — MPA ${mpa.toFixed(1)}%`} value={lucroBruto} pctVal={receita>0?lucroBruto/receita*100:0}
                   color={lucroBruto>0?C.g:C.r} bold separator
-                  tip="Receita líquida menos o custo do produto. Indica quanto você ganha antes das despesas operacionais."/>
+                  tip="Lucro Bruto menos ads. MPA (Margem Pós Ads) é a rentabilidade real do negócio incluindo o custo de aquisição via publicidade. Este é o indicador mais importante do dia a dia."/>
                 <DRERow icon="⚙️" label="Outras Despesas Operacionais" value={-cfg.otherCosts} pctVal={receita>0?cfg.otherCosts/receita*100:0} color={C.r} indent
                   tip="Ferramentas (Oráculo, etc), contador, taxas bancárias, devoluções, frete de retorno, despesas eventuais."/>
-                <DRERow icon="🏆" label="LUCRO LÍQUIDO" value={lucroLiquido} pctVal={margem}
+                <DRERow icon="🏆" label="LUCRO LÍQUIDO" value={lucroLiquido} pctVal={receita>0?lucroLiquido/receita*100:0}
                   color={lucroColor} bold separator
-                  tip="O que realmente ficou no seu bolso. Margem acima de 20% é excelente para Amazon FBA. Este é o número mais importante do seu negócio."/>
+                  tip="O que realmente ficou no bolso depois de pagar todos os custos. Margem acima de 20% é excelente para Amazon FBA."/>
               </>}
               {!salesData&&<div style={{padding:'20px',textAlign:'center' as const,color:C.t3,fontSize:12}}>
                 Carregue o Painel de Vendas para ver o DRE completo
