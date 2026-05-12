@@ -23,7 +23,14 @@ interface SalesData  {
 }
 interface Campaign   { name:string; status:string; spend:number; sales:number; acos:number; roas:number; orders:number }
 interface AdsData    { campaigns:Campaign[]; totalSpend:number; totalSales:number; totalAcos:number; totalRoas:number }
-interface DRECfg     { amazonFee:number; fbaFee:number; cmv:number; otherCosts:number }
+interface DRECfg     { amazonFee:number; fbaFee:number }
+
+interface ProductCost {
+  id:string; name:string; units:number; unitCost:number; extraPerUnit:number
+}
+interface Expense {
+  id:string; label:string; value:number
+}
 interface Insight    { type:'g'|'a'|'r'; text:string }
 
 /* ── CSV helpers ──────────────────────────────────────────────────────────── */
@@ -45,6 +52,7 @@ function brl(s:string):number{
 function pct(s:string):number{ return parseFloat((s||'').replace('%','').replace(',','.'))||0 }
 const fmtR=(n:number)=>n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 const fmtK=(n:number)=>n>=1000?`${(n/1000).toFixed(1).replace('.0','')}k`:`${n}`
+const uid=()=>Math.random().toString(36).slice(2)
 
 /* ── Parsers ──────────────────────────────────────────────────────────────── */
 function parseSales(text:string):SalesData{
@@ -66,7 +74,6 @@ function parseSales(text:string):SalesData{
     for(let i=tIdx+2;i<Math.min(tIdx+12,lines.length);i++){
       const raw=lines[i];if(!raw)continue
       const c=parseCSVLine(raw)
-      // "Este mês, até agora" tem vírgula no label — após parse: c[0]="Este mês" c[1]="até agora" c[2]=orders c[3]=units c[4]=revenue c[6]=avgTicket
       if(raw.startsWith('Este mês, até agora,')&&!raw.includes('BRT')){
         orders=parseInt(c[2])||0; units=parseInt(c[3])||0; revenue=brl(c[4]); avgTicket=parseFloat(c[6])||0
       } else if(c[0]==='Mês passado'){
@@ -101,7 +108,7 @@ function parseAds(text:string):AdsData{
     totalRoas:totalSpend>0?totalSales/totalSpend:0}
 }
 
-function calcInsights(s:SalesData|null,a:AdsData|null,cfg:DRECfg):Insight[]{
+function calcInsights(s:SalesData|null,a:AdsData|null,cfg:DRECfg,cmv:number,otherCosts:number):Insight[]{
   const ins:Insight[]=[]
   if(!s&&!a)return ins
   if(s){
@@ -121,19 +128,18 @@ function calcInsights(s:SalesData|null,a:AdsData|null,cfg:DRECfg):Insight[]{
     const best=a.campaigns.filter(c=>c.sales>0).sort((a,b)=>a.acos-b.acos)[0]
     if(best)ins.push({type:'g',text:`"${best.name}" é sua campeã: ACoS ${best.acos.toFixed(1)}%, ROAS ${best.roas.toFixed(2)}x — invista mais nela`})
   }
-  if(s&&a&&cfg.cmv>0){
+  if(s&&a&&cmv>0){
     const receita=s.revenue
     const liqMkt=receita*(1-(cfg.amazonFee+cfg.fbaFee)/100)
-    const lucroBruto=liqMkt-cfg.cmv
+    const lucroBruto=liqMkt-cmv
     const lucroPos=lucroBruto-a.totalSpend
-    const lucroLiq=lucroPos-cfg.otherCosts
     const mpaVal=receita>0?(lucroPos/receita)*100:0
     const tacosVal=receita>0?(a.totalSpend/receita)*100:0
-    const roiVal=cfg.cmv>0?(lucroBruto/cfg.cmv)*100:0
+    const roiVal=cmv>0?(lucroBruto/cmv)*100:0
     if(mpaVal>20)ins.push({type:'g',text:`MPA de ${mpaVal.toFixed(1)}% — Margem Pós Ads excelente! Negócio muito saudável 💰`})
     else if(mpaVal>10)ins.push({type:'a',text:`MPA de ${mpaVal.toFixed(1)}% — razoável. Tente reduzir TACOS ou CMV para melhorar`})
     else if(mpaVal>0)ins.push({type:'r',text:`MPA de ${mpaVal.toFixed(1)}% está apertado — ads ou CMV muito altos para a margem atual`})
-    else ins.push({type:'r',text:`⚠️ MPA negativo (${mpaVal.toFixed(1)}%) — ads + custos superam a receita líquida neste período`})
+    else ins.push({type:'r',text:`MPA negativo (${mpaVal.toFixed(1)}%) — ads + custos superam a receita líquida neste período ⚠️`})
     if(tacosVal>0&&tacosVal<10)ins.push({type:'g',text:`TACOS de ${tacosVal.toFixed(1)}% está ótimo — ads eficientes em relação ao faturamento total 🎯`})
     else if(tacosVal>=10&&tacosVal<20)ins.push({type:'a',text:`TACOS de ${tacosVal.toFixed(1)}% — aceitável. Benchmark ideal é abaixo de 10% do faturamento`})
     else if(tacosVal>=20)ins.push({type:'r',text:`TACOS de ${tacosVal.toFixed(1)}% está alto — ads estão consumindo mais de 20% do faturamento total`})
@@ -223,14 +229,14 @@ function DRERow({icon,label,value,pctVal,color,bold,indent,tip,separator}:{
 }
 
 /* ── Custom Recharts Tooltip ─────────────────────────────────────────────── */
-function ChartTooltip({active,payload,label,prefix='R$ '}:any){
+function ChartTooltip({active,payload,label}:any){
   if(!active||!payload?.length)return null
   return(
     <div style={{background:C.modal,border:`1px solid ${C.line}`,borderRadius:10,padding:'10px 14px',fontSize:11}}>
       <div style={{color:C.t3,marginBottom:6}}>Dia {label}</div>
       {payload.map((p:any,i:number)=>(
         <div key={i} style={{color:p.color,marginBottom:2}}>
-          {p.name}: <strong>{prefix}{fmtR(p.value)}</strong>
+          {p.name}: <strong>R$ {fmtR(p.value)}</strong>
         </div>
       ))}
     </div>
@@ -245,6 +251,27 @@ function AcosBadge({v}:{v:number}){
     <span style={{fontSize:10,fontWeight:700,color,padding:'3px 8px',background:`${color}15`,borderRadius:20}}>
       {v===0?'—':`${v.toFixed(1)}%`} {label}
     </span>
+  )
+}
+
+/* ── Inline editable cell ────────────────────────────────────────────────── */
+function InlineInput({value,onChange,placeholder,width,prefix}:{value:number;onChange:(v:number)=>void;placeholder?:string;width?:number;prefix?:string}){
+  return(
+    <div style={{display:'flex',alignItems:'center',gap:3}}>
+      {prefix&&<span style={{fontSize:10,color:C.t3}}>{prefix}</span>}
+      <input
+        type="number" min={0} step={1}
+        value={value||''}
+        placeholder={placeholder||'0'}
+        onChange={e=>onChange(parseFloat(e.target.value)||0)}
+        onClick={e=>e.stopPropagation()}
+        style={{
+          width:width||70,background:'rgba(255,255,255,0.04)',
+          border:`1px solid rgba(255,255,255,0.1)`,borderRadius:6,
+          color:C.t1,fontSize:12,fontWeight:600,padding:'5px 8px',
+          fontFamily:'inherit',outline:'none',textAlign:'right' as const,
+        }}/>
+    </div>
   )
 }
 
@@ -275,32 +302,51 @@ function HowTo(){
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════════════════════════ */
 export default function FinanceiroPanel(){
-  const [mounted, setMounted] = useState(false)
+  const [mounted,    setMounted]    = useState(false)
   const [salesData,  setSalesData]  = useState<SalesData|null>(null)
   const [adsData,    setAdsData]    = useState<AdsData|null>(null)
   const [showHowTo,  setShowHowTo]  = useState(false)
   const [dreOpen,    setDreOpen]    = useState(true)
-  const [cfg, setCfg] = useState<DRECfg>({amazonFee:15,fbaFee:12,cmv:0,otherCosts:0})
+  const [costOpen,   setCostOpen]   = useState(true)
+  const [cfg,        setCfg]        = useState<DRECfg>({amazonFee:15,fbaFee:12})
+  const [products,   setProducts]   = useState<ProductCost[]>([])
+  const [expenses,   setExpenses]   = useState<Expense[]>([])
 
   useEffect(()=>{ setMounted(true) },[])
 
+  /* ── Auto-populate products from campaigns when ads loaded ─────────────── */
+  useEffect(()=>{
+    if(!adsData||products.length>0)return
+    const fromCampaigns = adsData.campaigns
+      .filter(c=>c.spend>0||c.orders>0)
+      .map(c=>({id:uid(),name:c.name,units:c.orders,unitCost:0,extraPerUnit:0}))
+    if(fromCampaigns.length>0) setProducts(fromCampaigns)
+  },[adsData])
+
   const hasData = salesData||adsData
+
+  /* ── Cost calculations ─────────────────────────────────────────────────── */
+  const autoCmv       = products.reduce((s,p)=>s+p.units*(p.unitCost+p.extraPerUnit),0)
+  const autoDespesas  = expenses.reduce((s,e)=>s+e.value,0)
+  const hasCosts      = products.length>0
+  const cmv           = hasCosts ? autoCmv : 0
+  const otherCosts    = autoDespesas
 
   /* ── DRE calculations ──────────────────────────────────────────────────── */
   const receita          = salesData?.revenue ?? 0
   const comissao         = receita*(cfg.amazonFee/100)
   const fba              = receita*(cfg.fbaFee/100)
   const ads              = adsData?.totalSpend ?? 0
-  const liqMarketplace   = receita - comissao - fba          // líquido antes de ads e CMV
-  const receitaLiquida   = liqMarketplace - ads              // após deduzir ads
-  const lucroBrutoSemAds = liqMarketplace - cfg.cmv          // lucro bruto antes dos ads (= Gestor Seller "Lucro Bruto")
-  const lucroBruto       = receitaLiquida - cfg.cmv          // = lucro bruto pós ads
-  const lucroLiquido     = lucroBruto - cfg.otherCosts
-  const margem           = receita>0 ? (lucroBrutoSemAds/receita)*100 : 0   // margem bruta (sem ads)
-  const mpa              = receita>0 ? (lucroBruto/receita)*100 : 0          // Margem Pós Ads
-  const tacos            = receita>0 ? (ads/receita)*100 : 0                 // TACOS = ads/receita total
-  const roi              = cfg.cmv>0  ? (lucroBrutoSemAds/cfg.cmv)*100 : 0  // ROI sobre o CMV
+  const liqMarketplace   = receita - comissao - fba
+  const lucroBrutoSemAds = liqMarketplace - cmv
+  const lucroBruto       = lucroBrutoSemAds - ads
+  const lucroLiquido     = lucroBruto - otherCosts
+  const margem           = receita>0 ? (lucroBrutoSemAds/receita)*100 : 0
+  const mpa              = receita>0 ? (lucroBruto/receita)*100 : 0
+  const tacos            = receita>0 ? (ads/receita)*100 : 0
+  const roi              = cmv>0  ? (lucroBrutoSemAds/cmv)*100 : 0
   const lucroColor       = lucroLiquido>0 ? C.g : C.r
+  const cmvFilled        = hasCosts && autoCmv>0
 
   /* ── Chart data ────────────────────────────────────────────────────────── */
   const dailyChart = (salesData?.daily??[]).filter(d=>d.atual>0||d.anterior>0)
@@ -309,7 +355,7 @@ export default function FinanceiroPanel(){
     {name:'Comissão Amazon',value:comissao,color:C.pur},
     {name:'Taxa FBA',value:fba,color:C.blue},
     {name:'Publicidade',value:ads,color:C.a},
-    {name:'CMV',value:cfg.cmv,color:C.r},
+    {name:'CMV',value:cmv,color:C.r},
     {name:'Lucro Líquido',value:Math.max(0,lucroLiquido),color:C.g},
   ].filter(d=>d.value>0) : []
 
@@ -318,18 +364,34 @@ export default function FinanceiroPanel(){
     .sort((a,b)=>a.acos-b.acos)
     .map(c=>({
       name: c.name.length>18?c.name.slice(0,18)+'…':c.name,
-      acos: c.acos,
-      spend: c.spend,
-      sales: c.sales,
+      acos: c.acos, spend: c.spend, sales: c.sales,
       color: c.acos===0?C.t3:c.acos<20?C.g:c.acos<30?C.a:C.r,
     }))
 
-  const insights = calcInsights(salesData,adsData,cfg)
+  const insights = calcInsights(salesData,adsData,cfg,cmv,otherCosts)
 
-  /* ── Month comparison bar ─────────────────────────────────────────────── */
   const lastM   = salesData?.lastMonthRevenue??0
   const lastY   = salesData?.lastYearRevenue??0
   const compMax = Math.max(receita,lastM,lastY)||1
+
+  /* ── Product helpers ───────────────────────────────────────────────────── */
+  const updateProduct=(id:string,field:keyof ProductCost,val:any)=>
+    setProducts(ps=>ps.map(p=>p.id===id?{...p,[field]:val}:p))
+  const removeProduct=(id:string)=>setProducts(ps=>ps.filter(p=>p.id!==id))
+  const addProduct=()=>setProducts(ps=>[...ps,{id:uid(),name:'Novo produto',units:0,unitCost:0,extraPerUnit:0}])
+
+  const updateExpense=(id:string,field:keyof Expense,val:any)=>
+    setExpenses(es=>es.map(e=>e.id===id?{...e,[field]:val}:e))
+  const removeExpense=(id:string)=>setExpenses(es=>es.filter(e=>e.id!==id))
+  const addExpense=()=>setExpenses(es=>[...es,{id:uid(),label:'',value:0}])
+
+  /* ── styles helpers ────────────────────────────────────────────────────── */
+  const inputStyle=(w?:number)=>({
+    width:w||80,background:'rgba(255,255,255,0.04)',
+    border:`1px solid rgba(255,255,255,0.1)`,borderRadius:6,
+    color:C.t1,fontSize:12,fontWeight:600,padding:'5px 8px',
+    fontFamily:'inherit',outline:'none',
+  })
 
   return(
     <div style={{maxWidth:960,margin:'0 auto',paddingBottom:60}}>
@@ -341,7 +403,7 @@ export default function FinanceiroPanel(){
           <p style={{fontSize:12,color:C.t3}}>Carregue seus relatórios Amazon e veja seu DRE em segundos</p>
         </div>
         <div style={{display:'flex',gap:8}}>
-          {hasData&&<button onClick={()=>{setSalesData(null);setAdsData(null)}}
+          {hasData&&<button onClick={()=>{setSalesData(null);setAdsData(null);setProducts([]);setExpenses([])}}
             style={{background:'transparent',border:`1px solid ${C.line}`,color:C.t3,fontSize:11,padding:'8px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit'}}>
             ↩ Novo período
           </button>}
@@ -358,16 +420,12 @@ export default function FinanceiroPanel(){
       {!hasData&&(
         <div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:20}}>
-            <UploadZone
-              label="Painel de Vendas" icon="📊"
+            <UploadZone label="Painel de Vendas" icon="📊"
               hint="Relatórios → Painel de Vendas → Baixar CSV"
-              loaded={!!salesData}
-              onFile={t=>setSalesData(parseSales(t))}/>
-            <UploadZone
-              label="Relatório de Campanhas" icon="📢"
+              loaded={!!salesData} onFile={t=>setSalesData(parseSales(t))}/>
+            <UploadZone label="Relatório de Campanhas" icon="📢"
               hint="Publicidade → Relatórios → Sponsored Products CSV"
-              loaded={!!adsData}
-              onFile={t=>setAdsData(parseAds(t))}/>
+              loaded={!!adsData} onFile={t=>setAdsData(parseAds(t))}/>
           </div>
           <div style={{textAlign:'center' as const,padding:'24px',background:C.card,borderRadius:14,border:`1px solid ${C.line}`}}>
             <div style={{fontSize:28,marginBottom:8}}>📂</div>
@@ -377,9 +435,9 @@ export default function FinanceiroPanel(){
         </div>
       )}
 
-      {/* ── Upload (mini, after data loaded) ────────────────────────────── */}
+      {/* ── Upload (mini, após dados carregados) ────────────────────────── */}
       {hasData&&(
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:24}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:20}}>
           <UploadZone label="Painel de Vendas" icon="📊"
             hint="Clique para trocar o arquivo"
             loaded={!!salesData} onFile={t=>setSalesData(parseSales(t))}/>
@@ -389,60 +447,254 @@ export default function FinanceiroPanel(){
         </div>
       )}
 
-      {/* ═══════════════ DASHBOARD (after upload) ═══════════════════════ */}
+      {/* ═══════════════ DASHBOARD (após upload) ═══════════════════════ */}
       {hasData&&(<>
 
-        {/* ── Banner CMV (aparece quando CMV = 0) ──────────────────────── */}
-        {salesData&&cfg.cmv===0&&(
-          <div style={{background:'rgba(240,180,41,0.06)',border:'1px solid rgba(240,180,41,0.3)',borderRadius:14,padding:'16px 20px',marginBottom:16,display:'flex',alignItems:'center',gap:16,flexWrap:'wrap' as const}}>
-            <div style={{flex:1,minWidth:200}}>
-              <div style={{fontSize:12,fontWeight:700,color:C.gold,marginBottom:3}}>💡 Informe o CMV para ver Lucro, Margem, ROI e MPA</div>
-              <div style={{fontSize:11,color:C.t3}}>CMV = custo total dos produtos vendidos no período (compra + frete + importação)</div>
-            </div>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <span style={{fontSize:11,color:C.t3,whiteSpace:'nowrap' as const}}>CMV Total R$</span>
-              <input type="number" min={0} placeholder="ex: 2500"
-                value={cfg.cmv||''}
-                onChange={e=>setCfg(p=>({...p,cmv:parseFloat(e.target.value)||0}))}
-                style={{width:130,background:C.bg,border:'1.5px solid rgba(240,180,41,0.4)',borderRadius:8,
-                  color:C.t1,fontSize:14,fontWeight:700,padding:'8px 12px',fontFamily:'inherit',outline:'none'}}/>
-              <div style={{fontSize:10,color:C.t3}}>
-                <div>Comissão: <input type="number" min={0} max={30} step={0.5} value={cfg.amazonFee}
-                  onChange={e=>setCfg(p=>({...p,amazonFee:parseFloat(e.target.value)||0}))}
-                  style={{width:44,background:C.bg,border:`1px solid ${C.line}`,borderRadius:5,color:C.t4,fontSize:10,padding:'3px 6px',fontFamily:'inherit',outline:'none'}}/>%</div>
-                <div style={{marginTop:2}}>FBA: <input type="number" min={0} max={30} step={0.5} value={cfg.fbaFee}
-                  onChange={e=>setCfg(p=>({...p,fbaFee:parseFloat(e.target.value)||0}))}
-                  style={{width:44,background:C.bg,border:`1px solid ${C.line}`,borderRadius:5,color:C.t4,fontSize:10,padding:'3px 6px',fontFamily:'inherit',outline:'none'}}/>%</div>
+        {/* ═══ BLOCO DE CUSTOS ════════════════════════════════════════════ */}
+        <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:16,marginBottom:20,overflow:'hidden'}}>
+
+          {/* Header accordion */}
+          <div onClick={()=>setCostOpen(v=>!v)} style={{
+            display:'flex',alignItems:'center',justifyContent:'space-between',
+            padding:'18px 24px',cursor:'pointer',
+            borderBottom:costOpen?`1px solid ${C.line}`:'none',
+          }}>
+            <div>
+              <div style={{fontSize:10,fontWeight:700,color:C.t3,letterSpacing:'0.12em',marginBottom:2}}>
+                💼 PRODUTOS & CUSTOS — CMV automático por produto
+              </div>
+              <div style={{fontSize:12,color:C.t4}}>
+                {cmvFilled
+                  ? `CMV calculado: R$ ${fmtR(autoCmv)} · Despesas: R$ ${fmtR(autoDespesas)} · Total: R$ ${fmtR(autoCmv+autoDespesas)}`
+                  : 'Informe o custo por produto para calcular lucro, margem e ROI automaticamente'}
               </div>
             </div>
+            <div style={{display:'flex',alignItems:'center',gap:12}}>
+              {cmvFilled&&(
+                <span style={{fontSize:11,fontWeight:700,color:C.g,padding:'4px 10px',background:'rgba(34,197,94,0.08)',borderRadius:20}}>
+                  ✅ CMV preenchido
+                </span>
+              )}
+              {!cmvFilled&&(
+                <span style={{fontSize:11,fontWeight:700,color:C.gold,padding:'4px 10px',background:'rgba(240,180,41,0.08)',borderRadius:20}}>
+                  💡 Preencha os custos
+                </span>
+              )}
+              <span style={{color:C.t3,fontSize:14,transition:'transform .2s',transform:costOpen?'rotate(180deg)':'none'}}>▾</span>
+            </div>
           </div>
-        )}
 
-        {/* ── Config rápida quando CMV já preenchido ──────────────────── */}
-        {salesData&&cfg.cmv>0&&(
-          <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,marginBottom:14,padding:'10px 14px',background:'rgba(34,197,94,0.04)',border:'1px solid rgba(34,197,94,0.15)',borderRadius:10}}>
-            <span style={{fontSize:11,color:C.g,fontWeight:700}}>✅ Configurações do período</span>
-            {[
-              {l:'CMV',v:`R$ ${fmtR(cfg.cmv)}`,k:'cmv',t:'number'},
-              {l:'Comissão',v:`${cfg.amazonFee}%`,k:'amazonFee',t:'pct'},
-              {l:'FBA',v:`${cfg.fbaFee}%`,k:'fbaFee',t:'pct'},
-              {l:'Outras despesas',v:`R$ ${fmtR(cfg.otherCosts)}`,k:'otherCosts',t:'number'},
-            ].map((f,i)=>(
-              <div key={i} style={{display:'flex',alignItems:'center',gap:4,fontSize:10}}>
-                <span style={{color:C.t3}}>{f.l}:</span>
-                <input type="number" min={0} step={f.t==='pct'?0.5:100}
-                  value={(cfg as any)[f.k]}
-                  onChange={e=>setCfg(p=>({...p,[f.k]:parseFloat(e.target.value)||0}))}
-                  style={{width:f.t==='pct'?46:80,background:C.bg,border:`1px solid ${C.line}`,borderRadius:5,
-                    color:C.t4,fontSize:10,fontWeight:600,padding:'3px 6px',fontFamily:'inherit',outline:'none'}}/>
-                {f.t==='pct'&&<span style={{color:C.t3}}>%</span>}
+          {costOpen&&(
+            <div>
+              {/* ─── Taxa Amazon + FBA ──────────────────────────────────── */}
+              <div style={{padding:'14px 24px',background:'rgba(255,255,255,0.01)',borderBottom:`1px solid ${C.line}`,display:'flex',alignItems:'center',gap:20,flexWrap:'wrap' as const}}>
+                <span style={{fontSize:11,color:C.t3,fontWeight:600}}>⚙️ Taxas Amazon</span>
+                <div style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
+                  <span style={{color:C.t3}}>Comissão:</span>
+                  <input type="number" min={0} max={30} step={0.5} value={cfg.amazonFee}
+                    onChange={e=>setCfg(p=>({...p,amazonFee:parseFloat(e.target.value)||0}))}
+                    style={{...inputStyle(46)}}/>
+                  <span style={{color:C.t3}}>%</span>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:6,fontSize:11}}>
+                  <span style={{color:C.t3}}>FBA:</span>
+                  <input type="number" min={0} max={30} step={0.5} value={cfg.fbaFee}
+                    onChange={e=>setCfg(p=>({...p,fbaFee:parseFloat(e.target.value)||0}))}
+                    style={{...inputStyle(46)}}/>
+                  <span style={{color:C.t3}}>%</span>
+                </div>
+                <span style={{fontSize:10,color:C.t3,marginLeft:'auto'}}>
+                  Líq. Marketplace: R$ {fmtR(liqMarketplace)} ({receita>0?(liqMarketplace/receita*100).toFixed(1):0}% do faturamento)
+                </span>
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* KPI Cards — 3 linhas x 4 colunas (igual Gestor Seller) */}
-        {/* Linha 1: Receita */}
+              {/* ─── Tabela de produtos ─────────────────────────────────── */}
+              <div style={{padding:'18px 24px'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                  <div>
+                    <div style={{fontSize:10,fontWeight:700,color:C.t3,letterSpacing:'0.1em',marginBottom:2}}>
+                      📦 PRODUTOS — Custo × Unidades = CMV do produto
+                    </div>
+                    {adsData&&products.length>0&&(
+                      <div style={{fontSize:10,color:C.t3}}>
+                        Unidades pré-preenchidas com pedidos atribuídos às campanhas — ajuste se necessário
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={addProduct}
+                    style={{background:'rgba(240,180,41,0.08)',border:'1px solid rgba(240,180,41,0.25)',
+                      color:C.gold,fontSize:11,fontWeight:700,padding:'7px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' as const}}>
+                    + Adicionar produto
+                  </button>
+                </div>
+
+                {products.length===0&&(
+                  <div style={{textAlign:'center' as const,padding:'24px',background:'rgba(255,255,255,0.02)',borderRadius:10,border:`1px dashed ${C.line}`}}>
+                    <div style={{fontSize:22,marginBottom:6}}>📦</div>
+                    <div style={{fontSize:12,color:C.t3}}>
+                      {adsData
+                        ? 'Nenhum produto detectado nas campanhas. Clique em "+ Adicionar produto" para inserir manualmente.'
+                        : 'Carregue o relatório de campanhas para preencher os produtos automaticamente, ou adicione manualmente.'}
+                    </div>
+                  </div>
+                )}
+
+                {products.length>0&&(
+                  <div style={{overflowX:'auto' as const}}>
+                    <table style={{width:'100%',borderCollapse:'collapse' as const,fontSize:11}}>
+                      <thead>
+                        <tr style={{borderBottom:`1px solid ${C.line}`}}>
+                          {['Produto','Unidades vendidas','Custo Unit. (R$)','Custo Adicional/Un (R$)','CMV do Produto',''].map((h,i)=>(
+                            <th key={i} style={{
+                              textAlign:i===0?'left' as const:'right' as const,
+                              padding:'8px 10px',fontSize:9,fontWeight:700,color:C.t3,
+                              letterSpacing:'0.08em',whiteSpace:'nowrap' as const,
+                            }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {products.map((p,i)=>{
+                          const prodCmv=p.units*(p.unitCost+p.extraPerUnit)
+                          return(
+                            <tr key={p.id} style={{borderBottom:`1px solid rgba(255,255,255,0.03)`}}>
+                              {/* Nome */}
+                              <td style={{padding:'8px 10px'}}>
+                                <input value={p.name}
+                                  onChange={e=>updateProduct(p.id,'name',e.target.value)}
+                                  style={{...inputStyle(140),textAlign:'left' as const,fontSize:12}}/>
+                              </td>
+                              {/* Unidades */}
+                              <td style={{padding:'8px 10px',textAlign:'right' as const}}>
+                                <InlineInput value={p.units} onChange={v=>updateProduct(p.id,'units',v)} placeholder="0" width={60}/>
+                              </td>
+                              {/* Custo unitário */}
+                              <td style={{padding:'8px 10px',textAlign:'right' as const}}>
+                                <InlineInput value={p.unitCost} onChange={v=>updateProduct(p.id,'unitCost',v)} placeholder="ex: 45" width={80} prefix="R$"/>
+                              </td>
+                              {/* Custo adicional por unidade */}
+                              <td style={{padding:'8px 10px',textAlign:'right' as const}}>
+                                <div style={{display:'flex',flexDirection:'column' as const,alignItems:'flex-end',gap:2}}>
+                                  <InlineInput value={p.extraPerUnit} onChange={v=>updateProduct(p.id,'extraPerUnit',v)} placeholder="ex: 8" width={80} prefix="R$"/>
+                                  <span style={{fontSize:9,color:C.t3}}>frete, impostos…</span>
+                                </div>
+                              </td>
+                              {/* CMV do produto */}
+                              <td style={{padding:'8px 10px',textAlign:'right' as const}}>
+                                <span style={{fontSize:13,fontWeight:700,color:prodCmv>0?C.t1:C.t3}}>
+                                  {prodCmv>0?`R$ ${fmtR(prodCmv)}`:'—'}
+                                </span>
+                                {prodCmv>0&&<div style={{fontSize:9,color:C.t3}}>{p.units}un × R$ {fmtR(p.unitCost+p.extraPerUnit)}</div>}
+                              </td>
+                              {/* Remove */}
+                              <td style={{padding:'8px 6px',textAlign:'center' as const}}>
+                                <button onClick={()=>removeProduct(p.id)}
+                                  style={{background:'transparent',border:'none',color:C.t3,cursor:'pointer',fontSize:14,padding:'2px 6px',
+                                    borderRadius:4,fontFamily:'inherit'}}
+                                  title="Remover produto">✕</button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      {/* Total CMV dos produtos */}
+                      {autoCmv>0&&(
+                        <tfoot>
+                          <tr style={{borderTop:`1px solid ${C.line}`}}>
+                            <td colSpan={4} style={{padding:'10px 10px',fontSize:11,fontWeight:700,color:C.t3,textAlign:'right' as const}}>
+                              CMV Total dos Produtos
+                            </td>
+                            <td style={{padding:'10px 10px',textAlign:'right' as const}}>
+                              <span style={{fontSize:14,fontWeight:900,color:C.gold}}>R$ {fmtR(autoCmv)}</span>
+                            </td>
+                            <td/>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* ─── Despesas ──────────────────────────────────────────── */}
+              <div style={{padding:'16px 24px',borderTop:`1px solid ${C.line}`,background:'rgba(255,255,255,0.01)'}}>
+                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+                  <div>
+                    <div style={{fontSize:10,fontWeight:700,color:C.t3,letterSpacing:'0.1em',marginBottom:2}}>
+                      💸 DESPESAS — Custos operacionais do período
+                    </div>
+                    <div style={{fontSize:10,color:C.t3}}>
+                      Ex: contador, ferramentas, devoluções, frete de retorno, banco...
+                    </div>
+                  </div>
+                  <button onClick={addExpense}
+                    style={{background:'rgba(139,120,255,0.08)',border:'1px solid rgba(139,120,255,0.25)',
+                      color:C.pur,fontSize:11,fontWeight:700,padding:'7px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' as const}}>
+                    + Adicionar despesa
+                  </button>
+                </div>
+
+                {expenses.length===0&&(
+                  <div style={{fontSize:11,color:C.t3,padding:'10px 0'}}>
+                    Nenhuma despesa cadastrada. Clique em "+ Adicionar despesa" para incluir.
+                  </div>
+                )}
+
+                {expenses.length>0&&(
+                  <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                    {expenses.map((e)=>(
+                      <div key={e.id} style={{display:'flex',alignItems:'center',gap:10}}>
+                        <input
+                          value={e.label}
+                          onChange={ev=>updateExpense(e.id,'label',ev.target.value)}
+                          placeholder="Nome da despesa (ex: Contador)"
+                          style={{...inputStyle(200),textAlign:'left' as const,flex:1,maxWidth:280}}/>
+                        <span style={{fontSize:11,color:C.t3}}>R$</span>
+                        <input
+                          type="number" min={0} step={10}
+                          value={e.value||''}
+                          placeholder="0,00"
+                          onChange={ev=>updateExpense(e.id,'value',parseFloat(ev.target.value)||0)}
+                          style={{...inputStyle(110)}}/>
+                        <button onClick={()=>removeExpense(e.id)}
+                          style={{background:'transparent',border:'none',color:C.t3,cursor:'pointer',fontSize:14,padding:'2px 8px',
+                            borderRadius:4,fontFamily:'inherit'}}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Total despesas */}
+                {autoDespesas>0&&(
+                  <div style={{display:'flex',justifyContent:'flex-end',marginTop:12,paddingTop:10,borderTop:`1px solid ${C.line}`}}>
+                    <span style={{fontSize:11,fontWeight:700,color:C.t3,marginRight:12}}>Total Despesas</span>
+                    <span style={{fontSize:14,fontWeight:900,color:C.pur}}>R$ {fmtR(autoDespesas)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* ─── Resumo total ──────────────────────────────────────── */}
+              {(autoCmv>0||autoDespesas>0)&&(
+                <div style={{
+                  display:'flex',alignItems:'center',gap:16,flexWrap:'wrap' as const,
+                  padding:'14px 24px',
+                  background:'rgba(240,180,41,0.04)',
+                  borderTop:`1px solid rgba(240,180,41,0.15)`,
+                }}>
+                  <span style={{fontSize:11,fontWeight:700,color:C.gold}}>📊 Custos totais do período:</span>
+                  {autoCmv>0&&<span style={{fontSize:12,color:C.t3}}>CMV <strong style={{color:C.t1}}>R$ {fmtR(autoCmv)}</strong></span>}
+                  {autoCmv>0&&autoDespesas>0&&<span style={{color:C.t3}}>+</span>}
+                  {autoDespesas>0&&<span style={{fontSize:12,color:C.t3}}>Despesas <strong style={{color:C.t1}}>R$ {fmtR(autoDespesas)}</strong></span>}
+                  <span style={{fontSize:13,fontWeight:900,color:C.gold,marginLeft:'auto'}}>
+                    Total = R$ {fmtR(autoCmv+autoDespesas)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* KPI Cards — 3 linhas x 4 colunas */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
           <KPICard icon="💰" label="Faturamento" value={salesData?`R$ ${fmtK(receita)}`:'—'}
             sub={salesData?.period??'Carregue o relatório de vendas'} color={C.gold}
@@ -451,17 +703,16 @@ export default function FinanceiroPanel(){
             sub={salesData?`${(liqMarketplace/receita*100).toFixed(1)}% do faturamento`:'—'}
             color={C.blue}
             tip="Faturamento menos comissão Amazon e FBA. O que a Amazon deposita antes de subtrair CMV e ads."/>
-          <KPICard icon="📊" label="Lucro Bruto" value={salesData?(cfg.cmv>0?`R$ ${fmtK(lucroBrutoSemAds)}`:'informe CMV →'):'—'}
-            sub={salesData&&cfg.cmv>0?`Margem ${margem.toFixed(1)}%`:'Líq. Marketplace − CMV'}
-            color={cfg.cmv>0?(lucroBrutoSemAds>0?C.g:C.r):C.t3}
-            tip="Líq. Marketplace menos o CMV. Mostra a lucratividade antes dos gastos com publicidade. Igual ao 'Lucro Bruto' do Gestor Seller."/>
-          <KPICard icon="📈" label="Margem" value={salesData&&cfg.cmv>0?`${margem.toFixed(2)}%`:'—'}
-            sub={salesData&&cfg.cmv>0?(margem>30?'Excelente ✅':margem>20?'Boa 🟡':'Atenção 🔴'):'Informe o CMV'}
-            color={cfg.cmv>0?(margem>30?C.g:margem>20?C.a:C.r):C.t3}
-            tip="Lucro Bruto ÷ Faturamento. Mede quanto do faturamento vira lucro antes dos ads. Acima de 30% é excelente para Amazon FBA."/>
+          <KPICard icon="📊" label="Lucro Bruto" value={salesData?(cmvFilled?`R$ ${fmtK(lucroBrutoSemAds)}`:'preencha custos ↑'):'—'}
+            sub={salesData&&cmvFilled?`Margem ${margem.toFixed(1)}%`:'Líq. Marketplace − CMV'}
+            color={cmvFilled?(lucroBrutoSemAds>0?C.g:C.r):C.t3}
+            tip="Líq. Marketplace menos o CMV. Mostra a lucratividade antes dos gastos com publicidade."/>
+          <KPICard icon="📈" label="Margem" value={salesData&&cmvFilled?`${margem.toFixed(2)}%`:'—'}
+            sub={salesData&&cmvFilled?(margem>30?'Excelente ✅':margem>20?'Boa 🟡':'Atenção 🔴'):'Informe os custos'}
+            color={cmvFilled?(margem>30?C.g:margem>20?C.a:C.r):C.t3}
+            tip="Lucro Bruto ÷ Faturamento. Acima de 30% é excelente para Amazon FBA."/>
         </div>
 
-        {/* Linha 2: Volume */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
           <KPICard icon="🛒" label="Nº de Vendas" value={salesData?String(salesData.orders):'—'}
             sub={salesData?`${salesData.period}`:'—'} color={C.pur}
@@ -472,13 +723,12 @@ export default function FinanceiroPanel(){
           <KPICard icon="🎫" label="Ticket Médio" value={salesData?`R$ ${fmtR(salesData.avgTicket)}`:'—'}
             sub="por pedido" color={C.pur}
             tip="Faturamento ÷ Número de Pedidos. Aumentar o ticket médio é uma das formas mais eficientes de crescer."/>
-          <KPICard icon="💹" label="Retorno s/ Investimento" value={salesData&&cfg.cmv>0?`${roi.toFixed(2)}%`:'—'}
-            sub={cfg.cmv>0?`ROI sobre o CMV`:'Informe o CMV'}
-            color={cfg.cmv>0?(roi>150?C.g:roi>80?C.a:C.r):C.t3}
+          <KPICard icon="💹" label="ROI" value={salesData&&cmvFilled?`${roi.toFixed(2)}%`:'—'}
+            sub={cmvFilled?`ROI sobre o CMV`:'Preencha os custos'}
+            color={cmvFilled?(roi>150?C.g:roi>80?C.a:C.r):C.t3}
             tip="ROI = (Lucro Bruto ÷ CMV) × 100. Para cada R$100 investido em mercadoria, quanto você lucrou. Acima de 100% é excelente."/>
         </div>
 
-        {/* Linha 3: Publicidade */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:24}}>
           <KPICard icon="📢" label="Valor em Ads" value={adsData?`R$ ${fmtR(ads)}`:'—'}
             sub={adsData?`${adsData.campaigns.filter(c=>c.status.toUpperCase()==='ENABLED').length} campanhas ativas`:'Carregue o relatório de ads'}
@@ -488,14 +738,14 @@ export default function FinanceiroPanel(){
             sub={adsData&&salesData?(tacos<10?'Excelente ✅':tacos<20?'Bom 🟡':'Alto 🔴'):'—'}
             color={adsData&&salesData?(tacos<10?C.g:tacos<20?C.a:C.r):C.t3}
             tip="TACOS = Ads ÷ Faturamento Total. Diferente do ACoS que divide pelas vendas atribuídas. Abaixo de 10% é excelente."/>
-          <KPICard icon="✨" label="Lucro Bruto Pós Ads" value={salesData&&cfg.cmv>0?`R$ ${fmtK(lucroBruto)}`:'—'}
-            sub={salesData&&cfg.cmv>0?`Lucro Bruto − R$ ${fmtR(ads)} em ads`:'Informe o CMV'}
-            color={cfg.cmv>0?(lucroBruto>0?C.g:C.r):C.t3}
+          <KPICard icon="✨" label="Lucro Bruto Pós Ads" value={salesData&&cmvFilled?`R$ ${fmtK(lucroBruto)}`:'—'}
+            sub={salesData&&cmvFilled?`Lucro Bruto − R$ ${fmtR(ads)} em ads`:'Preencha os custos'}
+            color={cmvFilled?(lucroBruto>0?C.g:C.r):C.t3}
             tip="Lucro Bruto menos o total gasto em publicidade. Mostra o lucro real depois de pagar para aparecer na Amazon."/>
-          <KPICard icon="🏆" label="MPA" value={salesData&&cfg.cmv>0?`${mpa.toFixed(2)}%`:'—'}
-            sub={cfg.cmv>0?(mpa>20?'Excelente ✅':mpa>10?'Razoável 🟡':'Apertado 🔴'):'Margem Pós Ads'}
-            color={cfg.cmv>0?(mpa>20?C.g:mpa>10?C.a:C.r):C.t3}
-            tip="MPA (Margem Pós Ads) = Lucro Pós Ads ÷ Faturamento. Métrica mais importante do dia a dia — mede a rentabilidade real incluindo o custo de aquisição."/>
+          <KPICard icon="🏆" label="MPA" value={salesData&&cmvFilled?`${mpa.toFixed(2)}%`:'—'}
+            sub={cmvFilled?(mpa>20?'Excelente ✅':mpa>10?'Razoável 🟡':'Apertado 🔴'):'Margem Pós Ads'}
+            color={cmvFilled?(mpa>20?C.g:mpa>10?C.a:C.r):C.t3}
+            tip="MPA (Margem Pós Ads) = Lucro Pós Ads ÷ Faturamento. Métrica mais importante do dia a dia."/>
         </div>
 
         {/* ── Comparativo de receita ────────────────────────────────────── */}
@@ -523,7 +773,6 @@ export default function FinanceiroPanel(){
         {/* ── Charts row ───────────────────────────────────────────────── */}
         <div style={{display:'grid',gridTemplateColumns:salesData&&adsData?'2fr 1fr':'1fr',gap:16,marginBottom:20}}>
 
-          {/* Area chart - Daily */}
           {salesData&&dailyChart.length>0&&mounted&&(
             <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:16,padding:'20px 24px'}}>
               <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
@@ -531,8 +780,7 @@ export default function FinanceiroPanel(){
                 <div style={{display:'flex',gap:12}}>
                   {[{c:C.gold,l:'Atual'},{c:C.pur,l:'Mês ant.'},{c:'rgba(104,104,144,0.6)',l:'Ano ant.'}].map((item,i)=>(
                     <div key={i} style={{display:'flex',alignItems:'center',gap:4,fontSize:9,color:C.t3}}>
-                      <div style={{width:8,height:8,borderRadius:'50%',background:item.c}}/>
-                      {item.l}
+                      <div style={{width:8,height:8,borderRadius:'50%',background:item.c}}/>{item.l}
                     </div>
                   ))}
                 </div>
@@ -562,7 +810,6 @@ export default function FinanceiroPanel(){
             </div>
           )}
 
-          {/* Donut - cost breakdown */}
           {receita>0&&donutData.length>0&&mounted&&(
             <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:16,padding:'20px 24px'}}>
               <div style={{fontSize:10,fontWeight:700,color:C.t3,letterSpacing:'0.12em',marginBottom:6}}>🥧 PARA ONDE VAI A RECEITA</div>
@@ -601,52 +848,36 @@ export default function FinanceiroPanel(){
 
           {dreOpen&&(
             <div style={{padding:'12px 8px'}}>
-              {/* Inputs row */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,padding:'12px 16px',background:'rgba(255,255,255,0.02)',borderRadius:10,margin:'0 8px 16px'}}>
-                {[
-                  {label:'Comissão Amazon',key:'amazonFee',suffix:'%',tip:'Varia por categoria. Use 15% como padrão geral.'},
-                  {label:'Taxa FBA',key:'fbaFee',suffix:'%',tip:'Custo de fulfillment. Aprox. 10-15% dependendo do produto.'},
-                  {label:'CMV Total',key:'cmv',suffix:'R$',tip:'Custo total dos produtos vendidos no período (produto + frete + importação).'},
-                  {label:'Outras Despesas',key:'otherCosts',suffix:'R$',tip:'Contador, ferramentas, devoluções, frete de retorno, etc.'},
-                ].map((f,i)=>(
-                  <div key={i}>
-                    <div style={{fontSize:9,fontWeight:700,color:C.t3,letterSpacing:'0.1em',marginBottom:4}}>{f.label.toUpperCase()} <span style={{opacity:.5}}>({f.suffix})</span></div>
-                    <input type="number" min={0} step={f.suffix==='%'?0.5:100}
-                      value={(cfg as any)[f.key]}
-                      onChange={e=>setCfg(p=>({...p,[f.key]:parseFloat(e.target.value)||0}))}
-                      style={{width:'100%',background:C.bg,border:`1px solid ${C.line}`,borderRadius:7,
-                        color:C.t1,fontSize:13,fontWeight:700,padding:'7px 10px',fontFamily:'inherit',
-                        outline:'none',boxSizing:'border-box' as const}}/>
-                    <div style={{fontSize:9,color:C.t3,marginTop:3,lineHeight:1.4}}>{f.tip}</div>
-                  </div>
-                ))}
-              </div>
-
               {salesData&&<>
                 <DRERow icon="💰" label="Receita Bruta (Faturamento)" value={receita} pctVal={100} color={C.gold} bold
-                  tip="Total de vendas no período. Inclui todas as unidades vendidas × preço de venda. É o topo do DRE."/>
+                  tip="Total de vendas no período. Topo do DRE."/>
                 <DRERow icon="📦" label={`Comissão Amazon (${cfg.amazonFee}%)`} value={-comissao} pctVal={cfg.amazonFee} color={C.r} indent
-                  tip="Amazon cobra uma comissão sobre cada venda. Varia por categoria: 8% eletrônicos, 15% casa/moda/esportes."/>
-                <DRERow icon="🏭" label={`Taxa FBA — Fulfillment (${cfg.fbaFee}%)`} value={-fba} pctVal={cfg.fbaFee} color={C.r} indent
-                  tip="Custo de armazenagem + separação + embalagem + envio ao cliente pelo Amazon FBA. Varia com tamanho e peso."/>
+                  tip="Comissão por categoria. Use 15% como padrão geral."/>
+                <DRERow icon="🏭" label={`Taxa FBA (${cfg.fbaFee}%)`} value={-fba} pctVal={cfg.fbaFee} color={C.r} indent
+                  tip="Custo de fulfillment Amazon. Varia com tamanho e peso do produto."/>
                 <DRERow icon="🏦" label="Líq. Marketplace" value={liqMarketplace} pctVal={receita>0?liqMarketplace/receita*100:0}
                   color={C.blue} bold separator
-                  tip="O que a Amazon deposita na sua conta após descontar comissão e FBA. Ainda não considera ads nem custo do produto."/>
-                <DRERow icon="🏷️" label="CMV — Custo da Mercadoria Vendida" value={-cfg.cmv} pctVal={receita>0?cfg.cmv/receita*100:0} color={C.r} indent
-                  tip="Custo total dos produtos vendidos no período: preço de compra + frete de importação + impostos. Informe acima."/>
-                <DRERow icon="📊" label="Lucro Bruto" value={lucroBrutoSemAds} pctVal={receita>0?lucroBrutoSemAds/receita*100:0}
+                  tip="O que a Amazon deposita na sua conta após descontar comissão e FBA."/>
+                {cmv>0&&<DRERow icon="🏷️" label={`CMV — ${products.length} produto(s) · ${products.reduce((s,p)=>s+p.units,0)} unidades`} value={-cmv} pctVal={receita>0?cmv/receita*100:0} color={C.r} indent
+                  tip="Custo total dos produtos vendidos: soma de (unidades × custo unitário + custo adicional) por produto."/>}
+                {cmv>0&&<DRERow icon="📊" label="Lucro Bruto" value={lucroBrutoSemAds} pctVal={receita>0?lucroBrutoSemAds/receita*100:0}
                   color={lucroBrutoSemAds>0?C.g:C.r} bold separator
-                  tip="Líq. Marketplace menos CMV. Mostra a lucratividade antes de considerar os gastos com publicidade. Equivalente ao 'Lucro Bruto' do Gestor Seller."/>
+                  tip="Líq. Marketplace menos CMV. Mostra a lucratividade antes dos gastos com publicidade."/>}
                 {adsData&&<DRERow icon="📢" label={`Publicidade (TACOS ${tacos.toFixed(1)}%)`} value={-ads} pctVal={receita>0?ads/receita*100:0} color={C.a} indent
-                  tip="Total gasto em campanhas Sponsored Products. TACOS = Ads ÷ Faturamento Total — métrica mais honesta que o ACoS."/>}
-                <DRERow icon="✨" label={`Lucro Pós Ads — MPA ${mpa.toFixed(1)}%`} value={lucroBruto} pctVal={receita>0?lucroBruto/receita*100:0}
+                  tip="Total gasto em campanhas Sponsored Products."/>}
+                {cmv>0&&<DRERow icon="✨" label={`Lucro Pós Ads — MPA ${mpa.toFixed(1)}%`} value={lucroBruto} pctVal={receita>0?lucroBruto/receita*100:0}
                   color={lucroBruto>0?C.g:C.r} bold separator
-                  tip="Lucro Bruto menos ads. MPA (Margem Pós Ads) é a rentabilidade real do negócio incluindo o custo de aquisição via publicidade. Este é o indicador mais importante do dia a dia."/>
-                <DRERow icon="⚙️" label="Outras Despesas Operacionais" value={-cfg.otherCosts} pctVal={receita>0?cfg.otherCosts/receita*100:0} color={C.r} indent
-                  tip="Ferramentas (Oráculo, etc), contador, taxas bancárias, devoluções, frete de retorno, despesas eventuais."/>
-                <DRERow icon="🏆" label="LUCRO LÍQUIDO" value={lucroLiquido} pctVal={receita>0?lucroLiquido/receita*100:0}
+                  tip="Lucro Bruto menos ads. MPA é a rentabilidade real do negócio incluindo custo de aquisição via publicidade."/>}
+                {otherCosts>0&&<DRERow icon="⚙️" label={`Despesas Operacionais (${expenses.length} item${expenses.length!==1?'s':''})`} value={-otherCosts} pctVal={receita>0?otherCosts/receita*100:0} color={C.r} indent
+                  tip="Contador, ferramentas, devoluções, frete de retorno e outras despesas cadastradas."/>}
+                {cmv>0&&<DRERow icon="🏆" label="LUCRO LÍQUIDO" value={lucroLiquido} pctVal={receita>0?lucroLiquido/receita*100:0}
                   color={lucroColor} bold separator
-                  tip="O que realmente ficou no bolso depois de pagar todos os custos. Margem acima de 20% é excelente para Amazon FBA."/>
+                  tip="O que realmente ficou no bolso depois de pagar todos os custos. Margem acima de 20% é excelente."/>}
+                {!cmvFilled&&(
+                  <div style={{padding:'16px',textAlign:'center' as const,color:C.t3,fontSize:11,borderTop:`1px solid ${C.line}`,marginTop:8}}>
+                    💡 Preencha os produtos no bloco "Produtos & Custos" acima para ver o DRE completo com Lucro e Margem
+                  </div>
+                )}
               </>}
               {!salesData&&<div style={{padding:'20px',textAlign:'center' as const,color:C.t3,fontSize:12}}>
                 Carregue o Painel de Vendas para ver o DRE completo
@@ -663,7 +894,6 @@ export default function FinanceiroPanel(){
               <div style={{fontSize:12,color:C.t4}}>ACoS ideal: abaixo de 20% · ROAS ideal: acima de 4x</div>
             </div>
             <div style={{padding:'16px 24px'}}>
-              {/* Summary row */}
               <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:20}}>
                 {[
                   {l:'Total Investido',v:`R$ ${fmtR(adsData.totalSpend)}`,c:C.a},
@@ -678,7 +908,6 @@ export default function FinanceiroPanel(){
                 ))}
               </div>
 
-              {/* ACoS Bar chart */}
               {mounted&&campaignChart.length>0&&(
                 <div style={{marginBottom:20}}>
                   <div style={{fontSize:10,fontWeight:700,color:C.t3,letterSpacing:'0.1em',marginBottom:12}}>ACoS POR CAMPANHA — quanto menor, melhor</div>
@@ -706,7 +935,6 @@ export default function FinanceiroPanel(){
                 </div>
               )}
 
-              {/* Campaign table */}
               <div>
                 <div style={{fontSize:10,fontWeight:700,color:C.t3,letterSpacing:'0.1em',marginBottom:10}}>DETALHAMENTO POR CAMPANHA</div>
                 <div style={{overflowX:'auto' as const}}>
@@ -762,7 +990,7 @@ export default function FinanceiroPanel(){
               ))}
             </div>
             <div style={{marginTop:14,padding:'10px 14px',background:'rgba(255,255,255,0.02)',borderRadius:8,fontSize:11,color:C.t3}}>
-              📌 Estes insights são gerados automaticamente com base nos dados carregados. Use como ponto de partida para análise.
+              📌 Insights gerados automaticamente com base nos dados carregados. Use como ponto de partida para análise.
             </div>
           </div>
         )}
