@@ -51,7 +51,11 @@ function brl(s:string):number{
 }
 function pct(s:string):number{ return parseFloat((s||'').replace('%','').replace(',','.'))||0 }
 const fmtR=(n:number)=>n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
-const fmtK=(n:number)=>n>=1000?`${(n/1000).toFixed(1).replace('.0','')}k`:`${n}`
+const fmtK=(n:number)=>{
+  const abs=Math.abs(n); const sign=n<0?'-':''
+  if(abs>=1000)return `${sign}${(abs/1000).toFixed(1).replace('.0','')}k`
+  return fmtR(n)
+}
 const uid=()=>Math.random().toString(36).slice(2)
 
 /* ── Parsers ──────────────────────────────────────────────────────────────── */
