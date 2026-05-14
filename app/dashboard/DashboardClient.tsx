@@ -707,6 +707,11 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
               <div style={{fontSize:12,color:T.t4,lineHeight:1.6}}>{verdict.s}</div>
             </div>
           </div>
+          {/* Imagens do Anúncio */}
+          {product.images && product.images.length > 0 && (
+            <ImageDownloader images={product.images} asin={product.asin} title={product.title} />
+          )}
+
           {/* CTAs */}
           <div style={{display:'flex',gap:10}}>
             <a href={`https://www.amazon.com.br/dp/${product.asin}`} target="_blank" rel="noreferrer"
@@ -718,6 +723,75 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Image Downloader ───────────────────────────────────────────────────── */
+function ImageDownloader({images,asin,title}:{images:string[];asin:string;title:string}){
+  const [downloading,setDownloading]=useState<number|'all'|null>(null)
+
+  function slug(t:string){return(t||asin).slice(0,40).replace(/[^a-z0-9]/gi,'-').toLowerCase()}
+
+  async function downloadOne(url:string, idx:number){
+    setDownloading(idx)
+    try{
+      const filename=`${slug(title)}-img${idx+1}.jpg`
+      const res=await fetch(`/api/product/image-proxy?url=${encodeURIComponent(url)}&filename=${filename}`)
+      if(!res.ok) throw new Error()
+      const blob=await res.blob()
+      const a=document.createElement('a')
+      a.href=URL.createObjectURL(blob)
+      a.download=filename
+      a.click()
+      URL.revokeObjectURL(a.href)
+    }catch{alert('Erro ao baixar imagem. Tente novamente.')}
+    finally{setDownloading(null)}
+  }
+
+  async function downloadAll(){
+    setDownloading('all')
+    for(let i=0;i<images.length;i++){
+      const filename=`${slug(title)}-img${i+1}.jpg`
+      try{
+        const res=await fetch(`/api/product/image-proxy?url=${encodeURIComponent(images[i])}&filename=${filename}`)
+        if(!res.ok) continue
+        const blob=await res.blob()
+        const a=document.createElement('a')
+        a.href=URL.createObjectURL(blob)
+        a.download=filename
+        a.click()
+        URL.revokeObjectURL(a.href)
+        await new Promise(r=>setTimeout(r,400)) // pequeno delay entre downloads
+      }catch{}
+    }
+    setDownloading(null)
+  }
+
+  return(
+    <div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+        <Lbl>Imagens do Anúncio ({images.length})</Lbl>
+        <button onClick={downloadAll} disabled={downloading==='all'}
+          style={{background:downloading==='all'?'rgba(240,180,41,0.05)':T.goldSub,border:`1px solid ${T.lineG}`,color:T.gold,fontSize:10,fontWeight:700,padding:'5px 14px',borderRadius:7,cursor:downloading==='all'?'wait':'pointer',fontFamily:'inherit',letterSpacing:'0.06em',opacity:downloading==='all'?0.6:1}}>
+          {downloading==='all'?'Baixando…':'⬇ Baixar Todas'}
+        </button>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(96px,1fr))',gap:8}}>
+        {images.map((url,i)=>(
+          <div key={i} style={{position:'relative' as const,background:'#F8F8FC',borderRadius:10,overflow:'hidden',aspectRatio:'1',display:'flex',alignItems:'center',justifyContent:'center',border:`1px solid ${T.line}`}}>
+            <img src={url} alt={`img ${i+1}`} style={{maxWidth:'90%',maxHeight:'90%',objectFit:'contain'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>
+            <button onClick={()=>downloadOne(url,i)} disabled={downloading===i||downloading==='all'}
+              style={{position:'absolute',bottom:4,right:4,background:'rgba(3,3,10,0.82)',backdropFilter:'blur(4px)',border:`1px solid ${T.lineG}`,color:T.gold,fontSize:11,width:26,height:26,borderRadius:7,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',opacity:downloading===i?0.5:1}}
+              title={`Baixar imagem ${i+1}`}>
+              {downloading===i?'…':'⬇'}
+            </button>
+            <div style={{position:'absolute',top:3,left:3,background:'rgba(3,3,10,0.7)',borderRadius:4,padding:'1px 5px',fontSize:9,color:T.t3,fontWeight:600}}>
+              {i+1}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
