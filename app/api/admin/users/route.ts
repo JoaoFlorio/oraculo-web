@@ -3,11 +3,12 @@ export const dynamic = 'force-dynamic'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 
-const ADMIN_KEY = process.env.INTERNAL_KEY || ''
+const ADMIN_KEY    = process.env.INTERNAL_KEY  || ''
+const ADMIN_SECRET = process.env.ADMIN_SECRET  || ''
+const BACKEND_URL  = process.env.BACKEND_URL   || 'https://central.oraculojf.com.br'
 
 function checkAuth(req: NextRequest) {
-  const key = req.headers.get('x-admin-key') || ''
-  return key === ADMIN_KEY
+  return req.headers.get('x-admin-key') === ADMIN_KEY
 }
 
 function calcExpiry(plan: string): Date | null {
@@ -18,7 +19,30 @@ function calcExpiry(plan: string): Date | null {
   return d
 }
 
-// GET  /api/admin/users?key=XXX  → lista todos os usuários
+/** Gera senha aleatória legível: ex. Orc#8f2kL */
+function genPassword(): string {
+  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'
+  let p = 'Orc#'
+  for (let i = 0; i < 6; i++) p += chars[Math.floor(Math.random() * chars.length)]
+  return p
+}
+
+/** Cria licença no backend. Retorna a chave gerada ou null em caso de falha. */
+async function createBackendLicense(email: string, plan: string): Promise<string | null> {
+  try {
+    const backendPlan = plan === 'free' ? 'monthly' : plan  // free não existe no backend
+    const res = await fetch(`${BACKEND_URL}/api/license/generate`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+      body:    JSON.stringify({ email: email.toLowerCase(), plan: backendPlan }),
+    })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.key || null
+  } catch { return null }
+}
+
+// GET /api/admin/users → lista todos os usuários
 export async function GET(req: NextRequest) {
   if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const users = await prisma.user.findMany({
@@ -28,12 +52,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ users })
 }
 
-// POST /api/admin/users  → cria ou atualiza usuário
-// Body: { key, email, name?, password?, plan? }
+// POST /api/admin/users → cria ou atualiza usuário + gera licença
 export async function POST(req: NextRequest) {
   if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { email, name, password, plan } = await req.json()
+  const { email, name, plan } = await req.json()
   if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
 
   const targetPlan = plan || 'monthly'
@@ -41,15 +64,24 @@ export async function POST(req: NextRequest) {
   const exists     = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
 
   if (exists) {
-    const data: any = { plan: targetPlan, expiresAt: expiry }
-    if (name) data.name = name
-    if (password) data.password = await bcrypt.hash(password, 12)
-    const updated = await prisma.user.update({ where: { id: exists.id }, data })
-    return NextResponse.json({ ok: true, action: 'updated', user: { id: updated.id, email: updated.email, plan: updated.plan, expiresAt: updated.expiresAt } })
+    // Atualiza plano do usuário existente
+    const updated = await prisma.user.update({
+      where: { id: exists.id },
+      data:  { plan: targetPlan, expiresAt: expiry },
+    })
+    // Tenta renovar/gerar licença no backend também
+    const licKey = await createBackendLicense(email, targetPlan)
+    return NextResponse.json({
+      ok: true, action: 'updated',
+      user: { email: updated.email, plan: updated.plan },
+      licenseKey: licKey,
+    })
   }
 
-  const hash = await bcrypt.hash(password || 'oraculo123', 12)
-  const user = await prisma.user.create({
+  // Novo usuário: gera senha automática
+  const password = genPassword()
+  const hash     = await bcrypt.hash(password, 12)
+  const user     = await prisma.user.create({
     data: {
       name:      name || email.split('@')[0],
       email:     email.toLowerCase(),
@@ -59,19 +91,27 @@ export async function POST(req: NextRequest) {
       expiresAt: expiry,
     },
   })
-  return NextResponse.json({ ok: true, action: 'created', user: { id: user.id, email: user.email, plan: user.plan }, defaultPassword: password ? undefined : 'oraculo123' })
+
+  // Gera licença no backend
+  const licKey = await createBackendLicense(email, targetPlan)
+
+  return NextResponse.json({
+    ok: true, action: 'created',
+    user:       { email: user.email, plan: user.plan },
+    password,   // senha gerada automaticamente
+    licenseKey: licKey,
+  })
 }
 
-// PATCH /api/admin/users  → muda plano de um usuário existente
-// Body: { key, email, plan }
+// PATCH /api/admin/users → muda plano
 export async function PATCH(req: NextRequest) {
   if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { email, plan } = await req.json()
   if (!email || !plan) return NextResponse.json({ error: 'email e plan obrigatórios' }, { status: 400 })
   const expiry = calcExpiry(plan)
-  const user = await prisma.user.update({
+  const user   = await prisma.user.update({
     where: { email: email.toLowerCase() },
     data:  { plan, expiresAt: expiry },
   })
-  return NextResponse.json({ ok: true, user: { email: user.email, plan: user.plan, expiresAt: user.expiresAt } })
+  return NextResponse.json({ ok: true, user: { email: user.email, plan: user.plan } })
 }
