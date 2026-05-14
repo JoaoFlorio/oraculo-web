@@ -93,6 +93,21 @@ function oScore(bsr:number,m:number,isGeneric=false):number{
   const g=isGeneric?10:0
   return Math.min(100,Math.max(5,b+mg+g+10))
 }
+// Score composto real: penaliza listing fraco mesmo com boa demanda
+function realScore(bsr:number, m:number, isGeneric:boolean, breakdown:any, numImages:number, reviewCount:number):number {
+  // Demand (max 35) — same as oScore BSR component
+  const d = bsr<=10?35:bsr<=50?30:bsr<=100?25:bsr<=200?20:bsr<=500?16:bsr<=1000?12:bsr<=5000?7:bsr<=30000?4:2
+  // Listing quality (max 40)
+  const imgPts = numImages>=7?14:numImages>=5?11:numImages>=3?7:numImages>=1?3:0
+  const bltPts = breakdown ? Math.round((breakdown.bullets.score/breakdown.bullets.max)*12) : 6
+  const titPts = breakdown ? Math.round((breakdown.title.score/breakdown.title.max)*8) : 4
+  const genPts = isGeneric ? 8 : 0  // generic = opportunity
+  // Reviews (max 15)
+  const revPts = reviewCount>=1000?15:reviewCount>=200?11:reviewCount>=50?7:reviewCount>=10?4:1
+  // Margin (max 10)
+  const mgPts = m>=35?10:m>=25?8:m>=15?5:m>=5?2:0
+  return Math.min(100, Math.max(5, d+imgPts+bltPts+titPts+genPts+revPts+mgPts))
+}
 // Estima idade do anúncio pelo prefixo do ASIN
 function asinToAge(asin:string):string{
   if(!asin||!asin.startsWith('B'))return'Desconhecido'
@@ -351,7 +366,7 @@ function PromoModal({promo,setPromo,onClose}:{promo:PromoState;setPromo:(p:Promo
 /* ─── Detail modal ───────────────────────────────────────────────────────── */
 function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo:PromoState}){
   const catId=CATS.find(c=>product.category?.toLowerCase().includes(c.label.toLowerCase().split(' ')[0]))?.id||'home'
-  const defP=DEF_P[catId]||99
+  const defP = product.price>0 ? Math.round(product.price) : (DEF_P[catId]||99)
   const [price,setPrice]=useState(defP)
   const [cost,setCost]=useState(Math.round(defP*.3))
   const [lsData,setLsData]=useState<any>(null)
@@ -379,13 +394,30 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
   const margin=price>0?+((profit/price)*100).toFixed(1):0
   const roi=cost>0?+((profit/cost)*100).toFixed(1):0
   const modalGeneric=!product.brand||product.brand.trim()===''
-  // Score real do listing (quando carregado) ou estimativa por BSR+margem
-  const score=lsData?.score ?? oScore(bsr,margin,modalGeneric)
+  const numImages = product.images?.length ?? 0
+  const reviewCount = product.reviewCount ?? 0
+  // Score composto real: penaliza listing fraco mesmo com boa demanda
+  const score = realScore(bsr, margin, modalGeneric, lsData?.breakdown ?? null, numImages, reviewCount)
   const sc=sColor(score)
-  const verdict=score>=75?{l:'Excelente Oportunidade',c:T.g,s:'Alta demanda, bom listing e margem sólida — forte potencial para FBA.'}
-    :score>=55?{l:'Boa Oportunidade',c:T.g,s:'Demanda consistente. Vale testar com estoque inicial médio.'}
-    :score>=38?{l:'Potencial Médio',c:T.a,s:'Demanda razoável ou listing fraco. Avalie a concorrência antes de entrar.'}
-    :{l:'Baixo Potencial',c:T.r,s:'BSR alto, listing fraco ou margem apertada. Recomendamos explorar outra opção.'}
+  const verdictDetails = (() => {
+    const parts:string[] = []
+    if(bsr>0&&bsr<=100) parts.push(`BSR #${fmtN(bsr)} indica demanda excepcional`)
+    else if(bsr>0&&bsr<=1000) parts.push(`BSR #${fmtN(bsr)} — demanda ${dem.l.toLowerCase()}`)
+    if(margin>=30) parts.push(`margem sólida de ${margin}%`)
+    else if(margin>0) parts.push(`margem de ${margin}% (tente reduzir CMV)`)
+    if(numImages<4) parts.push(`⚠️ apenas ${numImages} imagem(ns) — ponto crítico`)
+    if(reviewCount<15&&reviewCount>0) parts.push(`⚠️ só ${reviewCount} review(s) — priorize conseguir mais`)
+    if(reviewCount===0) parts.push(`⚠️ sem reviews — risco alto`)
+    if(modalGeneric) parts.push(`nicho genérico sem marca dominante`)
+    return parts.length>0 ? parts.join(' · ') : 'Analise os pontos acima antes de decidir.'
+  })()
+  const verdict = score>=75
+    ? {l:'Excelente Oportunidade',c:T.g,  s:verdictDetails}
+    : score>=55
+    ? {l:'Boa Oportunidade',      c:T.g,  s:verdictDetails}
+    : score>=38
+    ? {l:'Potencial Médio',       c:T.a,  s:verdictDetails}
+    : {l:'Baixo Potencial',       c:T.r,  s:verdictDetails}
 
   return(
     <div onClick={e=>e.target===e.currentTarget&&onClose()}
@@ -475,13 +507,14 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
           <div>
             <Lbl style={{marginBottom:14}}>Simulador de Lucratividade</Lbl>
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:14}}>
-              {[{l:'Preço de Venda (R$)',v:price,s:setPrice},{l:'Custo do Produto (R$)',v:cost,s:setCost}].map(f=>(
+              {[{l:'Preço de Venda (R$)',v:price,s:setPrice,isPrice:true},{l:'Custo do Produto (R$)',v:cost,s:setCost,isPrice:false}].map(f=>(
                 <div key={f.l} style={{background:T.bg,border:`1px solid ${T.lineG}`,borderRadius:10,padding:'12px 16px'}}>
                   <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:8}}>{f.l}</div>
                   <div style={{display:'flex',alignItems:'baseline',gap:4}}>
                     <span style={{fontSize:13,color:T.t3,fontWeight:500}}>R$</span>
                     <input type="number" min={0} value={f.v} onChange={e=>(f.s as any)(+e.target.value||0)} style={{background:'none',border:'none',color:T.gold,fontSize:22,fontWeight:700,width:'100%',outline:'none',fontFamily:'inherit'}}/>
                   </div>
+                  {f.isPrice && product.price>0 && <div style={{fontSize:9,color:T.t3,marginTop:4}}>📌 Preço real da listagem</div>}
                 </div>
               ))}
             </div>
@@ -546,30 +579,109 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
           </div>
           {/* Como Melhorar */}
           {(()=>{
-            type Rec={priority:'Alta'|'Média';title:string;desc:string;icon:string}
-            const recs:Rec[]=[]
-            if(lsData?.breakdown){
-              const {images,bullets,title:t,demand}=lsData.breakdown
-              if(images.score<16) recs.push({priority:'Alta',title:'Adicione mais imagens',desc:'Anúncio com poucas fotos perde conversão. Use todas as 7 disponíveis: fundo branco, lifestyle, dimensões e diferenciais.',icon:'📸'})
-              if(bullets.score<16) recs.push({priority:'Alta',title:'Complete os bullet points',desc:'Preencha os 5 bullet points destacando benefícios, materiais, diferenciais e para quem é o produto.',icon:'📝'})
-              if(t.score<12) recs.push({priority:'Alta',title:'Otimize o título com palavras-chave',desc:'Título curto perde visibilidade na busca. Inclua as principais keywords que seu cliente digitaria.',icon:'🔤'})
-              if(demand.score<20) recs.push({priority:'Alta',title:'Entre com preço menor para rankear',desc:'BSR alto indica pouca tração. Preço agressivo nas primeiras semanas acelera vendas e melhora o ranking.',icon:'📉'})
-            } else {
-              recs.push(
-                {priority:'Alta',title:'Entre com preço menor para rankear',desc:'Preço competitivo nas primeiras semanas acelera as vendas iniciais e melhora o BSR rapidamente.',icon:'📉'},
-                {priority:'Alta',title:'Adicione imagens profissionais',desc:'Use as 7 fotos disponíveis: fundo branco, lifestyle, dimensões e diferenciais do produto.',icon:'📸'},
-              )
+            // ── Personalized recommendations ────────────────────────────────────────
+            type Rec = {priority:'Alta'|'Média'|'Baixa';title:string;desc:string;icon:string}
+            const recs:Rec[] = []
+            const hasAPlus = lsData?.breakdown?.images?.label?.toLowerCase().includes('a+') ?? false
+            const titleLen = (product.title||'').length
+
+            // Image recommendations
+            if(numImages < 4){
+              recs.push({priority:'Alta',icon:'📸',
+                title:`Adicione mais imagens (você tem ${numImages}, o ideal é 7)`,
+                desc:`Anúncios com 7 imagens convertem até 58% mais. Inclua: fundo branco, lifestyle, infográfico de benefícios, comparativo de tamanho e detalhe de materiais.`})
+            } else if(numImages < 7){
+              recs.push({priority:'Média',icon:'🖼️',
+                title:`Complete as ${7-numImages} imagem(ns) restante(s) para 7 no total`,
+                desc:`Você tem ${numImages} imagens — faltam ${7-numImages} para atingir o máximo. Priorize um infográfico e uma foto de lifestyle em uso.`})
             }
-            recs.push(
-              {priority:'Média',title:'Ative um cupom de desconto',desc:'Cupons aparecem com destaque nos resultados de busca e aumentam o CTR e a conversão do anúncio.',icon:'🏷️'},
-              {priority:'Média',title:'Adicione Conteúdo A+',desc:'Conteúdo A+ pode aumentar a conversão em até 10%. Disponível para marcas cadastradas no Brand Registry.',icon:'⭐'},
-            )
+
+            // Review recommendations
+            if(reviewCount === 0){
+              recs.push({priority:'Alta',icon:'⭐',
+                title:'Conquiste as primeiras avaliações urgente',
+                desc:`Produtos sem reviews têm conversão próxima de zero em buscas frias. Use o programa "Solicitar Avaliação" no Seller Central para cada pedido dos primeiros 30 dias.`})
+            } else if(reviewCount < 15){
+              recs.push({priority:'Alta',icon:'⭐',
+                title:`Escale para 15+ reviews (você tem ${reviewCount})`,
+                desc:`Abaixo de 15 reviews o algoritmo da Amazon não indexa bem o produto. Solicite avaliação para todos os pedidos ativos.`})
+            } else if(reviewCount < 100){
+              recs.push({priority:'Média',icon:'⭐',
+                title:`${reviewCount} reviews — meta: 100+ para dominar a busca`,
+                desc:`Com 100+ reviews a taxa de conversão aumenta significativamente. Continue solicitando avaliações e responda todos os reviews negativos.`})
+            }
+
+            // Title recommendations
+            if(titleLen < 80){
+              recs.push({priority:'Alta',icon:'🔤',
+                title:'Título muito curto — expanda com palavras-chave',
+                desc:`Seu título tem ${titleLen} caracteres. O ideal é 130-200. Inclua: modelo, material, benefício principal, público-alvo e compatibilidades. Cada palavra-chave extra é tráfego extra.`})
+            } else if(titleLen < 130){
+              recs.push({priority:'Média',icon:'🔤',
+                title:'Otimize o título com mais palavras-chave de cauda longa',
+                desc:`Título com ${titleLen} caracteres pode crescer até 200. Adicione especificações técnicas, casos de uso e variações de busca que o cliente usaria.`})
+            }
+
+            // Bullets (based on breakdown)
+            if(lsData?.breakdown?.bullets?.score !== undefined){
+              const bPct = Math.round((lsData.breakdown.bullets.score/lsData.breakdown.bullets.max)*100)
+              if(bPct < 50){
+                recs.push({priority:'Alta',icon:'📝',
+                  title:'Bullets pontos fracos — reescreva focando em benefícios',
+                  desc:`Seus bullet points estão ${bPct}% do ideal. Cada bullet deve começar com o benefício principal em maiúsculas, seguido da explicação. Ex: "RESISTENTE À ÁGUA — Material impermeável protege contra chuva e umidade".`})
+              } else if(bPct < 80){
+                recs.push({priority:'Média',icon:'📝',
+                  title:'Melhore os bullet points com prova social e especificações',
+                  desc:`Bullets a ${bPct}% do ideal. Adicione dados específicos (dimensões, peso, capacidade), certificações e o que o produto inclui na embalagem.`})
+              }
+            }
+
+            // A+ content
+            if(!hasAPlus && !modalGeneric){
+              recs.push({priority:'Média',icon:'✨',
+                title:'Adicione Conteúdo A+ para aumentar conversão',
+                desc:`Conteúdo A+ eleva a conversão em 3-10% e reduz devoluções. Disponível para marcas no Brand Registry. Crie um módulo de comparativo e um de história da marca.`})
+            } else if(modalGeneric){
+              recs.push({priority:'Média',icon:'🏷️',
+                title:'Registre sua marca no Brand Registry',
+                desc:`Produtos genéricos são vulneráveis a competidores e não podem ter A+. Registrar a marca desbloqueia: A+ content, Sponsored Brands, Brand Store e proteção anti-hijacking.`})
+            }
+
+            // Coupon
+            if(bsr > 100){
+              recs.push({priority:'Média',icon:'🎫',
+                title:'Ative um cupom de desconto para impulsionar BSR',
+                desc:`Cupons aparecem como badge verde nos resultados de busca e aumentam o CTR em até 25%. Use um desconto de 5-10% para acelerar as vendas e subir no ranking.`})
+            }
+
+            // Price competitiveness
+            if(product.price > 0){
+              const catRef = REF[catId] || 0.15
+              const impliedMargin = ((product.price - product.price*catRef - (product.price<50?12:18) - product.price*.3) / product.price)*100
+              if(impliedMargin > 40){
+                recs.push({priority:'Baixa',icon:'💰',
+                  title:'Margem alta — considere investir em tráfego pago',
+                  desc:`Com margem estimada de ${impliedMargin.toFixed(0)}%, você tem espaço para aumentar o orçamento de ads (TACOS alvo: 8-12%) e crescer mais rápido sem perder rentabilidade.`})
+              }
+            }
+
+            // BSR-specific tip
+            if(bsr > 5000 && bsr <= 30000){
+              recs.push({priority:'Alta',icon:'📈',
+                title:`BSR #${fmtN(bsr)} — concentre-se em uma palavra-chave para rankear`,
+                desc:`Com BSR nessa faixa, dominar 1 keyword específica de cauda longa é mais eficiente que tentar várias. Foque o PPC nessa keyword e peça reviews de clientes que vieram por ela.`})
+            }
+
+            // Sort by priority
+            const pOrd = {'Alta':0,'Média':1,'Baixa':2}
+            recs.sort((a,b)=>pOrd[a.priority]-pOrd[b.priority])
+
             return(
               <div>
                 <Lbl style={{marginBottom:12}}>Como Melhorar Este Anúncio</Lbl>
                 <div style={{display:'flex',flexDirection:'column',gap:8}}>
                   {recs.map((r,i)=>{
-                    const hc=r.priority==='Alta'?T.r:T.a
+                    const hc=r.priority==='Alta'?T.r:r.priority==='Média'?T.a:T.t3
                     return(
                       <div key={i} style={{display:'flex',gap:12,alignItems:'flex-start',background:T.bg,border:`1px solid ${hc}25`,borderLeft:`3px solid ${hc}`,borderRadius:10,padding:'11px 14px'}}>
                         <div style={{fontSize:17,lineHeight:1,flexShrink:0,marginTop:1}}>{r.icon}</div>
