@@ -20,7 +20,10 @@ export async function GET(req: NextRequest) {
     return new NextResponse(null, { status: 404 })
   }
 
-  const res = NextResponse.redirect(new URL('/admin', req.url))
+  // Usa o host real (x-forwarded-host no Railway) para montar o redirect
+  const proto = req.headers.get('x-forwarded-proto') || 'https'
+  const host  = req.headers.get('x-forwarded-host')  || req.headers.get('host') || 'app.oraculojf.com.br'
+  const res = NextResponse.redirect(new URL('/admin', `${proto}://${host}`))
 
   // Cookie httpOnly: JavaScript do browser não consegue ler nem roubar
   res.cookies.set(ADMIN_COOKIE, ADMIN_TOKEN, {
@@ -38,7 +41,9 @@ export async function GET(req: NextRequest) {
  * DELETE /api/admin/unlock  → logout do admin (limpa o cookie)
  */
 export async function DELETE(req: NextRequest) {
-  const res = NextResponse.redirect(new URL('/', req.url))
+  const proto = req.headers.get('x-forwarded-proto') || 'https'
+  const host  = req.headers.get('x-forwarded-host')  || req.headers.get('host') || 'app.oraculojf.com.br'
+  const res = NextResponse.redirect(new URL('/', `${proto}://${host}`))
   res.cookies.delete(ADMIN_COOKIE)
   return res
 }
