@@ -1,38 +1,65 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 const PLANS = ['free', 'monthly', 'annual', 'lifetime']
 const PLAN_LABEL: Record<string, string> = { free: 'Gratuito', monthly: 'Mensal', annual: 'Anual', lifetime: 'Vitalício' }
 const PLAN_COLOR: Record<string, string> = { free: '#64748B', monthly: '#3B82F6', annual: '#F0B429', lifetime: '#10B981' }
 
 export default function AdminPage() {
-  const [key,       setKey]       = useState('')
-  const [authed,    setAuthed]    = useState(false)
-  const [users,     setUsers]     = useState<any[]>([])
-  const [loading,   setLoading]   = useState(false)
-  const [msg,       setMsg]       = useState<{ text: string; ok: boolean } | null>(null)
+  const [key,     setKey]     = useState('')
+  const [authed,  setAuthed]  = useState(false)
+  const [users,   setUsers]   = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [msg,     setMsg]     = useState<{ text: string; ok: boolean } | null>(null)
+  const [attempts,setAttempts]= useState(0)
+  const [blocked, setBlocked] = useState(false)
 
-  // form criar/editar
   const [email,    setEmail]    = useState('')
   const [name,     setName]     = useState('')
   const [password, setPassword] = useState('')
   const [plan,     setPlan]     = useState('monthly')
 
+  // Envia sempre via header x-admin-key, nunca via query string
+  function authHeaders() {
+    return { 'Content-Type': 'application/json', 'x-admin-key': key }
+  }
+
   async function login() {
-    setLoading(true)
-    const res = await fetch(`/api/admin/users?key=${key}`)
+    if (blocked) return
+    setLoading(true); setMsg(null)
+
+    // Chave em branco = nem tenta
+    if (!key.trim()) {
+      setMsg({ text: 'Informe a chave de acesso', ok: false })
+      setLoading(false); return
+    }
+
+    // GET usa header, não query string
+    const res = await fetch('/api/admin/users', { headers: authHeaders() })
+
     if (res.ok) {
       const data = await res.json()
       setUsers(data.users || [])
       setAuthed(true)
+      setAttempts(0)
     } else {
-      setMsg({ text: 'Senha incorreta', ok: false })
+      const newAttempts = attempts + 1
+      setAttempts(newAttempts)
+
+      // Bloqueia após 5 tentativas erradas por 30s
+      if (newAttempts >= 5) {
+        setBlocked(true)
+        setMsg({ text: 'Muitas tentativas. Aguarde 30 segundos.', ok: false })
+        setTimeout(() => { setBlocked(false); setAttempts(0) }, 30_000)
+      } else {
+        setMsg({ text: `Chave incorreta (${newAttempts}/5)`, ok: false })
+      }
     }
     setLoading(false)
   }
 
   async function loadUsers() {
-    const res = await fetch(`/api/admin/users?key=${key}`)
+    const res = await fetch('/api/admin/users', { headers: authHeaders() })
     if (res.ok) { const d = await res.json(); setUsers(d.users || []) }
   }
 
@@ -41,7 +68,7 @@ export default function AdminPage() {
     setLoading(true); setMsg(null)
     const res = await fetch('/api/admin/users', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+      headers: authHeaders(),
       body: JSON.stringify({ email, name, password, plan }),
     })
     const data = await res.json()
@@ -60,15 +87,20 @@ export default function AdminPage() {
   async function changePlan(userEmail: string, newPlan: string) {
     const res = await fetch('/api/admin/users', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+      headers: authHeaders(),
       body: JSON.stringify({ email: userEmail, plan: newPlan }),
     })
     if (res.ok) { setMsg({ text: `✓ Plano atualizado`, ok: true }); await loadUsers() }
   }
 
+  async function logout() {
+    await fetch('/api/admin/unlock', { method: 'DELETE' })
+    window.location.href = '/'
+  }
+
   const s: Record<string, any> = {
     page:  { minHeight: '100vh', background: '#0A0A0F', fontFamily: 'Inter, sans-serif', color: '#E2E8F0', padding: '40px 24px' },
-    card:  { background: '#0D0D1A', border: '1px solid rgba(30,30,48,0.9)', borderRadius: 16, padding: '24px 28px', maxWidth: 480, margin: '0 auto 24px' },
+    card:  { background: '#0D0D1A', border: '1px solid rgba(30,30,48,0.9)', borderRadius: 16, padding: '24px 28px', maxWidth: 420, margin: '0 auto 24px' },
     wide:  { background: '#0D0D1A', border: '1px solid rgba(30,30,48,0.9)', borderRadius: 16, padding: '24px 28px', maxWidth: 900, margin: '0 auto 24px' },
     label: { fontSize: 11, fontWeight: 700, color: '#64748B', letterSpacing: '0.08em', marginBottom: 6, display: 'block' },
     input: { width: '100%', background: '#0A0A0F', border: '1px solid rgba(30,30,48,0.9)', borderRadius: 10, color: '#E2E8F0', padding: '10px 14px', fontSize: 13, outline: 'none', marginBottom: 14, fontFamily: 'inherit' },
@@ -76,31 +108,54 @@ export default function AdminPage() {
     title: { fontSize: 22, fontWeight: 900, color: '#F0B429', letterSpacing: '0.1em', textAlign: 'center' as const, marginBottom: 8 },
   }
 
+  /* ── Login screen ──────────────────────────────────────────────────────── */
   if (!authed) return (
     <div style={s.page}>
       <div style={s.card}>
         <div style={s.title}>🔮 ORÁCULO</div>
         <div style={{ textAlign: 'center', fontSize: 12, color: '#475569', marginBottom: 28 }}>Painel de Administração</div>
-        {msg && <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: msg.ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: msg.ok ? '#10B981' : '#EF4444', fontSize: 12, border: `1px solid ${msg.ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>{msg.text}</div>}
-        <label style={s.label}>CHAVE ADMIN (INTERNAL_KEY)</label>
-        <input style={s.input} type="password" value={key} onChange={e => setKey(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && login()} placeholder="oraculo-internal-2025" />
-        <button style={{ ...s.btn, width: '100%', padding: 12 }} onClick={login} disabled={loading}>
-          {loading ? 'Entrando...' : 'ENTRAR'}
+        {msg && (
+          <div style={{ padding: '10px 14px', borderRadius: 10, marginBottom: 16, background: msg.ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: msg.ok ? '#10B981' : '#EF4444', fontSize: 12, border: `1px solid ${msg.ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
+            {msg.text}
+          </div>
+        )}
+        <label style={s.label}>CHAVE DE ACESSO</label>
+        <input
+          style={{ ...s.input, opacity: blocked ? 0.5 : 1 }}
+          type="password"
+          value={key}
+          autoComplete="off"
+          disabled={blocked}
+          onChange={e => setKey(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !blocked && login()}
+          placeholder="••••••••••••"
+        />
+        <button
+          style={{ ...s.btn, width: '100%', padding: 12, opacity: blocked ? 0.5 : 1 }}
+          onClick={login}
+          disabled={loading || blocked}
+        >
+          {loading ? 'Verificando...' : blocked ? 'Aguarde 30s...' : 'ENTRAR'}
         </button>
       </div>
     </div>
   )
 
+  /* ── Admin screen ──────────────────────────────────────────────────────── */
   return (
     <div style={s.page}>
       {/* Header */}
       <div style={{ maxWidth: 900, margin: '0 auto 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 18, fontWeight: 900, color: '#F0B429', letterSpacing: '0.1em' }}>🔮 ORÁCULO ADMIN</div>
-        <div style={{ fontSize: 12, color: '#475569' }}>{users.length} usuários cadastrados</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ fontSize: 12, color: '#475569' }}>{users.length} usuários cadastrados</div>
+          <button onClick={logout} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#EF4444', fontSize: 11, padding: '6px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+            Sair
+          </button>
+        </div>
       </div>
 
-      {/* Flash message */}
+      {/* Flash */}
       {msg && (
         <div style={{ maxWidth: 900, margin: '0 auto 16px', padding: '10px 16px', borderRadius: 10, background: msg.ok ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: msg.ok ? '#10B981' : '#EF4444', fontSize: 12, border: `1px solid ${msg.ok ? 'rgba(16,185,129,0.3)' : 'rgba(239,68,68,0.3)'}` }}>
           {msg.text}
@@ -114,15 +169,15 @@ export default function AdminPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div>
               <label style={s.label}>E-MAIL *</label>
-              <input style={s.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="teste@email.com" required />
+              <input style={s.input} type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="usuario@email.com" required />
             </div>
             <div>
               <label style={s.label}>NOME</label>
-              <input style={s.input} value={name} onChange={e => setName(e.target.value)} placeholder="Nome do usuário" />
+              <input style={s.input} value={name} onChange={e => setName(e.target.value)} placeholder="Nome completo" />
             </div>
             <div>
-              <label style={s.label}>SENHA (deixe em branco = oraculo123)</label>
-              <input style={s.input} type="text" value={password} onChange={e => setPassword(e.target.value)} placeholder="oraculo123" />
+              <label style={s.label}>SENHA <span style={{ color: '#475569', fontWeight: 400 }}>(deixe em branco para senha padrão)</span></label>
+              <input style={s.input} type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
             </div>
             <div>
               <label style={s.label}>PLANO</label>

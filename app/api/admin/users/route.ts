@@ -6,7 +6,7 @@ import { prisma } from '@/lib/db'
 const ADMIN_KEY = process.env.INTERNAL_KEY || ''
 
 function checkAuth(req: NextRequest) {
-  const key = req.headers.get('x-admin-key') || req.nextUrl.searchParams.get('key') || ''
+  const key = req.headers.get('x-admin-key') || ''
   return key === ADMIN_KEY
 }
 
