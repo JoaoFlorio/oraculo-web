@@ -341,7 +341,7 @@ async function apiSave(m:SavedMeta): Promise<void> {
 /* ═══════════════════════════════════════════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════════════════════════════════════════ */
-export default function FinanceiroPanel(){
+export default function FinanceiroPanel({promoActive=false,promoType=null}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null}){
   const [mounted,    setMounted]    = useState(false)
   const [salesData,  setSalesData]  = useState<SalesData|null>(null)
   const [adsData,    setAdsData]    = useState<AdsData|null>(null)
@@ -417,10 +417,14 @@ export default function FinanceiroPanel(){
   const cmv           = hasCosts ? autoCmv : 0
   const otherCosts    = autoDespesas
 
+  /* ── Promo fee overrides ───────────────────────────────────────────────── */
+  const effectiveAmazonFee = promoActive&&(promoType==='comissao'||promoType==='ambas') ? 0 : cfg.amazonFee
+  const effectiveFbaFee    = promoActive&&(promoType==='fba'||promoType==='ambas')      ? 0 : cfg.fbaFee
+
   /* ── DRE calculations ──────────────────────────────────────────────────── */
   const receita          = salesData?.revenue ?? 0
-  const comissao         = receita*(cfg.amazonFee/100)
-  const fba              = receita*(cfg.fbaFee/100)
+  const comissao         = receita*(effectiveAmazonFee/100)
+  const fba              = receita*(effectiveFbaFee/100)
   const ads              = adsData?.totalSpend ?? 0
   const liqMarketplace   = receita - comissao - fba
   const lucroBrutoSemAds = liqMarketplace - cmv
@@ -453,7 +457,7 @@ export default function FinanceiroPanel(){
       color: c.acos===0?C.t3:c.acos<20?C.g:c.acos<30?C.a:C.r,
     }))
 
-  const insights = calcInsights(salesData,adsData,cfg,cmv,otherCosts)
+  const insights = calcInsights(salesData,adsData,{amazonFee:effectiveAmazonFee,fbaFee:effectiveFbaFee},cmv,otherCosts)
 
   const lastM   = salesData?.lastMonthRevenue??0
   const lastY   = salesData?.lastYearRevenue??0
@@ -484,7 +488,14 @@ export default function FinanceiroPanel(){
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:28}}>
         <div>
-          <h2 style={{fontSize:22,fontWeight:900,color:C.t1,letterSpacing:'-0.03em',marginBottom:4}}>💰 Painel Financeiro</h2>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:4}}>
+            <h2 style={{fontSize:22,fontWeight:900,color:C.t1,letterSpacing:'-0.03em'}}>💰 Painel Financeiro</h2>
+            {promoActive&&(
+              <span style={{fontSize:10,fontWeight:700,color:C.g,background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.25)',borderRadius:99,padding:'3px 10px',letterSpacing:'0.06em'}}>
+                🎁 {promoType==='comissao'?'Comissão zerada':promoType==='fba'?'FBA zerado':'Comissão + FBA zerados'}
+              </span>
+            )}
+          </div>
           <p style={{fontSize:12,color:C.t3}}>Carregue seus relatórios Amazon e veja seu DRE em segundos</p>
         </div>
         <div style={{display:'flex',gap:8}}>
@@ -804,9 +815,9 @@ export default function FinanceiroPanel(){
             sub={salesData?.period??'Carregue o relatório de vendas'} color={C.gold}
             tip="Total de vendas no período antes de qualquer desconto ou taxa. Topo do DRE."/>
           <KPICard icon="🏦" label="Líq. Marketplace" value={salesData?`R$ ${fmtK(liqMarketplace)}`:'—'}
-            sub={salesData?`${(liqMarketplace/receita*100).toFixed(1)}% do faturamento`:'—'}
+            sub={salesData?(promoActive?`🎁 ${(liqMarketplace/receita*100).toFixed(1)}% — c/ promoção`:`${(liqMarketplace/receita*100).toFixed(1)}% do faturamento`):'—'}
             color={C.blue}
-            tip="Faturamento menos comissão Amazon e FBA. O que a Amazon deposita antes de subtrair CMV e ads."/>
+            tip={promoActive?"🎁 Calculado com tarifas zeradas pela promoção Amazon.":"Faturamento menos comissão Amazon e FBA. O que a Amazon deposita antes de subtrair CMV e ads."}/>
           <KPICard icon="📊" label="Lucro Bruto" value={salesData?(cmvFilled?`R$ ${fmtK(lucroBrutoSemAds)}`:'preencha custos ↑'):'—'}
             sub={salesData&&cmvFilled?`Margem ${margem.toFixed(1)}%`:'Líq. Marketplace − CMV'}
             color={cmvFilled?(lucroBrutoSemAds>0?C.g:C.r):C.t3}
@@ -952,13 +963,19 @@ export default function FinanceiroPanel(){
 
           {dreOpen&&(
             <div style={{padding:'12px 8px'}}>
+              {promoActive&&(
+                <div style={{display:'flex',alignItems:'center',gap:8,margin:'0 8px 8px',padding:'9px 14px',background:'rgba(34,197,94,0.06)',border:'1px solid rgba(34,197,94,0.2)',borderRadius:10,fontSize:11,color:C.g}}>
+                  <span>🎁</span>
+                  <span><strong>Promoção ativa:</strong> {promoType==='comissao'?'Comissão zerada':promoType==='fba'?'FBA zerado':'Comissão + FBA zerados'} — tarifas ajustadas no DRE</span>
+                </div>
+              )}
               {salesData&&<>
                 <DRERow icon="💰" label="Receita Bruta (Faturamento)" value={receita} pctVal={100} color={C.gold} bold
                   tip="Total de vendas no período. Topo do DRE."/>
-                <DRERow icon="📦" label={`Comissão Amazon (${cfg.amazonFee}%)`} value={-comissao} pctVal={cfg.amazonFee} color={C.r} indent
-                  tip="Comissão por categoria. Use 15% como padrão geral."/>
-                <DRERow icon="🏭" label={`Taxa FBA (${cfg.fbaFee}%)`} value={-fba} pctVal={cfg.fbaFee} color={C.r} indent
-                  tip="Custo de fulfillment Amazon. Varia com tamanho e peso do produto."/>
+                <DRERow icon="📦" label={effectiveAmazonFee===0?`Comissão Amazon (${cfg.amazonFee}%) 🎁`:`Comissão Amazon (${cfg.amazonFee}%)`} value={-comissao} pctVal={effectiveAmazonFee} color={effectiveAmazonFee===0?C.g:C.r} indent
+                  tip={effectiveAmazonFee===0?"🎁 Comissão zerada pela promoção Amazon.":"Comissão por categoria. Use 15% como padrão geral."}/>
+                <DRERow icon="🏭" label={effectiveFbaFee===0?`Taxa FBA (${cfg.fbaFee}%) 🎁`:`Taxa FBA (${cfg.fbaFee}%)`} value={-fba} pctVal={effectiveFbaFee} color={effectiveFbaFee===0?C.g:C.r} indent
+                  tip={effectiveFbaFee===0?"🎁 Tarifa FBA zerada pela promoção Amazon.":"Custo de fulfillment Amazon. Varia com tamanho e peso do produto."}/>
                 <DRERow icon="🏦" label="Líq. Marketplace" value={liqMarketplace} pctVal={receita>0?liqMarketplace/receita*100:0}
                   color={C.blue} bold separator
                   tip="O que a Amazon deposita na sua conta após descontar comissão e FBA."/>

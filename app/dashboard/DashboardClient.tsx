@@ -256,8 +256,100 @@ function UpgradeModal({onClose}:{onClose:()=>void}){
   )
 }
 
+/* ─── Promo types ────────────────────────────────────────────────────────── */
+type PromoState = { active:boolean; type:'comissao'|'fba'|'ambas'|null }
+
+/* ─── Promo Modal ────────────────────────────────────────────────────────── */
+function PromoModal({promo,setPromo,onClose}:{promo:PromoState;setPromo:(p:PromoState)=>void;onClose:()=>void}){
+  const [active,setActive]=useState<boolean|null>(promo.active?true:null)
+  const [type,setType]=useState<'comissao'|'fba'|'ambas'|null>(promo.type)
+
+  function apply(){
+    if(active===false){setPromo({active:false,type:null});onClose();return}
+    if(active===true&&type){setPromo({active:true,type});onClose()}
+  }
+
+  const canApply = active===false||(active===true&&type!==null)
+
+  const typeOpts:[string,'comissao'|'fba'|'ambas',string,string][]=[
+    ['📦','comissao','Comissão de Referência','Taxa % sobre venda zerada'],
+    ['🚚','fba','Tarifa FBA','Frete + fulfillment zerado'],
+    ['✨','ambas','Ambas','Comissão E FBA zeradas'],
+  ]
+
+  return(
+    <div onClick={e=>e.target===e.currentTarget&&onClose()}
+      style={{position:'fixed',inset:0,background:'rgba(1,1,8,0.92)',backdropFilter:'blur(14px)',zIndex:910,overflowY:'auto',padding:'32px 16px',display:'flex',alignItems:'flex-start',justifyContent:'center'}}>
+      <div style={{width:'100%',maxWidth:460,background:T.modal,border:`1px solid ${T.lineG}`,borderRadius:20,overflow:'hidden',boxShadow:'0 40px 80px rgba(0,0,0,0.8)'}}>
+        {/* Header */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'22px 24px 18px',borderBottom:`1px solid ${T.line}`,background:`linear-gradient(180deg,rgba(240,180,41,0.06) 0%,transparent 100%)`}}>
+          <div>
+            <div style={{fontSize:18,marginBottom:4}}>🎁 Promoção Amazon Ativa?</div>
+            <div style={{fontSize:12,color:T.t3}}>Configure a isenção de tarifas para este período</div>
+          </div>
+          <button onClick={onClose} style={{background:'none',border:`1px solid ${T.line}`,color:T.t2,width:32,height:32,borderRadius:8,cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}>✕</button>
+        </div>
+        <div style={{padding:'24px'}}>
+          {/* Question */}
+          <div style={{fontSize:13,fontWeight:600,color:T.t1,marginBottom:16}}>A Amazon liberou isenção de tarifas para sua conta neste período?</div>
+          {/* Yes/No pills */}
+          <div style={{display:'flex',gap:10,marginBottom:24}}>
+            <button onClick={()=>setActive(false)}
+              style={{flex:1,padding:'12px',borderRadius:12,border:`1.5px solid ${active===false?'rgba(160,160,200,0.6)':T.line}`,
+                background:active===false?'rgba(160,160,200,0.1)':'transparent',color:active===false?T.t1:T.t3,
+                fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit',transition:'all .15s'}}>
+              Não, desativar
+            </button>
+            <button onClick={()=>setActive(true)}
+              style={{flex:1,padding:'12px',borderRadius:12,border:`1.5px solid ${active===true?T.gold:T.line}`,
+                background:active===true?'rgba(240,180,41,0.08)':'transparent',color:active===true?T.gold:T.t3,
+                fontWeight:700,fontSize:13,cursor:'pointer',fontFamily:'inherit',transition:'all .15s',
+                boxShadow:active===true?`0 0 20px rgba(240,180,41,0.15)`:undefined}}>
+              Sim, ativar
+            </button>
+          </div>
+          {/* Type selection */}
+          {active===true&&(
+            <div style={{marginBottom:24}}>
+              <div style={{fontSize:11,fontWeight:700,color:T.t3,letterSpacing:'0.1em',marginBottom:12}}>Qual isenção está ativa?</div>
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {typeOpts.map(([icon,val,title,desc])=>(
+                  <button key={val} onClick={()=>setType(val)}
+                    style={{display:'flex',alignItems:'center',gap:14,padding:'14px 16px',borderRadius:12,
+                      border:`1.5px solid ${type===val?T.gold:T.line}`,
+                      background:type===val?'rgba(240,180,41,0.06)':'transparent',
+                      cursor:'pointer',fontFamily:'inherit',textAlign:'left' as const,transition:'all .15s',
+                      boxShadow:type===val?`0 0 16px rgba(240,180,41,0.12)`:undefined}}>
+                    <span style={{fontSize:22,flexShrink:0}}>{icon}</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:13,fontWeight:700,color:type===val?T.t1:T.t2,marginBottom:2}}>{title}</div>
+                      <div style={{fontSize:11,color:T.t3}}>{desc}</div>
+                    </div>
+                    {type===val&&<div style={{width:18,height:18,borderRadius:'50%',background:T.gold,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 2.5" stroke="#02020A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </div>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {/* Apply button */}
+          <button onClick={apply} disabled={!canApply}
+            style={{width:'100%',padding:'14px',borderRadius:12,border:'none',cursor:canApply?'pointer':'not-allowed',fontFamily:'inherit',
+              fontWeight:700,fontSize:13,letterSpacing:'0.06em',transition:'all .15s',
+              background:canApply?T.goldG:'rgba(255,255,255,0.05)',
+              color:canApply?'#02020A':T.t3,
+              boxShadow:canApply?'0 4px 20px rgba(240,180,41,0.3)':undefined}}>
+            Aplicar em todo o sistema
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Detail modal ───────────────────────────────────────────────────────── */
-function DetailModal({product,onClose}:{product:any;onClose:()=>void}){
+function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo:PromoState}){
   const catId=CATS.find(c=>product.category?.toLowerCase().includes(c.label.toLowerCase().split(' ')[0]))?.id||'home'
   const defP=DEF_P[catId]||99
   const [price,setPrice]=useState(defP)
@@ -280,8 +372,9 @@ function DetailModal({product,onClose}:{product:any;onClose:()=>void}){
   const sales=product.salesEst||bsrSales(bsr)
   const dem=dInfo(sales)
   const ref=REF[catId]||.15
-  const refFee=+(price*ref).toFixed(2)
-  const fba=price<50?12:price<150?18:price<400?24:32
+  const refFee=promo.active&&(promo.type==='comissao'||promo.type==='ambas') ? 0 : +(price*ref).toFixed(2)
+  const fba=promo.active&&(promo.type==='fba'||promo.type==='ambas') ? 0 : (price<50?12:price<150?18:price<400?24:32)
+  const fbaBase=price<50?12:price<150?18:price<400?24:32
   const profit=+(price-refFee-fba-cost).toFixed(2)
   const margin=price>0?+((profit/price)*100).toFixed(1):0
   const roi=cost>0?+((profit/cost)*100).toFixed(1):0
@@ -392,14 +485,32 @@ function DetailModal({product,onClose}:{product:any;onClose:()=>void}){
                 </div>
               ))}
             </div>
+            {promo.active&&(
+              <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',marginBottom:8,background:'rgba(34,197,94,0.06)',border:`1px solid rgba(34,197,94,0.2)`,borderRadius:10,fontSize:11,color:T.g}}>
+                <span>🎁</span>
+                <span><strong>Promoção ativa:</strong> {promo.type==='comissao'?'Isenção de Comissão':promo.type==='fba'?'Isenção de Tarifa FBA':'Isenção de Comissão + FBA'} — tarifas zeradas no simulador</span>
+              </div>
+            )}
             <div style={{background:T.bg,borderRadius:12,overflow:'hidden',border:`1px solid ${T.line}`}}>
               <div style={{padding:'0 16px'}}>
-                {[{l:'Preço de venda',v:`R$ ${fmtR(price)}`,neg:false},{l:`Taxa Amazon (${(ref*100).toFixed(0)}%)`,v:`− R$ ${fmtR(refFee)}`,neg:true},{l:'Taxa FBA',v:`− R$ ${fmtR(fba)}`,neg:true},{l:'Custo do produto',v:`− R$ ${fmtR(cost)}`,neg:true}].map((row,i)=>(
-                  <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:`1px solid ${T.line}`}}>
-                    <span style={{fontSize:12,color:row.neg?T.t2:T.t1}}>{row.l}</span>
-                    <span style={{fontSize:12,color:row.neg?T.r:T.t1,fontWeight:row.neg?400:500}}>{row.v}</span>
-                  </div>
-                ))}
+                {(()=>{
+                  const refZeroed=promo.active&&(promo.type==='comissao'||promo.type==='ambas')
+                  const fbaZeroed=promo.active&&(promo.type==='fba'||promo.type==='ambas')
+                  return[
+                    {l:'Preço de venda',v:`R$ ${fmtR(price)}`,neg:false,zeroed:false,orig:null},
+                    {l:`Taxa Amazon (${(ref*100).toFixed(0)}%)`,v:refZeroed?`R$ 0,00 🎁`:`− R$ ${fmtR(+(price*ref).toFixed(2))}`,neg:true,zeroed:refZeroed,orig:refZeroed?`− R$ ${fmtR(+(price*ref).toFixed(2))}`:null},
+                    {l:'Taxa FBA',v:fbaZeroed?`R$ 0,00 🎁`:`− R$ ${fmtR(fbaBase)}`,neg:true,zeroed:fbaZeroed,orig:fbaZeroed?`− R$ ${fmtR(fbaBase)}`:null},
+                    {l:'Custo do produto',v:`− R$ ${fmtR(cost)}`,neg:true,zeroed:false,orig:null},
+                  ].map((row,i)=>(
+                    <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:`1px solid ${T.line}`}}>
+                      <span style={{fontSize:12,color:row.neg?T.t2:T.t1}}>{row.l}</span>
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        {row.orig&&<span style={{fontSize:11,color:T.t3,textDecoration:'line-through'}}>{row.orig}</span>}
+                        <span style={{fontSize:12,color:row.zeroed?T.g:row.neg?T.r:T.t1,fontWeight:row.zeroed?700:row.neg?400:500}}>{row.v}</span>
+                      </div>
+                    </div>
+                  ))
+                })()}
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',background:T.card}}>
                 {[{l:'Lucro / unidade',v:`R$ ${fmtR(profit)}`,s:`Margem ${margin}%`,c:profit>=0?T.gold:T.r},{l:'ROI sobre custo',v:`${roi}%`,s:'Retorno do capital',c:roi>=0?T.g:T.r}].map((b,i)=>(
@@ -874,6 +985,8 @@ export default function DashboardClient({user}:{user:any}){
   const [catOpen,  setCatOpen]  = useState(false)
   const [detail,     setDetail]     = useState<any>(null)
   const [upgrade,    setUpgrade]    = useState(false)
+  const [promo,      setPromo]      = useState<PromoState>({active:false,type:null})
+  const [promoOpen,  setPromoOpen]  = useState(false)
   const [page,       setPage]       = useState(1)
   const [licKey,     setLicKey]     = useState<string|null>(null)
   const [licPlan,    setLicPlan]    = useState<string|null>(null)
@@ -934,7 +1047,8 @@ export default function DashboardClient({user}:{user:any}){
   return(
     <>
       {upgrade&&<UpgradeModal onClose={()=>setUpgrade(false)}/>}
-      {detail&&<DetailModal product={detail} onClose={()=>setDetail(null)}/>}
+      {detail&&<DetailModal product={detail} onClose={()=>setDetail(null)} promo={promo}/>}
+      {promoOpen&&<PromoModal promo={promo} setPromo={setPromo} onClose={()=>setPromoOpen(false)}/>}
       <Watermark email={user.email}/>
 
       <style>{`
@@ -1077,6 +1191,25 @@ export default function DashboardClient({user}:{user:any}){
               <span style={{fontSize:10,color:T.t3,fontWeight:500}}>Amazon BR</span>
             </div>
           </header>
+
+          {/* Promo banner */}
+          {promo.active?(
+            <div style={{background:'rgba(34,197,94,0.07)',borderBottom:'1px solid rgba(34,197,94,0.2)',padding:'7px 24px',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
+              <span style={{fontSize:12}}>🎁</span>
+              <span style={{fontSize:11,color:T.g,flex:1}}>
+                <strong>Promoção ativa:</strong> {promo.type==='comissao'?'Isenção de Comissão de Referência':promo.type==='fba'?'Isenção de Tarifa FBA':'Isenção de Comissão + FBA'} — todos os cálculos foram ajustados
+              </span>
+              <button onClick={()=>setPromoOpen(true)} style={{background:'rgba(34,197,94,0.1)',border:'1px solid rgba(34,197,94,0.25)',color:T.g,fontSize:10,fontWeight:700,padding:'4px 10px',borderRadius:6,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.04em'}}>Editar</button>
+              <button onClick={()=>setPromo({active:false,type:null})} style={{background:'transparent',border:`1px solid rgba(34,197,94,0.15)`,color:T.t3,fontSize:10,fontWeight:600,padding:'4px 10px',borderRadius:6,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.04em'}}>Desativar</button>
+            </div>
+          ):(
+            <div style={{borderBottom:`1px solid ${T.line}`,padding:'6px 24px',display:'flex',alignItems:'center',flexShrink:0}}>
+              <button onClick={()=>setPromoOpen(true)} style={{background:'transparent',border:'none',cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6,padding:'2px 0'}}>
+                <span style={{fontSize:11}}>💡</span>
+                <span style={{fontSize:11,color:T.t3}}>Amazon com promoção de isenção? <span style={{color:T.gold}}>Ative aqui →</span></span>
+              </button>
+            </div>
+          )}
 
           {/* Content */}
           <main style={{flex:1,overflowY:'auto',padding:nav==='competitor'?'0':'28px 28px 40px',position:'relative' as const,display:'flex',flexDirection:'column'}}>
@@ -1223,7 +1356,7 @@ export default function DashboardClient({user}:{user:any}){
             {/* Financeiro Panel */}
             {nav==='financeiro'&&(
               <div style={{padding:'0 4px'}}>
-                <FinanceiroPanel/>
+                <FinanceiroPanel promoActive={promo.active} promoType={promo.type}/>
               </div>
             )}
 
