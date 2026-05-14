@@ -124,9 +124,9 @@ function calcInsights(s:SalesData|null,a:AdsData|null,cfg:DRECfg,cmv:number,othe
     if(s.avgTicket>100)ins.push({type:'g',text:`Ticket médio de R$ ${fmtR(s.avgTicket)} — produtos de valor agregado alto ✅`})
   }
   if(a){
-    if(a.totalAcos>0&&a.totalAcos<20)ins.push({type:'g',text:`ACoS geral de ${a.totalAcos.toFixed(1)}% está excelente! Escale as campanhas lucrativas 🎯`})
-    else if(a.totalAcos>=20&&a.totalAcos<=30)ins.push({type:'a',text:`ACoS geral de ${a.totalAcos.toFixed(1)}% é aceitável. Tente otimizar para abaixo de 20%`})
-    else if(a.totalAcos>30)ins.push({type:'r',text:`ACoS geral de ${a.totalAcos.toFixed(1)}% está alto — revise lances e segmentação ⚠️`})
+    if(a.totalAcos>0&&a.totalAcos<5)ins.push({type:'g',text:`ACoS geral de ${a.totalAcos.toFixed(1)}% — perfeito! Pode escalar as campanhas com segurança 🎯`})
+    else if(a.totalAcos>=5&&a.totalAcos<10)ins.push({type:'a',text:`ACoS geral de ${a.totalAcos.toFixed(1)}% — aceitável, mas tente reduzir para abaixo de 5% para escalar`})
+    else if(a.totalAcos>=10)ins.push({type:'r',text:`ACoS geral de ${a.totalAcos.toFixed(1)}% está alto — com margem de 20% da Amazon, ads acima de 10% eliminam o lucro. Revise lances ⚠️`})
     const noSales=a.campaigns.filter(c=>c.status.toUpperCase()==='ENABLED'&&c.sales===0&&c.spend>5)
     if(noSales.length>0)ins.push({type:'r',text:`${noSales.length} campanha(s) ativa(s) sem vendas gastando R$ ${fmtR(noSales.reduce((s,c)=>s+c.spend,0))} — pause ou corrija o targeting`})
     const best=a.campaigns.filter(c=>c.sales>0).sort((a,b)=>a.acos-b.acos)[0]
@@ -852,7 +852,7 @@ export default function FinanceiroPanel({promoActive=false,promoType=null}:{prom
           <KPICard icon="🎯" label="TACOS" value={adsData&&salesData?`${tacos.toFixed(2)}%`:'—'}
             sub={adsData&&salesData?(tacos<10?'Excelente ✅':tacos<20?'Bom 🟡':'Alto 🔴'):'—'}
             color={adsData&&salesData?(tacos<10?C.g:tacos<20?C.a:C.r):C.t3}
-            tip="TACOS = Ads ÷ Faturamento Total. Diferente do ACoS que divide pelas vendas atribuídas. Abaixo de 10% é excelente."/>
+            tip="TACOS = Ads ÷ Faturamento Total. Diferente do ACoS que divide pelas vendas atribuídas. Abaixo de 10% é excelente, acima de 20% os ads estão consumindo toda a margem."/>
           <KPICard icon="✨" label="Lucro Bruto Pós Ads" value={salesData&&cmvFilled?`R$ ${fmtK(lucroBruto)}`:'—'}
             sub={salesData&&cmvFilled?`Lucro Bruto − R$ ${fmtR(ads)} em ads`:'Preencha os custos'}
             color={cmvFilled?(lucroBruto>0?C.g:C.r):C.t3}
@@ -1012,14 +1012,14 @@ export default function FinanceiroPanel({promoActive=false,promoType=null}:{prom
           <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:16,marginBottom:20,overflow:'hidden'}}>
             <div style={{padding:'18px 24px',borderBottom:`1px solid ${C.line}`}}>
               <div style={{fontSize:10,fontWeight:700,color:C.t3,letterSpacing:'0.12em',marginBottom:2}}>📢 PERFORMANCE DE PUBLICIDADE</div>
-              <div style={{fontSize:12,color:C.t4}}>ACoS ideal: abaixo de 20% · ROAS ideal: acima de 4x</div>
+              <div style={{fontSize:12,color:C.t4}}>ACoS ideal: abaixo de 5% (aceitável até 10%) · ROAS ideal: acima de 10x</div>
             </div>
             <div style={{padding:'16px 24px'}}>
               <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:20}}>
                 {[
                   {l:'Total Investido',v:`R$ ${fmtR(adsData.totalSpend)}`,c:C.a},
                   {l:'Vendas via Ads',v:`R$ ${fmtR(adsData.totalSales)}`,c:C.g},
-                  {l:'ACoS Geral',v:`${adsData.totalAcos.toFixed(1)}%`,c:adsData.totalAcos<20?C.g:adsData.totalAcos<30?C.a:C.r},
+                  {l:'ACoS Geral',v:`${adsData.totalAcos.toFixed(1)}%`,c:adsData.totalAcos<5?C.g:adsData.totalAcos<10?C.a:C.r},
                   {l:'ROAS Geral',v:`${adsData.totalRoas.toFixed(2)}x`,c:adsData.totalRoas>4?C.g:adsData.totalRoas>2?C.a:C.r},
                 ].map((s,i)=>(
                   <div key={i} style={{background:C.card2,borderRadius:10,padding:'12px 14px',border:`1px solid ${C.line}`}}>
