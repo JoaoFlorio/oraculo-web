@@ -707,9 +707,9 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
               <div style={{fontSize:12,color:T.t4,lineHeight:1.6}}>{verdict.s}</div>
             </div>
           </div>
-          {/* Imagens do Anúncio */}
-          {product.images && product.images.length > 0 && (
-            <ImageDownloader images={product.images} asin={product.asin} title={product.title} />
+          {/* Imagens do Anúncio — usa lsData.images quando disponível (todas), fallback para product.images */}
+          {((lsData?.images?.length > 0 ? lsData.images : product.images)?.length > 0) && (
+            <ImageDownloader images={lsData?.images?.length > 0 ? lsData.images : product.images} asin={product.asin} title={product.title} />
           )}
 
           {/* CTAs */}
