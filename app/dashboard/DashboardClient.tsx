@@ -1178,7 +1178,7 @@ export default function DashboardClient({user}:{user:any}){
   const [licPlan,    setLicPlan]    = useState<string|null>(null)
   const [licLoading, setLicLoading] = useState(false)
   const [keyCopied,  setKeyCopied]  = useState(false)
-  const PAGE = 30
+  const PAGE = 50
 
   const cfg = PLAN_CFG[user.plan] ?? PLAN_CFG.free
   const isFree = user.plan === 'free'
@@ -1606,20 +1606,38 @@ export default function DashboardClient({user}:{user:any}){
                 )}
 
                 {/* Pagination */}
-                {!isFree&&totalP>1&&(
-                  <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:4,marginTop:32}}>
-                    {([
-                      {l:'←',fn:()=>setPage(p=>Math.max(1,p-1)),dis:page===1,act:false},
-                      ...Array.from({length:totalP}).map((_,i)=>({l:String(i+1),fn:()=>setPage(i+1),dis:false,act:page===i+1})),
-                      {l:'→',fn:()=>setPage(p=>Math.min(totalP,p+1)),dis:page===totalP,act:false},
-                    ] as {l:string;fn:()=>void;dis:boolean;act:boolean}[]).map((b,i)=>(
-                      <button key={i} onClick={()=>{if(!b.dis){b.fn();window.scrollTo(0,0)}}}
-                        style={{background:b.act?`${T.gold}14`:'none',border:`1px solid ${b.act?'rgba(240,180,41,0.3)':T.line}`,color:b.act?T.gold:b.dis?T.t3:T.t2,fontWeight:b.act?700:400,fontSize:12,width:34,height:34,borderRadius:7,cursor:b.dis?'default':'pointer',fontFamily:'inherit',transition:'all .12s'}}>
-                        {b.l}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {!isFree&&totalP>1&&(()=>{
+                  // Constrói lista de páginas com elipses: 1 … p-1 p p+1 … N
+                  const nums: (number|'…')[] = []
+                  if (totalP <= 9) {
+                    for (let i=1;i<=totalP;i++) nums.push(i)
+                  } else {
+                    nums.push(1)
+                    if (page > 3) nums.push('…')
+                    for (let i=Math.max(2,page-1);i<=Math.min(totalP-1,page+1);i++) nums.push(i)
+                    if (page < totalP-2) nums.push('…')
+                    nums.push(totalP)
+                  }
+                  type Btn={l:string;fn:()=>void;dis:boolean;act:boolean}
+                  const btns:Btn[]=[
+                    {l:'←',fn:()=>setPage(p=>Math.max(1,p-1)),dis:page===1,act:false},
+                    ...nums.map(n=>n==='…'
+                      ?{l:'…',fn:()=>{},dis:true,act:false}
+                      :{l:String(n),fn:()=>setPage(n as number),dis:false,act:page===n}
+                    ),
+                    {l:'→',fn:()=>setPage(p=>Math.min(totalP,p+1)),dis:page===totalP,act:false},
+                  ]
+                  return(
+                    <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:4,marginTop:32}}>
+                      {btns.map((b,i)=>(
+                        <button key={i} onClick={()=>{if(!b.dis){b.fn();window.scrollTo(0,0)}}}
+                          style={{background:b.act?`${T.gold}14`:'none',border:`1px solid ${b.act?'rgba(240,180,41,0.3)':T.line}`,color:b.act?T.gold:b.dis?T.t3:T.t2,fontWeight:b.act?700:400,fontSize:12,width:34,height:34,borderRadius:7,cursor:b.dis?'default':'pointer',fontFamily:'inherit',transition:'all .12s'}}>
+                          {b.l}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })()}
               </>
             )}
 
