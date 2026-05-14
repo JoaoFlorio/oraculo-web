@@ -1200,7 +1200,8 @@ export default function DashboardClient({user}:{user:any}){
     setLoading(false); setDone(true)
   }
 
-  useEffect(()=>{ load('bestsellers',cat) },[]) // eslint-disable-line
+  // Sempre bust=true no carregamento inicial → produtos frescos ao entrar
+  useEffect(()=>{ load('bestsellers',cat,'',true) },[]) // eslint-disable-line
 
   function goNav(id:string){
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}
@@ -1216,7 +1217,8 @@ export default function DashboardClient({user}:{user:any}){
       }
       return
     }
-    load(id,cat)
+    // bust=true ao trocar aba → sempre produtos novos
+    load(id,cat,'',true)
   }
 
   function handleCardClick(p:any, isLocked:boolean){
@@ -1305,7 +1307,7 @@ export default function DashboardClient({user}:{user:any}){
                         setCat(c.id); setPage(1)
                         const target=nav==='search'?'bestsellers':nav
                         if(nav==='search') setNav('bestsellers')
-                        load(target,c.id)
+                        load(target,c.id,'',true)
                       }} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 20px',borderRadius:7,border:'none',cursor:'pointer',marginBottom:1,background:active?`${T.gold}08`:'none',fontFamily:'inherit',textAlign:'left' as const}}>
                         <div style={{width:4,height:4,borderRadius:'50%',background:active?T.gold:T.t3,flexShrink:0}}/>
                         <span style={{fontSize:11,color:active?T.gold:T.t4,fontWeight:active?600:400,letterSpacing:'-0.01em'}}>{c.label}</span>
