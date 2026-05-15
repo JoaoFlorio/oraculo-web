@@ -19,6 +19,9 @@ export async function POST(req: NextRequest) {
     if (!valid)
       return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 })
 
+    if (!user.active)
+      return NextResponse.json({ error: 'Conta inativa. Entre em contato com o suporte.' }, { status: 403 })
+
     const token = await createToken(user.id)
     const res = NextResponse.json({ ok: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan } })
     res.cookies.set(COOKIE, token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 60 * 60 * 24 * 30, path: '/' })
