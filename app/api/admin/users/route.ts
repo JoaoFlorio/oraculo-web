@@ -32,15 +32,25 @@ function genPassword(): string {
 async function createBackendLicense(email: string, plan: string): Promise<string | null> {
   try {
     const backendPlan = plan === 'free' ? 'monthly' : plan  // free não existe no backend
-    const res = await fetch(`${BACKEND_URL}/api/license/generate`, {
+    const url = `${BACKEND_URL}/api/license/generate`
+    console.log(`[admin/users] createBackendLicense → POST ${url} | plan=${backendPlan} | secret=${ADMIN_SECRET ? ADMIN_SECRET.slice(0,4)+'…' : '(vazio!)'}`)
+    const res = await fetch(url, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
       body:    JSON.stringify({ email: email.toLowerCase(), plan: backendPlan }),
     })
-    if (!res.ok) return null
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      console.error(`[admin/users] backend retornou ${res.status}: ${body}`)
+      return null
+    }
     const data = await res.json()
+    console.log(`[admin/users] licença gerada: ${data.key}`)
     return data.key || null
-  } catch { return null }
+  } catch (err: any) {
+    console.error(`[admin/users] falha ao chamar backend:`, err?.message ?? err)
+    return null
+  }
 }
 
 // GET /api/admin/users → lista todos os usuários
