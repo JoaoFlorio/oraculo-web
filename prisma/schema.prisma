@@ -45,3 +45,19 @@ model License {
 
   @@map("licenses")
 }
+
+// Log imutável de operações de licença — INSERT-only, nunca DELETE/UPDATE.
+// Serve como fonte de verdade para reconstruir `licenses` após reset do banco.
+// event_type: 'create' | 'deactivate' | 'renew' | 'register_device'
+// payload: estado relevante no momento do evento (JSON livre por tipo)
+model LicenseEvent {
+  id          BigInt   @id @default(autoincrement())
+  occurredAt  DateTime @default(now()) @map("occurred_at")
+  eventType   String   @map("event_type")
+  licenseKey  String   @map("license_key")
+  payload     Json     @default("{}")
+
+  @@index([licenseKey], name: "idx_license_events_key")
+  @@index([eventType],  name: "idx_license_events_type")
+  @@map("license_events")
+}
