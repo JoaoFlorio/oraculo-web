@@ -14,8 +14,9 @@ function checkAuth(req: NextRequest) {
 function calcExpiry(plan: string): Date | null {
   if (plan === 'lifetime') return null
   const d = new Date()
-  if (plan === 'annual')  d.setFullYear(d.getFullYear() + 1)
-  if (plan === 'monthly') d.setMonth(d.getMonth() + 1)
+  // Usar ms exatos evita bugs de meses/anos com dias diferentes
+  if (plan === 'annual')  d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000)
+  if (plan === 'monthly') d.setTime(d.getTime() +  30 * 24 * 60 * 60 * 1000)
   return d
 }
 

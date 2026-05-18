@@ -31,3 +31,17 @@ model Session {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+// Licenças da extensão Chrome — gerenciadas pelo Prisma para garantir persistência
+model License {
+  key        String   @id
+  email      String
+  plan       String
+  createdAt  DateTime @default(now()) @map("created_at")
+  expiresAt  DateTime @map("expires_at")
+  active     Boolean  @default(true)
+  deviceIds  String[] @map("device_ids")
+  maxDevices Int      @default(2) @map("max_devices")
+
+  @@map("licenses")
+}
