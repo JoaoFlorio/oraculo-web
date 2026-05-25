@@ -33,7 +33,8 @@ const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:numbe
   annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'],     modal:true,  export:true  },
   lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'],     modal:true,  export:true  },
 }
-// Hotmart checkout links por plano (atualize com seus links reais)
+// TODO: Substituir pelos links da Greenn quando disponíveis
+// Usado no botão "Renovar" e nos cards de upgrade do painel
 const HOTMART: Record<string,string> = {
   monthly:  'https://pay.hotmart.com/T105514334O?off=cffcrkey',
   annual:   'https://pay.hotmart.com/T105514334O?off=b92zaedd',

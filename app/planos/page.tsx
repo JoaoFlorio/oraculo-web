@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   description: 'Mineração de produtos Amazon com inteligência artificial. Encontre os melhores produtos para vender no FBA.',
 }
 
-// ── Links do Hotmart — atualize com seus links reais ──────────────────────────
+// TODO: Substituir pelos links da Greenn quando disponíveis
 const LINKS = {
   monthly:  'https://pay.hotmart.com/T105514334O?off=cffcrkey',
   annual:   'https://pay.hotmart.com/T105514334O?off=b92zaedd',
