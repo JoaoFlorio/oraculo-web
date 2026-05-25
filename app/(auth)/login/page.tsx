@@ -107,7 +107,7 @@ export default function LoginPage(){
               </Link>
               <span>
                 Não tem conta?{' '}
-                <Link href="/register" style={{color:gold,fontWeight:600,textDecoration:'none'}}>Criar conta</Link>
+                <Link href="/planos" style={{color:gold,fontWeight:600,textDecoration:'none'}}>Criar conta</Link>
               </span>
             </div>
           </div>

@@ -1432,7 +1432,7 @@ export default function DashboardClient({user}:{user:any}){
                         </button>
                       </div>
                       <div style={{fontSize:11,color:T.t3}}>
-                        Plano: <span style={{color:T.gold,fontWeight:600,textTransform:'capitalize' as const}}>{licPlan}</span>
+                        Plano: <span style={{color:T.gold,fontWeight:600}}>{PLAN_CFG[licPlan]?.label ?? licPlan}</span>
                         {' · '}Funciona em até <span style={{color:T.t4,fontWeight:600}}>2 dispositivos</span>
                       </div>
                     </>
