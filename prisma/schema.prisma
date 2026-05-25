@@ -40,7 +40,7 @@ model License {
   createdAt  DateTime @default(now()) @map("created_at")
   expiresAt  DateTime @map("expires_at")
   active     Boolean  @default(true)
-  deviceIds  String[] @map("device_ids")
+  deviceIds  String[] @default([]) @map("device_ids")
   maxDevices Int      @default(2) @map("max_devices")
 
   @@map("licenses")
