@@ -1,9 +1,9 @@
 'use client'
 import { useState, useEffect } from 'react'
 
-const PLANS = ['monthly', 'annual', 'lifetime']
-const PLAN_LABEL: Record<string, string> = { free: 'Gratuito', monthly: 'Mensal', annual: 'Anual', lifetime: 'Vitalício' }
-const PLAN_COLOR: Record<string, string> = { free: '#64748B', monthly: '#3B82F6', annual: '#F0B429', lifetime: '#10B981' }
+const PLANS = ['monthly', 'biannual', 'annual', 'lifetime']
+const PLAN_LABEL: Record<string, string> = { free: 'Gratuito', monthly: 'Mensal', biannual: 'Semestral', annual: 'Anual', lifetime: 'Vitalício' }
+const PLAN_COLOR: Record<string, string> = { free: '#64748B', monthly: '#3B82F6', biannual: '#F0B429', annual: '#10B981', lifetime: '#A855F7' }
 
 type Created = { email: string; password: string; licenseKey: string | null; plan: string; action: string }
 
@@ -108,6 +108,26 @@ export default function AdminPage() {
     }
   }
 
+  async function resendAccess(userEmail: string) {
+    setMsg(null); setCreated(null)
+    const res = await fetch('/api/admin/users', {
+      method: 'PUT', headers: authHeaders(),
+      body: JSON.stringify({ email: userEmail }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setCreated({
+        email:      userEmail,
+        plan:       '',
+        action:     'resent',
+        password:   data.password   || '(erro)',
+        licenseKey: data.licenseKey || null,
+      })
+    } else {
+      setMsg({ text: data.error || 'Erro ao reenviar acesso', ok: false })
+    }
+  }
+
   async function logout() {
     await fetch('/api/admin/unlock', { method: 'DELETE' })
     window.location.href = '/'
@@ -195,7 +215,9 @@ export default function AdminPage() {
       {created && (
         <div style={{ maxWidth: 1100, margin: '0 auto 16px', padding: '16px 20px', borderRadius: 12, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)' }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: C.green, marginBottom: 12 }}>
-            ✓ Acesso {created.action === 'created' ? 'criado' : 'atualizado'} com sucesso
+            {created.action === 'resent'
+              ? `📧 Nova senha gerada e email reenviado para ${created.email}`
+              : `✓ Acesso ${created.action === 'created' ? 'criado' : 'atualizado'} com sucesso`}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             {[
@@ -309,23 +331,30 @@ export default function AdminPage() {
                           {lic ? `${lic.deviceIds?.length||0}/${lic.maxDevices||2}` : '—'}
                         </td>
                         <td style={s.td}>
-                          {lic && (
-                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
-                              {lic.active && (
-                                <button onClick={() => licenseAction('deactivate', lic.key)}
-                                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: C.red, fontSize: 10, padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
-                                  Desativar
-                                </button>
-                              )}
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+                            {/* Reenviar acesso — sempre disponível */}
+                            <button onClick={() => resendAccess(u.email)}
+                              style={{ background: 'rgba(240,180,41,0.08)', border: '1px solid rgba(240,180,41,0.3)', color: C.gold, fontSize: 10, padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+                              title="Gera nova senha e reenvia email com os dados de acesso">
+                              📧 Reenviar
+                            </button>
+                            {lic && lic.active && (
+                              <button onClick={() => licenseAction('deactivate', lic.key)}
+                                style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: C.red, fontSize: 10, padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+                                Desativar
+                              </button>
+                            )}
+                            {lic && (
                               <select defaultValue="" onChange={e => { if(e.target.value) licenseAction('renew', lic.key, e.target.value); (e.target as HTMLSelectElement).value='' }}
                                 style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', color: C.green, fontSize: 10, padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
                                 <option value="" disabled>Renovar...</option>
                                 <option value="monthly">Mensal</option>
+                                <option value="biannual">Semestral</option>
                                 <option value="annual">Anual</option>
                                 <option value="lifetime">Vitalício</option>
                               </select>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
