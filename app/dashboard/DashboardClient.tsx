@@ -28,17 +28,18 @@ const T = {
 
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
-  free:     { label:'Gratuito', color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers','extension','agente','financeiro'],                                                      modal:false, export:false },
-  monthly:  { label:'Mensal',   color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'],     modal:true,  export:false },
-  annual:   { label:'Anual',    color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'],     modal:true,  export:true  },
-  lifetime: { label:'Vitalício',color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'],     modal:true,  export:true  },
+  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers','extension','agente','financeiro'],                                                  modal:false, export:false },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'], modal:true,  export:true  },
 }
-// TODO: Substituir pelos links da Greenn quando disponíveis
-// Usado no botão "Renovar" e nos cards de upgrade do painel
-const HOTMART: Record<string,string> = {
-  monthly:  'https://pay.hotmart.com/T105514334O?off=cffcrkey',
-  annual:   'https://pay.hotmart.com/T105514334O?off=b92zaedd',
-  lifetime: 'https://pay.hotmart.com/T105514334O?off=2yii0s4k',
+// Links Greenn — plataforma de pagamento ativa
+const GREENN: Record<string,string> = {
+  monthly:  'https://payfast.greenn.com.br/pm36pq4/offer/B0febG',
+  biannual: 'https://payfast.greenn.com.br/pm36pq4/offer/rpgHFd',
+  annual:   'https://payfast.greenn.com.br/pm36pq4/offer/WBkId3',
+  lifetime: 'https://payfast.greenn.com.br/pm36pq4/offer/WBkId3', // fallback → anual
 }
 
 /* ─── Data ───────────────────────────────────────────────────────────────── */
@@ -206,9 +207,9 @@ function ScoreRing({score}:{score:number}){
 /* ─── Upgrade modal ──────────────────────────────────────────────────────── */
 function UpgradeModal({onClose}:{onClose:()=>void}){
   const plans = [
-    { id:'monthly',  label:'Mensal',   price:'R$ 47',  period:'/mês',  color:T.pur,  features:['20 produtos por busca','Todas as abas','Análise detalhada','Simulador de lucro'] },
-    { id:'annual',   label:'Anual',    price:'R$ 297', period:'/ano',  color:T.gold, features:['60 produtos por busca','Todas as abas','Análise detalhada','Simulador de lucro','Exportar CSV','Acesso prioritário'], best:true },
-    { id:'lifetime', label:'Vitalício',price:'R$ 497', period:'único', color:T.g,    features:['60 produtos por busca','Todas as abas','Análise detalhada','Simulador de lucro','Exportar CSV','Acesso vitalício','Todas as atualizações'] },
+    { id:'monthly',  label:'Mensal',    price:'R$ 79,90', period:'/mês',      color:T.pur,  features:['Acesso às 8 ferramentas','Extensão Chrome incluída','Agente IA ilimitado','Simulador Financeiro'] },
+    { id:'biannual', label:'Semestral', price:'R$ 397',   period:'/6 meses',  color:T.gold, features:['Tudo do plano Mensal','6 meses de acesso','Exportar CSV','Prioridade no suporte'], best:true },
+    { id:'annual',   label:'Anual',     price:'R$ 597',   period:'/ano',      color:T.g,    features:['Tudo do plano Semestral','12 meses de acesso','Suporte VIP','Acesso antecipado a novidades'] },
   ]
   return(
     <div onClick={e=>e.target===e.currentTarget&&onClose()}
@@ -255,7 +256,7 @@ function UpgradeModal({onClose}:{onClose:()=>void}){
                   </div>
                 ))}
               </div>
-              <a href={HOTMART[plan.id]} target="_blank" rel="noreferrer"
+              <a href={GREENN[plan.id]} target="_blank" rel="noreferrer"
                 style={{display:'block',textAlign:'center' as const,background:plan.best?plan.color:'none',color:plan.best?'#02020A':plan.color,border:plan.best?'none':`1px solid ${plan.color}40`,fontWeight:700,fontSize:11,padding:'11px',borderRadius:9,letterSpacing:'0.08em',textDecoration:'none',textTransform:'uppercase' as const,transition:'all .15s'}}>
                 Assinar
               </a>
@@ -1352,7 +1353,7 @@ export default function DashboardClient({user}:{user:any}){
           {expiringSoon&&(
             <div style={{background:`${T.a}15`,borderBottom:`1px solid ${T.a}30`,padding:'8px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
               <span style={{fontSize:11,color:T.a}}>Seu plano <strong>{cfg.label}</strong> expira em <strong>{daysLeft} dias</strong>. Renove para não perder o acesso.</span>
-              <a href={HOTMART[user.plan]} target="_blank" rel="noreferrer" style={{fontSize:10,fontWeight:700,color:'#02020A',background:T.a,padding:'4px 12px',borderRadius:5,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0}}>Renovar</a>
+              <a href={GREENN[user.plan]} target="_blank" rel="noreferrer" style={{fontSize:10,fontWeight:700,color:'#02020A',background:T.a,padding:'4px 12px',borderRadius:5,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0}}>Renovar</a>
             </div>
           )}
 

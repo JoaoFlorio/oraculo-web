@@ -10,11 +10,10 @@ export const metadata: Metadata = {
   },
 }
 
-// TODO: Substituir pelos links da Greenn quando disponíveis
 const LINKS = {
-  monthly:  'https://pay.hotmart.com/T105514334O?off=cffcrkey',
-  biannual: 'https://pay.hotmart.com/T105514334O?off=b92zaedd',
-  annual:   'https://pay.hotmart.com/T105514334O?off=2yii0s4k',
+  monthly:  'https://payfast.greenn.com.br/pm36pq4/offer/B0febG',
+  biannual: 'https://payfast.greenn.com.br/pm36pq4/offer/rpgHFd',
+  annual:   'https://payfast.greenn.com.br/pm36pq4/offer/WBkId3',
 }
 
 const FEATURES = [
