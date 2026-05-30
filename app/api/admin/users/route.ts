@@ -203,7 +203,7 @@ export async function PUT(req: NextRequest) {
     data:  { password: hash },
   })
 
-  // Busca chave de licença atual no backend
+  // Busca chave de licença no backend — se não existir, cria uma nova
   let licKey = '—'
   try {
     const r = await fetch(`${BACKEND_URL}/api/license/by-email?email=${encodeURIComponent(user.email)}`, {
@@ -213,7 +213,13 @@ export async function PUT(req: NextRequest) {
       const d = await r.json()
       licKey = d.key || d.license?.key || '—'
     }
-  } catch { /* ignora — ainda mostra a nova senha */ }
+  } catch { /* segue */ }
+
+  // Se não tem chave, gera uma nova
+  if (!licKey || licKey === '—') {
+    const newKey = await createBackendLicense(user.email, user.plan)
+    if (newKey) licKey = newKey
+  }
 
   // Envia email com novos dados
   await sendAccessEmail({ to: user.email, name: user.name || user.email, password, key: licKey, plan: user.plan })
