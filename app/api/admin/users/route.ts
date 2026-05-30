@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { email, name, plan } = await req.json()
+  const { email, name, plan, skipLicense, licenseKey: providedKey } = await req.json()
   if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
 
   const targetPlan = plan || 'monthly'
@@ -139,8 +139,8 @@ export async function POST(req: NextRequest) {
       where: { id: exists.id },
       data:  { plan: targetPlan, expiresAt: expiry },
     })
-    // Tenta renovar/gerar licença no backend também
-    const licKey = await createBackendLicense(email, targetPlan)
+    // Gera licença só se não vier uma pronta (skipLicense = chamada via webhook)
+    const licKey = skipLicense ? (providedKey || null) : await createBackendLicense(email, targetPlan)
     return NextResponse.json({
       ok: true, action: 'updated',
       user: { email: updated.email, plan: updated.plan },
@@ -162,8 +162,8 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // Gera licença no backend
-  const licKey = await createBackendLicense(email, targetPlan)
+  // Gera licença no backend (só se não vier uma pronta)
+  const licKey = skipLicense ? (providedKey || null) : await createBackendLicense(email, targetPlan)
 
   return NextResponse.json({
     ok: true, action: 'created',
