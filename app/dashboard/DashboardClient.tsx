@@ -1187,7 +1187,7 @@ export default function DashboardClient({user}:{user:any}){
   const [pwConf,  setPwConf]  = useState('')
   const [pwBusy,  setPwBusy]  = useState(false)
   const [pwMsg,   setPwMsg]   = useState<{ok:boolean;text:string}|null>(null)
-  const PAGE = 50
+  const PAGE = 60
 
   async function changePassword(){
     setPwMsg(null)
@@ -1216,14 +1216,29 @@ export default function DashboardClient({user}:{user:any}){
   const daysLeft  = expiresAt ? Math.ceil((expiresAt.getTime()-Date.now())/(1000*60*60*24)) : null
   const expiringSoon = daysLeft !== null && daysLeft <= 7 && user.plan !== 'lifetime'
 
+  // ASINs já mostrados, por aba+categoria → garante novidade a cada "Atualizar"
+  const seenRef = useRef<Record<string, Set<string>>>({})
+
   async function load(n=nav, c=cat, query='', bust=false){
     setLoading(true); setDone(false); setPage(1)
+    const key = `${n}__${c}`
+    if(bust) seenRef.current[key] = new Set()          // recomeça: pool novo, esquece o visto
+    const seen = (seenRef.current[key] ||= new Set())
     try{
       const params = new URLSearchParams({type:n,category:c,q:query})
       if(bust) params.set('bust','1')
+      // envia os já vistos (últimos 400) para o backend não repetir
+      if(seen.size) params.set('exclude',[...seen].slice(-400).join(','))
       const r = await fetch(`/api/products?${params}`)
       const d = await r.json()
-      setProds(d.products||[])
+      const list: any[] = d.products||[]
+      // pool esgotado (cliente já viu quase tudo) e não foi bust → reconstrói com produtos frescos
+      if(!bust && query==='' && (d.remaining ?? list.length) < 12){
+        return load(n,c,query,true)
+      }
+      list.forEach(p=>seen.add(p.asin))
+      if(seen.size > 800) seenRef.current[key] = new Set(list.map(p=>p.asin))
+      setProds(list)
     }catch{ setProds([]) }
     setLoading(false); setDone(true)
   }
@@ -1616,7 +1631,7 @@ export default function DashboardClient({user}:{user:any}){
                   {done&&totalP>1&&<> · pág. <span style={{color:T.t4}}>{page}/{totalP}</span></>}
                 </p>
               </div>
-              <button onClick={()=>load(nav,cat,'',true)}
+              <button onClick={()=>load(nav,cat,'',false)}
                 style={{display:'flex',alignItems:'center',gap:7,background:'none',border:`1px solid ${T.line}`,color:T.t3,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
                 onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
                 onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>

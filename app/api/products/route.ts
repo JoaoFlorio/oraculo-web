@@ -9,6 +9,7 @@ const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.u
 const PLAN_LIMIT: Record<string, number> = {
   free:     6,
   monthly:  9999,
+  biannual: 9999,
   annual:   9999,
   lifetime: 9999,
 }
@@ -22,6 +23,7 @@ export async function GET(req: NextRequest) {
   const category = searchParams.get('category') || 'electronics'
   const q        = searchParams.get('q')        || ''
   const bust     = searchParams.get('bust')     || ''
+  const exclude  = searchParams.get('exclude')  || ''  // ASINs que o usuário já viu
 
   // Plano gratuito só pode acessar Mais Vendidos
   if (user.plan === 'free' && type !== 'bestsellers' && type !== 'search') {
@@ -31,6 +33,7 @@ export async function GET(req: NextRequest) {
   try {
     const params = new URLSearchParams({ type, category, q })
     if (bust === '1') params.set('bust', '1')
+    if (exclude)     params.set('exclude', exclude)
 
     const res = await fetch(`${BACKEND}/api/product/search?${params}`, {
       headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' },
@@ -46,8 +49,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       products,
-      plan:  user.plan,
-      total: data.products?.length ?? 0,
+      plan:      user.plan,
+      total:     data.products?.length ?? 0,
+      poolSize:  data.poolSize  ?? products.length,
+      remaining: data.remaining ?? products.length,
     })
   } catch (e: any) {
     console.error('[products]', e.message)
