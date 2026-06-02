@@ -1181,7 +1181,32 @@ export default function DashboardClient({user}:{user:any}){
   const [licPlan,    setLicPlan]    = useState<string|null>(null)
   const [licLoading, setLicLoading] = useState(false)
   const [keyCopied,  setKeyCopied]  = useState(false)
+  // Troca de senha
+  const [pwCur,   setPwCur]   = useState('')
+  const [pwNew,   setPwNew]   = useState('')
+  const [pwConf,  setPwConf]  = useState('')
+  const [pwBusy,  setPwBusy]  = useState(false)
+  const [pwMsg,   setPwMsg]   = useState<{ok:boolean;text:string}|null>(null)
   const PAGE = 50
+
+  async function changePassword(){
+    setPwMsg(null)
+    if(!pwCur||!pwNew||!pwConf){setPwMsg({ok:false,text:'Preencha todos os campos'});return}
+    if(pwNew.length<6){setPwMsg({ok:false,text:'A nova senha deve ter pelo menos 6 caracteres'});return}
+    if(pwNew!==pwConf){setPwMsg({ok:false,text:'A confirmação não confere com a nova senha'});return}
+    setPwBusy(true)
+    try{
+      const r=await fetch('/api/user/change-password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currentPassword:pwCur,newPassword:pwNew})})
+      const d=await r.json().catch(()=>({}))
+      if(!r.ok){setPwMsg({ok:false,text:d.error||'Erro ao trocar a senha'});return}
+      setPwMsg({ok:true,text:'Senha alterada com sucesso!'})
+      setPwCur('');setPwNew('');setPwConf('')
+    }catch{
+      setPwMsg({ok:false,text:'Erro de conexão. Tente novamente.'})
+    }finally{
+      setPwBusy(false)
+    }
+  }
 
   const cfg = PLAN_CFG[user.plan] ?? PLAN_CFG.free
   const isFree = user.plan === 'free'
@@ -1468,6 +1493,30 @@ export default function DashboardClient({user}:{user:any}){
                       <span style={{fontSize:12,color:T.t3,lineHeight:1.6,paddingTop:2}}>{s}</span>
                     </div>
                   ))}
+                </div>
+
+                {/* Trocar senha */}
+                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px',marginTop:16}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:6}}>🔒 Segurança da Conta</div>
+                  <div style={{fontSize:12,color:T.t3,lineHeight:1.6,marginBottom:16}}>Troque a senha gerada automaticamente por uma de sua preferência. Os outros dispositivos conectados serão desconectados.</div>
+                  {([
+                    {ph:'Senha atual',        val:pwCur,  set:setPwCur},
+                    {ph:'Nova senha',         val:pwNew,  set:setPwNew},
+                    {ph:'Confirmar nova senha',val:pwConf, set:setPwConf},
+                  ] as const).map((f,i)=>(
+                    <input key={i} type="password" placeholder={f.ph} value={f.val}
+                      onChange={e=>{f.set(e.target.value);setPwMsg(null)}}
+                      onKeyDown={e=>{if(e.key==='Enter')changePassword()}}
+                      autoComplete={i===0?'current-password':'new-password'}
+                      style={{width:'100%',boxSizing:'border-box' as const,background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px 14px',marginBottom:10,color:T.t1,fontSize:13,fontFamily:'inherit',outline:'none'}}/>
+                  ))}
+                  {pwMsg&&(
+                    <div style={{fontSize:12,fontWeight:600,color:pwMsg.ok?T.g:T.r,marginBottom:12,marginTop:2}}>{pwMsg.text}</div>
+                  )}
+                  <button onClick={changePassword} disabled={pwBusy}
+                    style={{width:'100%',background:pwBusy?T.line:T.goldG,border:'none',color:'#03030A',fontWeight:800,fontSize:12,padding:'13px',borderRadius:10,cursor:pwBusy?'default':'pointer',fontFamily:'inherit',letterSpacing:'0.06em',opacity:pwBusy?.6:1,transition:'all .2s'}}>
+                    {pwBusy?'Salvando…':'ALTERAR SENHA'}
+                  </button>
                 </div>
               </div>
             )}
