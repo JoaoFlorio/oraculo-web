@@ -374,20 +374,24 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
   const [cost,setCost]=useState(Math.round(defP*.3))
   const [lsData,setLsData]=useState<any>(null)
   const [lsLoading,setLsLoading]=useState(true)
+  const [realPrice,setRealPrice]=useState(product.price>0)
 
-  // Busca score real do listing via SP-API
+  // Busca score real do listing via SP-API (inclui preço real + vendas calibradas)
   useEffect(()=>{
     if(!product.asin) return
     setLsLoading(true)
     fetch(`/api/listing-score?asin=${product.asin}`)
       .then(r=>r.json())
-      .then(d=>{ if(d.score) setLsData(d) })
+      .then(d=>{
+        if(d.score) setLsData(d)
+        if(d.price>0){ setPrice(Math.round(d.price)); setCost(Math.round(d.price*.3)); setRealPrice(true) }
+      })
       .catch(()=>{})
       .finally(()=>setLsLoading(false))
   },[product.asin])
 
   const bsr=product.bsr||0
-  const sales=product.salesEst||bsrSales(bsr)
+  const sales=lsData?.salesEst||product.salesEst||bsrSales(bsr)
   const dem=dInfo(sales)
   const ref=REF[catId]||.15
   const refFee=promo.active&&(promo.type==='comissao'||promo.type==='ambas') ? 0 : +(price*ref).toFixed(2)
@@ -517,7 +521,8 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
                     <span style={{fontSize:13,color:T.t3,fontWeight:500}}>R$</span>
                     <input type="number" min={0} value={f.v} onChange={e=>(f.s as any)(+e.target.value||0)} style={{background:'none',border:'none',color:T.gold,fontSize:22,fontWeight:700,width:'100%',outline:'none',fontFamily:'inherit'}}/>
                   </div>
-                  {f.isPrice && product.price>0 && <div style={{fontSize:9,color:T.t3,marginTop:4}}>📌 Preço real da listagem</div>}
+                  {f.isPrice && realPrice && <div style={{fontSize:9,color:T.g,marginTop:4}}>📌 Preço real da Amazon</div>}
+                  {f.isPrice && !realPrice && lsLoading && <div style={{fontSize:9,color:T.t3,marginTop:4}}>buscando preço real…</div>}
                 </div>
               ))}
             </div>
