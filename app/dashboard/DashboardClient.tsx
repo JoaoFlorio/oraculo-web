@@ -402,7 +402,8 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
   const roi=cost>0?+((profit/cost)*100).toFixed(1):0
   const modalGeneric=!product.brand||product.brand.trim()===''
   const numImages = product.images?.length ?? 0
-  const reviewCount = product.reviewCount ?? 0
+  const reviewCount = lsData?.reviews || product.reviewCount || 0
+  const rating = lsData?.rating || product.rating || 0
   // Score composto real: penaliza listing fraco mesmo com boa demanda
   const score = realScore(bsr, margin, modalGeneric, lsData?.breakdown ?? null, numImages, reviewCount)
   const sc=sColor(score)
@@ -454,6 +455,14 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
             </div>
           ))}
         </div>
+        {/* Avaliação real (coletada pela extensão) */}
+        {(rating>0||reviewCount>0)&&(
+          <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:12,padding:'12px 20px',borderBottom:`1px solid ${T.line}`,background:'rgba(34,197,94,0.05)'}}>
+            <span style={{fontSize:14,fontWeight:700,color:T.gold}}>★ {rating>0?rating.toFixed(1):'—'}</span>
+            <span style={{fontSize:12,color:T.t2}}>{reviewCount>0?`${fmtN(reviewCount)} avaliações`:'sem avaliações'}</span>
+            <span style={{fontSize:8,fontWeight:700,color:T.g,letterSpacing:'0.08em',textTransform:'uppercase' as const,border:`1px solid rgba(34,197,94,0.3)`,borderRadius:5,padding:'3px 7px'}}>● Dado real da Amazon</span>
+          </div>
+        )}
 
         {/* Score breakdown — aparece quando os dados reais do listing chegam */}
         {lsData?.breakdown&&(
