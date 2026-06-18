@@ -320,7 +320,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
 
   return(
     <ThemeCtx.Provider value={t}>
-      <div style={{background:t.pageBg,borderRadius:16,border:`1px solid ${t.line}`,padding:'18px 20px 28px',minHeight:'calc(100vh - 80px)'}}>
+      <div style={{background:t.dark?'transparent':t.pageBg,borderRadius:t.dark?0:16,border:t.dark?'none':`1px solid ${t.line}`,padding:t.dark?'2px 0 28px':'18px 20px 28px',minHeight:'calc(100vh - 80px)'}}>
         <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"/>
 
         {/* Header */}
