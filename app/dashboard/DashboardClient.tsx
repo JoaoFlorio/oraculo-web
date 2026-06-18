@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando painel financeiro…</div>})
+const GestaoHub = dynamic(()=>import('./GestaoHub'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Gestão…</div>})
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 const T = {
@@ -57,14 +57,19 @@ const CATS = [
   { id:'office-products', label:'Escritório'     },
 ]
 const NAV = [
+  { id:'financeiro',  label:'Gestão'            },
   { id:'bestsellers', label:'Mais Vendidos'     },
   { id:'new',         label:'Recém Adicionados' },
   { id:'trending',    label:'Em Alta'           },
   { id:'generics',    label:'Genéricos'         },
   { id:'competitor',  label:'Análise Rival'     },
-  { id:'extension',   label:'Extensão'          },
   { id:'agente',      label:'Agente IA'         },
-  { id:'financeiro',  label:'Financeiro'        },
+  { id:'extension',   label:'Extensão'          },
+]
+const NAV_GROUPS = [
+  { group:'Gestão',      ids:['financeiro'] },
+  { group:'Mineração',   ids:['bestsellers','new','trending','generics','competitor'] },
+  { group:'Ferramentas', ids:['agente','extension'] },
 ]
 const REF: Record<string,number> = {
   electronics:.08, computers:.08, health:.08, tools:.12, toys:.16,
@@ -155,17 +160,24 @@ function Watermark({email}:{email:string}){
 
 /* ─── Logo mark ──────────────────────────────────────────────────────────── */
 function OracleMark({size=22}:{size?:number}){
+  // Olho radiante do Oráculo: almond de linha dupla + íris + sol de 12 raios.
+  const rays=[]
+  for(let i=0;i<12;i++){
+    const a=i*Math.PI/6
+    const x1=(16+Math.cos(a)*2.3).toFixed(2), y1=(16+Math.sin(a)*2.3).toFixed(2)
+    const x2=(16+Math.cos(a)*4.5).toFixed(2), y2=(16+Math.sin(a)*4.5).toFixed(2)
+    rays.push(<line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#F6D89B" strokeWidth="0.8" strokeLinecap="round"/>)
+  }
   return(
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none"
-      style={{filter:'drop-shadow(0 0 8px rgba(240,180,41,0.65)) drop-shadow(0 0 2px rgba(240,180,41,0.9))'}}>
-      <ellipse cx="16" cy="16" rx="13" ry="9" stroke="#F0B429" strokeWidth="1.6"/>
-      <circle cx="16" cy="16" r="5.5" fill="#F0B429"/>
-      <circle cx="16" cy="16" r="2.4" fill="#03030A"/>
-      <circle cx="14.5" cy="14.2" r="1.1" fill="rgba(255,255,255,0.45)"/>
-      <line x1="16" y1="7"  x2="16" y2="5"  stroke="#F0B429" strokeWidth="1.4" strokeLinecap="round" opacity=".55"/>
-      <line x1="16" y1="25" x2="16" y2="27" stroke="#F0B429" strokeWidth="1.4" strokeLinecap="round" opacity=".55"/>
-      <line x1="3"  y1="16" x2="1"  y2="16" stroke="#F0B429" strokeWidth="1.4" strokeLinecap="round" opacity=".55"/>
-      <line x1="29" y1="16" x2="31" y2="16" stroke="#F0B429" strokeWidth="1.4" strokeLinecap="round" opacity=".55"/>
+      style={{filter:'drop-shadow(0 0 6px rgba(240,180,41,0.5))'}}>
+      <path d="M3 16 Q16 4 29 16"    stroke="#F0B429" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M3 16 Q16 28 29 16"   stroke="#F0B429" strokeWidth="1.5" strokeLinecap="round"/>
+      <path d="M7 16 Q16 8.5 25 16"  stroke="#F0B429" strokeWidth="1"   strokeLinecap="round"/>
+      <path d="M7 16 Q16 23.5 25 16" stroke="#F0B429" strokeWidth="1"   strokeLinecap="round"/>
+      <circle cx="16" cy="16" r="5.2" stroke="#F0B429" strokeWidth="1.2"/>
+      {rays}
+      <circle cx="16" cy="16" r="1.7" fill="#F6D89B"/>
     </svg>
   )
 }
@@ -1328,26 +1340,30 @@ export default function DashboardClient({user}:{user:any}){
 
           {/* Nav */}
           <nav style={{flex:1,overflowY:'auto',overflowX:'hidden',padding:'8px',display:'flex',flexDirection:'column',gap:2}}>
-            {sideOpen&&<Lbl style={{padding:'12px 8px 6px',marginBottom:2}}>Navegação</Lbl>}
-
-            {NAV.map(n=>{
-              const active  = nav===n.id
-              const locked  = !cfg.tabs.includes(n.id)
-              return(
-                <button key={n.id} onClick={()=>goNav(n.id)} title={!sideOpen?n.label:undefined}
-                  style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:sideOpen?'8px 10px':'10px',justifyContent:sideOpen?'flex-start':'center',borderRadius:8,border:'none',cursor:'pointer',
-                    background:active?`${T.gold}12`:'none',
-                    borderLeft:sideOpen?(active?`2px solid ${T.gold}`:'2px solid transparent'):'none',
-                    paddingLeft:sideOpen?(active?'8px':'10px'):undefined,
-                    fontFamily:'inherit',textAlign:'left' as const,outline:'none',transition:'all .12s',opacity:locked?.5:1}}>
-                  <NavIcon id={n.id} active={active}/>
-                  {sideOpen&&<>
-                    <span style={{fontSize:12,fontWeight:active?600:400,color:active?T.t1:T.t2,whiteSpace:'nowrap' as const,flex:1,letterSpacing:'-0.01em'}}>{n.label}</span>
-                    {locked&&<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1.5" y="5" width="8" height="5.5" rx="1.5" stroke={T.t3} strokeWidth="1.2"/><path d="M3.5 5V3.5a2 2 0 014 0V5" stroke={T.t3} strokeWidth="1.2" strokeLinecap="round"/></svg>}
-                  </>}
-                </button>
-              )
-            })}
+            {NAV_GROUPS.map(g=>(
+              <React.Fragment key={g.group}>
+                {sideOpen&&<Lbl style={{padding:'12px 8px 6px',marginBottom:2}}>{g.group}</Lbl>}
+                {g.ids.map(id=>{
+                  const n = NAV.find(x=>x.id===id)!
+                  const active = nav===id
+                  const locked = !cfg.tabs.includes(id)
+                  return(
+                    <button key={id} onClick={()=>goNav(id)} title={!sideOpen?n.label:undefined}
+                      style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:sideOpen?'8px 10px':'10px',justifyContent:sideOpen?'flex-start':'center',borderRadius:8,border:'none',cursor:'pointer',
+                        background:active?`${T.gold}12`:'none',
+                        borderLeft:sideOpen?(active?`2px solid ${T.gold}`:'2px solid transparent'):'none',
+                        paddingLeft:sideOpen?(active?'8px':'10px'):undefined,
+                        fontFamily:'inherit',textAlign:'left' as const,outline:'none',transition:'all .12s',opacity:locked?.5:1}}>
+                      <NavIcon id={id} active={active}/>
+                      {sideOpen&&<>
+                        <span style={{fontSize:12,fontWeight:active?600:400,color:active?T.t1:T.t2,whiteSpace:'nowrap' as const,flex:1,letterSpacing:'-0.01em'}}>{n.label}</span>
+                        {locked&&<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1.5" y="5" width="8" height="5.5" rx="1.5" stroke={T.t3} strokeWidth="1.2"/><path d="M3.5 5V3.5a2 2 0 014 0V5" stroke={T.t3} strokeWidth="1.2" strokeLinecap="round"/></svg>}
+                      </>}
+                    </button>
+                  )
+                })}
+              </React.Fragment>
+            ))}
 
             {/* Categories */}
             {sideOpen&&(
@@ -1622,10 +1638,10 @@ export default function DashboardClient({user}:{user:any}){
               </div>
             )}
 
-            {/* Financeiro Panel */}
+            {/* Gestão (hub financeiro) */}
             {nav==='financeiro'&&(
               <div style={{padding:'0 4px'}}>
-                <FinanceiroPanel promoActive={promo.active} promoType={promo.type}/>
+                <GestaoHub promoActive={promo.active} promoType={promo.type}/>
               </div>
             )}
 
