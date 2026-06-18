@@ -35,11 +35,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('oraculo_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}" }} />
-      </head>
-      <body style={{ margin: 0, background: 'var(--bg)', fontFamily: 'Inter, -apple-system, sans-serif' }}>
+    <html lang="pt-BR">
+      <body style={{ margin: 0, background: '#0A0A0F', fontFamily: 'Inter, -apple-system, sans-serif' }}>
         {children}
       </body>
     </html>
