@@ -1333,8 +1333,7 @@ export default function DashboardClient({user}:{user:any}){
               <OracleMark size={22}/>
             </div>
             {sideOpen&&<div style={{overflow:'hidden',minWidth:0}}>
-              <div style={{fontSize:13,fontWeight:800,letterSpacing:'0.2em',color:T.gold,lineHeight:1,whiteSpace:'nowrap' as const}}>ORÁCULO</div>
-              <div style={{fontSize:8,color:T.t3,letterSpacing:'0.18em',marginTop:3,fontWeight:500,whiteSpace:'nowrap' as const}}>AMAZON INTELLIGENCE</div>
+              <div style={{fontSize:16,fontWeight:800,letterSpacing:'0.24em',color:T.gold,lineHeight:1,whiteSpace:'nowrap' as const}}>ORÁCULO</div>
             </div>}
           </div>
 
