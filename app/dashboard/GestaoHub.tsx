@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useContext, createContext } from 'react'
 import dynamic from 'next/dynamic'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -7,210 +7,285 @@ import {
 } from 'recharts'
 import { getFinanceData, summary, productMetrics, abcCurve, type ProductMetrics } from './financeiroMock'
 
-const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#5C5C7C'}}>Carregando DRE…</div>})
+const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#888'}}>Carregando DRE…</div>})
 
-/* ── Paleta premium ──────────────────────────────────────────────────────── */
-const C = {
-  bg:'#06060E', panel:'#0B0B16', card:'#0E0E1B', card2:'#11111F',
-  line:'rgba(255,255,255,0.06)', line2:'rgba(255,255,255,0.11)',
-  gold:'#E7B85C', goldb:'#F6D89B', golddim:'rgba(231,184,92,0.10)',
-  grn:'#2FBE8F', red:'#F2685C', vio:'#9B8CFF', blue:'#4F86C6',
-  t1:'#F3F3FA', t2:'#9595B4', t3:'#5C5C7C',
+/* ════════════════════════════════════════════════════════════════════════
+   Temas — o seller escolhe a paleta (salvo no navegador). Fácil adicionar
+   novas paletas: basta inserir outra entrada em THEMES.
+   ════════════════════════════════════════════════════════════════════════ */
+export interface Theme {
+  key:string; name:string; dark:boolean
+  pageBg:string; card:string; card2:string; line:string; line2:string
+  t1:string; t2:string; t3:string
+  gold:string; goldText:string; grn:string; red:string; vio:string; blue:string
+  grid:string; tipBg:string
+  pillGrn:[string,string]; pillGold:[string,string]; pillRed:[string,string]
+}
+const THEMES:Record<string,Theme> = {
+  dark: {
+    key:'dark', name:'Escuro', dark:true,
+    pageBg:'#0A0A14', card:'#16162A', card2:'#1D1D34', line:'rgba(255,255,255,0.12)', line2:'rgba(255,255,255,0.18)',
+    t1:'#F5F5FC', t2:'#C4C4DE', t3:'#8B8BAC',
+    gold:'#F0C262', goldText:'#FAD98E', grn:'#3FD79B', red:'#FF7A6E', vio:'#A99BFF', blue:'#5E9BE0',
+    grid:'rgba(255,255,255,0.07)', tipBg:'#1D1D34',
+    pillGrn:['rgba(63,215,155,0.18)','#3FD79B'], pillGold:['rgba(240,194,98,0.18)','#FAD98E'], pillRed:['rgba(255,122,110,0.18)','#FF9A90'],
+  },
+  light: {
+    key:'light', name:'Claro', dark:false,
+    pageBg:'#F6F7F9', card:'#FFFFFF', card2:'#FFFFFF', line:'#E5E7EB', line2:'#D1D5DB',
+    t1:'#111827', t2:'#4B5563', t3:'#6B7280',
+    gold:'#E7B85C', goldText:'#B5840F', grn:'#15803D', red:'#DC2626', vio:'#7C3AED', blue:'#2563EB',
+    grid:'#EFF1F4', tipBg:'#FFFFFF',
+    pillGrn:['#DCFCE7','#15803D'], pillGold:['#FEF3D7','#B5840F'], pillRed:['#FEE2E2','#DC2626'],
+  },
 }
 const FH = "'Space Grotesk','Inter',sans-serif"
+const ThemeCtx = createContext<Theme>(THEMES.dark)
+const useT = ()=>useContext(ThemeCtx)
 
 /* ── Format ──────────────────────────────────────────────────────────────── */
 const brl  = (n:number)=>'R$ '+Math.round(n).toLocaleString('pt-BR')
 const brl2 = (n:number)=>'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 const pc   = (n:number)=>n.toFixed(1).replace('.',',')+'%'
 
-/* ── KPI Card ────────────────────────────────────────────────────────────── */
-function KPI({label,value,delta,up,icon,color,hide}:{label:string;value:string;delta?:string;up?:boolean;icon:string;color:string;hide:boolean}){
+/* ── Building blocks ─────────────────────────────────────────────────────── */
+function Pill({kind,children}:{kind:'grn'|'gold'|'red';children:React.ReactNode}){
+  const t=useT(); const [bg,fg] = kind==='grn'?t.pillGrn:kind==='gold'?t.pillGold:t.pillRed
+  return <span style={{fontSize:11,fontWeight:600,padding:'3px 9px',borderRadius:20,background:bg,color:fg,display:'inline-block'}}>{children}</span>
+}
+function Thumb({p}:{p:{id:string;image?:string;name:string}}){
+  const pal=['#7C3AED','#E7B85C','#2FBE8F','#4F86C6','#F2685C','#9B8CFF','#0EA5E9','#F59E0B']
+  const c=pal[parseInt(p.id||'0')%pal.length]
+  if(p.image) return <img src={p.image} alt="" width={34} height={34} style={{borderRadius:8,objectFit:'cover',flexShrink:0,border:'1px solid rgba(0,0,0,0.06)'}}/>
+  return <span aria-hidden style={{width:34,height:34,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background:c+'22'}}><i className="ti ti-photo" style={{fontSize:16,color:c}}/></span>
+}
+function ProdCell({p}:{p:{id:string;image?:string;name:string;sku?:string}}){
+  const t=useT()
   return(
-    <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:13,padding:'13px 14px'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:9}}>
-        <span style={{fontSize:10,color:C.t3,letterSpacing:'0.04em',textTransform:'uppercase' as const}}>{label}</span>
-        <i className={`ti ${icon}`} style={{fontSize:14,color:C.t3}} aria-hidden="true"/>
-      </div>
-      <div style={{fontFamily:FH,fontWeight:600,fontSize:21,letterSpacing:'-0.02em',color,filter:hide?'blur(7px)':'none'}}>{value}</div>
-      {delta&&(
-        <div style={{marginTop:6,display:'inline-flex',alignItems:'center',gap:3,fontSize:10,color:up?C.grn:C.red}}>
-          <i className={`ti ti-${up?'arrow-up-right':'arrow-down-right'}`} style={{fontSize:12}} aria-hidden="true"/>{delta}
+    <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`}}>
+      <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0}}>
+        <Thumb p={p}/>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:12.5,fontWeight:500,color:t.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+          {p.sku&&<div style={{fontSize:10,color:t.t3,marginTop:1}}>{p.sku}</div>}
         </div>
-      )}
+      </div>
+    </td>
+  )
+}
+function NumTd({children,color,strong,hide}:{children:React.ReactNode;color?:string;strong?:boolean;hide?:boolean}){
+  const t=useT()
+  return <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right',fontFamily:FH,fontWeight:strong?600:500,fontSize:13,color:color||t.t1,filter:hide?'blur(6px)':'none'}}>{children}</td>
+}
+function PillTd({children}:{children:React.ReactNode}){
+  const t=useT(); return <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right'}}>{children}</td>
+}
+function Table({head,children}:{head:{label:string;right?:boolean;w?:string}[];children:React.ReactNode}){
+  const t=useT()
+  return(
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,overflow:'hidden'}}>
+      <div style={{overflowX:'auto' as const}}>
+        <table style={{width:'100%',borderCollapse:'collapse' as const,tableLayout:'fixed' as const}}>
+          <thead><tr style={{background:t.dark?'rgba(255,255,255,0.02)':'#FAFBFC'}}>
+            {head.map((h,i)=><th key={i} style={{width:h.w,textAlign:h.right?'right':'left',padding:'10px 8px',fontSize:10.5,fontWeight:600,color:t.t3,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>{h.label}</th>)}
+          </tr></thead>
+          <tbody>{children}</tbody>
+        </table>
+      </div>
     </div>
   )
 }
-
-/* ── Table helpers ───────────────────────────────────────────────────────── */
-const th:React.CSSProperties = {fontSize:10.5,color:C.t3,fontWeight:500,textAlign:'left',padding:'7px 8px',textTransform:'uppercase',letterSpacing:'0.05em'}
-const td:React.CSSProperties = {fontSize:12,padding:'8px 8px',borderTop:`1px solid ${C.line}`}
 function Hint({children}:{children:React.ReactNode}){
-  return <div style={{fontSize:11.5,color:C.t2,marginBottom:13,display:'flex',alignItems:'center',gap:7}}>
-    <i className="ti ti-bulb" style={{fontSize:14,color:C.gold}} aria-hidden="true"/>{children}
+  const t=useT()
+  return <div style={{fontSize:12,color:t.t2,marginBottom:14,display:'flex',alignItems:'center',gap:7}}>
+    <i className="ti ti-bulb" style={{fontSize:15,color:t.gold}} aria-hidden="true"/>{children}
   </div>
 }
-function Table({head,children}:{head:{label:string;right?:boolean}[];children:React.ReactNode}){
+
+/* ── KPI ─────────────────────────────────────────────────────────────────── */
+function KPI({label,value,delta,up,icon,color,hide}:{label:string;value:string;delta?:string;up?:boolean;icon:string;color:string;hide:boolean}){
+  const t=useT()
   return(
-    <div style={{overflowX:'auto' as const}}>
-      <table style={{width:'100%',borderCollapse:'collapse' as const,tableLayout:'fixed' as const}}>
-        <thead><tr>{head.map((h,i)=><th key={i} style={{...th,textAlign:h.right?'right':'left'}}>{h.label}</th>)}</tr></thead>
-        <tbody>{children}</tbody>
-      </table>
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:13,padding:'14px 15px'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:9}}>
+        <span style={{fontSize:10.5,color:t.t3,letterSpacing:'0.04em',textTransform:'uppercase' as const,fontWeight:500}}>{label}</span>
+        <i className={`ti ${icon}`} style={{fontSize:15,color:t.t3}} aria-hidden="true"/>
+      </div>
+      <div style={{fontFamily:FH,fontWeight:600,fontSize:22,letterSpacing:'-0.02em',color,filter:hide?'blur(7px)':'none'}}>{value}</div>
+      {delta&&<div style={{marginTop:6,display:'inline-flex',alignItems:'center',gap:3,fontSize:11,fontWeight:500,color:up?t.grn:t.red}}>
+        <i className={`ti ti-${up?'arrow-up-right':'arrow-down-right'}`} style={{fontSize:12}} aria-hidden="true"/>{delta}
+      </div>}
     </div>
   )
 }
-const ellip:React.CSSProperties = {overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}
 
-/* ── Resumo (dashboard principal) ───────────────────────────────────────── */
+/* ── Resumo ──────────────────────────────────────────────────────────────── */
 function Resumo({hide}:{hide:boolean}){
-  const d = useMemo(()=>getFinanceData(),[])
-  const s = useMemo(()=>summary(d),[d])
-  const kpis = [
-    {label:'Faturamento',     value:brl(s.faturamento),    delta:'+12,4%', up:true,  icon:'ti-cash',            color:C.gold},
-    {label:'Líq. Marketplace',value:brl(s.liqMarketplace), delta:'+9,1%',  up:true,  icon:'ti-building-bank',   color:C.t1},
-    {label:'Lucro Bruto',     value:brl(s.lucroBruto),     delta:'+15,2%', up:true,  icon:'ti-trending-up',     color:C.grn},
-    {label:'Margem',          value:pc(s.margem),          delta:'+1,8pp', up:true,  icon:'ti-percentage',      color:C.grn},
-    {label:'Nº de Vendas',    value:String(s.orders),      delta:'+8',     up:true,  icon:'ti-shopping-cart',   color:C.t1},
-    {label:'Unidades',        value:String(s.unidades),    delta:'+74',    up:true,  icon:'ti-package',         color:C.t1},
-    {label:'Ticket Médio',    value:brl(s.ticketMedio),    delta:'+3,2%',  up:true,  icon:'ti-receipt',         color:C.t1},
-    {label:'ROI',             value:pc(s.roi),             delta:'+6pp',   up:true,  icon:'ti-rotate-clockwise',color:C.grn},
-    {label:'Valor em Ads',    value:brl(s.ads),            delta:'+5,0%',  up:false, icon:'ti-speakerphone',    color:C.gold},
-    {label:'TACOS',           value:pc(s.tacos),           delta:'-0,4pp', up:true,  icon:'ti-target',          color:C.gold},
-    {label:'Lucro pós-ADS',   value:brl(s.lucroPosAds),    delta:'+17%',   up:true,  icon:'ti-coin',            color:C.grn},
-    {label:'MPA',             value:pc(s.mpa),             delta:'+2,1pp', up:true,  icon:'ti-chart-pie',       color:C.grn},
+  const t=useT()
+  const d=useMemo(()=>getFinanceData(),[])
+  const s=useMemo(()=>summary(d),[d])
+  const kpis=[
+    {label:'Faturamento',value:brl(s.faturamento),delta:'+12,4%',up:true,icon:'ti-cash',color:t.gold},
+    {label:'Líq. Marketplace',value:brl(s.liqMarketplace),delta:'+9,1%',up:true,icon:'ti-building-bank',color:t.t1},
+    {label:'Lucro Bruto',value:brl(s.lucroBruto),delta:'+15,2%',up:true,icon:'ti-trending-up',color:t.grn},
+    {label:'Margem',value:pc(s.margem),delta:'+1,8pp',up:true,icon:'ti-percentage',color:t.grn},
+    {label:'Nº de Vendas',value:String(s.orders),delta:'+8',up:true,icon:'ti-shopping-cart',color:t.t1},
+    {label:'Unidades',value:String(s.unidades),delta:'+74',up:true,icon:'ti-package',color:t.t1},
+    {label:'Ticket Médio',value:brl(s.ticketMedio),delta:'+3,2%',up:true,icon:'ti-receipt',color:t.t1},
+    {label:'ROI',value:pc(s.roi),delta:'+6pp',up:true,icon:'ti-rotate-clockwise',color:t.grn},
+    {label:'Valor em Ads',value:brl(s.ads),delta:'+5,0%',up:false,icon:'ti-speakerphone',color:t.gold},
+    {label:'TACOS',value:pc(s.tacos),delta:'-0,4pp',up:true,icon:'ti-target',color:t.gold},
+    {label:'Lucro pós-ADS',value:brl(s.lucroPosAds),delta:'+17%',up:true,icon:'ti-coin',color:t.grn},
+    {label:'MPA',value:pc(s.mpa),delta:'+2,1pp',up:true,icon:'ti-chart-pie',color:t.grn},
   ]
-  const comp = [
-    {name:'Lucro líquido', value:Math.max(0,Math.round(s.lucroLiquido)), color:C.grn},
-    {name:'CMV',           value:Math.round(s.cmv),       color:C.vio},
-    {name:'Comissão',      value:Math.round(s.comissao),  color:C.gold},
-    {name:'Ads',           value:Math.round(s.ads),       color:C.red},
-    {name:'FBA',           value:Math.round(s.fba),       color:C.blue},
-    {name:'Outros',        value:Math.round(s.armazenagem+s.remocao+s.refunds+s.tax), color:C.t3},
+  const comp=[
+    {name:'Lucro líquido',value:Math.max(0,Math.round(s.lucroLiquido)),color:t.grn},
+    {name:'CMV',value:Math.round(s.cmv),color:t.vio},
+    {name:'Comissão',value:Math.round(s.comissao),color:t.gold},
+    {name:'Ads',value:Math.round(s.ads),color:t.red},
+    {name:'FBA',value:Math.round(s.fba),color:t.blue},
+    {name:'Outros',value:Math.round(s.armazenagem+s.remocao+s.refunds+s.tax),color:t.t3},
   ]
-  return(
-    <>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:18}}>
-        {kpis.map((k,i)=><KPI key={i} {...k} hide={hide}/>)}
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'1.6fr 1fr',gap:14}}>
-        <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:13,padding:'14px 16px'}}>
-          <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
-            <span style={{fontSize:12.5,fontWeight:500,color:C.t1}}>Resumo de Receitas</span>
-            <span style={{fontSize:10,color:C.t3}}>{d.period}</span>
-          </div>
-          <div style={{height:190}}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={d.daily} margin={{top:4,right:4,left:-18,bottom:0}}>
-                <defs>
-                  <linearGradient id="gR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C.gold} stopOpacity={0.25}/><stop offset="100%" stopColor={C.gold} stopOpacity={0}/></linearGradient>
-                  <linearGradient id="gL" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C.grn} stopOpacity={0.25}/><stop offset="100%" stopColor={C.grn} stopOpacity={0}/></linearGradient>
-                </defs>
-                <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false}/>
-                <XAxis dataKey="day" tick={{fill:C.t3,fontSize:9}} tickLine={false} axisLine={false} interval={5}/>
-                <YAxis tick={{fill:C.t3,fontSize:9}} tickLine={false} axisLine={false} tickFormatter={(v:number)=>'R$'+Math.round(v/1000)+'k'}/>
-                <RTooltip contentStyle={{background:C.card2,border:`1px solid ${C.line2}`,borderRadius:10,fontSize:11}} labelStyle={{color:C.t3}} formatter={(v:any)=>brl(Number(v))} labelFormatter={(l)=>'Dia '+l}/>
-                <Area type="monotone" dataKey="receita" name="Receita" stroke={C.gold} strokeWidth={2} fill="url(#gR)"/>
-                <Area type="monotone" dataKey="lucro"   name="Lucro"   stroke={C.grn}  strokeWidth={2} fill="url(#gL)"/>
-                <Area type="monotone" dataKey="ads"     name="Ads"     stroke={C.vio}  strokeWidth={2} fill="none"/>
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+  return(<>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:18}}>
+      {kpis.map((k,i)=><KPI key={i} {...k} hide={hide}/>)}
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'1.6fr 1fr',gap:14}}>
+      <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'14px 16px'}}>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
+          <span style={{fontSize:13,fontWeight:600,color:t.t1}}>Resumo de Receitas</span>
+          <span style={{fontSize:10.5,color:t.t3}}>{d.period}</span>
         </div>
-        <div style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:13,padding:'14px 16px'}}>
-          <div style={{fontSize:12.5,fontWeight:500,color:C.t1,marginBottom:6}}>Para onde vai o faturamento</div>
-          <div style={{height:150}}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={comp} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={64} stroke={C.card} strokeWidth={2}>
-                  {comp.map((c,i)=><Cell key={i} fill={c.color}/>)}
-                </Pie>
-                <RTooltip contentStyle={{background:C.card2,border:`1px solid ${C.line2}`,borderRadius:10,fontSize:11}} formatter={(v:any)=>brl(Number(v))}/>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-          <div style={{marginTop:8,display:'flex',flexDirection:'column' as const,gap:5}}>
-            {comp.map((c,i)=>(
-              <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:10.5}}>
-                <span style={{display:'flex',alignItems:'center',gap:6,color:C.t2}}><span style={{width:8,height:8,borderRadius:2,background:c.color}}/>{c.name}</span>
-                <span style={{color:C.t1,filter:hide?'blur(6px)':'none'}}>{brl(c.value)}</span>
-              </div>
-            ))}
-          </div>
+        <div style={{height:190}}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={d.daily} margin={{top:4,right:4,left:-18,bottom:0}}>
+              <defs>
+                <linearGradient id="gR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={t.gold} stopOpacity={0.3}/><stop offset="100%" stopColor={t.gold} stopOpacity={0}/></linearGradient>
+                <linearGradient id="gL" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={t.grn} stopOpacity={0.28}/><stop offset="100%" stopColor={t.grn} stopOpacity={0}/></linearGradient>
+              </defs>
+              <CartesianGrid stroke={t.grid} vertical={false}/>
+              <XAxis dataKey="day" tick={{fill:t.t3,fontSize:10}} tickLine={false} axisLine={false} interval={5}/>
+              <YAxis tick={{fill:t.t3,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={(v:number)=>'R$'+Math.round(v/1000)+'k'}/>
+              <RTooltip contentStyle={{background:t.tipBg,border:`1px solid ${t.line2}`,borderRadius:10,fontSize:12,color:t.t1}} labelStyle={{color:t.t3}} formatter={(v:any)=>brl(Number(v))} labelFormatter={(l)=>'Dia '+l}/>
+              <Area type="monotone" dataKey="receita" name="Receita" stroke={t.gold} strokeWidth={2.2} fill="url(#gR)"/>
+              <Area type="monotone" dataKey="lucro" name="Lucro" stroke={t.grn} strokeWidth={2.2} fill="url(#gL)"/>
+              <Area type="monotone" dataKey="ads" name="Ads" stroke={t.vio} strokeWidth={2} fill="none"/>
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </div>
-    </>
-  )
+      <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'14px 16px'}}>
+        <div style={{fontSize:13,fontWeight:600,color:t.t1,marginBottom:6}}>Para onde vai o faturamento</div>
+        <div style={{height:150}}>
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie data={comp} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={64} stroke={t.card} strokeWidth={2}>
+                {comp.map((c,i)=><Cell key={i} fill={c.color}/>)}
+              </Pie>
+              <RTooltip contentStyle={{background:t.tipBg,border:`1px solid ${t.line2}`,borderRadius:10,fontSize:12,color:t.t1}} formatter={(v:any)=>brl(Number(v))}/>
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div style={{marginTop:8,display:'flex',flexDirection:'column' as const,gap:6}}>
+          {comp.map((c,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:11.5}}>
+              <span style={{display:'flex',alignItems:'center',gap:6,color:t.t2}}><span style={{width:9,height:9,borderRadius:2,background:c.color}}/>{c.name}</span>
+              <span style={{color:t.t1,fontWeight:500,filter:hide?'blur(6px)':'none'}}>{brl(c.value)}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </>)
 }
 
 /* ── Abas tabulares ─────────────────────────────────────────────────────── */
-const nameCell = (v:string)=><td style={{...td,...ellip}}>{v}</td>
-const rCell = (v:string,color?:string,hide?:boolean)=><td style={{...td,textAlign:'right',color:color||C.t2,filter:hide?'blur(6px)':'none'}}>{v}</td>
-
 function Vendas({m,hide}:{m:ProductMetrics[];hide:boolean}){
   const t=[...m].sort((a,b)=>b.revenue-a.revenue)
   return(<>
     <Hint>Ranking por receita · ordena os produtos por faturamento e mostra a margem real.</Hint>
-    <Table head={[{label:'Produto'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true}]}>
-      {t.map(p=><tr key={p.id}>{nameCell(p.name)}{rCell(String(p.units))}{rCell(brl(p.revenue),C.t1,hide)}{rCell(pc(p.margin),p.margin>20?C.grn:C.gold)}</tr>)}
+    <Table head={[{label:'Produto',w:'46%'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true}]}>
+      {t.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl(p.revenue)}</NumTd><PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
     </Table>
   </>)
 }
 function CurvaABC({d,hide}:{d:ReturnType<typeof abcCurve>;hide:boolean}){
+  const t=useT()
+  const groups=(['A','B','C'] as const).map(cls=>{
+    const items=d.filter(p=>p.cls===cls)
+    return {cls,count:items.length,rev:items.reduce((s,p)=>s+p.revenue,0),un:items.reduce((s,p)=>s+p.units,0),
+      color:cls==='A'?t.grn:cls==='B'?t.blue:t.gold}
+  })
   return(<>
     <Hint>Classe A = 80% do faturamento · B = 15% · C = resto. Foca estoque e ads nos produtos A.</Hint>
-    <Table head={[{label:'Produto'},{label:'Receita',right:true},{label:'% total',right:true},{label:'Classe',right:true}]}>
-      {d.map(p=><tr key={p.id}>{nameCell(p.name)}{rCell(brl(p.revenue),C.t1,hide)}{rCell(pc(p.shareTotal))}
-        <td style={{...td,textAlign:'right',fontWeight:600,color:p.cls==='A'?C.grn:p.cls==='B'?C.gold:C.t3}}>{p.cls}</td></tr>)}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:16}}>
+      {groups.map(g=>(
+        <div key={g.cls} style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${g.color}`,borderRadius:12,padding:'13px 15px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+            <span style={{width:24,height:24,borderRadius:7,background:g.color+'22',color:g.color,fontWeight:700,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:FH}}>{g.cls}</span>
+            <span style={{fontSize:12,color:t.t2}}>{g.count} produto{g.count!==1?'s':''} · {g.un} un</span>
+          </div>
+          <div style={{fontFamily:FH,fontWeight:600,fontSize:18,color:t.t1,filter:hide?'blur(7px)':'none'}}>{brl(g.rev)}</div>
+        </div>
+      ))}
+    </div>
+    <Table head={[{label:'Produto',w:'46%'},{label:'Receita',right:true},{label:'% total',right:true},{label:'Classe',right:true}]}>
+      {d.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl(p.revenue)}</NumTd><NumTd>{pc(p.shareTotal)}</NumTd>
+        <PillTd><Pill kind={p.cls==='A'?'grn':p.cls==='B'?'gold':'red'}>{p.cls}</Pill></PillTd></tr>)}
     </Table>
   </>)
 }
 function Ads({m,hide}:{m:ProductMetrics[];hide:boolean}){
   return(<>
     <Hint>ACoS &lt;20% ótimo · 20–30% atenção · &gt;30% prejuízo (revisar lance).</Hint>
-    <Table head={[{label:'Campanha'},{label:'Gasto',right:true},{label:'Vendas',right:true},{label:'ACoS',right:true}]}>
-      {m.map(p=><tr key={p.id}>{nameCell(p.name)}{rCell(brl(p.adsSpend),C.t1,hide)}{rCell(brl(p.adsSales),C.t1,hide)}{rCell(pc(p.acos),p.acos<20?C.grn:p.acos<30?C.gold:C.red)}</tr>)}
+    <Table head={[{label:'Campanha',w:'42%'},{label:'Gasto',right:true},{label:'Vendas',right:true},{label:'ROAS',right:true},{label:'ACoS',right:true}]}>
+      {m.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl(p.adsSpend)}</NumTd><NumTd hide={hide}>{brl(p.adsSales)}</NumTd><NumTd>{p.roas.toFixed(1)}x</NumTd>
+        <PillTd><Pill kind={p.acos<20?'grn':p.acos<30?'gold':'red'}>{pc(p.acos)}</Pill></PillTd></tr>)}
     </Table>
   </>)
 }
 function Analitico({m,hide}:{m:ProductMetrics[];hide:boolean}){
-  const t=[...m].sort((a,b)=>b.refundUnits-a.refundUnits)
+  const T=useT()
+  const rows=[...m].sort((a,b)=>b.refundUnits-a.refundUnits)
   return(<>
     <Hint>Reembolsos por produto · acha o que vende mas dá prejuízo por devolução/CMV.</Hint>
-    <Table head={[{label:'Produto'},{label:'Devol.',right:true},{label:'R$ perdido',right:true},{label:'Margem',right:true}]}>
-      {t.map(p=><tr key={p.id}>{nameCell(p.name)}{rCell(p.refundUnits+' un')}{rCell(brl(p.refundValue),C.red,hide)}{rCell(pc(p.margin),p.margin>20?C.grn:C.gold)}</tr>)}
+    <Table head={[{label:'Produto',w:'46%'},{label:'Devol.',right:true},{label:'R$ perdido',right:true},{label:'Margem',right:true}]}>
+      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.refundUnits} un</NumTd><NumTd color={T.red} hide={hide}>{brl(p.refundValue)}</NumTd>
+        <PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
     </Table>
   </>)
 }
 function Gerenciamento({m,hide}:{m:ProductMetrics[];hide:boolean}){
   return(<>
     <Hint>Cadastro + custo (CMV) — o que a Amazon não sabe. Alimenta a DRE e o ROI.</Hint>
-    <Table head={[{label:'Produto'},{label:'SKU',right:true},{label:'Custo un.',right:true},{label:'Preço',right:true},{label:'Markup',right:true}]}>
-      {m.map(p=><tr key={p.id}>{nameCell(p.name)}{rCell(p.sku,C.t3)}{rCell(brl2(p.unitCost),C.t1,hide)}{rCell(brl2(p.price),C.t1,hide)}{rCell((p.price/p.unitCost).toFixed(1)+'x',C.gold)}</tr>)}
+    <Table head={[{label:'Produto',w:'48%'},{label:'Custo un.',right:true},{label:'Preço',right:true},{label:'Markup',right:true}]}>
+      {m.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl2(p.unitCost)}</NumTd><NumTd hide={hide}>{brl2(p.price)}</NumTd>
+        <PillTd><Pill kind="gold">{(p.price/p.unitCost).toFixed(1)}x</Pill></PillTd></tr>)}
     </Table>
   </>)
 }
 function Fulfillment({m}:{m:ProductMetrics[]}){
   return(<>
     <Hint>Estoque FBA + dias de cobertura · alerta de ruptura e excesso (armazenagem cara).</Hint>
-    <Table head={[{label:'Produto'},{label:'FBA',right:true},{label:'Cobertura',right:true},{label:'Status',right:true}]}>
+    <Table head={[{label:'Produto',w:'48%'},{label:'FBA',right:true},{label:'Cobertura',right:true},{label:'Status',right:true}]}>
       {m.map(p=>{
-        const st = p.coverageDays<10?['Ruptura',C.red]:p.coverageDays>120?['Excesso',C.gold]:['Saudável',C.grn]
-        return <tr key={p.id}>{nameCell(p.name)}{rCell(String(p.stockFBA))}{rCell(p.coverageDays+' dias')}
-          <td style={{...td,textAlign:'right',color:st[1]}}>{st[0]}</td></tr>
+        const k = p.coverageDays<10?'red':p.coverageDays>120?'gold':'grn'
+        const lbl = p.coverageDays<10?'Ruptura':p.coverageDays>120?'Excesso':'Saudável'
+        return <tr key={p.id}><ProdCell p={p}/><NumTd>{p.stockFBA}</NumTd><NumTd>{p.coverageDays} dias</NumTd><PillTd><Pill kind={k}>{lbl}</Pill></PillTd></tr>
       })}
     </Table>
   </>)
 }
 function Relatorio(){
+  const t=useT()
   const reps=[['Vendas','ti-cash'],['Reembolsos','ti-arrow-back-up'],['Estoque FBA','ti-package'],['Produtos','ti-list'],['Comissões','ti-receipt-2'],['Operacional','ti-file-spreadsheet']]
   return(<>
     <Hint>Relatórios exportáveis em CSV/PDF.</Hint>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:10}}>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:11}}>
       {reps.map((r,i)=>(
-        <div key={i} style={{background:C.card,border:`1px solid ${C.line}`,borderRadius:12,padding:'13px 14px',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}}>
-          <span style={{display:'flex',alignItems:'center',gap:8,fontSize:12.5,color:C.t1}}><i className={`ti ${r[1]}`} style={{fontSize:17,color:C.gold}} aria-hidden="true"/>{r[0]}</span>
-          <i className="ti ti-download" style={{fontSize:15,color:C.t3}} aria-hidden="true"/>
+        <div key={i} style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'14px 15px',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}}>
+          <span style={{display:'flex',alignItems:'center',gap:8,fontSize:13,fontWeight:500,color:t.t1}}><i className={`ti ${r[1]}`} style={{fontSize:18,color:t.gold}} aria-hidden="true"/>{r[0]}</span>
+          <i className="ti ti-download" style={{fontSize:16,color:t.t3}} aria-hidden="true"/>
         </div>
       ))}
     </div>
@@ -219,68 +294,90 @@ function Relatorio(){
 
 /* ── Hub ─────────────────────────────────────────────────────────────────── */
 const TABS = [
-  {id:'resumo',  label:'Resumo',       icon:'ti-layout-dashboard'},
-  {id:'vendas',  label:'Vendas',       icon:'ti-cash'},
-  {id:'abc',     label:'Curva ABC',    icon:'ti-chart-bar'},
-  {id:'ads',     label:'Ads',          icon:'ti-speakerphone'},
-  {id:'analit',  label:'Analítico',    icon:'ti-chart-dots'},
-  {id:'gerenc',  label:'Gerenciamento',icon:'ti-adjustments'},
-  {id:'fulfil',  label:'Fulfillment',  icon:'ti-truck-delivery'},
-  {id:'relat',   label:'Relatório',    icon:'ti-file-text'},
-  {id:'dre',     label:'DRE',          icon:'ti-building-bank'},
+  {id:'resumo',label:'Resumo',icon:'ti-layout-dashboard'},
+  {id:'vendas',label:'Vendas',icon:'ti-cash'},
+  {id:'abc',label:'Curva ABC',icon:'ti-chart-bar'},
+  {id:'ads',label:'Ads',icon:'ti-speakerphone'},
+  {id:'analit',label:'Analítico',icon:'ti-chart-dots'},
+  {id:'gerenc',label:'Gerenciamento',icon:'ti-adjustments'},
+  {id:'fulfil',label:'Fulfillment',icon:'ti-truck-delivery'},
+  {id:'relat',label:'Relatório',icon:'ti-file-text'},
+  {id:'dre',label:'DRE',icon:'ti-building-bank'},
 ]
+const THEME_KEY='oraculo_gestao_theme'
 
 export default function GestaoHub({promoActive=false,promoType=null}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null}){
   const [tab,setTab]=useState('resumo')
   const [hide,setHide]=useState(false)
-  const d = useMemo(()=>getFinanceData(),[])
-  const m = useMemo(()=>productMetrics(d),[d])
-  const abc = useMemo(()=>abcCurve(d),[d])
+  const [themeKey,setThemeKey]=useState('dark')
+  useEffect(()=>{ const s=typeof localStorage!=='undefined'&&localStorage.getItem(THEME_KEY); if(s&&THEMES[s]) setThemeKey(s) },[])
+  const setTheme=(k:string)=>{ setThemeKey(k); try{localStorage.setItem(THEME_KEY,k)}catch{} }
+  const t=THEMES[themeKey]||THEMES.dark
+
+  const d=useMemo(()=>getFinanceData(),[])
+  const m=useMemo(()=>productMetrics(d),[d])
+  const abc=useMemo(()=>abcCurve(d),[d])
 
   return(
-    <div style={{maxWidth:1080,margin:'0 auto'}}>
-      <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"/>
-      {/* Header */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
-        <div>
-          <h2 style={{fontFamily:FH,fontSize:20,fontWeight:600,color:C.t1,letterSpacing:'-0.02em'}}>Gestão</h2>
-          <p style={{fontSize:11.5,color:C.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:C.gold}}>dados de exemplo</span></p>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <button onClick={()=>setHide(v=>!v)} title="Ocultar valores"
-            style={{background:C.card2,border:`1px solid ${C.line2}`,borderRadius:9,width:34,height:34,color:C.t2,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
-            <i className={`ti ti-${hide?'eye-off':'eye'}`} aria-hidden="true"/>
-          </button>
-          <select style={{background:C.card2,color:C.t1,border:`1px solid ${C.line2}`,borderRadius:9,padding:'7px 10px',fontSize:12,fontFamily:'inherit',outline:'none'}}>
-            <option>Últimos 30 dias</option><option>Este mês</option><option>Mês passado</option><option>Hoje</option>
-          </select>
-        </div>
-      </div>
+    <ThemeCtx.Provider value={t}>
+      <div style={{background:t.pageBg,borderRadius:16,border:`1px solid ${t.line}`,padding:'18px 20px 28px',minHeight:'calc(100vh - 80px)'}}>
+        <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"/>
 
-      {/* Sub-tabs */}
-      <div style={{display:'flex',gap:6,overflowX:'auto' as const,borderBottom:`1px solid ${C.line}`,paddingBottom:11,marginBottom:18}}>
-        {TABS.map(t=>{
-          const on=tab===t.id
-          return(
-            <button key={t.id} onClick={()=>setTab(t.id)}
-              style={{display:'flex',alignItems:'center',gap:6,fontSize:12,whiteSpace:'nowrap' as const,padding:'7px 11px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',border:'1px solid transparent',
-                background:on?C.gold:'transparent',color:on?'#1c1606':C.t2,fontWeight:on?600:400}}>
-              <i className={`ti ${t.icon}`} style={{fontSize:14}} aria-hidden="true"/>{t.label}
+        {/* Header */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
+          <div>
+            <h2 style={{fontFamily:FH,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>Gestão</h2>
+            <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:t.goldText,fontWeight:500}}>dados de exemplo</span></p>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            {/* Seletor de paleta */}
+            <div style={{display:'flex',gap:3,background:t.card,border:`1px solid ${t.line}`,borderRadius:9,padding:3}}>
+              {Object.values(THEMES).map(th=>{
+                const on=themeKey===th.key
+                return(
+                  <button key={th.key} onClick={()=>setTheme(th.key)} title={`Tema ${th.name}`}
+                    style={{display:'flex',alignItems:'center',gap:5,fontSize:11.5,fontWeight:on?600:400,padding:'5px 9px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',border:'none',
+                      background:on?(t.dark?'rgba(255,255,255,0.08)':'#EEF0F3'):'transparent',color:on?t.t1:t.t3}}>
+                    <span style={{width:11,height:11,borderRadius:'50%',background:th.dark?'#16162A':'#FFFFFF',border:`1.5px solid ${th.gold}`}}/>{th.name}
+                  </button>
+                )
+              })}
+            </div>
+            <button onClick={()=>setHide(v=>!v)} title="Ocultar valores"
+              style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t2,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <i className={`ti ti-${hide?'eye-off':'eye'}`} aria-hidden="true"/>
             </button>
-          )
-        })}
-      </div>
+            <select style={{background:t.card,color:t.t1,border:`1px solid ${t.line}`,borderRadius:9,padding:'7px 10px',fontSize:12,fontFamily:'inherit',outline:'none'}}>
+              <option>Últimos 30 dias</option><option>Este mês</option><option>Mês passado</option><option>Hoje</option>
+            </select>
+          </div>
+        </div>
 
-      {/* Conteúdo */}
-      {tab==='resumo' && <Resumo hide={hide}/>}
-      {tab==='vendas' && <Vendas m={m} hide={hide}/>}
-      {tab==='abc'    && <CurvaABC d={abc} hide={hide}/>}
-      {tab==='ads'    && <Ads m={m} hide={hide}/>}
-      {tab==='analit' && <Analitico m={m} hide={hide}/>}
-      {tab==='gerenc' && <Gerenciamento m={m} hide={hide}/>}
-      {tab==='fulfil' && <Fulfillment m={m}/>}
-      {tab==='relat'  && <Relatorio/>}
-      {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
-    </div>
+        {/* Sub-tabs */}
+        <div style={{display:'flex',gap:6,overflowX:'auto' as const,borderBottom:`1px solid ${t.line}`,paddingBottom:11,marginBottom:18}}>
+          {TABS.map(tb=>{
+            const on=tab===tb.id
+            return(
+              <button key={tb.id} onClick={()=>setTab(tb.id)}
+                style={{display:'flex',alignItems:'center',gap:6,fontSize:12.5,whiteSpace:'nowrap' as const,padding:'7px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',border:'1px solid transparent',
+                  background:on?t.gold:'transparent',color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2,fontWeight:on?600:500}}>
+                <i className={`ti ${tb.icon}`} style={{fontSize:14}} aria-hidden="true"/>{tb.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Conteúdo */}
+        {tab==='resumo' && <Resumo hide={hide}/>}
+        {tab==='vendas' && <Vendas m={m} hide={hide}/>}
+        {tab==='abc'    && <CurvaABC d={abc} hide={hide}/>}
+        {tab==='ads'    && <Ads m={m} hide={hide}/>}
+        {tab==='analit' && <Analitico m={m} hide={hide}/>}
+        {tab==='gerenc' && <Gerenciamento m={m} hide={hide}/>}
+        {tab==='fulfil' && <Fulfillment m={m}/>}
+        {tab==='relat'  && <Relatorio/>}
+        {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
+      </div>
+    </ThemeCtx.Provider>
   )
 }

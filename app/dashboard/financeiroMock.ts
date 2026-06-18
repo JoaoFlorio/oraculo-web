@@ -10,6 +10,7 @@ export interface FinProduct {
   name: string
   sku: string
   asin: string
+  image?: string         // URL da imagem (vem do Catalog API; placeholder no mock)
   units: number          // unidades vendidas no período
   price: number          // preço médio de venda
   unitCost: number       // CMV unitário (vem do Gerenciamento)
