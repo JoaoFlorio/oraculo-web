@@ -6,25 +6,27 @@ const GestaoHub = dynamic(()=>import('./GestaoHub'),{ssr:false,loading:()=><div 
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 const T = {
-  bg:      '#03030A',
-  sidebar: '#070710',
-  card:    '#0B0B1A',
-  cardHov: '#0F0F22',
-  modal:   '#09091A',
-  line:    'rgba(255,255,255,0.07)',
-  lineG:   'rgba(240,180,41,0.22)',
-  gold:    '#F0B429',
-  goldG:   'linear-gradient(135deg,#F5C842 0%,#C48F10 100%)',
-  goldSub: 'rgba(240,180,41,0.10)',
-  g:       '#22C55E',
-  a:       '#F59E0B',
-  r:       '#EF4444',
-  pur:     '#8B78FF',
-  t1:      '#F2F2FC',
-  t2:      '#A0A0C8',
-  t3:      '#686890',
-  t4:      '#C8C8E8',
+  bg:      'var(--bg)',
+  sidebar: 'var(--sidebar)',
+  card:    'var(--card)',
+  cardHov: 'var(--cardHov)',
+  modal:   'var(--modal)',
+  line:    'var(--line)',
+  lineG:   'var(--lineG)',
+  gold:    'var(--gold)',
+  goldG:   'var(--goldG)',
+  goldSub: 'var(--goldSub)',
+  g:       'var(--g)',
+  a:       'var(--a)',
+  r:       'var(--r)',
+  pur:     'var(--pur)',
+  t1:      'var(--t1)',
+  t2:      'var(--t2)',
+  t3:      'var(--t3)',
+  t4:      'var(--t4)',
 }
+// Tinta translúcida a partir de um token de tema (substitui o antigo `${T.x}NN`).
+const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transparent)`
 
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
@@ -186,18 +188,18 @@ function OracleMark({size=22}:{size?:number}){
 function NavIcon({id,active}:{id:string,active:boolean}){
   const c = active ? T.gold : T.t2
   const icons:Record<string,React.ReactElement> = {
-    bestsellers: <><path d="M6 20l4-7 4 5 3-4 3 6" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="9" cy="8" r="1.5" fill={c}/></>,
-    new:         <><rect x="6" y="6" width="8" height="8" rx="1.5" stroke={c} strokeWidth="1.5"/><path d="M14 12h6M14 16h4M14 20h6" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
-    trending:    <><path d="M5 19l5-6 4 3 5-8" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M15 8h4v4" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
-    generics:    <><circle cx="16" cy="16" r="10" stroke={c} strokeWidth="1.5"/><path d="M13 13h6M13 16h6M13 19h4" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
-    search:      <><circle cx="14" cy="14" r="7" stroke={c} strokeWidth="1.5"/><path d="M19.5 19.5L26 26" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
-    competitor: <><circle cx="16" cy="10" r="4" stroke={c} strokeWidth="1.5"/><circle cx="10" cy="20" r="3" stroke={c} strokeWidth="1.5"/><circle cx="22" cy="20" r="3" stroke={c} strokeWidth="1.5"/><path d="M13 13l-1.5 4M19 13l1.5 4" stroke={c} strokeWidth="1.3" strokeLinecap="round"/></>,
-    extension:  <><rect x="5" y="5" width="18" height="18" rx="3" stroke={c} strokeWidth="1.5"/><path d="M11 5v4a2 2 0 01-2 2H5M19 14h-2a2 2 0 00-2 2v2" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
-    agente:     <><circle cx="14" cy="10" r="5" stroke={c} strokeWidth="1.5"/><path d="M10 15c-3 1.5-5 4-5 7h18c0-3-2-5.5-5-7" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><path d="M14 10v3M12 12h4" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
-    financeiro: <><path d="M6 20V14M10 20V10M14 20V6M18 20V12" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><path d="M6 8l4-3 4 4 4-5" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
+    bestsellers: <><path d="M6 20l4-7 4 5 3-4 3 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><circle cx="9" cy="8" r="1.5" fill="currentColor"/></>,
+    new:         <><rect x="6" y="6" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><path d="M14 12h6M14 16h4M14 20h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
+    trending:    <><path d="M5 19l5-6 4 3 5-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M15 8h4v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
+    generics:    <><circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13h6M13 16h6M13 19h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
+    search:      <><circle cx="14" cy="14" r="7" stroke="currentColor" strokeWidth="1.5"/><path d="M19.5 19.5L26 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
+    competitor: <><circle cx="16" cy="10" r="4" stroke="currentColor" strokeWidth="1.5"/><circle cx="10" cy="20" r="3" stroke="currentColor" strokeWidth="1.5"/><circle cx="22" cy="20" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13l-1.5 4M19 13l1.5 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></>,
+    extension:  <><rect x="5" y="5" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.5"/><path d="M11 5v4a2 2 0 01-2 2H5M19 14h-2a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
+    agente:     <><circle cx="14" cy="10" r="5" stroke="currentColor" strokeWidth="1.5"/><path d="M10 15c-3 1.5-5 4-5 7h18c0-3-2-5.5-5-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M14 10v3M12 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
+    financeiro: <><path d="M6 20V14M10 20V10M14 20V6M18 20V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M6 8l4-3 4 4 4-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
   }
   return(
-    <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0}}>
+    <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0,color:c}}>
       {icons[id]}
     </svg>
   )
@@ -208,7 +210,7 @@ function ScoreRing({score}:{score:number}){
   const c=sColor(score);const r=9;const circ=2*Math.PI*r
   return(
     <svg width="28" height="28" viewBox="0 0 28 28" style={{flexShrink:0}}>
-      <circle cx="14" cy="14" r={r} fill="none" stroke={T.line} strokeWidth="2.5"/>
+      <circle cx="14" cy="14" r={r} fill="none" style={{stroke:T.line}} strokeWidth="2.5"/>
       <circle cx="14" cy="14" r={r} fill="none" stroke={c} strokeWidth="2.5"
         strokeDasharray={`${circ*(score/100)} ${circ}`} strokeDashoffset={circ*.25} strokeLinecap="round"/>
       <text x="14" y="18" textAnchor="middle" fontSize="7" fontWeight="700" fill={c} fontFamily="inherit">{score}</text>
@@ -478,7 +480,7 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
 
         {/* Score breakdown — aparece quando os dados reais do listing chegam */}
         {lsData?.breakdown&&(
-          <div style={{padding:'16px 28px',borderBottom:`1px solid ${T.line}`,background:`${T.card}80`}}>
+          <div style={{padding:'16px 28px',borderBottom:`1px solid ${T.line}`,background:`${tint(T.card,50)}`}}>
             <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:12}}>Score do Listing — Critérios Reais</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8}}>
               {([
@@ -854,7 +856,7 @@ function Card({product,onClick,locked}:{product:any;onClick:()=>void;locked?:boo
       {/* Score badge */}
       <div style={{position:'absolute',top:10,right:10,zIndex:2}}><ScoreRing score={score}/></div>
       {/* Generic badge */}
-      {isGeneric&&!locked&&<div style={{position:'absolute',top:10,left:10,zIndex:2,background:'rgba(3,3,10,0.8)',backdropFilter:'blur(4px)',border:`1px solid ${T.pur}35`,borderRadius:4,padding:'2px 7px',fontSize:8,fontWeight:700,color:T.pur,letterSpacing:'0.1em'}}>GENÉRICO</div>}
+      {isGeneric&&!locked&&<div style={{position:'absolute',top:10,left:10,zIndex:2,background:'rgba(3,3,10,0.8)',backdropFilter:'blur(4px)',border:`1px solid ${tint(T.pur,21)}`,borderRadius:4,padding:'2px 7px',fontSize:8,fontWeight:700,color:T.pur,letterSpacing:'0.1em'}}>GENÉRICO</div>}
       {/* Image */}
       <div style={{background:'#F8F8FC',height:162,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
         {product.images?.[0]?<img src={product.images[0]} alt="" style={{maxHeight:138,maxWidth:'88%',objectFit:'contain',transition:'transform .3s cubic-bezier(.34,1.56,.64,1)',transform:hov?'scale(1.08)':'scale(1)'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>:<div style={{width:44,height:44,background:'#e8e8f0',borderRadius:8}}/>}
@@ -870,7 +872,7 @@ function Card({product,onClick,locked}:{product:any;onClick:()=>void;locked?:boo
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',borderTop:`1px solid ${T.line}`,paddingTop:11}}>
           <span style={{fontSize:10,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,color:hov&&!locked?T.gold:T.t3,transition:'color .15s'}}>{locked?'Bloqueado':'Ver análise'}</span>
           <div style={{width:24,height:24,borderRadius:'50%',background:hov&&!locked?T.goldSub:'none',border:`1px solid ${hov&&!locked?T.lineG:T.line}`,display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}}>
-            {locked?<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="4.5" width="6" height="5" rx="1" stroke={T.t3} strokeWidth="1.2"/><path d="M3.5 4.5V3a1.5 1.5 0 013 0v1.5" stroke={T.t3} strokeWidth="1.2" strokeLinecap="round"/></svg>
+            {locked?<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="2" y="4.5" width="6" height="5" rx="1" style={{stroke:T.t3}} strokeWidth="1.2"/><path d="M3.5 4.5V3a1.5 1.5 0 013 0v1.5" style={{stroke:T.t3}} strokeWidth="1.2" strokeLinecap="round"/></svg>
             :<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5h6M5.5 2.5L8 5l-2.5 2.5" stroke={hov?T.gold:T.t3} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" style={{transition:'stroke .15s'}}/></svg>}
           </div>
         </div>
@@ -890,7 +892,7 @@ function GaugeArc({value,max=100,color,label,size=90}:{value:number;max?:number;
   return(
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
       <svg width={size} height={size/2+10} viewBox={`0 0 80 46`}>
-        <path d="M8 40 A32 32 0 0 1 72 40" fill="none" stroke={T.line} strokeWidth="7" strokeLinecap="round"/>
+        <path d="M8 40 A32 32 0 0 1 72 40" fill="none" style={{stroke:T.line}} strokeWidth="7" strokeLinecap="round"/>
         <path d="M8 40 A32 32 0 0 1 72 40" fill="none" stroke={color} strokeWidth="7" strokeLinecap="round"
           strokeDasharray={`${dash} ${circ}`} style={{transition:'stroke-dasharray 1s ease'}}/>
         <text x="40" y="36" textAnchor="middle" fontSize="13" fontWeight="800" fill={color} fontFamily="inherit">{value}</text>
@@ -970,7 +972,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
             {loading?'Analisando…':'Analisar →'}
           </button>
         </div>
-        {error&&<div style={{marginTop:10,fontSize:12,color:T.r,background:`${T.r}10`,border:`1px solid ${T.r}25`,borderRadius:7,padding:'8px 12px'}}>{error}</div>}
+        {error&&<div style={{marginTop:10,fontSize:12,color:T.r,background:`${tint(T.r,6)}`,border:`1px solid ${tint(T.r,15)}`,borderRadius:7,padding:'8px 12px'}}>{error}</div>}
       </div>
 
       {/* Loading skeleton */}
@@ -1020,8 +1022,8 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
               <div style={{flex:1,minWidth:0}}>
                 <p style={{fontSize:14,fontWeight:600,color:T.t1,lineHeight:1.55,marginBottom:10,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any,overflow:'hidden'}}>{p.title}</p>
                 <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
-                  <span style={{background:`${T.t3}18`,color:T.t3,border:`1px solid ${T.t3}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>ASIN {data.asin}</span>
-                  {p.brand&&<span style={{background:`${T.pur}18`,color:T.pur,border:`1px solid ${T.pur}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>{p.brand}</span>}
+                  <span style={{background:`${tint(T.t3,9)}`,color:T.t3,border:`1px solid ${tint(T.t3,16)}`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>ASIN {data.asin}</span>
+                  {p.brand&&<span style={{background:`${tint(T.pur,9)}`,color:T.pur,border:`1px solid ${tint(T.pur,16)}`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600}}>{p.brand}</span>}
                 </div>
               </div>
             </div>
@@ -1048,7 +1050,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
                   {v:`R$ ${fmtN(p.annualRevenue)}`,   l:'Faturamento Estimado/ano',  c:T.g},
                   {v:p.price>0?`R$ ${p.price.toFixed(2)}`:'—', l:'Preço de Venda (Buy Box)', c:T.t1},
                 ].map((k,i)=>(
-                  <div key={i} style={{background:`${T.gold}06`,border:`1px solid ${T.lineG}`,borderRadius:12,padding:'16px',textAlign:'center' as const}}>
+                  <div key={i} style={{background:`${tint(T.gold,2)}`,border:`1px solid ${T.lineG}`,borderRadius:12,padding:'16px',textAlign:'center' as const}}>
                     <div style={{fontSize:18,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1}}>{k.v}</div>
                     <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const}}>{k.l}</div>
                   </div>
@@ -1149,7 +1151,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
                       {/* Detail */}
                       <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:8}}>
                         <p style={{fontSize:12,color:T.t4,lineHeight:1.7,margin:0}}>{rec.detail}</p>
-                        <div style={{display:'flex',gap:8,alignItems:'flex-start',background:`${T.gold}06`,border:`1px solid ${T.lineG}`,borderRadius:8,padding:'8px 12px'}}>
+                        <div style={{display:'flex',gap:8,alignItems:'flex-start',background:`${tint(T.gold,2)}`,border:`1px solid ${T.lineG}`,borderRadius:8,padding:'8px 12px'}}>
                           <span style={{fontSize:11,flexShrink:0}}>💡</span>
                           <p style={{fontSize:11,color:T.gold,lineHeight:1.6,margin:0,fontStyle:'italic' as const}}><strong>Por que isso importa:</strong> {rec.why}</p>
                         </div>
@@ -1350,14 +1352,14 @@ export default function DashboardClient({user}:{user:any}){
                   return(
                     <button key={id} onClick={()=>goNav(id)} title={!sideOpen?n.label:undefined}
                       style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:sideOpen?'8px 10px':'10px',justifyContent:sideOpen?'flex-start':'center',borderRadius:8,border:'none',cursor:'pointer',
-                        background:active?`${T.gold}12`:'none',
+                        background:active?`${tint(T.gold,7)}`:'none',
                         borderLeft:sideOpen?(active?`2px solid ${T.gold}`:'2px solid transparent'):'none',
                         paddingLeft:sideOpen?(active?'8px':'10px'):undefined,
                         fontFamily:'inherit',textAlign:'left' as const,outline:'none',transition:'all .12s',opacity:locked?.5:1}}>
                       <NavIcon id={id} active={active}/>
                       {sideOpen&&<>
                         <span style={{fontSize:12,fontWeight:active?600:400,color:active?T.t1:T.t2,whiteSpace:'nowrap' as const,flex:1,letterSpacing:'-0.01em'}}>{n.label}</span>
-                        {locked&&<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1.5" y="5" width="8" height="5.5" rx="1.5" stroke={T.t3} strokeWidth="1.2"/><path d="M3.5 5V3.5a2 2 0 014 0V5" stroke={T.t3} strokeWidth="1.2" strokeLinecap="round"/></svg>}
+                        {locked&&<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1.5" y="5" width="8" height="5.5" rx="1.5" style={{stroke:T.t3}} strokeWidth="1.2"/><path d="M3.5 5V3.5a2 2 0 014 0V5" style={{stroke:T.t3}} strokeWidth="1.2" strokeLinecap="round"/></svg>}
                       </>}
                     </button>
                   )
@@ -1381,7 +1383,7 @@ export default function DashboardClient({user}:{user:any}){
                         const target=nav==='search'?'bestsellers':nav
                         if(nav==='search') setNav('bestsellers')
                         load(target,c.id,'',false)
-                      }} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 20px',borderRadius:7,border:'none',cursor:'pointer',marginBottom:1,background:active?`${T.gold}08`:'none',fontFamily:'inherit',textAlign:'left' as const}}>
+                      }} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 20px',borderRadius:7,border:'none',cursor:'pointer',marginBottom:1,background:active?`${tint(T.gold,3)}`:'none',fontFamily:'inherit',textAlign:'left' as const}}>
                         <div style={{width:4,height:4,borderRadius:'50%',background:active?T.gold:T.t3,flexShrink:0}}/>
                         <span style={{fontSize:11,color:active?T.gold:T.t4,fontWeight:active?600:400,letterSpacing:'-0.01em'}}>{c.label}</span>
                       </button>
@@ -1421,7 +1423,7 @@ export default function DashboardClient({user}:{user:any}){
 
           {/* Expiry warning banner */}
           {expiringSoon&&(
-            <div style={{background:`${T.a}15`,borderBottom:`1px solid ${T.a}30`,padding:'8px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+            <div style={{background:`${tint(T.a,8)}`,borderBottom:`1px solid ${tint(T.a,19)}`,padding:'8px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
               <span style={{fontSize:11,color:T.a}}>Seu plano <strong>{cfg.label}</strong> expira em <strong>{daysLeft} dias</strong>. Renove para não perder o acesso.</span>
               <a href={GREENN[user.plan]} target="_blank" rel="noreferrer" style={{fontSize:10,fontWeight:700,color:'#02020A',background:T.a,padding:'4px 12px',borderRadius:5,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0}}>Renovar</a>
             </div>
@@ -1429,7 +1431,7 @@ export default function DashboardClient({user}:{user:any}){
 
           {/* Free plan banner */}
           {isFree&&(
-            <div style={{background:`${T.gold}10`,borderBottom:`1px solid ${T.gold}20`,padding:'8px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
+            <div style={{background:`${tint(T.gold,6)}`,borderBottom:`1px solid ${tint(T.gold,12)}`,padding:'8px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
               <div style={{fontSize:11,color:T.gold}}>Plano Gratuito — <span style={{color:T.t2}}>Você está vendo apenas {cfg.limit} produtos. Faça upgrade para desbloquear tudo.</span></div>
               <button onClick={()=>setUpgrade(true)} style={{background:T.goldG,border:'none',cursor:'pointer',color:'#02020A',fontSize:10,fontFamily:'inherit',padding:'5px 14px',borderRadius:6,letterSpacing:'0.06em',fontWeight:800,textTransform:'uppercase' as const,flexShrink:0,marginLeft:16}}>Ver Planos</button>
             </div>
@@ -1728,7 +1730,7 @@ export default function DashboardClient({user}:{user:any}){
                     <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:4,marginTop:32}}>
                       {btns.map((b,i)=>(
                         <button key={i} onClick={()=>{if(!b.dis){b.fn();window.scrollTo(0,0)}}}
-                          style={{background:b.act?`${T.gold}14`:'none',border:`1px solid ${b.act?'rgba(240,180,41,0.3)':T.line}`,color:b.act?T.gold:b.dis?T.t3:T.t2,fontWeight:b.act?700:400,fontSize:12,width:34,height:34,borderRadius:7,cursor:b.dis?'default':'pointer',fontFamily:'inherit',transition:'all .12s'}}>
+                          style={{background:b.act?`${tint(T.gold,8)}`:'none',border:`1px solid ${b.act?'rgba(240,180,41,0.3)':T.line}`,color:b.act?T.gold:b.dis?T.t3:T.t2,fontWeight:b.act?700:400,fontSize:12,width:34,height:34,borderRadius:7,cursor:b.dis?'default':'pointer',fontFamily:'inherit',transition:'all .12s'}}>
                           {b.l}
                         </button>
                       ))}

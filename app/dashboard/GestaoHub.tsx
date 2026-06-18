@@ -304,14 +304,22 @@ const TABS = [
   {id:'relat',label:'Relatório',icon:'ti-file-text'},
   {id:'dre',label:'DRE',icon:'ti-building-bank'},
 ]
-const THEME_KEY='oraculo_gestao_theme'
+const THEME_KEY='oraculo_theme'
 
 export default function GestaoHub({promoActive=false,promoType=null}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null}){
   const [tab,setTab]=useState('resumo')
   const [hide,setHide]=useState(false)
   const [themeKey,setThemeKey]=useState('dark')
-  useEffect(()=>{ const s=typeof localStorage!=='undefined'&&localStorage.getItem(THEME_KEY); if(s&&THEMES[s]) setThemeKey(s) },[])
-  const setTheme=(k:string)=>{ setThemeKey(k); try{localStorage.setItem(THEME_KEY,k)}catch{} }
+  useEffect(()=>{
+    let s = (typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')) || ''
+    if(!s) try{ s = localStorage.getItem(THEME_KEY)||'' }catch{}
+    if(s && THEMES[s]) setThemeKey(s)
+  },[])
+  const setTheme=(k:string)=>{
+    setThemeKey(k)
+    try{ localStorage.setItem(THEME_KEY,k) }catch{}
+    if(typeof document!=='undefined') document.documentElement.setAttribute('data-theme',k)  // tema do site inteiro
+  }
   const t=THEMES[themeKey]||THEMES.dark
 
   const d=useMemo(()=>getFinanceData(),[])
