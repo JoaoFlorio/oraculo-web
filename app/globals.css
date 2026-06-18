@@ -20,7 +20,23 @@
 }
 
 body {
-  background: var(--background);
+  background: var(--bg);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ── Tema do Oráculo (escolhido pelo seller) — escuro padrão / claro ──────── */
+:root {
+  --bg:#03030A; --sidebar:#070710; --card:#0B0B1A; --cardHov:#0F0F22; --modal:#09091A;
+  --line:rgba(255,255,255,0.07); --lineG:rgba(240,180,41,0.22);
+  --gold:#F0B429; --goldG:linear-gradient(135deg,#F5C842 0%,#C48F10 100%); --goldSub:rgba(240,180,41,0.10);
+  --g:#22C55E; --a:#F59E0B; --r:#EF4444; --pur:#8B78FF;
+  --t1:#F2F2FC; --t2:#A0A0C8; --t3:#686890; --t4:#C8C8E8;
+}
+[data-theme="light"] {
+  --bg:#F4F5F7; --sidebar:#FFFFFF; --card:#FFFFFF; --cardHov:#F1F3F6; --modal:#FFFFFF;
+  --line:rgba(17,24,39,0.10); --lineG:rgba(231,184,92,0.45);
+  --gold:#C8910E; --goldG:linear-gradient(135deg,#E7B85C 0%,#B5840F 100%); --goldSub:rgba(231,184,92,0.14);
+  --g:#15803D; --a:#B45309; --r:#DC2626; --pur:#7C3AED;
+  --t1:#111827; --t2:#4B5563; --t3:#6B7280; --t4:#374151;
 }
