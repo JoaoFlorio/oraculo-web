@@ -54,6 +54,25 @@ function periodRange(p:string):{from:string;to:string}{
   if(p==='Mês passado') return {from:new Date(now.getFullYear(),now.getMonth()-1,1).toISOString(), to:new Date(now.getFullYear(),now.getMonth(),0,23,59,59).toISOString()}
   return {from:new Date(now.getTime()-30*86400000).toISOString(), to} // Últimos 30 dias
 }
+// Converte os produtos reais (com nome/foto) em ProductMetrics p/ as abas Vendas/Curva ABC.
+function realProductMetrics(realDre:any, costs:Record<string,number>):ProductMetrics[]{
+  const prods=realDre?.produtos||[]
+  const recLiq=realDre?.linhas?.receitaLiquida||0
+  const liqRatio=recLiq>0?(realDre.liqMarketplace||0)/recLiq:0   // rateia o líquido do marketplace por receita
+  return prods.map((p:any)=>{
+    const cost=costs[p.sku]||0, cmv=p.units*cost
+    const grossP=p.receita*liqRatio-cmv
+    const margin=p.receita>0?grossP/p.receita*100:0
+    const roi=cmv>0?grossP/cmv*100:0
+    return {id:p.sku,name:p.name||p.sku,sku:p.sku,asin:p.asin||'',image:p.image||'',units:p.units,price:p.units>0?p.receita/p.units:0,unitCost:cost,adsSpend:0,adsSales:0,refundUnits:0,stockFBA:0,bsr:0,revenue:p.receita,commission:0,fbaFee:0,cmv,tax:0,refundValue:0,grossProfit:grossP,acos:0,roas:0,margin,roi,coverageDays:0} as ProductMetrics
+  })
+}
+function realAbc(metrics:ProductMetrics[]){
+  const m=[...metrics].sort((a,b)=>b.revenue-a.revenue)
+  const total=m.reduce((s,p)=>s+p.revenue,0)||1
+  let cum=0
+  return m.map(p=>{cum+=p.revenue;const sh=cum/total*100;return {...p,shareTotal:p.revenue/total*100,cls:(sh<=80?'A':sh<=95?'B':'C') as 'A'|'B'|'C'}})
+}
 
 /* ── Building blocks ─────────────────────────────────────────────────────── */
 function Pill({kind,children}:{kind:'grn'|'gold'|'red';children:React.ReactNode}){
@@ -452,6 +471,8 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
     })
   }
   const cmv = realDre?.produtos ? realDre.produtos.reduce((sum:number,p:any)=>sum+p.units*(costs[p.sku]||0),0) : 0
+  const realM = realDre?.produtos ? realProductMetrics(realDre,costs) : null
+  const realAbcData = realM ? realAbc(realM) : null
   useEffect(()=>{
     let s = (typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')) || ''
     if(!s) try{ s = localStorage.getItem(THEME_KEY)||'' }catch{}
@@ -541,8 +562,8 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
 
         {/* Conteúdo */}
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv}/>}
-        {tab==='vendas' && <Vendas m={m} hide={hide}/>}
-        {tab==='abc'    && <CurvaABC d={abc} hide={hide}/>}
+        {tab==='vendas' && <Vendas m={realM||m} hide={hide}/>}
+        {tab==='abc'    && <CurvaABC d={realAbcData||abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide}/>}
         {tab==='analit' && <Analitico m={m} hide={hide}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide}/>}
