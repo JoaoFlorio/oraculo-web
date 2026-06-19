@@ -119,8 +119,40 @@ function KPI({label,value,delta,up,icon,color,hide}:{label:string;value:string;d
   )
 }
 
+/* ── DRE Real (dados ao vivo da conta Amazon) ────────────────────────────── */
+function RealDRECard({data,hide}:{data:any;hide:boolean}){
+  const t=useT()
+  const L=data.linhas||{}
+  const Row=({label,val,sign,strong,color}:{label:string;val:number;sign?:'-'|'=';strong?:boolean;color?:string})=>(
+    <div style={{display:'flex',justifyContent:'space-between',padding:'8px 2px',borderBottom:`1px solid ${t.line}`,fontSize:strong?14:13}}>
+      <span style={{color:strong?t.t1:t.t2,fontWeight:strong?600:400}}>{sign==='='?'= ':sign==='-'?'(–) ':''}{label}</span>
+      <span style={{color:color||t.t1,fontWeight:strong?700:500,fontFamily:FH,filter:hide?'blur(6px)':'none'}}>{brl(val||0)}</span>
+    </div>
+  )
+  return(
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderLeft:`3px solid ${t.grn}`,borderRadius:14,padding:'16px 18px',marginBottom:18}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12,flexWrap:'wrap' as const}}>
+        <span style={{width:8,height:8,borderRadius:'50%',background:t.grn}}/>
+        <span style={{fontSize:13.5,fontWeight:600,color:t.t1}}>DRE Real — sua conta Amazon</span>
+        <span style={{fontSize:10.5,color:t.t3}}>· ao vivo da Finances API</span>
+      </div>
+      <Row label="Receita bruta" val={L.receitaBruta}/>
+      <Row label="Devoluções" val={L.devolucoes} sign="-" color={t.red}/>
+      <Row label="Receita líquida" val={L.receitaLiquida} sign="=" strong/>
+      <Row label="Comissão Amazon" val={L.comissao} sign="-" color={t.red}/>
+      <Row label="Taxa Amazon pra Todos" val={L.taxaPrograma} sign="-" color={t.red}/>
+      <Row label="Tarifa FBA" val={L.fba} sign="-" color={t.red}/>
+      {L.armazenagem>0 && <Row label="Armazenagem" val={L.armazenagem} sign="-" color={t.red}/>}
+      <Row label="Assinatura" val={L.assinatura} sign="-" color={t.red}/>
+      <Row label="Líq. do Marketplace" val={data.liqMarketplace} sign="=" strong color={t.grn}/>
+      <Row label="Ads (parcial)" val={L.ads} sign="-" color={t.red}/>
+      <div style={{fontSize:10.5,color:t.t3,marginTop:10}}>Ads completo virá da Advertising API · CMV e despesas você informa em Gerenciamento.</div>
+    </div>
+  )
+}
+
 /* ── Resumo ──────────────────────────────────────────────────────────────── */
-function Resumo({hide}:{hide:boolean}){
+function Resumo({hide,realDre}:{hide:boolean;realDre?:any}){
   const t=useT()
   const d=useMemo(()=>getFinanceData(),[])
   const s=useMemo(()=>summary(d),[d])
@@ -147,6 +179,7 @@ function Resumo({hide}:{hide:boolean}){
     {name:'Outros',value:Math.round(s.armazenagem+s.remocao+s.refunds+s.tax),color:t.t3},
   ]
   return(<>
+    {realDre && <RealDRECard data={realDre} hide={hide}/>}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:18}}>
       {kpis.map((k,i)=><KPI key={i} {...k} hide={hide}/>)}
     </div>
@@ -306,10 +339,21 @@ const TABS = [
 ]
 const THEME_KEY='oraculo_theme'
 
-export default function GestaoHub({promoActive=false,promoType=null}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null}){
+export default function GestaoHub({promoActive=false,promoType=null}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null;userEmail?:string}){
   const [tab,setTab]=useState('resumo')
   const [hide,setHide]=useState(false)
   const [themeKey,setThemeKey]=useState('dark')
+  const [amazonConnected,setAmazonConnected]=useState<boolean|null>(null)
+  const [realDre,setRealDre]=useState<any>(null)
+  useEffect(()=>{
+    let alive=true
+    fetch('/api/amazon/status').then(r=>r.json()).then(d=>{
+      if(!alive) return
+      setAmazonConnected(!!d.connected)
+      if(d.connected) fetch('/api/amazon/finance').then(r=>r.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
+    }).catch(()=>{ if(alive) setAmazonConnected(false) })
+    return ()=>{ alive=false }
+  },[])
   useEffect(()=>{
     let s = (typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')) || ''
     if(!s) try{ s = localStorage.getItem(THEME_KEY)||'' }catch{}
@@ -335,7 +379,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
           <div>
             <h2 style={{fontFamily:FH,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>Gestão</h2>
-            <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:t.goldText,fontWeight:500}}>dados de exemplo</span></p>
+            <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':'dados de exemplo'}</span></p>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             {/* Seletor de paleta */}
@@ -361,6 +405,28 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
           </div>
         </div>
 
+        {/* Conexão Amazon */}
+        {amazonConnected===false && (
+          <div style={{background:t.card,border:`1px solid ${t.gold}`,borderRadius:12,padding:'14px 16px',marginBottom:16,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const}}>
+            <div style={{display:'flex',alignItems:'center',gap:11}}>
+              <i className="ti ti-plug" style={{fontSize:22,color:t.gold}} aria-hidden="true"/>
+              <div>
+                <div style={{fontSize:13,fontWeight:600,color:t.t1}}>Conecte sua conta Amazon</div>
+                <div style={{fontSize:11.5,color:t.t2}}>Veja sua DRE real e automática, sem subir planilha.</div>
+              </div>
+            </div>
+            <a href="/api/amazon/connect" style={{background:t.gold,color:t.dark?'#1c1606':'#3a2a05',fontWeight:600,fontSize:12.5,padding:'10px 16px',borderRadius:9,textDecoration:'none',whiteSpace:'nowrap' as const}}>Conectar conta Amazon</a>
+          </div>
+        )}
+        {amazonConnected===true && (
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16,flexWrap:'wrap' as const}}>
+            <span style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:11.5,fontWeight:600,color:t.grn,background:t.pillGrn[0],padding:'5px 11px',borderRadius:20}}>
+              <i className="ti ti-circle-check" style={{fontSize:14}} aria-hidden="true"/>Conta Amazon conectada
+            </span>
+            <button onClick={()=>{ fetch('/api/amazon/disconnect',{method:'POST'}).then(()=>location.reload()) }} style={{background:'none',border:'none',color:t.t3,fontSize:11,cursor:'pointer',fontFamily:'inherit',textDecoration:'underline'}}>desconectar</button>
+          </div>
+        )}
+
         {/* Sub-tabs */}
         <div style={{display:'flex',gap:6,overflowX:'auto' as const,borderBottom:`1px solid ${t.line}`,paddingBottom:11,marginBottom:18}}>
           {TABS.map(tb=>{
@@ -376,7 +442,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         </div>
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre}/>}
         {tab==='vendas' && <Vendas m={m} hide={hide}/>}
         {tab==='abc'    && <CurvaABC d={abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide}/>}
