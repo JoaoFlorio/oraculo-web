@@ -47,6 +47,13 @@ const useT = ()=>useContext(ThemeCtx)
 const brl  = (n:number)=>'R$ '+Math.round(n).toLocaleString('pt-BR')
 const brl2 = (n:number)=>'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 const pc   = (n:number)=>n.toFixed(1).replace('.',',')+'%'
+function periodRange(p:string):{from:string;to:string}{
+  const now=new Date(); const to=now.toISOString()
+  if(p==='Hoje')        return {from:new Date(now.getFullYear(),now.getMonth(),now.getDate()).toISOString(), to}
+  if(p==='Este mês')    return {from:new Date(now.getFullYear(),now.getMonth(),1).toISOString(), to}
+  if(p==='Mês passado') return {from:new Date(now.getFullYear(),now.getMonth()-1,1).toISOString(), to:new Date(now.getFullYear(),now.getMonth(),0,23,59,59).toISOString()}
+  return {from:new Date(now.getTime()-30*86400000).toISOString(), to} // Últimos 30 dias
+}
 
 /* ── Building blocks ─────────────────────────────────────────────────────── */
 function Pill({kind,children}:{kind:'grn'|'gold'|'red';children:React.ReactNode}){
@@ -345,15 +352,20 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
   const [themeKey,setThemeKey]=useState('dark')
   const [amazonConnected,setAmazonConnected]=useState<boolean|null>(null)
   const [realDre,setRealDre]=useState<any>(null)
+  const [period,setPeriod]=useState('Últimos 30 dias')
   useEffect(()=>{
     let alive=true
-    fetch('/api/amazon/status').then(r=>r.json()).then(d=>{
-      if(!alive) return
-      setAmazonConnected(!!d.connected)
-      if(d.connected) fetch('/api/amazon/finance').then(r=>r.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
-    }).catch(()=>{ if(alive) setAmazonConnected(false) })
+    fetch('/api/amazon/status').then(r=>r.json()).then(d=>{ if(alive) setAmazonConnected(!!d.connected) }).catch(()=>{ if(alive) setAmazonConnected(false) })
     return ()=>{ alive=false }
   },[])
+  useEffect(()=>{
+    if(!amazonConnected) return
+    let alive=true
+    const {from,to}=periodRange(period)
+    setRealDre(null)
+    fetch(`/api/amazon/finance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
+    return ()=>{ alive=false }
+  },[amazonConnected,period])
   useEffect(()=>{
     let s = (typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')) || ''
     if(!s) try{ s = localStorage.getItem(THEME_KEY)||'' }catch{}
@@ -399,7 +411,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
               style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t2,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
               <i className={`ti ti-${hide?'eye-off':'eye'}`} aria-hidden="true"/>
             </button>
-            <select style={{background:t.card,color:t.t1,border:`1px solid ${t.line}`,borderRadius:9,padding:'7px 10px',fontSize:12,fontFamily:'inherit',outline:'none'}}>
+            <select value={period} onChange={e=>setPeriod(e.target.value)} style={{background:t.card,color:t.t1,border:`1px solid ${t.line}`,borderRadius:9,padding:'7px 10px',fontSize:12,fontFamily:'inherit',outline:'none'}}>
               <option>Últimos 30 dias</option><option>Este mês</option><option>Mês passado</option><option>Hoje</option>
             </select>
           </div>
