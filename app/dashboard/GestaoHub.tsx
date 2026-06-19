@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useMemo, useEffect, useContext, createContext } from 'react'
+import React, { useState, useMemo, useEffect, useRef, useContext, createContext } from 'react'
 import dynamic from 'next/dynamic'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -159,7 +159,7 @@ function RealDRECard({data,hide}:{data:any;hide:boolean}){
 }
 
 /* ── Resumo ──────────────────────────────────────────────────────────────── */
-function Resumo({hide,realDre}:{hide:boolean;realDre?:any}){
+function Resumo({hide,realDre,cmv=0}:{hide:boolean;realDre?:any;cmv?:number}){
   const t=useT()
   const d=useMemo(()=>getFinanceData(),[])
   const s=useMemo(()=>summary(d),[d])
@@ -185,10 +185,46 @@ function Resumo({hide,realDre}:{hide:boolean;realDre?:any}){
     {name:'FBA',value:Math.round(s.fba),color:t.blue},
     {name:'Outros',value:Math.round(s.armazenagem+s.remocao+s.refunds+s.tax),color:t.t3},
   ]
+  // ── KPIs e rosca REAIS quando conectado ──
+  const RK = realDre ? (()=>{
+    const L=realDre.linhas||{}
+    const receita=L.receitaLiquida||0, liq=realDre.liqMarketplace||0, ads=L.ads||0
+    const vendas=realDre.vendas||0, unidades=realDre.unidades||0
+    const ticket=vendas>0?receita/vendas:0, tacos=receita>0?ads/receita*100:0
+    const lucroBruto=liq-cmv, lucroPosAds=lucroBruto-ads
+    const margem=receita>0?lucroBruto/receita*100:0, roi=cmv>0?lucroBruto/cmv*100:0
+    const mpa=receita>0?lucroPosAds/receita*100:0, cm=cmv>0, dash='—'
+    return {
+      kpis:[
+        {label:'Faturamento',value:brl(receita),icon:'ti-cash',color:t.gold},
+        {label:'Líq. Marketplace',value:brl(liq),icon:'ti-building-bank',color:t.t1},
+        {label:'Lucro Bruto',value:cm?brl(lucroBruto):dash,icon:'ti-trending-up',color:cm?t.grn:t.t3},
+        {label:'Margem',value:cm?pc(margem):dash,icon:'ti-percentage',color:cm?t.grn:t.t3},
+        {label:'Nº de Vendas',value:String(vendas),icon:'ti-shopping-cart',color:t.t1},
+        {label:'Unidades',value:String(unidades),icon:'ti-package',color:t.t1},
+        {label:'Ticket Médio',value:brl(ticket),icon:'ti-receipt',color:t.t1},
+        {label:'ROI',value:cm?pc(roi):dash,icon:'ti-rotate-clockwise',color:cm?t.grn:t.t3},
+        {label:'Valor em Ads',value:brl(ads),icon:'ti-speakerphone',color:t.gold},
+        {label:'TACOS',value:pc(tacos),icon:'ti-target',color:t.gold},
+        {label:'Lucro pós-ADS',value:cm?brl(lucroPosAds):dash,icon:'ti-coin',color:cm?t.grn:t.t3},
+        {label:'MPA',value:cm?pc(mpa):dash,icon:'ti-chart-pie',color:cm?t.grn:t.t3},
+      ],
+      comp:[
+        {name:'Lucro líquido',value:Math.max(0,Math.round(lucroPosAds)),color:t.grn},
+        {name:'CMV',value:Math.round(cmv),color:t.vio},
+        {name:'Comissão',value:Math.round(L.comissao||0),color:t.gold},
+        {name:'Ads',value:Math.round(ads),color:t.red},
+        {name:'FBA',value:Math.round(L.fba||0),color:t.blue},
+        {name:'Outros',value:Math.round((L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.devolucoes||0)),color:t.t3},
+      ].filter(x=>x.value>0),
+    }
+  })() : null
+  const shownKpis:any[] = RK?RK.kpis:kpis
+  const shownComp:any[] = RK?RK.comp:comp
   return(<>
     {realDre && <RealDRECard data={realDre} hide={hide}/>}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:18}}>
-      {kpis.map((k,i)=><KPI key={i} {...k} hide={hide}/>)}
+      {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
     </div>
     <div style={{display:'grid',gridTemplateColumns:'1.6fr 1fr',gap:14}}>
       <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'14px 16px'}}>
@@ -219,15 +255,15 @@ function Resumo({hide,realDre}:{hide:boolean;realDre?:any}){
         <div style={{height:150}}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
-              <Pie data={comp} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={64} stroke={t.card} strokeWidth={2}>
-                {comp.map((c,i)=><Cell key={i} fill={c.color}/>)}
+              <Pie data={shownComp} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={42} outerRadius={64} stroke={t.card} strokeWidth={2}>
+                {shownComp.map((c:any,i:number)=><Cell key={i} fill={c.color}/>)}
               </Pie>
               <RTooltip contentStyle={{background:t.tipBg,border:`1px solid ${t.line2}`,borderRadius:10,fontSize:12,color:t.t1}} formatter={(v:any)=>brl(Number(v))}/>
             </PieChart>
           </ResponsiveContainer>
         </div>
         <div style={{marginTop:8,display:'flex',flexDirection:'column' as const,gap:6}}>
-          {comp.map((c,i)=>(
+          {shownComp.map((c:any,i:number)=>(
             <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:11.5}}>
               <span style={{display:'flex',alignItems:'center',gap:6,color:t.t2}}><span style={{width:9,height:9,borderRadius:2,background:c.color}}/>{c.name}</span>
               <span style={{color:t.t1,fontWeight:500,filter:hide?'blur(6px)':'none'}}>{brl(c.value)}</span>
@@ -295,13 +331,47 @@ function Analitico({m,hide}:{m:ProductMetrics[];hide:boolean}){
     </Table>
   </>)
 }
-function Gerenciamento({m,hide}:{m:ProductMetrics[];hide:boolean}){
+function Gerenciamento({realDre,costs,onCost,mockM,hide}:{realDre?:any;costs:Record<string,number>;onCost:(sku:string,v:number)=>void;mockM:ProductMetrics[];hide:boolean}){
+  const t=useT()
+  if(!realDre?.produtos?.length){
+    return(<>
+      <Hint>Conecte sua conta Amazon pra informar o custo (CMV) dos produtos vendidos — é o que falta pro lucro real.</Hint>
+      <Table head={[{label:'Produto',w:'48%'},{label:'Custo un.',right:true},{label:'Preço',right:true},{label:'Markup',right:true}]}>
+        {mockM.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl2(p.unitCost)}</NumTd><NumTd hide={hide}>{brl2(p.price)}</NumTd>
+          <PillTd><Pill kind="gold">{(p.price/p.unitCost).toFixed(1)}x</Pill></PillTd></tr>)}
+      </Table>
+    </>)
+  }
+  const prods=realDre.produtos as any[]
+  const cmvTotal=prods.reduce((sum,p)=>sum+p.units*(costs[p.sku]||0),0)
+  const inp:React.CSSProperties={width:84,background:t.dark?'rgba(255,255,255,0.05)':'#FFFFFF',border:`1px solid ${t.line2}`,borderRadius:7,color:t.t1,fontSize:12.5,fontWeight:600,padding:'6px 8px',fontFamily:'inherit',outline:'none',textAlign:'right'}
   return(<>
-    <Hint>Cadastro + custo (CMV) — o que a Amazon não sabe. Alimenta a DRE e o ROI.</Hint>
-    <Table head={[{label:'Produto',w:'48%'},{label:'Custo un.',right:true},{label:'Preço',right:true},{label:'Markup',right:true}]}>
-      {m.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl2(p.unitCost)}</NumTd><NumTd hide={hide}>{brl2(p.price)}</NumTd>
-        <PillTd><Pill kind="gold">{(p.price/p.unitCost).toFixed(1)}x</Pill></PillTd></tr>)}
+    <Hint>Informe o custo unitário de cada produto vendido. É o que falta pro Oráculo calcular o seu <b>lucro real</b> — a Amazon não sabe quanto você paga.</Hint>
+    <Table head={[{label:'Produto (SKU)',w:'36%'},{label:'Un. vendidas',right:true},{label:'Receita',right:true},{label:'Custo unit.',right:true},{label:'CMV',right:true}]}>
+      {prods.map((p)=>{
+        const cost=costs[p.sku]||0
+        const cmv=p.units*cost
+        return(
+          <tr key={p.sku}>
+            <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`}}>
+              <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0}}>
+                <Thumb p={{id:p.sku,name:p.sku}}/>
+                <div style={{fontSize:12.5,fontWeight:500,color:t.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.sku}</div>
+              </div>
+            </td>
+            <NumTd>{p.units}</NumTd>
+            <NumTd hide={hide}>{brl(p.receita)}</NumTd>
+            <PillTd><input type="number" min={0} step={0.5} value={cost||''} placeholder="0,00" onChange={e=>onCost(p.sku,parseFloat(e.target.value)||0)} style={inp}/></PillTd>
+            <NumTd color={t.gold} hide={hide}>{cmv>0?brl(cmv):'—'}</NumTd>
+          </tr>
+        )
+      })}
     </Table>
+    <div style={{display:'flex',justifyContent:'flex-end',alignItems:'baseline',gap:8,marginTop:12,fontSize:13}}>
+      <span style={{color:t.t2,fontWeight:500}}>CMV Total do período</span>
+      <span style={{color:t.gold,fontWeight:700,fontFamily:FH,filter:hide?'blur(6px)':'none'}}>{brl(cmvTotal)}</span>
+    </div>
+    <div style={{fontSize:11,color:t.t3,marginTop:8}}>Salvo automaticamente · volte ao Resumo pra ver Lucro Bruto, Margem, ROI e MPA reais.</div>
   </>)
 }
 function Fulfillment({m}:{m:ProductMetrics[]}){
@@ -366,6 +436,19 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
     fetch(`/api/amazon/finance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
     return ()=>{ alive=false }
   },[amazonConnected,period])
+  // Custo (CMV) por SKU — informado pelo seller, salvo no metadata do usuário
+  const [costs,setCosts]=useState<Record<string,number>>({})
+  const saveTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
+  useEffect(()=>{ fetch('/api/user/metadata?key=gestao_cmv').then(r=>r.json()).then(d=>{ if(d&&d.value&&typeof d.value==='object') setCosts(d.value) }).catch(()=>{}) },[])
+  const setCost=(sku:string,val:number)=>{
+    setCosts(prev=>{
+      const next={...prev,[sku]:val}
+      if(saveTimer.current) clearTimeout(saveTimer.current)
+      saveTimer.current=setTimeout(()=>{ fetch('/api/user/metadata',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'gestao_cmv',value:next})}).catch(()=>{}) },1200)
+      return next
+    })
+  }
+  const cmv = realDre?.produtos ? realDre.produtos.reduce((sum:number,p:any)=>sum+p.units*(costs[p.sku]||0),0) : 0
   useEffect(()=>{
     let s = (typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')) || ''
     if(!s) try{ s = localStorage.getItem(THEME_KEY)||'' }catch{}
@@ -454,12 +537,12 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         </div>
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv}/>}
         {tab==='vendas' && <Vendas m={m} hide={hide}/>}
         {tab==='abc'    && <CurvaABC d={abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide}/>}
         {tab==='analit' && <Analitico m={m} hide={hide}/>}
-        {tab==='gerenc' && <Gerenciamento m={m} hide={hide}/>}
+        {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide}/>}
         {tab==='fulfil' && <Fulfillment m={m}/>}
         {tab==='relat'  && <Relatorio/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
