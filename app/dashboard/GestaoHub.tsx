@@ -347,7 +347,7 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide}:{realDre?:any;costs:Rec
   const inp:React.CSSProperties={width:84,background:t.dark?'rgba(255,255,255,0.05)':'#FFFFFF',border:`1px solid ${t.line2}`,borderRadius:7,color:t.t1,fontSize:12.5,fontWeight:600,padding:'6px 8px',fontFamily:'inherit',outline:'none',textAlign:'right'}
   return(<>
     <Hint>Informe o custo unitário de cada produto vendido. É o que falta pro Oráculo calcular o seu <b>lucro real</b> — a Amazon não sabe quanto você paga.</Hint>
-    <Table head={[{label:'Produto (SKU)',w:'36%'},{label:'Un. vendidas',right:true},{label:'Receita',right:true},{label:'Custo unit.',right:true},{label:'CMV',right:true}]}>
+    <Table head={[{label:'Produto',w:'42%'},{label:'Un. vendidas',right:true},{label:'Receita',right:true},{label:'Custo unit.',right:true},{label:'CMV',right:true}]}>
       {prods.map((p)=>{
         const cost=costs[p.sku]||0
         const cmv=p.units*cost
@@ -355,8 +355,11 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide}:{realDre?:any;costs:Rec
           <tr key={p.sku}>
             <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`}}>
               <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0}}>
-                <Thumb p={{id:p.sku,name:p.sku}}/>
-                <div style={{fontSize:12.5,fontWeight:500,color:t.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.sku}</div>
+                <Thumb p={{id:p.sku,name:p.name||p.sku,image:p.image}}/>
+                <div style={{minWidth:0}}>
+                  <div style={{fontSize:12.5,fontWeight:500,color:t.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name||p.sku}</div>
+                  <div style={{fontSize:10,color:t.t3,marginTop:1}}>{p.sku}</div>
+                </div>
               </div>
             </td>
             <NumTd>{p.units}</NumTd>
