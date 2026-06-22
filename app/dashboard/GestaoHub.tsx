@@ -288,7 +288,7 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
   while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
   return out
 }
-function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any}){
+function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null}){
   const t=useT()
   const d=useMemo(()=>getFinanceData(),[])
   const s=useMemo(()=>summary(d),[d])
@@ -350,7 +350,13 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30}:{hide:boolean;real
       ].filter(x=>x.value>0),
     }
   })() : null
-  const shownKpis:any[] = RK?RK.kpis:kpis
+  // Conectado mas ainda carregando o real → mostra esqueleto (NUNCA o mock, p/ não confundir).
+  const loadingKpis = [
+    {label:'Faturamento',color:t.vio},{label:'Líq. do Marketplace',color:t.blue},{label:'Lucro Bruto',color:t.grn},{label:'Margem',color:t.grn},
+    {label:'Número de Vendas',color:t.blue},{label:'Número de Unidades Vendidas',color:t.blue},{label:'Ticket Médio',color:t.grn},{label:'Retorno Sobre Investimento',color:t.grn},
+    {label:'Valor em Ads',color:t.grn},{label:'TACOS',color:t.grn},{label:'Lucro bruto pós ADS',color:t.grn},{label:'MPA',color:t.grn},
+  ].map(k=>({...k,value:'…'}))
+  const shownKpis:any[] = RK ? RK.kpis : (connected ? loadingKpis : kpis)
   // Gráfico: SEMPRE 30 dias por data (não muda com o filtro de período) — igual ao Gestor.
   const cSrc = chart30 || realDre
   const realChart = !!cSrc?.daily
@@ -406,10 +412,12 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30}:{hide:boolean;real
       </div>
     </div>
     {/* 3) Top 15 produtos vendidos */}
-    {realDre && (
+    {(realDre || connected) && (
       <div>
         <div style={{fontFamily:FG,fontSize:15,fontWeight:600,color:t.t1,marginBottom:10}}>Top 15 produtos vendidos</div>
-        {top15.length===0 ? (
+        {!realDre ? (
+          <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando produtos da Amazon…</div>
+        ) : top15.length===0 ? (
           <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5}}>Nenhuma venda no período selecionado.</div>
         ) : (
           <Table head={[
@@ -649,7 +657,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
     if(!amazonConnected) return
     let alive=true
     const now=new Date(); const from=new Date(now.getTime()-30*86400000).toISOString(); const to=now.toISOString()
-    fetch(`/api/amazon/finance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.daily) setDre30(f) }).catch(()=>{})
+    fetch(`/api/amazon/finance?daily=1&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.daily) setDre30(f) }).catch(()=>{})
     return ()=>{ alive=false }
   },[amazonConnected])
   // ── Ads (Advertising API) — cacheado no backend; lê na hora e, se estiver gerando, faz polling ──
@@ -719,7 +727,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
           <div>
             <h2 style={{fontFamily:FG,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>Gestão</h2>
-            <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':'dados de exemplo'}</span></p>
+            <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':amazonConnected?'carregando dados reais…':'dados de exemplo'}</span></p>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             {/* Seletor de paleta */}
@@ -790,7 +798,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         </div>
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30} connected={amazonConnected}/>}
         {tab==='vendas' && <Vendas m={realM||m} hide={hide}/>}
         {tab==='abc'    && <CurvaABC d={realAbcData||abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}

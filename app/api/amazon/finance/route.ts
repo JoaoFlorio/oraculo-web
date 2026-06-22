@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
   const qs = new URLSearchParams({ email: user.email })
   if (searchParams.get('from')) qs.set('from', searchParams.get('from')!)
   if (searchParams.get('to')) qs.set('to', searchParams.get('to')!)
+  if (searchParams.get('daily')) qs.set('daily', searchParams.get('daily')!)
   try {
     const res = await fetch(`${BACKEND}/api/amazon/finance?${qs.toString()}`, { cache: 'no-store' })
     return NextResponse.json(await res.json(), { status: res.status })
