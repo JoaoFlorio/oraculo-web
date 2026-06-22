@@ -803,9 +803,17 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
   },[])
   useEffect(()=>{
     if(!amazonConnected) return
-    let alive=true
+    let alive=true, tries=0
     setRealDre(null)
-    fetch(`/api/amazon/finance?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
+    const load=()=>{
+      fetch(`/api/amazon/finance?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`).then(r=>r.json()).then(f=>{
+        if(!alive||!f||!f.linhas) return
+        // venda sem faturamento = falha transitória na estimativa de preço (Pending) → retenta 1x
+        if((f.vendas||0)>0 && (f.faturamento||0)<=0 && tries++<2){ setTimeout(load,4000); return }
+        setRealDre(f)
+      }).catch(()=>{})
+    }
+    load()
     return ()=>{ alive=false }
   },[amazonConnected,range.from,range.to])
   // Estoque FBA (Inventory API) — carrega uma vez ao conectar (cache 30min no backend)
