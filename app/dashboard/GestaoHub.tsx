@@ -288,7 +288,7 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
   while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
   return out
 }
-function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null}){
+function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnected}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null}){
   const t=useT()
   const d=useMemo(()=>getFinanceData(),[])
   const s=useMemo(()=>summary(d),[d])
@@ -319,6 +319,7 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected}:{hide:bo
     const L=realDre.linhas||{}
     // Ads "cheio" da Advertising API quando disponível; senão o parcial da Finances.
     const ads = adsReal?.ready ? (Number(adsReal.spend)||0) : (L.ads||0)
+    const adsPending = adsConnected && !(adsReal?.ready)   // ads conectado mas ainda gerando relatório
     const receita=L.receitaLiquida||0, liq=realDre.liqMarketplace||0
     const vendas=realDre.vendas||0, unidades=realDre.unidades||0
     const ticket=vendas>0?receita/vendas:0, tacos=receita>0?ads/receita*100:0
@@ -335,10 +336,10 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected}:{hide:bo
         {label:'Número de Unidades Vendidas',value:String(unidades),icon:'ti-package',color:t.blue},
         {label:'Ticket Médio',value:brl2(ticket),icon:'ti-receipt',color:t.grn},
         {label:'Retorno Sobre Investimento',value:cm?pc(roi):dash,icon:'ti-rotate-clockwise',color:t.grn},
-        {label:'Valor em Ads',value:brl2(ads),icon:'ti-speakerphone',color:t.grn},
-        {label:'TACOS',value:pc(tacos),icon:'ti-target',color:t.grn},
-        {label:'Lucro bruto pós ADS',value:cm?brl2(lucroPosAds):dash,icon:'ti-coin',color:t.grn},
-        {label:'MPA',value:cm?pc(mpa):dash,icon:'ti-chart-pie',color:t.grn},
+        {label:'Valor em Ads',value:adsPending?'…':brl2(ads),icon:'ti-speakerphone',color:t.grn},
+        {label:'TACOS',value:adsPending?'…':pc(tacos),icon:'ti-target',color:t.grn},
+        {label:'Lucro bruto pós ADS',value:adsPending?'…':(cm?brl2(lucroPosAds):dash),icon:'ti-coin',color:t.grn},
+        {label:'MPA',value:adsPending?'…':(cm?pc(mpa):dash),icon:'ti-chart-pie',color:t.grn},
       ],
       comp:[
         {name:'Lucro líquido',value:Math.max(0,Math.round(lucroPosAds)),color:t.grn},
@@ -798,7 +799,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         </div>
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30} connected={amazonConnected}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected}/>}
         {tab==='vendas' && <Vendas m={realM||m} hide={hide}/>}
         {tab==='abc'    && <CurvaABC d={realAbcData||abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
