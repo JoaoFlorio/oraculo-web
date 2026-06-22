@@ -48,17 +48,113 @@ const useT = ()=>useContext(ThemeCtx)
 const brl  = (n:number)=>'R$ '+Math.round(n).toLocaleString('pt-BR')
 const brl2 = (n:number)=>'R$ '+n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 const pc   = (n:number)=>n.toFixed(1).replace('.',',')+'%'
-function periodRange(p:string):{from:string;to:string}{
+// Presets de período (estilo Gestor Seller).
+const PRESETS:[string,string][] = [
+  ['hoje','Hoje'],['ontem','Ontem'],['7d','Últimos 7 dias'],['15d','Últimos 15 dias'],
+  ['30d','Últimos 30 dias'],['mes','Esse mês'],['mespass','Mês passado'],['ano','Esse ano'],
+]
+function computeRange(key:string, custom:{from:Date;to:Date}|null):{from:string;to:string}{
   const now=new Date(); const to=now.toISOString()
-  if(p==='Hoje')        return {from:new Date(now.getFullYear(),now.getMonth(),now.getDate()).toISOString(), to}
-  if(p==='Este mês')    return {from:new Date(now.getFullYear(),now.getMonth(),1).toISOString(), to}
-  if(p==='Mês passado') return {from:new Date(now.getFullYear(),now.getMonth()-1,1).toISOString(), to:new Date(now.getFullYear(),now.getMonth(),0,23,59,59).toISOString()}
-  return {from:new Date(now.getTime()-30*86400000).toISOString(), to} // Últimos 30 dias
+  const startOf=(d:Date)=>new Date(d.getFullYear(),d.getMonth(),d.getDate()).toISOString()
+  const endOf=(d:Date)=>new Date(d.getFullYear(),d.getMonth(),d.getDate(),23,59,59).toISOString()
+  switch(key){
+    case 'hoje':    return {from:startOf(now),to}
+    case 'ontem':   {const y=new Date(now);y.setDate(y.getDate()-1);return {from:startOf(y),to:endOf(y)}}
+    case '7d':      return {from:new Date(now.getTime()-7*86400000).toISOString(),to}
+    case '15d':     return {from:new Date(now.getTime()-15*86400000).toISOString(),to}
+    case '30d':     return {from:new Date(now.getTime()-30*86400000).toISOString(),to}
+    case 'mes':     return {from:new Date(now.getFullYear(),now.getMonth(),1).toISOString(),to}
+    case 'mespass': return {from:new Date(now.getFullYear(),now.getMonth()-1,1).toISOString(),to:new Date(now.getFullYear(),now.getMonth(),0,23,59,59).toISOString()}
+    case 'ano':     return {from:new Date(now.getFullYear(),0,1).toISOString(),to}
+    case 'custom':  return custom?{from:startOf(custom.from),to:endOf(custom.to)}:{from:startOf(now),to}
+    default:        return {from:startOf(now),to}
+  }
 }
-// Mapeia o filtro de período para a janela de ads cacheada no backend.
-function adsWindow(p:string):string{
-  return p==='Hoje'?'today':p==='Este mês'?'month':p==='Mês passado'?'lastmonth':'30d'
+function periodLabel(key:string, custom:{from:Date;to:Date}|null):string{
+  const p=PRESETS.find(x=>x[0]===key); if(p) return p[1]
+  if(key==='custom'&&custom) return `${custom.from.toLocaleDateString('pt-BR')} a ${custom.to.toLocaleDateString('pt-BR')}`
+  return 'Selecione um período'
 }
+// Mapeia o período para a janela de ads cacheada no backend.
+function adsWindow(key:string):string{
+  return key==='hoje'?'today':key==='ontem'?'today':key==='7d'?'7d':key==='mes'?'month':key==='mespass'?'lastmonth':'30d'
+}
+/* ── Seletor de período (presets + calendário "Personalizado", estilo Gestor) ── */
+const sameDay=(a:Date,b:Date)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate()
+function menuItem(t:Theme,active:boolean):React.CSSProperties{
+  return {display:'flex',alignItems:'center',gap:6,width:'100%',textAlign:'left' as const,background:active?t.pillGrn[0]:'transparent',border:'none',borderRadius:8,padding:'8px 10px',fontSize:12.5,fontFamily:FG,color:t.t1,cursor:'pointer',fontWeight:active?600:400}
+}
+function MiniCalendar({t,onPick}:{t:Theme;onPick:(from:Date,to:Date)=>void}){
+  const today=new Date()
+  const [view,setView]=useState({y:today.getFullYear(),m:today.getMonth()})
+  const [start,setStart]=useState<Date|null>(null)
+  const [end,setEnd]=useState<Date|null>(null)
+  const monthName=new Date(view.y,view.m,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
+  const firstDow=(new Date(view.y,view.m,1).getDay()+6)%7
+  const daysInMonth=new Date(view.y,view.m+1,0).getDate()
+  const cells:(Date|null)[]=[]
+  for(let i=0;i<firstDow;i++) cells.push(null)
+  for(let d=1;d<=daysInMonth;d++) cells.push(new Date(view.y,view.m,d))
+  const click=(d:Date)=>{
+    if(!start||end){ setStart(d); setEnd(null) }
+    else if(d<start){ setEnd(start); setStart(d); onPick(d,start) }
+    else { setEnd(d); onPick(start,d) }
+  }
+  const inRange=(d:Date)=> !!(start&&end&&d>=start&&d<=end)
+  const isEdge=(d:Date)=> !!((start&&sameDay(d,start))||(end&&sameDay(d,end)))
+  const nav=(delta:number)=>setView(v=>{let m=v.m+delta,y=v.y; if(m<0){m=11;y--} if(m>11){m=0;y++} return {y,m}})
+  const navBtn:React.CSSProperties={background:'none',border:'none',color:t.t2,fontSize:18,cursor:'pointer',padding:'0 6px',lineHeight:1}
+  return (<div style={{width:252}}>
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+      <button onClick={()=>nav(-1)} style={navBtn}>‹</button>
+      <span style={{fontFamily:FG,fontSize:13,fontWeight:600,color:t.t1,textTransform:'capitalize' as const}}>{monthName}</span>
+      <button onClick={()=>nav(1)} style={navBtn}>›</button>
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:4}}>
+      {['S','T','Q','Q','S','S','D'].map((w,i)=><div key={i} style={{textAlign:'center' as const,fontSize:10,color:t.t3,fontWeight:600}}>{w}</div>)}
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+      {cells.map((d,i)=> d? (
+        <button key={i} onClick={()=>click(d)} style={{fontFamily:FG,fontSize:12,border:'none',borderRadius:6,padding:'6px 0',cursor:'pointer',
+          background:isEdge(d)?t.grn:inRange(d)?t.pillGrn[0]:'transparent',
+          color:isEdge(d)?(t.dark?'#0A0A14':'#fff'):t.t1,fontWeight:isEdge(d)?700:400}}>{d.getDate()}</button>
+      ) : <div key={i}/>)}
+    </div>
+    <div style={{fontSize:10.5,color:t.t3,marginTop:6,fontFamily:FG}}>{!start?'Escolha a data inicial':!end?'Agora a data final':''}</div>
+  </div>)
+}
+function PeriodPicker({value,custom,onChange}:{value:string;custom:{from:Date;to:Date}|null;onChange:(key:string,range:{from:Date;to:Date}|null)=>void}){
+  const t=useT()
+  const [open,setOpen]=useState(false)
+  const [showCal,setShowCal]=useState(false)
+  return (<div style={{position:'relative' as const}}>
+    <button onClick={()=>{setOpen(o=>!o);setShowCal(false)}} style={{display:'flex',alignItems:'center',gap:8,justifyContent:'space-between',background:t.card,color:t.t1,border:`1px solid ${t.line}`,borderRadius:9,padding:'8px 12px',fontSize:12.5,fontFamily:FG,cursor:'pointer',minWidth:172}}>
+      <span style={{display:'flex',alignItems:'center',gap:7}}><i className="ti ti-calendar" style={{fontSize:14,color:t.t3}} aria-hidden="true"/>{periodLabel(value,custom)}</span>
+      <i className="ti ti-chevron-down" style={{fontSize:14,color:t.grn}} aria-hidden="true"/>
+    </button>
+    {open && <>
+      <div onClick={()=>setOpen(false)} style={{position:'fixed' as const,inset:0,zIndex:40}}/>
+      <div style={{position:'absolute' as const,top:'calc(100% + 6px)',right:0,zIndex:41,background:t.card,border:`1px solid ${t.line}`,borderRadius:12,boxShadow:'0 12px 32px rgba(0,0,0,0.35)',padding:6,minWidth:showCal?276:188}}>
+        {!showCal ? <>
+          {PRESETS.map(([k,lbl])=>(
+            <button key={k} onClick={()=>{onChange(k,null);setOpen(false)}} style={menuItem(t,value===k)}>
+              <span style={{width:16,display:'inline-flex'}}>{value===k&&<i className="ti ti-check" style={{fontSize:13,color:t.grn}} aria-hidden="true"/>}</span>{lbl}
+            </button>
+          ))}
+          <button onClick={()=>setShowCal(true)} style={menuItem(t,value==='custom')}>
+            <span style={{width:16,display:'inline-flex'}}>{value==='custom'&&<i className="ti ti-check" style={{fontSize:13,color:t.grn}} aria-hidden="true"/>}</span>Personalizado
+          </button>
+        </> : (
+          <div style={{padding:4}}>
+            <MiniCalendar t={t} onPick={(from,to)=>{onChange('custom',{from,to});setOpen(false);setShowCal(false)}}/>
+            <button onClick={()=>setShowCal(false)} style={{...menuItem(t,false),color:t.t3,marginTop:4}}>‹ atalhos</button>
+          </div>
+        )}
+      </div>
+    </>}
+  </div>)
+}
+
 // Converte os produtos reais (com nome/foto) em ProductMetrics p/ as abas Vendas/Curva ABC.
 function realProductMetrics(realDre:any, costs:Record<string,number>):ProductMetrics[]{
   const prods=realDre?.produtos||[]
@@ -301,7 +397,7 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30}:{hide:boolean;real
             </defs>
             <CartesianGrid stroke={t.grid} vertical={false}/>
             <XAxis dataKey={chartXKey} tick={{fill:t.t3,fontSize:11,fontFamily:FG}} tickLine={false} axisLine={{stroke:t.line}} interval="preserveStartEnd" minTickGap={28} tickMargin={8}/>
-            <YAxis tick={{fill:t.t3,fontSize:11,fontFamily:FG}} tickLine={false} axisLine={false} width={64} tickFormatter={(v:number)=>brl2(v)}/>
+            <YAxis tick={{fill:t.t3,fontSize:10.5,fontFamily:FG}} tickLine={false} axisLine={false} width={82} tickFormatter={(v:number)=>'R$ '+Math.round(v).toLocaleString('pt-BR')}/>
             <RTooltip contentStyle={{background:t.tipBg,border:`1px solid ${t.line2}`,borderRadius:10,fontSize:12,color:t.t1,fontFamily:FG}} labelStyle={{color:t.t3,fontWeight:600,marginBottom:4}} formatter={(v:any,n:any)=>[brl2(Number(v)),n]}/>
             <Area type="monotone" dataKey="receita" name="Receita" stroke={t.vio} strokeWidth={2.4} fill="url(#gReceita)" dot={false} activeDot={{r:4}}/>
             {realChart && <Area type="monotone" dataKey="lucro" name="Lucro líquido" stroke={t.grn} strokeWidth={2.4} fill="url(#gLucro)" dot={false} activeDot={{r:4}}/>}
@@ -532,7 +628,9 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
   const [themeKey,setThemeKey]=useState('dark')
   const [amazonConnected,setAmazonConnected]=useState<boolean|null>(null)
   const [realDre,setRealDre]=useState<any>(null)
-  const [period,setPeriod]=useState('Hoje')
+  const [period,setPeriod]=useState('hoje')
+  const [customRange,setCustomRange]=useState<{from:Date;to:Date}|null>(null)
+  const range=useMemo(()=>computeRange(period,customRange),[period,customRange])
   useEffect(()=>{
     let alive=true
     fetch('/api/amazon/status').then(r=>r.json()).then(d=>{ if(alive) setAmazonConnected(!!d.connected) }).catch(()=>{ if(alive) setAmazonConnected(false) })
@@ -541,11 +639,10 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
   useEffect(()=>{
     if(!amazonConnected) return
     let alive=true
-    const {from,to}=periodRange(period)
     setRealDre(null)
-    fetch(`/api/amazon/finance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
+    fetch(`/api/amazon/finance?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
     return ()=>{ alive=false }
-  },[amazonConnected,period])
+  },[amazonConnected,range.from,range.to])
   // Série fixa de 30 dias para o gráfico (não muda com o filtro de período — igual ao Gestor)
   const [dre30,setDre30]=useState<any>(null)
   useEffect(()=>{
@@ -642,9 +739,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
               style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t2,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
               <i className={`ti ti-${hide?'eye-off':'eye'}`} aria-hidden="true"/>
             </button>
-            <select value={period} onChange={e=>setPeriod(e.target.value)} style={{background:t.card,color:t.t1,border:`1px solid ${t.line}`,borderRadius:9,padding:'7px 10px',fontSize:12,fontFamily:'inherit',outline:'none'}}>
-              <option>Hoje</option><option>Últimos 30 dias</option><option>Este mês</option><option>Mês passado</option>
-            </select>
+            <PeriodPicker value={period} custom={customRange} onChange={(k,r)=>{ setPeriod(k); setCustomRange(r) }}/>
           </div>
         </div>
 
