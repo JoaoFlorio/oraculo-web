@@ -455,7 +455,7 @@ function Vendas({m,hide}:{m:ProductMetrics[];hide:boolean}){
   return(<>
     <Hint>Ranking por receita · ordena os produtos por faturamento e mostra a margem real.</Hint>
     <Table head={[{label:'Produto',w:'46%'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true}]}>
-      {t.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl(p.revenue)}</NumTd><PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
+      {t.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
     </Table>
   </>)
 }
@@ -475,12 +475,12 @@ function CurvaABC({d,hide}:{d:ReturnType<typeof abcCurve>;hide:boolean}){
             <span style={{width:24,height:24,borderRadius:7,background:g.color+'22',color:g.color,fontWeight:700,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:FG}}>{g.cls}</span>
             <span style={{fontSize:12,color:t.t2}}>{g.count} produto{g.count!==1?'s':''} · {g.un} un</span>
           </div>
-          <div style={{fontFamily:FG,fontWeight:600,fontSize:18,color:t.t1,filter:hide?'blur(7px)':'none'}}>{brl(g.rev)}</div>
+          <div style={{fontFamily:FG,fontWeight:600,fontSize:18,color:t.t1,filter:hide?'blur(7px)':'none'}}>{brl2(g.rev)}</div>
         </div>
       ))}
     </div>
     <Table head={[{label:'Produto',w:'46%'},{label:'Receita',right:true},{label:'% total',right:true},{label:'Classe',right:true}]}>
-      {d.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl(p.revenue)}</NumTd><NumTd>{pc(p.shareTotal)}</NumTd>
+      {d.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl2(p.revenue)}</NumTd><NumTd>{pc(p.shareTotal)}</NumTd>
         <PillTd><Pill kind={p.cls==='A'?'grn':p.cls==='B'?'gold':'red'}>{p.cls}</Pill></PillTd></tr>)}
     </Table>
   </>)
@@ -505,8 +505,8 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:b
   )
   const camps:any[]=adsReal.byCampaign||[]
   const tot=[
-    {label:'Gasto',value:brl(adsReal.spend),icon:'ti-speakerphone',color:t.gold},
-    {label:'Vendas por Ads',value:brl(adsReal.sales),icon:'ti-cash',color:t.grn},
+    {label:'Gasto',value:brl2(adsReal.spend),icon:'ti-speakerphone',color:t.gold},
+    {label:'Vendas por Ads',value:brl2(adsReal.sales),icon:'ti-cash',color:t.grn},
     {label:'ACoS',value:pc(adsReal.acos),icon:'ti-target',color:adsReal.acos<20?t.grn:adsReal.acos<30?t.gold:t.red},
     {label:'ROAS',value:(Number(adsReal.roas)||0).toFixed(2)+'x',icon:'ti-rotate-clockwise',color:t.grn},
   ]
@@ -521,7 +521,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:b
         const acos=c.sales>0?c.spend/c.sales*100:0, roas=c.spend>0?c.sales/c.spend:0
         return(<tr key={i}>
           <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,fontSize:13,color:t.t1,fontWeight:500,whiteSpace:'nowrap' as const,overflow:'hidden',textOverflow:'ellipsis'}}>{c.campaign}</td>
-          <NumTd hide={hide}>{brl(c.spend)}</NumTd><NumTd hide={hide}>{brl(c.sales)}</NumTd>
+          <NumTd hide={hide}>{brl2(c.spend)}</NumTd><NumTd hide={hide}>{brl2(c.sales)}</NumTd>
           <NumTd>{c.sales>0?roas.toFixed(1)+'x':'—'}</NumTd>
           <PillTd><Pill kind={c.sales<=0?'red':acos<20?'grn':acos<30?'gold':'red'}>{c.sales>0?pc(acos):'—'}</Pill></PillTd>
         </tr>)
@@ -601,16 +601,16 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide}:{realDre?:any;costs:Rec
               </div>
             </td>
             <NumTd>{p.units}</NumTd>
-            <NumTd hide={hide}>{brl(p.receita)}</NumTd>
+            <NumTd hide={hide}>{brl2(p.receita)}</NumTd>
             <PillTd><input type="number" min={0} step={0.5} value={cost||''} placeholder="0,00" onChange={e=>onCost(p.sku,parseFloat(e.target.value)||0)} style={inp}/></PillTd>
-            <NumTd color={t.gold} hide={hide}>{cmv>0?brl(cmv):'—'}</NumTd>
+            <NumTd color={t.gold} hide={hide}>{cmv>0?brl2(cmv):'—'}</NumTd>
           </tr>
         )
       })}
     </Table>
     <div style={{display:'flex',justifyContent:'flex-end',alignItems:'baseline',gap:8,marginTop:12,fontSize:13}}>
       <span style={{color:t.t2,fontWeight:500}}>CMV Total do período</span>
-      <span style={{color:t.gold,fontWeight:700,fontFamily:FG,filter:hide?'blur(6px)':'none'}}>{brl(cmvTotal)}</span>
+      <span style={{color:t.gold,fontWeight:700,fontFamily:FG,filter:hide?'blur(6px)':'none'}}>{brl2(cmvTotal)}</span>
     </div>
     <div style={{fontSize:11,color:t.t3,marginTop:8}}>Salvo automaticamente · volte ao Resumo pra ver Lucro Bruto, Margem, ROI e MPA reais.</div>
   </>)
