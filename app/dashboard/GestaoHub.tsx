@@ -40,7 +40,7 @@ const THEMES:Record<string,Theme> = {
   },
 }
 const FH = "'Space Grotesk','Inter',sans-serif"
-const FG = "'Poppins','Inter',sans-serif"   // fonte estilo Gestor Seller (números/labels da Gestão)
+const FG = "'Montserrat','Inter',sans-serif"   // fonte do Gestor Seller (Montserrat nos títulos/valores)
 const ThemeCtx = createContext<Theme>(THEMES.dark)
 const useT = ()=>useContext(ThemeCtx)
 
@@ -106,7 +106,7 @@ function ProdCell({p}:{p:{id:string;image?:string;name:string;sku?:string}}){
 }
 function NumTd({children,color,strong,hide}:{children:React.ReactNode;color?:string;strong?:boolean;hide?:boolean}){
   const t=useT()
-  return <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right',fontFamily:FH,fontWeight:strong?600:500,fontSize:13,color:color||t.t1,filter:hide?'blur(6px)':'none'}}>{children}</td>
+  return <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right',fontFamily:FG,fontWeight:strong?600:500,fontSize:13,color:color||t.t1,filter:hide?'blur(6px)':'none'}}>{children}</td>
 }
 function PillTd({children}:{children:React.ReactNode}){
   const t=useT(); return <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right'}}>{children}</td>
@@ -154,7 +154,7 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
   const Row=({label,val,sign,strong,color}:{label:string;val:number;sign?:'-'|'=';strong?:boolean;color?:string})=>(
     <div style={{display:'flex',justifyContent:'space-between',padding:'8px 2px',borderBottom:`1px solid ${t.line}`,fontSize:strong?14:13}}>
       <span style={{color:strong?t.t1:t.t2,fontWeight:strong?600:400}}>{sign==='='?'= ':sign==='-'?'(–) ':''}{label}</span>
-      <span style={{color:color||t.t1,fontWeight:strong?700:500,fontFamily:FH,filter:hide?'blur(6px)':'none'}}>{brl(val||0)}</span>
+      <span style={{color:color||t.t1,fontWeight:strong?700:500,fontFamily:FG,filter:hide?'blur(6px)':'none'}}>{brl(val||0)}</span>
     </div>
   )
   return(
@@ -367,10 +367,10 @@ function CurvaABC({d,hide}:{d:ReturnType<typeof abcCurve>;hide:boolean}){
       {groups.map(g=>(
         <div key={g.cls} style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${g.color}`,borderRadius:12,padding:'13px 15px'}}>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-            <span style={{width:24,height:24,borderRadius:7,background:g.color+'22',color:g.color,fontWeight:700,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:FH}}>{g.cls}</span>
+            <span style={{width:24,height:24,borderRadius:7,background:g.color+'22',color:g.color,fontWeight:700,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:FG}}>{g.cls}</span>
             <span style={{fontSize:12,color:t.t2}}>{g.count} produto{g.count!==1?'s':''} · {g.un} un</span>
           </div>
-          <div style={{fontFamily:FH,fontWeight:600,fontSize:18,color:t.t1,filter:hide?'blur(7px)':'none'}}>{brl(g.rev)}</div>
+          <div style={{fontFamily:FG,fontWeight:600,fontSize:18,color:t.t1,filter:hide?'blur(7px)':'none'}}>{brl(g.rev)}</div>
         </div>
       ))}
     </div>
@@ -479,7 +479,7 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide}:{realDre?:any;costs:Rec
     </Table>
     <div style={{display:'flex',justifyContent:'flex-end',alignItems:'baseline',gap:8,marginTop:12,fontSize:13}}>
       <span style={{color:t.t2,fontWeight:500}}>CMV Total do período</span>
-      <span style={{color:t.gold,fontWeight:700,fontFamily:FH,filter:hide?'blur(6px)':'none'}}>{brl(cmvTotal)}</span>
+      <span style={{color:t.gold,fontWeight:700,fontFamily:FG,filter:hide?'blur(6px)':'none'}}>{brl(cmvTotal)}</span>
     </div>
     <div style={{fontSize:11,color:t.t3,marginTop:8}}>Salvo automaticamente · volte ao Resumo pra ver Lucro Bruto, Margem, ROI e MPA reais.</div>
   </>)
@@ -532,7 +532,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
   const [themeKey,setThemeKey]=useState('dark')
   const [amazonConnected,setAmazonConnected]=useState<boolean|null>(null)
   const [realDre,setRealDre]=useState<any>(null)
-  const [period,setPeriod]=useState('Últimos 30 dias')
+  const [period,setPeriod]=useState('Hoje')
   useEffect(()=>{
     let alive=true
     fetch('/api/amazon/status').then(r=>r.json()).then(d=>{ if(alive) setAmazonConnected(!!d.connected) }).catch(()=>{ if(alive) setAmazonConnected(false) })
@@ -616,12 +616,12 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
     <ThemeCtx.Provider value={t}>
       <div style={{background:t.dark?'transparent':t.pageBg,borderRadius:t.dark?0:16,border:t.dark?'none':`1px solid ${t.line}`,padding:t.dark?'2px 0 28px':'18px 20px 28px',minHeight:'calc(100vh - 80px)'}}>
         <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"/>
-        <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap"/>
+        <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap"/>
 
         {/* Header */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
           <div>
-            <h2 style={{fontFamily:FH,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>Gestão</h2>
+            <h2 style={{fontFamily:FG,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>Gestão</h2>
             <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':'dados de exemplo'}</span></p>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -643,7 +643,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
               <i className={`ti ti-${hide?'eye-off':'eye'}`} aria-hidden="true"/>
             </button>
             <select value={period} onChange={e=>setPeriod(e.target.value)} style={{background:t.card,color:t.t1,border:`1px solid ${t.line}`,borderRadius:9,padding:'7px 10px',fontSize:12,fontFamily:'inherit',outline:'none'}}>
-              <option>Últimos 30 dias</option><option>Este mês</option><option>Mês passado</option><option>Hoje</option>
+              <option>Hoje</option><option>Últimos 30 dias</option><option>Este mês</option><option>Mês passado</option>
             </select>
           </div>
         </div>
