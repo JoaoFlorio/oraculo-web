@@ -532,13 +532,39 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:b
     </div>}
   </>)
 }
-function Analitico({m,hide}:{m:ProductMetrics[];hide:boolean}){
-  const T=useT()
-  const rows=[...m].sort((a,b)=>b.refundUnits-a.refundUnits)
+function Analitico({realDre,hide,connected,mockM}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[]}){
+  const t=useT()
+  if(connected && !realDre) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
+  if(realDre){
+    const reembolsos:any[] = realDre.reembolsos||[]
+    const vendaPorSku:Record<string,number> = {}
+    for(const p of (realDre.produtos||[])) vendaPorSku[p.sku]=p.units
+    const totalDev = reembolsos.reduce((s,r)=>s+(r.valor||0),0)
+    return(<>
+      <Hint>Reembolsos por produto (base de repasse) · acha o que vende mas volta. Total devolvido no período: <b style={{color:t.red}}>{brl2(totalDev)}</b></Hint>
+      {reembolsos.length===0 ? (
+        <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhuma devolução no período selecionado. 🎉</div>
+      ) : (
+        <Table head={[{label:'Produto',w:'46%'},{label:'Devolvidas',right:true},{label:'R$ devolvido',right:true},{label:'Taxa devol.',right:true}]}>
+          {reembolsos.map((r,i)=>{
+            const vendidas=vendaPorSku[r.sku]||0
+            const taxa=vendidas>0?(r.units/vendidas*100):0
+            return(<tr key={i}>
+              <ProdCell p={{id:r.sku,image:r.image,name:r.name||r.sku,sku:r.sku}}/>
+              <NumTd>{r.units} un</NumTd>
+              <NumTd color={t.red} hide={hide}>{brl2(r.valor)}</NumTd>
+              <PillTd>{vendidas>0?<Pill kind={taxa<5?'grn':taxa<15?'gold':'red'}>{pc(taxa)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
+            </tr>)
+          })}
+        </Table>
+      )}
+    </>)
+  }
+  const rows=[...(mockM||[])].sort((a,b)=>b.refundUnits-a.refundUnits)
   return(<>
     <Hint>Reembolsos por produto · acha o que vende mas dá prejuízo por devolução/CMV.</Hint>
     <Table head={[{label:'Produto',w:'46%'},{label:'Devol.',right:true},{label:'R$ perdido',right:true},{label:'Margem',right:true}]}>
-      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.refundUnits} un</NumTd><NumTd color={T.red} hide={hide}>{brl(p.refundValue)}</NumTd>
+      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.refundUnits} un</NumTd><NumTd color={t.red} hide={hide}>{brl(p.refundValue)}</NumTd>
         <PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
     </Table>
   </>)
@@ -589,11 +615,44 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide}:{realDre?:any;costs:Rec
     <div style={{fontSize:11,color:t.t3,marginTop:8}}>Salvo automaticamente · volte ao Resumo pra ver Lucro Bruto, Margem, ROI e MPA reais.</div>
   </>)
 }
-function Fulfillment({m}:{m:ProductMetrics[]}){
+function Fulfillment({inv,realDre,connected,mockM}:{inv?:any;realDre?:any;connected?:boolean|null;mockM?:ProductMetrics[]}){
+  const t=useT()
+  if(connected){
+    if(!inv) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando estoque FBA da Amazon…</div>
+    const itens:any[] = inv.inventario||[]
+    // velocidade de venda (un/dia) pelo período atual p/ estimar cobertura
+    const vendaPorSku:Record<string,number> = {}
+    for(const p of (realDre?.produtos||[])) vendaPorSku[p.sku]=p.units
+    const from=realDre?.period?.from, to=realDre?.period?.to
+    const days = from&&to ? Math.max(1,Math.round((Date.parse(to)-Date.parse(from))/86400000)) : 30
+    return(<>
+      <Hint>Estoque FBA real · cobertura estimada pela velocidade de venda · alerta de ruptura e excesso.</Hint>
+      {itens.length===0 ? (
+        <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhum item em estoque FBA.</div>
+      ) : (
+        <Table head={[{label:'Produto',w:'40%'},{label:'FBA disp.',right:true},{label:'A caminho',right:true},{label:'Reservado',right:true},{label:'Cobertura',right:true},{label:'Status',right:true}]}>
+          {itens.map((it,i)=>{
+            const vel=(vendaPorSku[it.sku]||0)/days
+            const cob = vel>0 ? Math.round(it.fulfillable/vel) : null
+            const k = it.fulfillable<=0?'red':(cob!=null&&cob<10)?'red':(cob!=null&&cob>120)?'gold':'grn'
+            const lbl = it.fulfillable<=0?'Ruptura':(cob!=null&&cob<10)?'Baixo':(cob!=null&&cob>120)?'Excesso':'Saudável'
+            return(<tr key={i}>
+              <ProdCell p={{id:it.sku,image:it.image,name:it.name||it.sku,sku:it.sku}}/>
+              <NumTd strong>{it.fulfillable}</NumTd>
+              <NumTd color={t.t2}>{it.inbound}</NumTd>
+              <NumTd color={t.t2}>{it.reserved}</NumTd>
+              <NumTd>{cob!=null?`${cob} dias`:'—'}</NumTd>
+              <PillTd><Pill kind={k}>{lbl}</Pill></PillTd>
+            </tr>)
+          })}
+        </Table>
+      )}
+    </>)
+  }
   return(<>
     <Hint>Estoque FBA + dias de cobertura · alerta de ruptura e excesso (armazenagem cara).</Hint>
     <Table head={[{label:'Produto',w:'48%'},{label:'FBA',right:true},{label:'Cobertura',right:true},{label:'Status',right:true}]}>
-      {m.map(p=>{
+      {(mockM||[]).map(p=>{
         const k = p.coverageDays<10?'red':p.coverageDays>120?'gold':'grn'
         const lbl = p.coverageDays<10?'Ruptura':p.coverageDays>120?'Excesso':'Saudável'
         return <tr key={p.id}><ProdCell p={p}/><NumTd>{p.stockFBA}</NumTd><NumTd>{p.coverageDays} dias</NumTd><PillTd><Pill kind={k}>{lbl}</Pill></PillTd></tr>
@@ -601,19 +660,44 @@ function Fulfillment({m}:{m:ProductMetrics[]}){
     </Table>
   </>)
 }
-function Relatorio(){
+function toCSV(headers:string[],rows:(string|number)[][]):string{
+  const esc=(v:any)=>{const s=String(v??'');return /[",;\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+  return [headers.map(esc).join(';'),...rows.map(r=>r.map(esc).join(';'))].join('\n')
+}
+function downloadCSV(filename:string,content:string){
+  if(typeof document==='undefined') return
+  const blob=new Blob(['﻿'+content],{type:'text/csv;charset=utf-8'})
+  const url=URL.createObjectURL(blob)
+  const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url)
+}
+function Relatorio({realDre,inv,costs={}}:{realDre?:any;inv?:any;costs?:Record<string,number>}){
   const t=useT()
-  const reps=[['Vendas','ti-cash'],['Reembolsos','ti-arrow-back-up'],['Estoque FBA','ti-package'],['Produtos','ti-list'],['Comissões','ti-receipt-2'],['Operacional','ti-file-spreadsheet']]
+  const produtos:any[]=realDre?.produtos||[]
+  const reembolsos:any[]=realDre?.reembolsos||[]
+  const inventario:any[]=inv?.inventario||[]
+  const L=realDre?.linhas||{}
+  const reps:{label:string;icon:string;off:boolean;gen:()=>string;file:string}[]=[
+    {label:'Produtos / Vendas',icon:'ti-list',off:!produtos.length,file:'produtos-vendas',
+      gen:()=>toCSV(['Produto','SKU','ASIN','Unidades','Faturado','Preço médio','Custo un.'],produtos.map(p=>[p.name||p.sku,p.sku,p.asin||'',p.units,p.receita,p.units>0?(p.receita/p.units).toFixed(2):'0',costs[p.sku]||0]))},
+    {label:'Reembolsos',icon:'ti-arrow-back-up',off:!reembolsos.length,file:'reembolsos',
+      gen:()=>toCSV(['Produto','SKU','Unidades devolvidas','R$ devolvido'],reembolsos.map(r=>[r.name||r.sku,r.sku,r.units,r.valor]))},
+    {label:'Estoque FBA',icon:'ti-package',off:!inventario.length,file:'estoque-fba',
+      gen:()=>toCSV(['Produto','SKU','FBA disponível','A caminho','Reservado','Total'],inventario.map(it=>[it.name||it.sku,it.sku,it.fulfillable,it.inbound,it.reserved,it.total]))},
+    {label:'DRE / Operacional',icon:'ti-file-spreadsheet',off:!realDre,file:'dre',
+      gen:()=>toCSV(['Linha','Valor (R$)'],[['Receita bruta',L.receitaBruta||0],['Devoluções',L.devolucoes||0],['Receita líquida',L.receitaLiquida||0],['Comissão',L.comissao||0],['Tarifa FBA',L.fba||0],['Armazenagem',L.armazenagem||0],['Assinatura',L.assinatura||0],['Líq. Marketplace',realDre?.liqMarketplace||0],['Ads',L.ads||0]])},
+  ]
   return(<>
-    <Hint>Relatórios exportáveis em CSV/PDF.</Hint>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:11}}>
+    <Hint>Relatórios reais exportáveis em CSV (abre direto no Excel).</Hint>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:11}}>
       {reps.map((r,i)=>(
-        <div key={i} style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'14px 15px',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer'}}>
-          <span style={{display:'flex',alignItems:'center',gap:8,fontSize:13,fontWeight:500,color:t.t1}}><i className={`ti ${r[1]}`} style={{fontSize:18,color:t.gold}} aria-hidden="true"/>{r[0]}</span>
-          <i className="ti ti-download" style={{fontSize:16,color:t.t3}} aria-hidden="true"/>
+        <div key={i} onClick={()=>{ if(!r.off) downloadCSV(`oraculo-${r.file}.csv`,r.gen()) }}
+          style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'14px 15px',display:'flex',alignItems:'center',justifyContent:'space-between',cursor:r.off?'default':'pointer',opacity:r.off?0.45:1}}>
+          <span style={{display:'flex',alignItems:'center',gap:8,fontSize:13,fontWeight:500,color:t.t1,fontFamily:FG}}><i className={`ti ${r.icon}`} style={{fontSize:18,color:t.gold}} aria-hidden="true"/>{r.label}</span>
+          <i className="ti ti-download" style={{fontSize:16,color:r.off?t.t3:t.grn}} aria-hidden="true"/>
         </div>
       ))}
     </div>
+    {!realDre && <div style={{fontSize:11,color:t.t3,marginTop:10,fontFamily:FG}}>Conecte a conta Amazon para exportar dados reais.</div>}
   </>)
 }
 
@@ -652,6 +736,14 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
     fetch(`/api/amazon/finance?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
     return ()=>{ alive=false }
   },[amazonConnected,range.from,range.to])
+  // Estoque FBA (Inventory API) — carrega uma vez ao conectar (cache 30min no backend)
+  const [inventory,setInventory]=useState<any>(null)
+  useEffect(()=>{
+    if(!amazonConnected) return
+    let alive=true
+    fetch('/api/amazon/inventory').then(r=>r.json()).then(d=>{ if(alive&&d&&Array.isArray(d.inventario)) setInventory(d) }).catch(()=>{})
+    return ()=>{ alive=false }
+  },[amazonConnected])
   // Série fixa de 30 dias para o gráfico (não muda com o filtro de período — igual ao Gestor)
   const [dre30,setDre30]=useState<any>(null)
   useEffect(()=>{
@@ -803,10 +895,10 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         {tab==='vendas' && <Vendas m={realM||m} hide={hide}/>}
         {tab==='abc'    && <CurvaABC d={realAbcData||abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
-        {tab==='analit' && <Analitico m={m} hide={hide}/>}
+        {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide}/>}
-        {tab==='fulfil' && <Fulfillment m={m}/>}
-        {tab==='relat'  && <Relatorio/>}
+        {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m}/>}
+        {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={costs}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
       </div>
     </ThemeCtx.Provider>
