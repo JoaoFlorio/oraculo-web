@@ -459,30 +459,100 @@ function Vendas({m,hide}:{m:ProductMetrics[];hide:boolean}){
     </Table>
   </>)
 }
-function CurvaABC({d,hide}:{d:ReturnType<typeof abcCurve>;hide:boolean}){
+const clsColor=(t:Theme,cls:string)=> cls==='A'?t.grn:cls==='B'?t.blue:cls==='C'?t.gold:t.t3
+function ClassBadge({t,cls}:{t:Theme;cls:string}){
+  const c=clsColor(t,cls)
+  return <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',background:c+'22',color:c,fontWeight:700,fontSize:12,fontFamily:FG}}>{cls}</span>
+}
+function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:any;costs?:Record<string,number>;adsReal?:any;inv?:any;connected?:boolean|null;mockD?:ReturnType<typeof abcCurve>;hide:boolean}){
   const t=useT()
-  const groups=(['A','B','C'] as const).map(cls=>{
-    const items=d.filter(p=>p.cls===cls)
-    return {cls,count:items.length,rev:items.reduce((s,p)=>s+p.revenue,0),un:items.reduce((s,p)=>s+p.units,0),
-      color:cls==='A'?t.grn:cls==='B'?t.blue:t.gold}
-  })
+  if(connected && !realDre) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
+  if(realDre){
+    const L=realDre.linhas||{}
+    const fat=L.receitaBruta||0
+    const feesTot=(L.comissao||0)+(L.fba||0)+(L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.outrasTaxas||0)
+    const adsTot=adsReal?.ready?(Number(adsReal.spend)||0):0
+    const sorted=[...(realDre.produtos||[])].sort((a:any,b:any)=>b.receita-a.receita)
+    // Classificação ABC (cumulativa, inclui o produto que cruza o limiar — corrige o dominante virar A)
+    let cum=0, aDone=false, bDone=false
+    const rows=sorted.map((p:any)=>{
+      cum+=p.receita; const sh=fat>0?cum/fat*100:0
+      let cls:'A'|'B'|'C'; if(!aDone){cls='A'; if(sh>=80)aDone=true} else if(!bDone){cls='B'; if(sh>=95)bDone=true} else cls='C'
+      const share=fat>0?p.receita/fat:0
+      const cmv=(costs[p.sku]||0)*p.units
+      const temCusto=(costs[p.sku]||0)>0
+      const lucroBruto=p.receita-cmv-feesTot*share
+      const lucroPos=lucroBruto-adsTot*share
+      const mpa=p.receita>0?lucroPos/p.receita*100:0
+      return {p,units:p.units,receita:p.receita,cls,lucroBruto,lucroPos,mpa,temCusto}
+    })
+    // Curva Z = produtos com estoque FBA mas SEM giro (0 vendas no período)
+    const sold=new Set(sorted.map((p:any)=>p.sku))
+    const zItems=(inv?.inventario||[]).filter((it:any)=>it.total>0 && !sold.has(it.sku))
+    const agg=(cls:string)=>{
+      const its=rows.filter(r=>r.cls===cls)
+      return {count:its.length,units:its.reduce((s,r)=>s+r.units,0),fat:its.reduce((s,r)=>s+r.receita,0),
+        lb:its.reduce((s,r)=>s+r.lucroBruto,0),lp:its.reduce((s,r)=>s+r.lucroPos,0),hasCusto:its.some(r=>r.temCusto)}
+    }
+    const cards=[
+      {cls:'A',...agg('A')},{cls:'B',...agg('B')},{cls:'C',...agg('C')},
+      {cls:'Z',count:zItems.length,units:0,fat:0,lb:0,lp:0,hasCusto:false},
+    ]
+    const Row=({label,value,color}:{label:string;value:string;color?:string})=>(
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',padding:'5px 0',borderTop:`1px solid ${t.line}`,fontSize:12}}>
+        <span style={{color:t.t2,fontFamily:FG}}>{label}</span>
+        <span style={{color:color||t.t1,fontWeight:600,fontFamily:FG,filter:hide?'blur(5px)':'none'}}>{value}</span>
+      </div>
+    )
+    return(<>
+      <Hint>Curva A ≈ 80% do faturamento · B ≈ 15% · C ≈ resto · Z = em estoque sem giro. Foca estoque e ads nos produtos A.</Hint>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:13,marginBottom:18}}>
+        {cards.map(c=>{
+          const color=clsColor(t,c.cls)
+          const lbPct=c.fat>0?c.lb/c.fat*100:0, lpPct=c.fat>0?c.lp/c.fat*100:0
+          return(
+            <div key={c.cls} style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${color}`,borderRadius:14,padding:'14px 16px 12px'}}>
+              <div style={{textAlign:'center' as const,fontFamily:FG,fontSize:18,fontWeight:700,color:t.t1,marginBottom:10}}>Curva {c.cls}</div>
+              <Row label="Unidades Vendidas" value={String(c.units)}/>
+              <Row label="Produtos diferentes" value={String(c.count)}/>
+              <Row label="Faturamento" value={brl2(c.fat)}/>
+              <Row label="Lucro Bruto" value={c.hasCusto?`${brl2(c.lb)} (${pc(lbPct)})`:'—'} color={c.hasCusto?(c.lb>=0?t.grn:t.red):t.t3}/>
+              <Row label="Lucro Pós Ads" value={c.hasCusto?`${brl2(c.lp)} (${pc(lpPct)})`:'—'} color={c.hasCusto?(c.lp>=0?t.grn:t.red):t.t3}/>
+            </div>
+          )
+        })}
+      </div>
+      <Table head={[{label:'Produto',w:'34%'},{label:'Unid. vendidas',right:true},{label:'Fat. total',right:true},{label:'Lucro',right:true},{label:'Lucro pós Ads',right:true},{label:'MPA',right:true},{label:'Curva',right:true}]}>
+        {rows.map((r,i)=>(
+          <tr key={i}>
+            <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}}/>
+            <NumTd>{r.units}</NumTd>
+            <NumTd strong hide={hide}>{brl2(r.receita)}</NumTd>
+            <NumTd color={r.temCusto?(r.lucroBruto>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto?brl2(r.lucroBruto):'—'}</NumTd>
+            <NumTd color={r.temCusto?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto?brl2(r.lucroPos):'—'}</NumTd>
+            <PillTd>{r.temCusto?<Pill kind={r.mpa>15?'grn':r.mpa>0?'gold':'red'}>{pc(r.mpa)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
+            <PillTd><ClassBadge t={t} cls={r.cls}/></PillTd>
+          </tr>
+        ))}
+      </Table>
+      <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Lucro/MPA usam o custo (CMV) informado em Gerenciamento + comissão/FBA/ads rateados por faturamento.</div>
+    </>)
+  }
+  // Fallback mock (não conectado)
+  const d=mockD||[]
+  const groups=(['A','B','C'] as const).map(cls=>{const items=d.filter(p=>p.cls===cls);return {cls,count:items.length,rev:items.reduce((s,p)=>s+p.revenue,0),un:items.reduce((s,p)=>s+p.units,0),color:clsColor(t,cls)}})
   return(<>
     <Hint>Classe A = 80% do faturamento · B = 15% · C = resto. Foca estoque e ads nos produtos A.</Hint>
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:16}}>
       {groups.map(g=>(
         <div key={g.cls} style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${g.color}`,borderRadius:12,padding:'13px 15px'}}>
           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-            <span style={{width:24,height:24,borderRadius:7,background:g.color+'22',color:g.color,fontWeight:700,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:FG}}>{g.cls}</span>
-            <span style={{fontSize:12,color:t.t2}}>{g.count} produto{g.count!==1?'s':''} · {g.un} un</span>
+            <ClassBadge t={t} cls={g.cls}/><span style={{fontSize:12,color:t.t2}}>{g.count} produto{g.count!==1?'s':''} · {g.un} un</span>
           </div>
           <div style={{fontFamily:FG,fontWeight:600,fontSize:18,color:t.t1,filter:hide?'blur(7px)':'none'}}>{brl2(g.rev)}</div>
         </div>
       ))}
     </div>
-    <Table head={[{label:'Produto',w:'46%'},{label:'Receita',right:true},{label:'% total',right:true},{label:'Classe',right:true}]}>
-      {d.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl2(p.revenue)}</NumTd><NumTd>{pc(p.shareTotal)}</NumTd>
-        <PillTd><Pill kind={p.cls==='A'?'grn':p.cls==='B'?'gold':'red'}>{p.cls}</Pill></PillTd></tr>)}
-    </Table>
   </>)
 }
 function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean}){
@@ -895,7 +965,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         {/* Conteúdo */}
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected}/>}
         {tab==='vendas' && <Vendas m={realM||m} hide={hide}/>}
-        {tab==='abc'    && <CurvaABC d={realAbcData||abc} hide={hide}/>}
+        {tab==='abc'    && <CurvaABC realDre={realDre} costs={costs} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide}/>}
