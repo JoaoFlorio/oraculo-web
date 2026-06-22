@@ -54,6 +54,10 @@ function periodRange(p:string):{from:string;to:string}{
   if(p==='Mês passado') return {from:new Date(now.getFullYear(),now.getMonth()-1,1).toISOString(), to:new Date(now.getFullYear(),now.getMonth(),0,23,59,59).toISOString()}
   return {from:new Date(now.getTime()-30*86400000).toISOString(), to} // Últimos 30 dias
 }
+// Mapeia o filtro de período para a janela de ads cacheada no backend.
+function adsWindow(p:string):string{
+  return p==='Hoje'?'today':p==='Este mês'?'month':p==='Mês passado'?'lastmonth':'30d'
+}
 // Converte os produtos reais (com nome/foto) em ProductMetrics p/ as abas Vendas/Curva ABC.
 function realProductMetrics(realDre:any, costs:Record<string,number>):ProductMetrics[]{
   const prods=realDre?.produtos||[]
@@ -146,7 +150,7 @@ function KPI({label,value,delta,up,icon,color,hide}:{label:string;value:string;d
 }
 
 /* ── DRE Real (dados ao vivo da conta Amazon) ────────────────────────────── */
-function RealDRECard({data,hide}:{data:any;hide:boolean}){
+function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
   const t=useT()
   const L=data.linhas||{}
   const Row=({label,val,sign,strong,color}:{label:string;val:number;sign?:'-'|'=';strong?:boolean;color?:string})=>(
@@ -171,14 +175,14 @@ function RealDRECard({data,hide}:{data:any;hide:boolean}){
       {L.armazenagem>0 && <Row label="Armazenagem" val={L.armazenagem} sign="-" color={t.red}/>}
       <Row label="Assinatura" val={L.assinatura} sign="-" color={t.red}/>
       <Row label="Líq. do Marketplace" val={data.liqMarketplace} sign="=" strong color={t.grn}/>
-      <Row label="Ads (parcial)" val={L.ads} sign="-" color={t.red}/>
-      <div style={{fontSize:10.5,color:t.t3,marginTop:10}}>Ads completo virá da Advertising API · CMV e despesas você informa em Gerenciamento.</div>
+      <Row label={adsReal?.ready?'Ads (Advertising API)':'Ads (parcial)'} val={adsReal?.ready?(Number(adsReal.spend)||0):L.ads} sign="-" color={t.red}/>
+      <div style={{fontSize:10.5,color:t.t3,marginTop:10}}>{adsReal?.ready?'Ads real da Advertising API · CMV e despesas você informa em Gerenciamento.':'Ads completo virá da Advertising API · CMV e despesas você informa em Gerenciamento.'}</div>
     </div>
   )
 }
 
 /* ── Resumo ──────────────────────────────────────────────────────────────── */
-function Resumo({hide,realDre,cmv=0}:{hide:boolean;realDre?:any;cmv?:number}){
+function Resumo({hide,realDre,cmv=0,adsReal}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any}){
   const t=useT()
   const d=useMemo(()=>getFinanceData(),[])
   const s=useMemo(()=>summary(d),[d])
@@ -207,7 +211,9 @@ function Resumo({hide,realDre,cmv=0}:{hide:boolean;realDre?:any;cmv?:number}){
   // ── KPIs e rosca REAIS quando conectado ──
   const RK = realDre ? (()=>{
     const L=realDre.linhas||{}
-    const receita=L.receitaLiquida||0, liq=realDre.liqMarketplace||0, ads=L.ads||0
+    // Ads "cheio" da Advertising API quando disponível; senão o parcial da Finances.
+    const ads = adsReal?.ready ? (Number(adsReal.spend)||0) : (L.ads||0)
+    const receita=L.receitaLiquida||0, liq=realDre.liqMarketplace||0
     const vendas=realDre.vendas||0, unidades=realDre.unidades||0
     const ticket=vendas>0?receita/vendas:0, tacos=receita>0?ads/receita*100:0
     const lucroBruto=liq-cmv, lucroPosAds=lucroBruto-ads
@@ -241,7 +247,7 @@ function Resumo({hide,realDre,cmv=0}:{hide:boolean;realDre?:any;cmv?:number}){
   const shownKpis:any[] = RK?RK.kpis:kpis
   const shownComp:any[] = RK?RK.comp:comp
   return(<>
-    {realDre && <RealDRECard data={realDre} hide={hide}/>}
+    {realDre && <RealDRECard data={realDre} hide={hide} adsReal={adsReal}/>}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:18}}>
       {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
     </div>
@@ -330,13 +336,51 @@ function CurvaABC({d,hide}:{d:ReturnType<typeof abcCurve>;hide:boolean}){
     </Table>
   </>)
 }
-function Ads({m,hide}:{m:ProductMetrics[];hide:boolean}){
+function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean}){
+  const t=useT()
+  // Não conectou a conta de Ads ainda
+  if(adsConnected===false) return(
+    <div style={{background:t.card,border:`1px solid ${t.gold}`,borderRadius:14,padding:'22px 20px',textAlign:'center' as const}}>
+      <i className="ti ti-speakerphone" style={{fontSize:28,color:t.gold}} aria-hidden="true"/>
+      <div style={{fontSize:15,fontWeight:600,color:t.t1,marginTop:8}}>Conecte sua conta de Ads</div>
+      <div style={{fontSize:12.5,color:t.t2,margin:'5px 0 16px'}}>Gasto, ACoS e ROAS reais das suas campanhas Sponsored Products — direto da Amazon.</div>
+      <a href="/api/ads/connect" style={{background:t.gold,color:t.dark?'#1c1606':'#3a2a05',fontWeight:600,fontSize:12.5,padding:'10px 18px',borderRadius:9,textDecoration:'none'}}>Conectar Ads</a>
+    </div>
+  )
+  // Conectado mas o relatório ainda está sendo gerado no fundo
+  if(!adsReal?.ready) return(
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px 20px',textAlign:'center' as const,color:t.t2,fontSize:12.5}}>
+      <i className={`ti ti-${adsLoading?'loader-2':'clock'}`} style={{fontSize:24,color:t.gold,display:'block',marginBottom:8}} aria-hidden="true"/>
+      {adsLoading?'Gerando o relatório de ads na Amazon… na 1ª vez leva alguns minutos; depois fica instantâneo (atualiza no fundo).':'Relatório de ads indisponível no momento. Tente atualizar em instantes.'}
+    </div>
+  )
+  const camps:any[]=adsReal.byCampaign||[]
+  const tot=[
+    {label:'Gasto',value:brl(adsReal.spend),icon:'ti-speakerphone',color:t.gold},
+    {label:'Vendas por Ads',value:brl(adsReal.sales),icon:'ti-cash',color:t.grn},
+    {label:'ACoS',value:pc(adsReal.acos),icon:'ti-target',color:adsReal.acos<20?t.grn:adsReal.acos<30?t.gold:t.red},
+    {label:'ROAS',value:(Number(adsReal.roas)||0).toFixed(2)+'x',icon:'ti-rotate-clockwise',color:t.grn},
+  ]
+  const upd=adsReal.updatedAt?new Date(adsReal.updatedAt):null
   return(<>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:16}}>
+      {tot.map((k,i)=><KPI key={i} {...k} hide={hide}/>)}
+    </div>
     <Hint>ACoS &lt;20% ótimo · 20–30% atenção · &gt;30% prejuízo (revisar lance).</Hint>
     <Table head={[{label:'Campanha',w:'42%'},{label:'Gasto',right:true},{label:'Vendas',right:true},{label:'ROAS',right:true},{label:'ACoS',right:true}]}>
-      {m.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl(p.adsSpend)}</NumTd><NumTd hide={hide}>{brl(p.adsSales)}</NumTd><NumTd>{p.roas.toFixed(1)}x</NumTd>
-        <PillTd><Pill kind={p.acos<20?'grn':p.acos<30?'gold':'red'}>{pc(p.acos)}</Pill></PillTd></tr>)}
+      {camps.map((c,i)=>{
+        const acos=c.sales>0?c.spend/c.sales*100:0, roas=c.spend>0?c.sales/c.spend:0
+        return(<tr key={i}>
+          <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,fontSize:13,color:t.t1,fontWeight:500,whiteSpace:'nowrap' as const,overflow:'hidden',textOverflow:'ellipsis'}}>{c.campaign}</td>
+          <NumTd hide={hide}>{brl(c.spend)}</NumTd><NumTd hide={hide}>{brl(c.sales)}</NumTd>
+          <NumTd>{c.sales>0?roas.toFixed(1)+'x':'—'}</NumTd>
+          <PillTd><Pill kind={c.sales<=0?'red':acos<20?'grn':acos<30?'gold':'red'}>{c.sales>0?pc(acos):'—'}</Pill></PillTd>
+        </tr>)
+      })}
     </Table>
+    {upd && <div style={{fontSize:10.5,color:t.t3,marginTop:10,display:'flex',gap:6,alignItems:'center'}}>
+      <i className="ti ti-refresh" style={{fontSize:12}} aria-hidden="true"/>Atualizado {upd.toLocaleString('pt-BR')} · dado real da Advertising API{adsReal.stale?' · revalidando no fundo':''}
+    </div>}
   </>)
 }
 function Analitico({m,hide}:{m:ProductMetrics[];hide:boolean}){
@@ -458,6 +502,32 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
     fetch(`/api/amazon/finance?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
     return ()=>{ alive=false }
   },[amazonConnected,period])
+  // ── Ads (Advertising API) — cacheado no backend; lê na hora e, se estiver gerando, faz polling ──
+  const [adsConnected,setAdsConnected]=useState<boolean|null>(null)
+  const [adsData,setAdsData]=useState<any>(null)      // {spend,sales,acos,roas,byCampaign,stale,updatedAt}
+  const [adsLoading,setAdsLoading]=useState(false)
+  useEffect(()=>{
+    let alive=true
+    fetch('/api/ads/status').then(r=>r.json()).then(d=>{ if(alive) setAdsConnected(!!d.connected) }).catch(()=>{ if(alive) setAdsConnected(false) })
+    return ()=>{ alive=false }
+  },[])
+  useEffect(()=>{
+    if(!adsConnected) return
+    let alive=true, tries=0
+    const win=adsWindow(period)
+    setAdsData(null); setAdsLoading(true)
+    const tick=()=>{
+      fetch(`/api/ads/report?window=${win}`).then(r=>r.json()).then(d=>{
+        if(!alive) return
+        if(d && d.ready){ setAdsData(d); setAdsLoading(false) }
+        else if(d && d.generating && tries++<18){ setTimeout(tick,10000) }  // gera no fundo: tenta por ~3min
+        else setAdsLoading(false)
+      }).catch(()=>{ if(alive) setAdsLoading(false) })
+    }
+    tick()
+    return ()=>{ alive=false }
+  },[adsConnected,period])
+  const adsSpend = adsData?.ready ? Number(adsData.spend)||0 : null
   // Custo (CMV) por SKU — informado pelo seller, salvo no metadata do usuário
   const [costs,setCosts]=useState<Record<string,number>>({})
   const saveTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
@@ -543,6 +613,16 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
               <i className="ti ti-circle-check" style={{fontSize:14}} aria-hidden="true"/>Conta Amazon conectada
             </span>
             <button onClick={()=>{ fetch('/api/amazon/disconnect',{method:'POST'}).then(()=>location.reload()) }} style={{background:'none',border:'none',color:t.t3,fontSize:11,cursor:'pointer',fontFamily:'inherit',textDecoration:'underline'}}>desconectar</button>
+            {adsConnected===true && (
+              <span style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:11.5,fontWeight:600,color:t.grn,background:t.pillGrn[0],padding:'5px 11px',borderRadius:20}}>
+                <i className="ti ti-speakerphone" style={{fontSize:13}} aria-hidden="true"/>Ads conectado
+              </span>
+            )}
+            {adsConnected===false && (
+              <a href="/api/ads/connect" style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:11.5,fontWeight:600,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,padding:'6px 12px',borderRadius:20,textDecoration:'none'}}>
+                <i className="ti ti-speakerphone" style={{fontSize:13}} aria-hidden="true"/>Conectar Ads
+              </a>
+            )}
           </div>
         )}
 
@@ -561,10 +641,10 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         </div>
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData}/>}
         {tab==='vendas' && <Vendas m={realM||m} hide={hide}/>}
         {tab==='abc'    && <CurvaABC d={realAbcData||abc} hide={hide}/>}
-        {tab==='ads'    && <Ads m={m} hide={hide}/>}
+        {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
         {tab==='analit' && <Analitico m={m} hide={hide}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide}/>}
         {tab==='fulfil' && <Fulfillment m={m}/>}
