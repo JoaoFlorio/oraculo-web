@@ -627,7 +627,9 @@ function Fulfillment({inv,realDre,connected,mockM}:{inv?:any;realDre?:any;connec
     const days = from&&to ? Math.max(1,Math.round((Date.parse(to)-Date.parse(from))/86400000)) : 30
     return(<>
       <Hint>Estoque FBA real · cobertura estimada pela velocidade de venda · alerta de ruptura e excesso.</Hint>
-      {itens.length===0 ? (
+      {inv.error ? (
+        <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Estoque FBA temporariamente indisponível (verificando permissão da API).</div>
+      ) : itens.length===0 ? (
         <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhum item em estoque FBA.</div>
       ) : (
         <Table head={[{label:'Produto',w:'40%'},{label:'FBA disp.',right:true},{label:'A caminho',right:true},{label:'Reservado',right:true},{label:'Cobertura',right:true},{label:'Status',right:true}]}>
@@ -741,7 +743,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
   useEffect(()=>{
     if(!amazonConnected) return
     let alive=true
-    fetch('/api/amazon/inventory').then(r=>r.json()).then(d=>{ if(alive&&d&&Array.isArray(d.inventario)) setInventory(d) }).catch(()=>{})
+    fetch('/api/amazon/inventory').then(r=>r.json()).then(d=>{ if(!alive) return; setInventory(Array.isArray(d?.inventario)?d:{inventario:[],error:d?.error||'indisponível'}) }).catch(()=>{ if(alive) setInventory({inventario:[],error:'indisponível'}) })
     return ()=>{ alive=false }
   },[amazonConnected])
   // Série fixa de 30 dias para o gráfico (não muda com o filtro de período — igual ao Gestor)
