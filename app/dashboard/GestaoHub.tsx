@@ -679,7 +679,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
       fetch(`/api/ads/report?window=${win}`).then(r=>r.json()).then(d=>{
         if(!alive) return
         if(d && d.ready){ setAdsData(d); setAdsLoading(false) }
-        else if(d && d.generating && tries++<18){ setTimeout(tick,10000) }  // gera no fundo: tenta por ~3min
+        else if(d && d.generating && tries++<70){ setTimeout(tick,12000) }  // 1ª geração leva ~10min: insiste ~14min
         else setAdsLoading(false)
       }).catch(()=>{ if(alive) setAdsLoading(false) })
     }
