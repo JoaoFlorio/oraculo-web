@@ -953,7 +953,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
           {TABS.map(tb=>{
             const on=tab===tb.id
             return(
-              <button key={tb.id} onClick={()=>setTab(tb.id)}
+              <button key={tb.id} onClick={()=>{ setTab(tb.id); if(tb.id==='abc'&&(period==='hoje'||period==='ontem')){ setPeriod('30d'); setCustomRange(null) } }}
                 style={{display:'flex',alignItems:'center',gap:6,fontSize:12.5,whiteSpace:'nowrap' as const,padding:'7px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',border:'1px solid transparent',
                   background:on?t.gold:'transparent',color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2,fontWeight:on?600:500}}>
                 <i className={`ti ${tb.icon}`} style={{fontSize:14}} aria-hidden="true"/>{tb.label}
