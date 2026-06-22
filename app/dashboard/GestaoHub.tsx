@@ -182,7 +182,18 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
 }
 
 /* ── Resumo ──────────────────────────────────────────────────────────────── */
-function Resumo({hide,realDre,cmv=0,adsReal}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any}){
+// Preenche a série diária dia-a-dia no período (hoje como último), zero onde não houve venda.
+function fmtDM(ds:string){const p=ds.split('-');return `${p[2]}/${p[1]}`}
+function nextDay(ds:string){const dt=new Date(ds+'T00:00:00Z');dt.setUTCDate(dt.getUTCDate()+1);return dt.toISOString().slice(0,10)}
+function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
+  const map:Record<string,number>={}; for(const d of daily) map[d.date]=d.receita
+  const s=(fromISO||'').slice(0,10), e=(toISO||'').slice(0,10)
+  if(!s||!e) return (daily||[]).map((d:any)=>({label:fmtDM(d.date),date:d.date,receita:d.receita}))
+  const out:{label:string;date:string;receita:number}[]=[]; let cur=s, guard=0
+  while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
+  return out
+}
+function Resumo({hide,realDre,cmv=0,adsReal,costs={}}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any;costs?:Record<string,number>}){
   const t=useT()
   const d=useMemo(()=>getFinanceData(),[])
   const s=useMemo(()=>summary(d),[d])
@@ -246,31 +257,46 @@ function Resumo({hide,realDre,cmv=0,adsReal}:{hide:boolean;realDre?:any;cmv?:num
   })() : null
   const shownKpis:any[] = RK?RK.kpis:kpis
   const shownComp:any[] = RK?RK.comp:comp
+  // Série diária real (por data do pedido) quando conectado; senão o mock.
+  const chartData:any[] = realDre ? fillDaily(realDre.daily, realDre.period?.from, realDre.period?.to) : d.daily
+  const chartXKey = realDre ? 'label' : 'day'
+  // Top 15 produtos vendidos no período (real) com métricas por produto.
+  const L = realDre?.linhas||{}
+  const fatTot = realDre ? (L.receitaBruta||0) : 0
+  const feesTot = (L.comissao||0)+(L.fba||0)+(L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.outrasTaxas||0)
+  const adsTot = adsReal?.ready ? (Number(adsReal.spend)||0) : 0
+  const top15 = realDre?.produtos ? (realDre.produtos as any[]).slice(0,15).map(p=>{
+    const receita=p.receita||0, units=p.units||0
+    const preco=units>0?receita/units:0
+    const custoU=costs[p.sku]||0, cmvP=custoU*units
+    const repres=fatTot>0?receita/fatTot*100:0
+    const lucro=receita-cmvP-(fatTot>0?(feesTot+adsTot)*(receita/fatTot):0)
+    const margem=receita>0?lucro/receita*100:0
+    return {p,receita,units,preco,custoU,cmvP,repres,lucro,margem}
+  }) : []
   return(<>
-    {realDre && <RealDRECard data={realDre} hide={hide} adsReal={adsReal}/>}
+    {/* 1) KPIs primeiro (estilo Gestor) */}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:18}}>
       {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
     </div>
-    <div style={{display:'grid',gridTemplateColumns:'1.6fr 1fr',gap:14}}>
+    {/* 2) Gráfico (por data) + composição */}
+    <div style={{display:'grid',gridTemplateColumns:'1.6fr 1fr',gap:14,marginBottom:18}}>
       <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'14px 16px'}}>
         <div style={{display:'flex',justifyContent:'space-between',marginBottom:10}}>
           <span style={{fontSize:13,fontWeight:600,color:t.t1}}>Resumo de Receitas</span>
-          <span style={{fontSize:10.5,color:t.t3}}>{d.period}</span>
+          <span style={{fontSize:10.5,color:t.t3}}>{realDre?'por data · dados reais':d.period}</span>
         </div>
-        <div style={{height:190}}>
+        <div style={{height:200}}>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={d.daily} margin={{top:4,right:4,left:-18,bottom:0}}>
+            <AreaChart data={chartData} margin={{top:4,right:6,left:-14,bottom:0}}>
               <defs>
-                <linearGradient id="gR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={t.gold} stopOpacity={0.3}/><stop offset="100%" stopColor={t.gold} stopOpacity={0}/></linearGradient>
-                <linearGradient id="gL" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={t.grn} stopOpacity={0.28}/><stop offset="100%" stopColor={t.grn} stopOpacity={0}/></linearGradient>
+                <linearGradient id="gR" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={t.gold} stopOpacity={0.32}/><stop offset="100%" stopColor={t.gold} stopOpacity={0}/></linearGradient>
               </defs>
               <CartesianGrid stroke={t.grid} vertical={false}/>
-              <XAxis dataKey="day" tick={{fill:t.t3,fontSize:10}} tickLine={false} axisLine={false} interval={5}/>
-              <YAxis tick={{fill:t.t3,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={(v:number)=>'R$'+Math.round(v/1000)+'k'}/>
-              <RTooltip contentStyle={{background:t.tipBg,border:`1px solid ${t.line2}`,borderRadius:10,fontSize:12,color:t.t1}} labelStyle={{color:t.t3}} formatter={(v:any)=>brl(Number(v))} labelFormatter={(l)=>'Dia '+l}/>
-              <Area type="monotone" dataKey="receita" name="Receita" stroke={t.gold} strokeWidth={2.2} fill="url(#gR)"/>
-              <Area type="monotone" dataKey="lucro" name="Lucro" stroke={t.grn} strokeWidth={2.2} fill="url(#gL)"/>
-              <Area type="monotone" dataKey="ads" name="Ads" stroke={t.vio} strokeWidth={2} fill="none"/>
+              <XAxis dataKey={chartXKey} tick={{fill:t.t3,fontSize:10}} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={24}/>
+              <YAxis tick={{fill:t.t3,fontSize:10}} tickLine={false} axisLine={false} tickFormatter={(v:number)=>v>=1000?'R$'+Math.round(v/1000)+'k':'R$'+Math.round(v)}/>
+              <RTooltip contentStyle={{background:t.tipBg,border:`1px solid ${t.line2}`,borderRadius:10,fontSize:12,color:t.t1}} labelStyle={{color:t.t3}} formatter={(v:any)=>[brl(Number(v)),'Receita']} labelFormatter={(l)=>realDre?`Dia ${l}`:'Dia '+l}/>
+              <Area type="monotone" dataKey="receita" name="Receita" stroke={t.gold} strokeWidth={2.2} fill="url(#gR)" dot={chartData.length<=14?{r:2.5,fill:t.gold}:false}/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -297,6 +323,31 @@ function Resumo({hide,realDre,cmv=0,adsReal}:{hide:boolean;realDre?:any;cmv?:num
         </div>
       </div>
     </div>
+    {/* 3) Top 15 produtos vendidos */}
+    {realDre && (
+      <div>
+        <div style={{fontSize:14,fontWeight:600,color:t.t1,marginBottom:10}}>Top 15 produtos vendidos</div>
+        {top15.length===0 ? (
+          <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5}}>Nenhuma venda no período selecionado.</div>
+        ) : (
+          <Table head={[{label:'Produto',w:'34%'},{label:'Preço méd.',right:true},{label:'Custo un.',right:true},{label:'Unid.',right:true},{label:'Faturado',right:true},{label:'Repres.',right:true},{label:'Lucro',right:true},{label:'Margem',right:true}]}>
+            {top15.map((r,i)=>(
+              <tr key={i}>
+                <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}}/>
+                <NumTd hide={hide}>{brl(r.preco)}</NumTd>
+                <NumTd color={r.custoU>0?t.t1:t.t3} hide={hide}>{r.custoU>0?brl(r.custoU):'—'}</NumTd>
+                <NumTd>{r.units}</NumTd>
+                <NumTd strong hide={hide}>{brl(r.receita)}</NumTd>
+                <NumTd color={t.t2}>{r.repres.toFixed(1)}%</NumTd>
+                <NumTd color={r.custoU>0?(r.lucro>=0?t.grn:t.red):t.t3} hide={hide}>{r.custoU>0?brl(r.lucro):'—'}</NumTd>
+                <PillTd>{r.custoU>0?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:11,color:t.t3}}>informe o custo</span>}</PillTd>
+              </tr>
+            ))}
+          </Table>
+        )}
+        <div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Lucro e margem usam o custo (CMV) informado na aba Gerenciamento + comissão/FBA/ads rateados por faturamento.</div>
+      </div>
+    )}
   </>)
 }
 
@@ -641,7 +692,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         </div>
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs}/>}
         {tab==='vendas' && <Vendas m={realM||m} hide={hide}/>}
         {tab==='abc'    && <CurvaABC d={realAbcData||abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
