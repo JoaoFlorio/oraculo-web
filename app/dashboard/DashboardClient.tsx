@@ -1191,9 +1191,13 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
 }
 
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
-export default function DashboardClient({user}:{user:any}){
+export default function DashboardClient({user,gestaoEnabled=false}:{user:any;gestaoEnabled?:boolean}){
   const router = useRouter()
   const [nav,      setNav]      = useState('bestsellers')
+  // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
+  const navGroups = NAV_GROUPS
+    .map(g=>({...g, ids: g.ids.filter(id=> id!=='financeiro' || gestaoEnabled)}))
+    .filter(g=>g.ids.length>0)
   const [cat,      setCat]      = useState('all')
   const [prods,    setProds]    = useState<any[]>([])
   const [loading,  setLoading]  = useState(false)
@@ -1341,7 +1345,7 @@ export default function DashboardClient({user}:{user:any}){
 
           {/* Nav */}
           <nav style={{flex:1,overflowY:'auto',overflowX:'hidden',padding:'8px',display:'flex',flexDirection:'column',gap:2}}>
-            {NAV_GROUPS.map(g=>(
+            {navGroups.map(g=>(
               <React.Fragment key={g.group}>
                 {sideOpen&&<Lbl style={{padding:'12px 8px 6px',marginBottom:2}}>{g.group}</Lbl>}
                 {g.ids.map(id=>{
@@ -1639,8 +1643,8 @@ export default function DashboardClient({user}:{user:any}){
               </div>
             )}
 
-            {/* Gestão (hub financeiro) */}
-            {nav==='financeiro'&&(
+            {/* Gestão (hub financeiro) — gated p/ allowlist enquanto SP-API em Draft */}
+            {nav==='financeiro'&&gestaoEnabled&&(
               <div style={{padding:'0 4px'}}>
                 <GestaoHub promoActive={promo.active} promoType={promo.type}/>
               </div>
