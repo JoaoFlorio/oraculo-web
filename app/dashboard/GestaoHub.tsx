@@ -320,15 +320,15 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
     // Ads "cheio" da Advertising API quando disponível; senão o parcial da Finances.
     const ads = adsReal?.ready ? (Number(adsReal.spend)||0) : (L.ads||0)
     const adsPending = adsConnected && !(adsReal?.ready)   // ads conectado mas ainda gerando relatório
-    const receita=L.receitaLiquida||0, liq=realDre.liqMarketplace||0
+    const fat=L.receitaBruta||0, liq=realDre.liqMarketplace||0   // Faturamento = BRUTO (devoluções são linha à parte)
     const vendas=realDre.vendas||0, unidades=realDre.unidades||0
-    const ticket=vendas>0?receita/vendas:0, tacos=receita>0?ads/receita*100:0
+    const ticket=vendas>0?fat/vendas:0, tacos=fat>0?ads/fat*100:0
     const lucroBruto=liq-cmv, lucroPosAds=lucroBruto-ads
-    const margem=receita>0?lucroBruto/receita*100:0, roi=cmv>0?lucroBruto/cmv*100:0
-    const mpa=receita>0?lucroPosAds/receita*100:0, cm=cmv>0, dash='—'
+    const margem=fat>0?lucroBruto/fat*100:0, roi=cmv>0?lucroBruto/cmv*100:0
+    const mpa=fat>0?lucroPosAds/fat*100:0, cm=cmv>0, dash='—'
     return {
       kpis:[
-        {label:'Faturamento',value:brl2(receita),icon:'ti-cash',color:t.vio},
+        {label:'Faturamento',value:brl2(fat),icon:'ti-cash',color:t.vio},
         {label:'Líq. do Marketplace',value:brl2(liq),icon:'ti-building-bank',color:t.blue},
         {label:'Lucro Bruto',value:cm?brl2(lucroBruto):dash,icon:'ti-trending-up',color:t.grn},
         {label:'Margem',value:cm?pc(margem):dash,icon:'ti-percentage',color:t.grn},
