@@ -351,21 +351,24 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
       ].filter(x=>x.value>0),
     }
   })() : null
-  // Conectado mas ainda carregando o real → mostra esqueleto (NUNCA o mock, p/ não confundir).
-  const loadingKpis = [
+  // Cards-base (labels + cor de acento). Viram esqueleto "…" (carregando) ou "—" (não conectado).
+  const KPI_BASE = [
     {label:'Faturamento',color:t.vio},{label:'Líq. do Marketplace',color:t.blue},{label:'Lucro Bruto',color:t.grn},{label:'Margem',color:t.grn},
     {label:'Número de Vendas',color:t.blue},{label:'Número de Unidades Vendidas',color:t.blue},{label:'Ticket Médio',color:t.grn},{label:'Retorno Sobre Investimento',color:t.grn},
     {label:'Valor em Ads',color:t.grn},{label:'TACOS',color:t.grn},{label:'Lucro bruto pós ADS',color:t.grn},{label:'MPA',color:t.grn},
-  ].map(k=>({...k,value:'…'}))
-  const shownKpis:any[] = RK ? RK.kpis : (connected ? loadingKpis : kpis)
+  ]
+  const loadingKpis = KPI_BASE.map(k=>({...k,value:'…'}))
+  // NÃO conectado → tudo zerado ("—"), NUNCA o mock (evita o cliente achar que é a conta dele).
+  const emptyKpis = KPI_BASE.map(k=>({...k,value:'—'}))
+  const shownKpis:any[] = RK ? RK.kpis : (connected ? loadingKpis : emptyKpis)
   // Gráfico: SEMPRE 30 dias por data (não muda com o filtro de período) — igual ao Gestor.
   const cSrc = chart30 || realDre
   const realChart = !!cSrc?.daily
   const netRatio = cSrc && (cSrc.linhas?.receitaBruta||0)>0 ? (cSrc.liqMarketplace||0)/(cSrc.linhas.receitaBruta) : 0
   const chartData:any[] = realChart
     ? fillDaily(cSrc.daily,cSrc.period?.from,cSrc.period?.to).map((x:any)=>({...x,lucro:Math.round(x.receita*netRatio*100)/100}))
-    : d.daily
-  const chartXKey = realChart ? 'label' : 'day'
+    : []   // não conectado / carregando → gráfico vazio (sem mock)
+  const chartXKey = 'label'
   // Top 15 produtos vendidos no período (real) com métricas por produto (estilo Gestor).
   const L = realDre?.linhas||{}
   const fatTot = realDre ? (L.receitaBruta||0) : 0
@@ -900,7 +903,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
           <div>
             <h2 style={{fontFamily:FG,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>Gestão</h2>
-            <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':amazonConnected?'carregando dados reais…':'dados de exemplo'}</span></p>
+            <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':amazonConnected?'carregando dados reais…':'conecte sua conta para ver seus dados'}</span></p>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             {/* Seletor de paleta */}
