@@ -228,6 +228,18 @@ function Hint({children}:{children:React.ReactNode}){
     <i className="ti ti-bulb" style={{fontSize:15,color:t.gold}} aria-hidden="true"/>{children}
   </div>
 }
+// Estado vazio quando o cliente ainda NÃO conectou a conta (evita mostrar mock como se fosse dele).
+function ConnectEmpty({texto}:{texto?:string}){
+  const t=useT()
+  return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'30px 20px',textAlign:'center' as const,color:t.t3,fontSize:13,fontFamily:FG}}>
+    <i className="ti ti-plug" style={{fontSize:26,color:t.gold,display:'block',marginBottom:10}} aria-hidden="true"/>
+    {texto||'Conecte sua conta Amazon (no topo da Gestão) para ver seus dados reais aqui.'}
+  </div>
+}
+function LoadingBox(){
+  const t=useT()
+  return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
+}
 
 /* ── KPI ─────────────────────────────────────────────────────────────────── */
 // Card de KPI no estilo Gestor Seller: centralizado, valor grande (Poppins),
@@ -453,12 +465,14 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
 }
 
 /* ── Abas tabulares ─────────────────────────────────────────────────────── */
-function Vendas({m,hide}:{m:ProductMetrics[];hide:boolean}){
-  const t=[...m].sort((a,b)=>b.revenue-a.revenue)
+function Vendas({realM,mockM,hide,connected}:{realM?:ProductMetrics[]|null;mockM?:ProductMetrics[];hide:boolean;connected?:boolean|null}){
+  if(connected===false) return <ConnectEmpty/>
+  if(connected && !realM) return <LoadingBox/>
+  const rows=[...(realM||mockM||[])].sort((a,b)=>b.revenue-a.revenue)
   return(<>
     <Hint>Ranking por receita · ordena os produtos por faturamento e mostra a margem real.</Hint>
     <Table head={[{label:'Produto',w:'46%'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true}]}>
-      {t.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
+      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
     </Table>
   </>)
 }
@@ -541,22 +555,9 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
       <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Lucro/MPA usam o custo (CMV) informado em Gerenciamento + comissão/FBA/ads rateados por faturamento.</div>
     </>)
   }
-  // Fallback mock (não conectado)
-  const d=mockD||[]
-  const groups=(['A','B','C'] as const).map(cls=>{const items=d.filter(p=>p.cls===cls);return {cls,count:items.length,rev:items.reduce((s,p)=>s+p.revenue,0),un:items.reduce((s,p)=>s+p.units,0),color:clsColor(t,cls)}})
-  return(<>
-    <Hint>Classe A = 80% do faturamento · B = 15% · C = resto. Foca estoque e ads nos produtos A.</Hint>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:16}}>
-      {groups.map(g=>(
-        <div key={g.cls} style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${g.color}`,borderRadius:12,padding:'13px 15px'}}>
-          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-            <ClassBadge t={t} cls={g.cls}/><span style={{fontSize:12,color:t.t2}}>{g.count} produto{g.count!==1?'s':''} · {g.un} un</span>
-          </div>
-          <div style={{fontFamily:FG,fontWeight:600,fontSize:18,color:t.t1,filter:hide?'blur(7px)':'none'}}>{brl2(g.rev)}</div>
-        </div>
-      ))}
-    </div>
-  </>)
+  // Não conectado → vazio (sem mock). (mockD ignorado de propósito.)
+  void mockD
+  return <ConnectEmpty/>
 }
 function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean}){
   const t=useT()
@@ -633,26 +634,15 @@ function Analitico({realDre,hide,connected,mockM}:{realDre?:any;hide:boolean;con
       )}
     </>)
   }
-  const rows=[...(mockM||[])].sort((a,b)=>b.refundUnits-a.refundUnits)
-  return(<>
-    <Hint>Reembolsos por produto · acha o que vende mas dá prejuízo por devolução/CMV.</Hint>
-    <Table head={[{label:'Produto',w:'46%'},{label:'Devol.',right:true},{label:'R$ perdido',right:true},{label:'Margem',right:true}]}>
-      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.refundUnits} un</NumTd><NumTd color={t.red} hide={hide}>{brl(p.refundValue)}</NumTd>
-        <PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
-    </Table>
-  </>)
+  void mockM
+  return <ConnectEmpty/>   // não conectado → vazio (sem mock)
 }
-function Gerenciamento({realDre,costs,onCost,mockM,hide}:{realDre?:any;costs:Record<string,number>;onCost:(sku:string,v:number)=>void;mockM:ProductMetrics[];hide:boolean}){
+function Gerenciamento({realDre,costs,onCost,mockM,hide,connected}:{realDre?:any;costs:Record<string,number>;onCost:(sku:string,v:number)=>void;mockM:ProductMetrics[];hide:boolean;connected?:boolean|null}){
   const t=useT()
-  if(!realDre?.produtos?.length){
-    return(<>
-      <Hint>Conecte sua conta Amazon pra informar o custo (CMV) dos produtos vendidos — é o que falta pro lucro real.</Hint>
-      <Table head={[{label:'Produto',w:'48%'},{label:'Custo un.',right:true},{label:'Preço',right:true},{label:'Markup',right:true}]}>
-        {mockM.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd hide={hide}>{brl2(p.unitCost)}</NumTd><NumTd hide={hide}>{brl2(p.price)}</NumTd>
-          <PillTd><Pill kind="gold">{(p.price/p.unitCost).toFixed(1)}x</Pill></PillTd></tr>)}
-      </Table>
-    </>)
-  }
+  void mockM
+  if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon para informar o custo (CMV) dos seus produtos."/>
+  if(!realDre) return <LoadingBox/>
+  if(!realDre.produtos?.length) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhum produto vendido no período selecionado.</div>
   const prods=realDre.produtos as any[]
   const cmvTotal=prods.reduce((sum,p)=>sum+p.units*(costs[p.sku]||0),0)
   const inp:React.CSSProperties={width:84,background:t.dark?'rgba(255,255,255,0.05)':'#FFFFFF',border:`1px solid ${t.line2}`,borderRadius:7,color:t.t1,fontSize:12.5,fontWeight:600,padding:'6px 8px',fontFamily:'inherit',outline:'none',textAlign:'right'}
@@ -724,16 +714,8 @@ function Fulfillment({inv,realDre,connected,mockM}:{inv?:any;realDre?:any;connec
       )}
     </>)
   }
-  return(<>
-    <Hint>Estoque FBA + dias de cobertura · alerta de ruptura e excesso (armazenagem cara).</Hint>
-    <Table head={[{label:'Produto',w:'48%'},{label:'FBA',right:true},{label:'Cobertura',right:true},{label:'Status',right:true}]}>
-      {(mockM||[]).map(p=>{
-        const k = p.coverageDays<10?'red':p.coverageDays>120?'gold':'grn'
-        const lbl = p.coverageDays<10?'Ruptura':p.coverageDays>120?'Excesso':'Saudável'
-        return <tr key={p.id}><ProdCell p={p}/><NumTd>{p.stockFBA}</NumTd><NumTd>{p.coverageDays} dias</NumTd><PillTd><Pill kind={k}>{lbl}</Pill></PillTd></tr>
-      })}
-    </Table>
-  </>)
+  void mockM
+  return <ConnectEmpty/>   // não conectado → vazio (sem mock)
 }
 function toCSV(headers:string[],rows:(string|number)[][]):string{
   const esc=(v:any)=>{const s=String(v??'');return /[",;\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
@@ -975,11 +957,11 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
 
         {/* Conteúdo */}
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected}/>}
-        {tab==='vendas' && <Vendas m={realM||m} hide={hide}/>}
+        {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={costs} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m}/>}
-        {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide}/>}
+        {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide} connected={amazonConnected}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m}/>}
         {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={costs}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
