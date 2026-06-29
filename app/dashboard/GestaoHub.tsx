@@ -781,6 +781,22 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
   const [period,setPeriod]=useState('hoje')
   const [customRange,setCustomRange]=useState<{from:Date;to:Date}|null>(null)
   const range=useMemo(()=>computeRange(period,customRange),[period,customRange])
+  // Curva ABC abre em 30 dias (ABC de 1 dia não faz sentido), mas isso NÃO deve
+  // vazar para as outras abas: guardamos o período anterior e restauramos ao sair.
+  const prePeriodRef=useRef<{period:string;custom:{from:Date;to:Date}|null}|null>(null)
+  function goTab(id:string){
+    const enteringAbc = id==='abc' && tab!=='abc'
+    const leavingAbc  = tab==='abc' && id!=='abc'
+    if(enteringAbc){
+      prePeriodRef.current={period,custom:customRange}
+      if(period==='hoje'||period==='ontem'){ setPeriod('30d'); setCustomRange(null) }
+    } else if(leavingAbc && prePeriodRef.current){
+      setPeriod(prePeriodRef.current.period)
+      setCustomRange(prePeriodRef.current.custom)
+      prePeriodRef.current=null
+    }
+    setTab(id)
+  }
   useEffect(()=>{
     let alive=true
     fetch('/api/amazon/status').then(r=>r.json()).then(d=>{ if(alive) setAmazonConnected(!!d.connected) }).catch(()=>{ if(alive) setAmazonConnected(false) })
@@ -933,7 +949,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
           {TABS.map(tb=>{
             const on=tab===tb.id
             return(
-              <button key={tb.id} onClick={()=>{ setTab(tb.id); if(tb.id==='abc'&&(period==='hoje'||period==='ontem')){ setPeriod('30d'); setCustomRange(null) } }}
+              <button key={tb.id} onClick={()=>goTab(tb.id)}
                 style={{display:'flex',alignItems:'center',gap:6,fontSize:12.5,whiteSpace:'nowrap' as const,padding:'7px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',border:'1px solid transparent',
                   background:on?t.gold:'transparent',color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2,fontWeight:on?600:500}}>
                 <i className={`ti ${tb.icon}`} style={{fontSize:14}} aria-hidden="true"/>{tb.label}
