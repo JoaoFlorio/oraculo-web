@@ -49,6 +49,21 @@ export async function verifyToken(token: string) {
   }
 }
 
+// Folga após o vencimento (evita travar exatamente na hora da renovação recorrente).
+const GRACE_MS = 2 * 24 * 60 * 60 * 1000
+
+type AccessUser = { active?: boolean; plan?: string; expiresAt?: Date | null }
+// Regra de acesso do Oráculo: NÃO existe plano grátis. Sem pagamento = sem acesso.
+// Retorna o motivo da negação, ou null se o acesso está liberado.
+export function accessDenied(user: AccessUser | null): 'notfound' | 'inactive' | 'free' | 'expired' | null {
+  if (!user) return 'notfound'
+  if (!user.active) return 'inactive'
+  if (user.plan === 'free' || !user.plan) return 'free'           // sem plano pago = bloqueado
+  if (user.plan === 'lifetime') return null                       // vitalício nunca expira
+  if (user.expiresAt && new Date(user.expiresAt).getTime() + GRACE_MS < Date.now()) return 'expired'
+  return null
+}
+
 export async function getSession() {
   const cookieStore = await cookies()
   const token = cookieStore.get(COOKIE)?.value
@@ -65,7 +80,7 @@ export async function getSession() {
     where: { id: payload.userId },
     select: { id: true, name: true, email: true, plan: true, active: true, expiresAt: true },
   })
-  return user?.active ? user : null
+  return user && !accessDenied(user) ? user : null
 }
 
 export async function invalidateToken(token: string) {

@@ -134,10 +134,11 @@ export async function POST(req: NextRequest) {
   const exists     = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
 
   if (exists) {
-    // Atualiza plano do usuário existente
+    // Atualiza plano do usuário existente. Reativa a conta (active=true): uma
+    // compra/renovação sempre restaura o acesso de quem estava bloqueado/expirado.
     const updated = await prisma.user.update({
       where: { id: exists.id },
-      data:  { plan: targetPlan, expiresAt: expiry },
+      data:  { plan: targetPlan, expiresAt: expiry, active: true },
     })
     // Gera licença só se não vier uma pronta (skipLicense = chamada via webhook)
     const licKey = skipLicense ? (providedKey || null) : await createBackendLicense(email, targetPlan)

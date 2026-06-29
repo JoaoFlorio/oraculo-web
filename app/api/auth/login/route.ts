@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
-import { createToken, COOKIE } from '@/lib/auth'
+import { createToken, COOKIE, accessDenied } from '@/lib/auth'
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,8 +19,13 @@ export async function POST(req: NextRequest) {
     if (!valid)
       return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 })
 
-    if (!user.active)
+    const denied = accessDenied(user)
+    if (denied === 'inactive')
       return NextResponse.json({ error: 'Conta inativa. Entre em contato com o suporte.' }, { status: 403 })
+    if (denied === 'expired')
+      return NextResponse.json({ error: 'Seu acesso expirou. Renove seu plano para voltar a usar o Oráculo.' }, { status: 403 })
+    if (denied)  // 'free' / 'notfound' → sem plano pago ativo
+      return NextResponse.json({ error: 'Você não tem um plano ativo. Adquira o Oráculo para acessar.' }, { status: 403 })
 
     const token = await createToken(user.id)
     const res = NextResponse.json({ ok: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan } })
