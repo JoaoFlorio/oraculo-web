@@ -5,7 +5,7 @@ import { prisma } from './db'
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'oraculo-secret-change-in-prod')
 export const COOKIE = 'oraculo_session'
 
-const MAX_SESSIONS = 2   // máximo de dispositivos simultâneos
+const MAX_SESSIONS = 1   // 1 acesso simultâneo: novo login encerra o anterior
 
 export async function createToken(userId: string): Promise<string> {
   // Remove sessões expiradas primeiro
@@ -13,7 +13,7 @@ export async function createToken(userId: string): Promise<string> {
     where: { userId, expiresAt: { lt: new Date() } },
   })
 
-  // Se já tem MAX_SESSIONS ativas, remove a mais antiga
+  // Se já atingiu MAX_SESSIONS, encerra a(s) sessão(ões) anterior(es) antes de abrir a nova
   const active = await prisma.session.findMany({
     where: { userId },
     orderBy: { createdAt: 'asc' },

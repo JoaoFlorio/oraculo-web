@@ -151,14 +151,6 @@ function exportCSV(products: any[], category: string) {
   URL.revokeObjectURL(url)
 }
 
-/* ─── Watermark ──────────────────────────────────────────────────────────── */
-function Watermark({email}:{email:string}){
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='320' height='120'><text x='50%' y='55%' text-anchor='middle' dominant-baseline='middle' fill='rgba(240,180,41,0.045)' font-size='11' font-family='Inter,sans-serif' transform='rotate(-25,160,60)'>${email} · ORÁCULO</text></svg>`
-  const url = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
-  return(
-    <div style={{position:'fixed',inset:0,zIndex:3,pointerEvents:'none',userSelect:'none',backgroundImage:`url("${url}")`,backgroundRepeat:'repeat',backgroundSize:'320px 120px'}}/>
-  )
-}
 
 /* ─── Logo mark ──────────────────────────────────────────────────────────── */
 function OracleMark({size=22}:{size?:number}){
@@ -1359,7 +1351,6 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       {upgrade&&<UpgradeModal onClose={()=>setUpgrade(false)}/>}
       {detail&&<DetailModal product={detail} onClose={()=>setDetail(null)} promo={promo}/>}
       {promoOpen&&<PromoModal promo={promo} setPromo={setPromo} onClose={()=>setPromoOpen(false)}/>}
-      <Watermark email={user.email}/>
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
