@@ -25,18 +25,179 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* ── Tema do Oráculo (escolhido pelo seller) — escuro padrão / claro ──────── */
+/* ── Tema do Oráculo (escolhido pelo seller) — escuro padrão / claro ──────────
+   Refino premium: superfícies em camadas (page → card → elevado), hairlines
+   finas, ouro de marca como acento, sombras de elevação e tipografia tabular. */
 :root {
-  --bg:#03030A; --sidebar:#070710; --card:#0B0B1A; --cardHov:#0F0F22; --modal:#09091A;
-  --line:rgba(255,255,255,0.07); --lineG:rgba(240,180,41,0.22);
-  --gold:#F0B429; --goldG:linear-gradient(135deg,#F5C842 0%,#C48F10 100%); --goldSub:rgba(240,180,41,0.10);
-  --g:#22C55E; --a:#F59E0B; --r:#EF4444; --pur:#8B78FF;
-  --t1:#F2F2FC; --t2:#A0A0C8; --t3:#686890; --t4:#C8C8E8;
+  /* superfícies em camadas */
+  --bg:#07080D; --sidebar:#0A0B12; --card:#10121B; --cardHov:#161925; --modal:#0E1018;
+  --line:rgba(255,255,255,0.06); --lineG:rgba(240,180,41,0.30);
+  --gold:#F0B429; --goldG:linear-gradient(135deg,#F5C842 0%,#C48F10 100%); --goldSub:rgba(240,180,41,0.09);
+  --g:#34D399; --a:#FBBF24; --r:#F87171; --pur:#8B78FF;
+  --t1:#F3F3FB; --t2:#9DA2BC; --t3:#666B85; --t4:#C8C8E8;
+  /* elevação + forma + tipografia */
+  --elev1:0 1px 2px rgba(0,0,0,0.45);
+  --elev2:0 10px 30px -16px rgba(0,0,0,0.7);
+  --elevGold:0 0 40px -22px rgba(240,180,41,0.5);
+  --radius:12px; --radius-sm:9px;
+  --font-ui:'Plus Jakarta Sans','Inter',system-ui,sans-serif;
+  --font-num:'JetBrains Mono','SFMono-Regular',ui-monospace,monospace;
 }
 [data-theme="light"] {
-  --bg:#F4F5F7; --sidebar:#FFFFFF; --card:#FFFFFF; --cardHov:#F1F3F6; --modal:#FFFFFF;
-  --line:rgba(17,24,39,0.10); --lineG:rgba(231,184,92,0.45);
-  --gold:#C8910E; --goldG:linear-gradient(135deg,#E7B85C 0%,#B5840F 100%); --goldSub:rgba(231,184,92,0.14);
-  --g:#15803D; --a:#B45309; --r:#DC2626; --pur:#7C3AED;
-  --t1:#111827; --t2:#4B5563; --t3:#6B7280; --t4:#374151;
+  --bg:#F4F5F8; --sidebar:#FFFFFF; --card:#FFFFFF; --cardHov:#F8FAFC; --modal:#FFFFFF;
+  --line:rgba(17,24,39,0.08); --lineG:rgba(200,145,14,0.45);
+  --gold:#C8910E; --goldG:linear-gradient(135deg,#E7B85C 0%,#B5840F 100%); --goldSub:rgba(200,145,14,0.12);
+  --g:#16A34A; --a:#B45309; --r:#DC2626; --pur:#7C3AED;
+  --t1:#0F172A; --t2:#475569; --t3:#94A3B8; --t4:#334155;
+  --elev1:0 1px 2px rgba(17,24,39,0.05);
+  --elev2:0 10px 30px -16px rgba(17,24,39,0.18);
+  --elevGold:0 6px 24px -16px rgba(200,145,14,0.4);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   LANDING / PÁGINA DE VENDAS (cinematográfica) — escopo .ora-landing
+   ════════════════════════════════════════════════════════════════════════ */
+.ora-landing{
+  --gold:#F0C262; --gold-bright:#FFE7A6; --gold-deep:#C48F10;
+  --emerald:#3FD79B; --violet:#A99BFF; --blue:#5E9BE0;
+  --ink:#04040C; --ink2:#070710;
+  --tx1:#F5F5FC; --tx2:#9AA6C0; --tx3:#5C6680;
+  position:relative; background:var(--ink); color:var(--tx1);
+  font-family:var(--font-body), "DM Sans", system-ui, sans-serif;
+  -webkit-font-smoothing:antialiased; overflow-x:clip;
+}
+.ora-landing h1,.ora-landing h2,.ora-landing h3,.ora-landing .ora-display{
+  font-family:var(--font-display), "Bricolage Grotesque", system-ui, sans-serif;
+  letter-spacing:-0.02em;
+}
+.ora-landing .ora-num{ font-family:var(--font-mono-o), "JetBrains Mono", monospace; font-variant-numeric:tabular-nums; }
+
+/* gold text gradient */
+.ora-goldtext{
+  background:linear-gradient(100deg,#FFE7A6 0%,#F0C262 38%,#C48F10 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+
+/* deep radial backdrop */
+.ora-backdrop{
+  position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(120% 80% at 50% 8%, rgba(240,194,98,0.16) 0%, rgba(240,194,98,0.04) 30%, transparent 60%),
+    radial-gradient(100% 100% at 50% 100%, rgba(13,13,30,0.6) 0%, transparent 60%),
+    var(--ink);
+}
+/* breathing grid */
+.ora-grid{
+  position:absolute; inset:-2px; pointer-events:none; z-index:0; opacity:.5;
+  background-image:
+    linear-gradient(rgba(240,194,98,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240,194,98,0.06) 1px, transparent 1px);
+  background-size:56px 56px;
+  mask-image:radial-gradient(100% 70% at 50% 30%, #000 0%, transparent 75%);
+  -webkit-mask-image:radial-gradient(100% 70% at 50% 30%, #000 0%, transparent 75%);
+  animation:ora-grid-breathe 9s ease-in-out infinite;
+}
+@keyframes ora-grid-breathe{ 0%,100%{opacity:.42; background-size:56px 56px} 50%{opacity:.6; background-size:58px 58px} }
+/* film grain */
+.ora-noise{
+  position:absolute; inset:0; pointer-events:none; z-index:2; opacity:.05; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+/* fine scanlines */
+.ora-scan{
+  position:absolute; inset:0; pointer-events:none; z-index:2; opacity:.35;
+  background:repeating-linear-gradient(0deg, transparent 0 3px, rgba(0,0,0,0.10) 3px 4px);
+}
+
+/* CTA gold button */
+.ora-cta{
+  position:relative; display:inline-flex; align-items:center; gap:.55rem;
+  padding:.95rem 1.6rem; border-radius:999px; font-weight:700; font-size:.98rem;
+  color:#1a1305; cursor:pointer; border:1px solid rgba(255,231,166,0.6);
+  background:linear-gradient(135deg,#FFE7A6 0%,#F0C262 45%,#D79B22 100%);
+  box-shadow:0 0 0 0 rgba(240,194,98,.5), 0 14px 40px -10px rgba(240,194,98,.55), inset 0 1px 0 rgba(255,255,255,.5);
+  transition:transform .25s cubic-bezier(.2,.7,.2,1), box-shadow .25s;
+}
+.ora-cta:hover{ transform:translateY(-2px); box-shadow:0 0 34px -2px rgba(240,194,98,.6), 0 20px 50px -10px rgba(240,194,98,.6), inset 0 1px 0 rgba(255,255,255,.6); }
+.ora-cta-ghost{
+  display:inline-flex; align-items:center; gap:.55rem;
+  padding:.95rem 1.5rem; border-radius:999px; font-weight:600; font-size:.98rem;
+  color:var(--tx1); cursor:pointer; background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.12); backdrop-filter:blur(8px);
+  transition:transform .25s, border-color .25s, background .25s;
+}
+.ora-cta-ghost:hover{ transform:translateY(-2px); border-color:rgba(240,194,98,.5); background:rgba(240,194,98,0.06); }
+
+/* glass card */
+.ora-glass{
+  background:linear-gradient(180deg, rgba(20,20,40,0.72) 0%, rgba(9,9,22,0.82) 100%);
+  border:1px solid rgba(240,194,98,0.18);
+  box-shadow:0 30px 80px -24px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.06), 0 0 60px -20px rgba(240,194,98,.25);
+  backdrop-filter:blur(14px);
+}
+
+/* chips / kicker */
+.ora-kicker{
+  display:inline-flex; align-items:center; gap:.5rem; padding:.4rem .85rem; border-radius:999px;
+  font-size:.72rem; font-weight:600; letter-spacing:.18em; text-transform:uppercase; color:var(--gold);
+  background:rgba(240,194,98,0.07); border:1px solid rgba(240,194,98,0.22);
+}
+.ora-dot{ width:6px; height:6px; border-radius:50%; background:var(--emerald); box-shadow:0 0 10px var(--emerald); animation:ora-blink 2s ease-in-out infinite; }
+@keyframes ora-blink{ 0%,100%{opacity:1} 50%{opacity:.35} }
+
+@keyframes ora-float{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+@keyframes ora-bob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(8px)} }
+.ora-scrollcue{ animation:ora-bob 1.8s ease-in-out infinite; }
+
+.ora-nav-links a{ white-space:nowrap; transition:color .2s; }
+.ora-nav-links a:hover{ color:var(--gold) !important; }
+@media (max-width: 920px){ .ora-nav-links{ display:none !important; } }
+
+/* ── primitivas de seção ─────────────────────────────────────────────── */
+.ora-section{ position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:clamp(72px,11vh,130px) 24px; }
+.ora-eyebrow{
+  display:inline-flex; align-items:center; gap:.5rem; margin-bottom:18px;
+  font-size:.72rem; font-weight:700; letter-spacing:.22em; text-transform:uppercase; color:var(--gold);
+}
+.ora-eyebrow::before{ content:""; width:22px; height:1px; background:linear-gradient(90deg,transparent,var(--gold)); }
+.ora-h2{ font-size:clamp(2rem,4.6vw,3.35rem); font-weight:800; line-height:1.04; letter-spacing:-.02em; }
+.ora-lead{ color:var(--tx2); font-size:clamp(1rem,1.7vw,1.16rem); line-height:1.6; max-width:60ch; }
+.ora-card{
+  position:relative; background:linear-gradient(180deg, rgba(16,16,34,0.6), rgba(8,8,20,0.7));
+  border:1px solid rgba(255,255,255,0.07); border-radius:18px; overflow:hidden;
+  transition:transform .35s cubic-bezier(.2,.7,.2,1), border-color .35s, box-shadow .35s;
+}
+.ora-card:hover{ transform:translateY(-5px); border-color:rgba(240,194,98,0.32);
+  box-shadow:0 24px 60px -28px rgba(0,0,0,.8), 0 0 50px -26px rgba(240,194,98,.5); }
+.ora-card-glow::after{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .35s;
+  background:radial-gradient(80% 60% at 50% 0%, rgba(240,194,98,0.12), transparent 70%);
+}
+.ora-card:hover.ora-card-glow::after{ opacity:1; }
+.ora-divider{ height:1px; background:linear-gradient(90deg,transparent,rgba(240,194,98,.25),transparent); }
+.ora-mini{ font-family:var(--font-mono-o),"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; }
+.ora-pos{ color:var(--emerald); } .ora-neg{ color:#FF6B6B; }
+.ora-step-line{ background:linear-gradient(90deg, rgba(240,194,98,.0), rgba(240,194,98,.5), rgba(240,194,98,.0)); }
+
+/* bento dos poderes */
+.ora-bento{
+  display:grid; gap:16px; grid-template-columns:repeat(6,1fr);
+  grid-template-areas:
+    "g g g m m m"
+    "g g g c c c"
+    "e e e e a a";
+}
+.ora-bento > *{ min-height:0; }
+@media (max-width:900px){
+  .ora-bento{ grid-template-columns:1fr 1fr; grid-template-areas:"g g" "m c" "e e" "a a"; }
+}
+@media (max-width:620px){
+  .ora-bento{ grid-template-columns:1fr; grid-template-areas:"g" "m" "c" "e" "a"; }
+  .ora-steps-line{ display:none; }
+  .ora-contrast{ grid-template-columns:1fr !important; }
+  .ora-contrast > div:nth-child(2){ transform:rotate(90deg); padding:6px 0 !important; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .ora-grid,.ora-scrollcue,.ora-dot{ animation:none !important; }
 }

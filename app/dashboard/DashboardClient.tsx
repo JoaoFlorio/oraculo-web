@@ -205,6 +205,44 @@ function NavIcon({id,active}:{id:string,active:boolean}){
   )
 }
 
+/* ─── Ícone SVG (substitui emojis estruturais) ───────────────────────────── */
+function Ico({n,size=16,c='currentColor'}:{n:string;size?:number;c?:string}){
+  const p:Record<string,React.ReactElement> = {
+    puzzle:  <path d="M9 4.5a1.6 1.6 0 1 1 3.2 0V6h2.3a1 1 0 0 1 1 1v2.3h1.5a1.6 1.6 0 1 1 0 3.2H16V15a1 1 0 0 1-1 1h-2.3v1.5a1.6 1.6 0 1 1-3.2 0V16H7.2a1 1 0 0 1-1-1v-2.3H4.7a1.6 1.6 0 1 1 0-3.2h1.5V7a1 1 0 0 1 1-1H9z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/>,
+    key:     <><circle cx="8" cy="8" r="3.2" stroke={c} strokeWidth="1.5"/><path d="M10.3 10.3 19 19M16 16l2-2M14 14l2-2" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
+    lock:    <><rect x="5" y="10.5" width="14" height="9.5" rx="2" stroke={c} strokeWidth="1.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
+    demand:  <><path d="M4 20V4M4 20h16" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><rect x="7" y="12" width="3" height="5" rx="1" stroke={c} strokeWidth="1.4"/><rect x="12" y="8" width="3" height="9" rx="1" stroke={c} strokeWidth="1.4"/><rect x="17" y="5" width="3" height="12" rx="1" stroke={c} strokeWidth="1.4"/></>,
+    images:  <><rect x="4" y="5" width="16" height="14" rx="2" stroke={c} strokeWidth="1.5"/><circle cx="9" cy="10" r="1.6" stroke={c} strokeWidth="1.3"/><path d="m5 17 4.5-4 3 2.5L16 12l3 3" stroke={c} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></>,
+    bullets: <><circle cx="5.5" cy="7" r="1.2" fill={c}/><circle cx="5.5" cy="12" r="1.2" fill={c}/><circle cx="5.5" cy="17" r="1.2" fill={c}/><path d="M9 7h11M9 12h11M9 17h7" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
+    title:   <><path d="M5 7V5.5h14V7M12 5.5V19M9.5 19h5" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
+    generic: <><path d="M4 12.5 11.5 5a1.8 1.8 0 0 1 1.3-.5H18a1.5 1.5 0 0 1 1.5 1.5v5.2a1.8 1.8 0 0 1-.5 1.3L11.5 20a1.5 1.5 0 0 1-2.1 0L4 14.6a1.5 1.5 0 0 1 0-2.1z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/><circle cx="15.5" cy="8.5" r="1.2" fill={c}/></>,
+    clock:   <><circle cx="12" cy="12" r="8" stroke={c} strokeWidth="1.5"/><path d="M12 7.5V12l3 2" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
+    cash:    <><rect x="3" y="6.5" width="18" height="11" rx="2" stroke={c} strokeWidth="1.5"/><circle cx="12" cy="12" r="2.6" stroke={c} strokeWidth="1.4"/><path d="M6.5 9.5h.01M17.5 14.5h.01" stroke={c} strokeWidth="1.6" strokeLinecap="round"/></>,
+    gift:    <><rect x="4" y="9" width="16" height="11" rx="1.5" stroke={c} strokeWidth="1.5"/><path d="M3.5 9h17M12 9v11M12 9c-1.5-3.5-6-3-5 0M12 9c1.5-3.5 6-3 5 0" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
+    truck:   <><path d="M3 6.5h10v9H3zM13 9.5h4l3 3v3h-7z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/><circle cx="7" cy="17.5" r="1.8" stroke={c} strokeWidth="1.4"/><circle cx="16.5" cy="17.5" r="1.8" stroke={c} strokeWidth="1.4"/></>,
+    sparkles:<><path d="M12 4.5 13.4 9 18 10.5 13.4 12 12 16.5 10.6 12 6 10.5 10.6 9z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/><path d="M18 5v3M19.5 6.5h-3" stroke={c} strokeWidth="1.3" strokeLinecap="round"/></>,
+    star:    <path d="m12 4 2.35 4.76 5.25.76-3.8 3.7.9 5.23L12 16.9l-4.7 2.47.9-5.23-3.8-3.7 5.25-.76z" stroke={c} strokeWidth="1.4" strokeLinejoin="round"/>,
+    ticket:  <><path d="M4 8a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2.2a1.8 1.8 0 0 0 0 3.6V16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.2a1.8 1.8 0 0 0 0-3.6z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/><path d="M13 8v8" stroke={c} strokeWidth="1.3" strokeDasharray="1.5 2"/></>,
+    trending:<><path d="M4 17 10 11l3.5 3L20 7" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M15.5 7H20v4.5" stroke={c} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
+    robot:   <><rect x="5" y="8" width="14" height="10" rx="2.5" stroke={c} strokeWidth="1.5"/><path d="M12 5.5V8M12 4.2v1.3" stroke={c} strokeWidth="1.5" strokeLinecap="round"/><circle cx="9.3" cy="13" r="1.2" fill={c}/><circle cx="14.7" cy="13" r="1.2" fill={c}/><path d="M3.5 12v3M20.5 12v3" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
+    search:  <><circle cx="11" cy="11" r="6" stroke={c} strokeWidth="1.6"/><path d="m15.5 15.5 4 4" stroke={c} strokeWidth="1.6" strokeLinecap="round"/></>,
+    bulb:    <><path d="M9 16.5a5.5 5.5 0 1 1 6 0V18a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/><path d="M9.5 21h5" stroke={c} strokeWidth="1.5" strokeLinecap="round"/></>,
+    pin:     <><path d="M12 21s6-5.3 6-10a6 6 0 1 0-12 0c0 4.7 6 10 6 10z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/><circle cx="12" cy="11" r="2.2" stroke={c} strokeWidth="1.4"/></>,
+  }
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{flexShrink:0,display:'inline-block',verticalAlign:'-0.18em'}}>{p[n]||p.sparkles}</svg>
+}
+// Mapeia emojis legados (usados em listas de dados) para os ícones SVG do Ico.
+const EMOJI_MAP:Record<string,string> = {
+  '📸':'images','🖼️':'images','🖼':'images','⭐':'star','🔤':'title','📝':'bullets',
+  '✨':'sparkles','🏷️':'generic','🏷':'generic','🎫':'ticket','💰':'cash','📈':'trending',
+  '🔍':'search','📊':'demand','🤖':'robot','💡':'bulb','📌':'pin','🎁':'gift','🚚':'truck','📦':'cash',
+}
+function EmojiIco({e,size=16,c='currentColor'}:{e?:string;size?:number;c?:string}){
+  const n = e ? EMOJI_MAP[e] : undefined
+  if(!n) return <span style={{color:c}}>{e||'•'}</span>
+  return <Ico n={n} size={size} c={c}/>
+}
+
 /* ─── Score ring ─────────────────────────────────────────────────────────── */
 function ScoreRing({score}:{score:number}){
   const c=sColor(score);const r=9;const circ=2*Math.PI*r
@@ -304,9 +342,9 @@ function PromoModal({promo,setPromo,onClose}:{promo:PromoState;setPromo:(p:Promo
   const canApply = active===false||(active===true&&type!==null)
 
   const typeOpts:[string,'comissao'|'fba'|'ambas',string,string][]=[
-    ['📦','comissao','Comissão de Referência','Taxa % sobre venda zerada'],
-    ['🚚','fba','Tarifa FBA','Frete + fulfillment zerado'],
-    ['✨','ambas','Ambas','Comissão E FBA zeradas'],
+    ['cash','comissao','Comissão de Referência','Taxa % sobre venda zerada'],
+    ['truck','fba','Tarifa FBA','Frete + fulfillment zerado'],
+    ['sparkles','ambas','Ambas','Comissão E FBA zeradas'],
   ]
 
   return(
@@ -316,7 +354,7 @@ function PromoModal({promo,setPromo,onClose}:{promo:PromoState;setPromo:(p:Promo
         {/* Header */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'22px 24px 18px',borderBottom:`1px solid ${T.line}`,background:`linear-gradient(180deg,rgba(240,180,41,0.06) 0%,transparent 100%)`}}>
           <div>
-            <div style={{fontSize:18,marginBottom:4}}>🎁 Promoção Amazon Ativa?</div>
+            <div style={{fontSize:16,fontWeight:700,marginBottom:4,display:'flex',alignItems:'center',gap:8,color:T.t1}}><Ico n="gift" size={18} c={T.gold}/> Promoção Amazon Ativa?</div>
             <div style={{fontSize:12,color:T.t3}}>Configure a isenção de tarifas para este período</div>
           </div>
           <button onClick={onClose} style={{background:'none',border:`1px solid ${T.line}`,color:T.t2,width:32,height:32,borderRadius:8,cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}>✕</button>
@@ -352,7 +390,7 @@ function PromoModal({promo,setPromo,onClose}:{promo:PromoState;setPromo:(p:Promo
                       background:type===val?'rgba(240,180,41,0.06)':'transparent',
                       cursor:'pointer',fontFamily:'inherit',textAlign:'left' as const,transition:'all .15s',
                       boxShadow:type===val?`0 0 16px rgba(240,180,41,0.12)`:undefined}}>
-                    <span style={{fontSize:22,flexShrink:0}}>{icon}</span>
+                    <span style={{flexShrink:0,color:type===val?T.gold:T.t2}}><Ico n={icon} size={20} c={type===val?T.gold:T.t2}/></span>
                     <div style={{flex:1}}>
                       <div style={{fontSize:13,fontWeight:700,color:type===val?T.t1:T.t2,marginBottom:2}}>{title}</div>
                       <div style={{fontSize:11,color:T.t3}}>{desc}</div>
@@ -462,9 +500,9 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
         </div>
         {/* KPIs */}
         <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',borderBottom:`1px solid ${T.line}`}}>
-          {[{v:bsr>0?`#${fmtN(bsr)}`:'—',l:'BSR Amazon',c:T.t1},{v:`~${fmtK(sales)}/mês`,l:'Vendas estimadas',c:dem.c},{v:dem.l,l:'Nível de Demanda',c:dem.c},{v:lsLoading?'…':`${score}/100`,l:lsData?'Score Real Listing':'Score Oráculo',c:sc}].map((k,i)=>(
+          {[{v:bsr>0?`#${fmtN(bsr)}`:'—',l:'BSR Amazon',c:T.t1,num:true},{v:`~${fmtK(sales)}/mês`,l:'Vendas estimadas',c:dem.c,num:true},{v:dem.l,l:'Nível de Demanda',c:dem.c,num:false},{v:lsLoading?'…':`${score}/100`,l:lsData?'Score Real Listing':'Score Oráculo',c:sc,num:true}].map((k,i)=>(
             <div key={i} style={{padding:'18px 20px',borderRight:i<3?`1px solid ${T.line}`:'none',textAlign:'center' as const}}>
-              <div style={{fontSize:20,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1}}>{k.v}</div>
+              <div className={k.num?'ora-num':undefined} style={{fontSize:20,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1}}>{k.v}</div>
               <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const}}>{k.l}</div>
             </div>
           ))}
@@ -484,20 +522,20 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
             <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:12}}>Score do Listing — Critérios Reais</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8}}>
               {([
-                {key:'demand',  icon:'📊', label:'Demanda'},
-                {key:'images',  icon:'🖼️', label:'Imagens'},
-                {key:'bullets', icon:'📝', label:'Bullets'},
-                {key:'title',   icon:'🔤', label:'Título'},
-                {key:'generic', icon:'🏷️', label:'Marca'},
-              ] as const).map(({key,icon,label})=>{
+                {key:'demand',  label:'Demanda'},
+                {key:'images',  label:'Imagens'},
+                {key:'bullets', label:'Bullets'},
+                {key:'title',   label:'Título'},
+                {key:'generic', label:'Marca'},
+              ] as const).map(({key,label})=>{
                 const d=lsData.breakdown[key]
                 const pct=Math.round((d.score/d.max)*100)
                 const c=pct>=80?T.g:pct>=50?T.a:T.r
                 return(
                   <div key={key} style={{background:T.bg,borderRadius:10,padding:'10px 12px',border:`1px solid ${T.line}`}}>
-                    <div style={{fontSize:14,marginBottom:4}}>{icon}</div>
+                    <div style={{marginBottom:4,color:c}}><Ico n={key} size={15} c={c}/></div>
                     <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.08em',marginBottom:6}}>{label}</div>
-                    <div style={{fontSize:14,fontWeight:700,color:c,marginBottom:4}}>{d.score}<span style={{fontSize:9,color:T.t3,fontWeight:400}}>/{d.max}</span></div>
+                    <div className="ora-num" style={{fontSize:14,fontWeight:700,color:c,marginBottom:4}}>{d.score}<span style={{fontSize:9,color:T.t3,fontWeight:400}}>/{d.max}</span></div>
                     <div style={{height:3,background:T.card,borderRadius:99,overflow:'hidden'}}>
                       <div style={{height:'100%',width:`${pct}%`,background:c,borderRadius:99,transition:'width 0.6s ease'}}/>
                     </div>
@@ -511,13 +549,13 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
         {/* Listing Info: idade + faturamento anual */}
         <div style={{padding:'14px 28px',borderBottom:`1px solid ${T.line}`,display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
           <div style={{background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px 16px'}}>
-            <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:6}}>🕐 Idade do Anúncio</div>
+            <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:6,display:'flex',alignItems:'center',gap:6}}><Ico n="clock" size={12} c={T.t3}/> Idade do Anúncio</div>
             <div style={{fontSize:18,fontWeight:700,color:T.t1,letterSpacing:'-0.02em'}}>{asinToAge(product.asin||'')}</div>
             <div style={{fontSize:10,color:T.t3,marginTop:2}}>Estimado pelo prefixo ASIN</div>
           </div>
           <div style={{background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px 16px'}}>
-            <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:6}}>💰 Faturamento Anual Est.</div>
-            <div style={{fontSize:18,fontWeight:700,color:T.gold,letterSpacing:'-0.02em'}}>R$ {fmtN(Math.round(sales*price*12))}</div>
+            <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:6,display:'flex',alignItems:'center',gap:6}}><Ico n="cash" size={12} c={T.gold}/> Faturamento Anual Est.</div>
+            <div className="ora-num" style={{fontSize:18,fontWeight:700,color:T.gold,letterSpacing:'-0.02em'}}>R$ {fmtN(Math.round(sales*price*12))}</div>
             <div style={{fontSize:10,color:T.t3,marginTop:2}}>~{fmtK(sales)} un/mês × R$ {fmtR(price)} × 12</div>
           </div>
         </div>
@@ -544,14 +582,14 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
                     <span style={{fontSize:13,color:T.t3,fontWeight:500}}>R$</span>
                     <input type="number" min={0} value={f.v} onChange={e=>(f.s as any)(+e.target.value||0)} style={{background:'none',border:'none',color:T.gold,fontSize:22,fontWeight:700,width:'100%',outline:'none',fontFamily:'inherit'}}/>
                   </div>
-                  {f.isPrice && realPrice && <div style={{fontSize:9,color:T.g,marginTop:4}}>📌 Preço real da Amazon</div>}
+                  {f.isPrice && realPrice && <div style={{fontSize:9,color:T.g,marginTop:4,display:'flex',alignItems:'center',gap:4}}><Ico n="pin" size={10} c={T.g}/> Preço real da Amazon</div>}
                   {f.isPrice && !realPrice && lsLoading && <div style={{fontSize:9,color:T.t3,marginTop:4}}>buscando preço real…</div>}
                 </div>
               ))}
             </div>
             {promo.active&&(
               <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',marginBottom:8,background:'rgba(34,197,94,0.06)',border:`1px solid rgba(34,197,94,0.2)`,borderRadius:10,fontSize:11,color:T.g}}>
-                <span>🎁</span>
+                <Ico n="gift" size={14} c={T.g}/>
                 <span><strong>Promoção ativa:</strong> {promo.type==='comissao'?'Isenção de Comissão':promo.type==='fba'?'Isenção de Tarifa FBA':'Isenção de Comissão + FBA'} — tarifas zeradas no simulador</span>
               </div>
             )}
@@ -562,8 +600,8 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
                   const fbaZeroed=promo.active&&(promo.type==='fba'||promo.type==='ambas')
                   return[
                     {l:'Preço de venda',v:`R$ ${fmtR(price)}`,neg:false,zeroed:false,orig:null},
-                    {l:`Taxa Amazon (${(ref*100).toFixed(0)}%)`,v:refZeroed?`R$ 0,00 🎁`:`− R$ ${fmtR(+(price*ref).toFixed(2))}`,neg:true,zeroed:refZeroed,orig:refZeroed?`− R$ ${fmtR(+(price*ref).toFixed(2))}`:null},
-                    {l:'Taxa FBA',v:fbaZeroed?`R$ 0,00 🎁`:`− R$ ${fmtR(fbaBase)}`,neg:true,zeroed:fbaZeroed,orig:fbaZeroed?`− R$ ${fmtR(fbaBase)}`:null},
+                    {l:`Taxa Amazon (${(ref*100).toFixed(0)}%)`,v:refZeroed?`R$ 0,00`:`− R$ ${fmtR(+(price*ref).toFixed(2))}`,neg:true,zeroed:refZeroed,orig:refZeroed?`− R$ ${fmtR(+(price*ref).toFixed(2))}`:null},
+                    {l:'Taxa FBA',v:fbaZeroed?`R$ 0,00`:`− R$ ${fmtR(fbaBase)}`,neg:true,zeroed:fbaZeroed,orig:fbaZeroed?`− R$ ${fmtR(fbaBase)}`:null},
                     {l:'Custo do produto',v:`− R$ ${fmtR(cost)}`,neg:true,zeroed:false,orig:null},
                   ].map((row,i)=>(
                     <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'10px 0',borderBottom:`1px solid ${T.line}`}}>
@@ -715,7 +753,7 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
                     const hc=r.priority==='Alta'?T.r:r.priority==='Média'?T.a:T.t3
                     return(
                       <div key={i} style={{display:'flex',gap:12,alignItems:'flex-start',background:T.bg,border:`1px solid ${hc}25`,borderLeft:`3px solid ${hc}`,borderRadius:10,padding:'11px 14px'}}>
-                        <div style={{fontSize:17,lineHeight:1,flexShrink:0,marginTop:1}}>{r.icon}</div>
+                        <div style={{lineHeight:1,flexShrink:0,marginTop:1,color:T.gold}}><EmojiIco e={r.icon} size={17} c={T.gold}/></div>
                         <div style={{flex:1}}>
                           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
                             <span style={{fontSize:12,fontWeight:600,color:T.t1}}>{r.title}</span>
@@ -848,7 +886,7 @@ function Card({product,onClick,locked}:{product:any;onClick:()=>void;locked?:boo
       style={{background:hov?T.cardHov:T.card,border:`1px solid ${hov&&!locked?T.lineG:T.line}`,borderRadius:14,overflow:'hidden',cursor:'pointer',
         transition:'background .15s,border-color .15s,transform .15s,box-shadow .15s',
         transform:hov&&!locked?'translateY(-2px)':'none',
-        boxShadow:hov&&!locked?'0 20px 40px rgba(0,0,0,0.5),0 0 0 1px rgba(240,180,41,0.08)':'none',
+        boxShadow:hov&&!locked?'var(--elev2),0 0 0 1px rgba(240,180,41,0.08)':'var(--elev1)',
         display:'flex',flexDirection:'column',position:'relative' as const,
         filter:locked?'blur(5px) brightness(0.5)':'none',
         userSelect:locked?'none':'auto',
@@ -862,7 +900,7 @@ function Card({product,onClick,locked}:{product:any;onClick:()=>void;locked?:boo
         {product.images?.[0]?<img src={product.images[0]} alt="" style={{maxHeight:138,maxWidth:'88%',objectFit:'contain',transition:'transform .3s cubic-bezier(.34,1.56,.64,1)',transform:hov?'scale(1.08)':'scale(1)'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>:<div style={{width:44,height:44,background:'#e8e8f0',borderRadius:8}}/>}
       </div>
       <div style={{padding:'14px 14px 16px',flex:1,display:'flex',flexDirection:'column',gap:0}}>
-        {sales>0&&bsr>0&&<div style={{display:'flex',alignItems:'baseline',gap:5,marginBottom:8}}><span style={{fontSize:22,fontWeight:700,color:salesColor,letterSpacing:'-0.03em',lineHeight:1}}>~{fmtK(sales)}</span><span style={{fontSize:10,color:T.t3,fontWeight:500}}>est./mês</span></div>}
+        {sales>0&&bsr>0&&<div style={{display:'flex',alignItems:'baseline',gap:5,marginBottom:8}}><span className="ora-num" style={{fontSize:22,fontWeight:700,color:salesColor,letterSpacing:'-0.03em',lineHeight:1}}>~{fmtK(sales)}</span><span style={{fontSize:10,color:T.t3,fontWeight:500}}>est./mês</span></div>}
         <p style={{fontSize:12,fontWeight:500,color:T.t1,lineHeight:1.58,flex:1,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any,overflow:'hidden',marginBottom:10}}>{product.title}</p>
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
           {bsr>0&&<span style={{fontSize:10,color:T.t3}}>BSR <strong style={{color:T.t2,fontWeight:600}}>#{fmtN(bsr)}</strong></span>}
@@ -994,10 +1032,10 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
         const oppColor  = opp>=70?T.g:opp>=50?T.a:T.r
         const compColor = comp>=70?T.g:comp>=50?T.a:T.r
 
-        const verdict = opp>=70?{l:'Excelente Oportunidade 🚀',c:T.g,s:'Poucos concorrentes e boa demanda — vale entrar neste mercado agora.'}
-          :opp>=55?{l:'Boa Oportunidade ✅',c:T.g,s:'Mercado com potencial. Diferencie-se para conquistar espaço.'}
-          :opp>=38?{l:'Oportunidade Moderada ⚠️',c:T.a,s:'Concorrência relevante. Estude bem os líderes antes de entrar.'}
-          :{l:'Alta Barreira de Entrada 🚫',c:T.r,s:'Mercado saturado ou demanda baixa. Considere outro produto.'}
+        const verdict = opp>=70?{l:'Excelente Oportunidade',c:T.g,s:'Poucos concorrentes e boa demanda — vale entrar neste mercado agora.'}
+          :opp>=55?{l:'Boa Oportunidade',c:T.g,s:'Mercado com potencial. Diferencie-se para conquistar espaço.'}
+          :opp>=38?{l:'Oportunidade Moderada',c:T.a,s:'Concorrência relevante. Estude bem os líderes antes de entrar.'}
+          :{l:'Alta Barreira de Entrada',c:T.r,s:'Mercado saturado ou demanda baixa. Considere outro produto.'}
 
         const bsrColor=p.bsr>0&&p.bsr<5000?T.g:p.bsr<30000?T.a:T.r
         const salesColor=p.salesEst>=500?T.g:p.salesEst>=100?T.a:T.r
@@ -1131,7 +1169,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
             <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
               <div style={{marginBottom:16}}>
                 <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:4}}>Plano de Ação Personalizado — {p.title?.split(' ').slice(0,4).join(' ')}</div>
-                <div style={{fontSize:11,color:T.t3}}>O Oráculo analisou o anúncio e criou um guia específico para você superar estes concorrentes 👇</div>
+                <div style={{fontSize:11,color:T.t3}}>O Oráculo analisou o anúncio e criou um guia específico para você superar estes concorrentes.</div>
               </div>
               <div style={{display:'flex',flexDirection:'column',gap:12}}>
                 {(data.recommendations||[]).map((rec:any,i:number)=>{
@@ -1140,7 +1178,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
                     <div key={i} style={{background:T.bg,border:`1px solid ${T.line}`,borderRadius:12,overflow:'hidden'}}>
                       {/* Header */}
                       <div style={{display:'flex',gap:12,alignItems:'center',padding:'14px 16px',borderBottom:`1px solid ${T.line}`}}>
-                        <div style={{fontSize:20,flexShrink:0}}>{rec.icon||'•'}</div>
+                        <div style={{flexShrink:0,color:T.gold}}><EmojiIco e={rec.icon} size={19} c={T.gold}/></div>
                         <div style={{flex:1}}>
                           <div style={{fontSize:13,fontWeight:600,color:T.t1,lineHeight:1.4}}>{rec.title}</div>
                         </div>
@@ -1152,7 +1190,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
                       <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:8}}>
                         <p style={{fontSize:12,color:T.t4,lineHeight:1.7,margin:0}}>{rec.detail}</p>
                         <div style={{display:'flex',gap:8,alignItems:'flex-start',background:`${tint(T.gold,2)}`,border:`1px solid ${T.lineG}`,borderRadius:8,padding:'8px 12px'}}>
-                          <span style={{fontSize:11,flexShrink:0}}>💡</span>
+                          <span style={{flexShrink:0,color:T.gold}}><Ico n="bulb" size={13} c={T.gold}/></span>
                           <p style={{fontSize:11,color:T.gold,lineHeight:1.6,margin:0,fontStyle:'italic' as const}}><strong>Por que isso importa:</strong> {rec.why}</p>
                         </div>
                       </div>
@@ -1181,7 +1219,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
       {/* Empty state */}
       {!data&&!loading&&(
         <div style={{textAlign:'center' as const,padding:'60px 20px',color:T.t3}}>
-          <div style={{fontSize:48,marginBottom:16,opacity:.4}}>🔍</div>
+          <div style={{marginBottom:16,opacity:.4,display:'flex',justifyContent:'center'}}><Ico n="search" size={44} c={T.t3}/></div>
           <div style={{fontSize:14,fontWeight:600,color:T.t2,marginBottom:8}}>Cole um ASIN acima para começar</div>
           <div style={{fontSize:12,color:T.t3}}>O Oráculo vai analisar todos os concorrentes e te dizer se vale a pena entrar neste mercado.</div>
         </div>
@@ -1204,6 +1242,15 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const [done,     setDone]     = useState(false)
   const [sideOpen, setSideOpen] = useState(true)
   const [catOpen,  setCatOpen]  = useState(false)
+  // Tema escuro/claro — escolha do cliente, persistida em localStorage
+  const [theme, setTheme] = useState<'dark'|'light'>('dark')
+  useEffect(()=>{
+    try{ const t=localStorage.getItem('oraculo_theme'); if(t==='light'||t==='dark') setTheme(t) }catch{}
+  },[])
+  useEffect(()=>{
+    try{ localStorage.setItem('oraculo_theme', theme); document.documentElement.setAttribute('data-theme', theme) }catch{}
+  },[theme])
+  const toggleTheme = ()=> setTheme(t=> t==='dark' ? 'light' : 'dark')
   const [detail,     setDetail]     = useState<any>(null)
   const [upgrade,    setUpgrade]    = useState(false)
   const [promo,      setPromo]      = useState<PromoState>({active:false,type:null})
@@ -1315,10 +1362,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       <Watermark email={user.email}/>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
         html,body{height:100%}
-        body,input,button{font-family:'Inter',system-ui,sans-serif}
+        body,input,button{font-family:var(--font-ui)}
+        .ora-num{font-family:var(--font-num);font-variant-numeric:tabular-nums;letter-spacing:-0.01em}
         ::-webkit-scrollbar{width:3px;height:3px}
         ::-webkit-scrollbar-track{background:transparent}
         ::-webkit-scrollbar-thumb{background:${T.t3};border-radius:2px}
@@ -1452,16 +1500,26 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 CSV
               </button>
             )}
-            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6}}>
-              <div style={{width:6,height:6,borderRadius:'50%',background:T.g,boxShadow:`0 0 6px ${T.g}`}}/>
-              <span style={{fontSize:10,color:T.t3,fontWeight:500}}>Amazon BR</span>
+            <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:14}}>
+              <button onClick={toggleTheme} title={theme==='dark'?'Tema claro':'Tema escuro'} aria-label="Alternar tema"
+                style={{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:9,background:T.card,border:`1px solid ${T.line}`,color:T.t2,cursor:'pointer',transition:'all .15s'}}
+                onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
+                onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t2}}>
+                {theme==='dark'
+                  ?<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.6"/><path d="M12 2v2.2M12 19.8V22M22 12h-2.2M4.2 12H2M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+                  :<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.3 6.3 0 0 0 10.5 10.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+              </button>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <div style={{width:6,height:6,borderRadius:'50%',background:T.g,boxShadow:`0 0 6px ${T.g}`}}/>
+                <span style={{fontSize:10,color:T.t3,fontWeight:500}}>Amazon BR</span>
+              </div>
             </div>
           </header>
 
           {/* Promo banner */}
           {promo.active?(
             <div style={{background:'rgba(34,197,94,0.07)',borderBottom:'1px solid rgba(34,197,94,0.2)',padding:'7px 24px',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
-              <span style={{fontSize:12}}>🎁</span>
+              <Ico n="gift" size={14} c={T.g}/>
               <span style={{fontSize:11,color:T.g,flex:1}}>
                 <strong>Promoção ativa:</strong> {promo.type==='comissao'?'Isenção de Comissão de Referência':promo.type==='fba'?'Isenção de Tarifa FBA':'Isenção de Comissão + FBA'} — todos os cálculos foram ajustados
               </span>
@@ -1471,7 +1529,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           ):(
             <div style={{borderBottom:`1px solid ${T.line}`,padding:'6px 24px',display:'flex',alignItems:'center',flexShrink:0}}>
               <button onClick={()=>setPromoOpen(true)} style={{background:'transparent',border:'none',cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6,padding:'2px 0'}}>
-                <span style={{fontSize:11}}>💡</span>
+                <span style={{flexShrink:0,color:T.gold}}><Ico n="bulb" size={13} c={T.gold}/></span>
                 <span style={{fontSize:11,color:T.t3}}>Amazon com promoção de isenção? <span style={{color:T.gold}}>Ative aqui →</span></span>
               </button>
             </div>
@@ -1489,20 +1547,20 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {nav==='extension'&&(
               <div style={{maxWidth:560,margin:'0 auto',paddingTop:40}}>
                 <div style={{textAlign:'center' as const,marginBottom:36}}>
-                  <div style={{fontSize:40,marginBottom:12}}>🧩</div>
+                  <div style={{marginBottom:12,display:'flex',justifyContent:'center'}}><Ico n="puzzle" size={40} c={T.gold}/></div>
                   <h2 style={{fontSize:22,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Extensão Chrome</h2>
                   <p style={{fontSize:13,color:T.t3,lineHeight:1.6}}>Analise qualquer produto Amazon diretamente na página com nossa extensão. Instale e ative com sua chave de licença.</p>
                 </div>
 
                 {/* Chave de licença */}
-                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'24px',marginBottom:16}}>
-                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:12}}>🔑 Sua Chave de Licença</div>
+                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'24px',marginBottom:16,boxShadow:'var(--elev1)'}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:12,display:'flex',alignItems:'center',gap:7}}><Ico n="key" size={13} c={T.gold}/> Sua Chave de Licença</div>
                   {licLoading?(
                     <div style={{height:48,background:T.bg,borderRadius:10,animation:'pulse 1.5s infinite'}}/>
                   ):licKey?(
                     <>
                       <div style={{background:T.bg,border:`1px solid ${T.lineG}`,borderRadius:10,padding:'14px 18px',marginBottom:12,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12}}>
-                        <span style={{fontFamily:'monospace',fontSize:16,fontWeight:800,color:T.gold,letterSpacing:'0.06em',wordBreak:'break-all' as const}}>{licKey}</span>
+                        <span className="ora-num" style={{fontSize:16,fontWeight:600,color:T.gold,letterSpacing:'0.06em',wordBreak:'break-all' as const}}>{licKey}</span>
                         <button onClick={()=>{navigator.clipboard.writeText(licKey);setKeyCopied(true);setTimeout(()=>setKeyCopied(false),2000)}}
                           style={{flexShrink:0,background:keyCopied?T.g:T.goldG,border:'none',color:'#03030A',fontWeight:700,fontSize:10,padding:'8px 14px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',transition:'all .2s',whiteSpace:'nowrap' as const}}>
                           {keyCopied?'✓ Copiado!':'Copiar'}
@@ -1525,12 +1583,12 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 <a href="https://chromewebstore.google.com/detail/or%C3%A1culo-amazon-intelligen/jggkabmggnkaobhjmhhcikipbhhnoapp"
                   target="_blank" rel="noreferrer"
                   style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,background:T.goldG,color:'#03030A',fontWeight:800,fontSize:13,padding:'16px',borderRadius:12,textDecoration:'none',letterSpacing:'0.06em',boxShadow:'0 4px 24px rgba(240,180,41,0.3)',marginBottom:16}}>
-                  <span style={{fontSize:18}}>🧩</span>
+                  <Ico n="puzzle" size={18} c="#03030A"/>
                   INSTALAR EXTENSÃO NO CHROME
                 </a>
 
                 {/* Passos */}
-                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
+                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px',boxShadow:'var(--elev1)'}}>
                   <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:14}}>Como ativar</div>
                   {[
                     'Clique em "Instalar Extensão no Chrome" acima',
@@ -1546,8 +1604,8 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 </div>
 
                 {/* Trocar senha */}
-                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px',marginTop:16}}>
-                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:6}}>🔒 Segurança da Conta</div>
+                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px',marginTop:16,boxShadow:'var(--elev1)'}}>
+                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:6,display:'flex',alignItems:'center',gap:7}}><Ico n="lock" size={13} c={T.t2}/> Segurança da Conta</div>
                   <div style={{fontSize:12,color:T.t3,lineHeight:1.6,marginBottom:16}}>Troque a senha gerada automaticamente por uma de sua preferência. Os outros dispositivos conectados serão desconectados.</div>
                   {([
                     {ph:'Senha atual',        val:pwCur,  set:setPwCur},
@@ -1576,7 +1634,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               <div style={{maxWidth:600,margin:'0 auto',paddingTop:40}}>
                 {/* Header */}
                 <div style={{textAlign:'center' as const,marginBottom:40}}>
-                  <div style={{fontSize:48,marginBottom:12}}>🤖</div>
+                  <div style={{marginBottom:12,display:'flex',justifyContent:'center'}}><Ico n="robot" size={46} c={T.gold}/></div>
                   <h2 style={{fontSize:24,fontWeight:900,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Agente IA — Criador de Anúncios</h2>
                   <p style={{fontSize:13,color:T.t3,lineHeight:1.7,maxWidth:440,margin:'0 auto'}}>
                     Nosso agente especialista em Amazon Brasil cria o anúncio completo pelo ChatGPT — título SEO, bullets, descrição, keywords e até <strong style={{color:T.t1}}>6 imagens profissionais</strong> do seu produto.
@@ -1613,7 +1671,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                     { icon:'📊', title:'Estratégia',         desc:'Gatilhos usados, alertas de mercado e sugestões para teste A/B' },
                   ].map((item,i)=>(
                     <div key={i} style={{display:'flex',gap:14,marginBottom:i<3?16:0,alignItems:'flex-start'}}>
-                      <div style={{width:38,height:38,borderRadius:10,background:'rgba(16,163,127,0.1)',border:'1px solid rgba(16,163,127,0.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{item.icon}</div>
+                      <div style={{width:38,height:38,borderRadius:10,background:'rgba(16,163,127,0.1)',border:'1px solid rgba(16,163,127,0.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:T.g}}><EmojiIco e={item.icon} size={18} c={T.g}/></div>
                       <div>
                         <div style={{fontSize:13,fontWeight:700,color:T.t1,marginBottom:3}}>{item.title}</div>
                         <div style={{fontSize:12,color:T.t3,lineHeight:1.6}}>{item.desc}</div>
@@ -1636,8 +1694,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                       <span style={{fontSize:12,color:T.t3,lineHeight:1.6,paddingTop:2}}>{s}</span>
                     </div>
                   ))}
-                  <div style={{marginTop:16,padding:'12px 14px',background:'rgba(16,163,127,0.06)',border:'1px solid rgba(16,163,127,0.15)',borderRadius:10,fontSize:11,color:T.t3,lineHeight:1.6}}>
-                    💡 <strong style={{color:T.t1}}>Dica:</strong> Você precisa de uma conta no ChatGPT (gratuita ou Plus). O agente usa seus próprios créditos do ChatGPT — sem cobranças extras do Oráculo.
+                  <div style={{marginTop:16,padding:'12px 14px',background:'rgba(16,163,127,0.06)',border:'1px solid rgba(16,163,127,0.15)',borderRadius:10,fontSize:11,color:T.t3,lineHeight:1.6,display:'flex',gap:8,alignItems:'flex-start'}}>
+                    <span style={{flexShrink:0,color:T.g,marginTop:1}}><Ico n="bulb" size={13} c={T.g}/></span>
+                    <span><strong style={{color:T.t1}}>Dica:</strong> Você precisa de uma conta no ChatGPT (gratuita ou Plus). O agente usa seus próprios créditos do ChatGPT — sem cobranças extras do Oráculo.</span>
                   </div>
                 </div>
               </div>
@@ -1646,7 +1705,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {/* Gestão (hub financeiro) — gated p/ allowlist enquanto SP-API em Draft */}
             {nav==='financeiro'&&gestaoEnabled&&(
               <div style={{padding:'0 4px'}}>
-                <GestaoHub promoActive={promo.active} promoType={promo.type}/>
+                <GestaoHub promoActive={promo.active} promoType={promo.type} theme={theme}/>
               </div>
             )}
 

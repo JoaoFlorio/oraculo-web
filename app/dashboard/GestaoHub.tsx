@@ -247,10 +247,10 @@ function LoadingBox(){
 function KPI({label,value,color,hide}:{label:string;value:string;delta?:string;up?:boolean;icon?:string;color:string;hide:boolean}){
   const t=useT()
   return(
-    <div style={{background:t.card,border:`1.5px solid ${color}`,borderRadius:14,padding:'16px 14px 18px',textAlign:'center' as const,position:'relative' as const,minHeight:96,display:'flex',flexDirection:'column' as const,justifyContent:'center'}}>
+    <div style={{background:t.card,border:`1.5px solid ${color}`,borderRadius:14,padding:'16px 14px 18px',textAlign:'center' as const,position:'relative' as const,minHeight:96,display:'flex',flexDirection:'column' as const,justifyContent:'center',boxShadow:'var(--elev1)'}}>
       <i className="ti ti-info-circle" style={{position:'absolute' as const,top:9,right:11,fontSize:14,color:t.t3,opacity:0.7}} aria-hidden="true"/>
       <div style={{fontFamily:FG,fontSize:12.5,color:t.t2,fontWeight:500,marginBottom:9,lineHeight:1.25}}>{label}</div>
-      <div style={{fontFamily:FG,fontWeight:700,fontSize:25,letterSpacing:'-0.01em',color:t.t1,filter:hide?'blur(7px)':'none'}}>{value}</div>
+      <div style={{fontFamily:FG,fontWeight:700,fontSize:25,letterSpacing:'-0.01em',color:t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}}>{value}</div>
     </div>
   )
 }
@@ -262,7 +262,7 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
   const Row=({label,val,sign,strong,color}:{label:string;val:number;sign?:'-'|'=';strong?:boolean;color?:string})=>(
     <div style={{display:'flex',justifyContent:'space-between',padding:'8px 2px',borderBottom:`1px solid ${t.line}`,fontSize:strong?14:13}}>
       <span style={{color:strong?t.t1:t.t2,fontWeight:strong?600:400}}>{sign==='='?'= ':sign==='-'?'(–) ':''}{label}</span>
-      <span style={{color:color||t.t1,fontWeight:strong?700:500,fontFamily:FG,filter:hide?'blur(6px)':'none'}}>{brl(val||0)}</span>
+      <span style={{color:color||t.t1,fontWeight:strong?700:500,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide?'blur(6px)':'none'}}>{brl(val||0)}</span>
     </div>
   )
   return(
@@ -772,7 +772,7 @@ const TABS = [
 ]
 const THEME_KEY='oraculo_theme'
 
-export default function GestaoHub({promoActive=false,promoType=null}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null;userEmail?:string}){
+export default function GestaoHub({promoActive=false,promoType=null,theme}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null;userEmail?:string;theme?:'dark'|'light'}){
   const [tab,setTab]=useState('resumo')
   const [hide,setHide]=useState(false)
   const [themeKey,setThemeKey]=useState('dark')
@@ -864,11 +864,10 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
     if(!s) try{ s = localStorage.getItem(THEME_KEY)||'' }catch{}
     if(s && THEMES[s]) setThemeKey(s)
   },[])
-  const setTheme=(k:string)=>{
-    setThemeKey(k)
-    try{ localStorage.setItem(THEME_KEY,k) }catch{}
-    if(typeof document!=='undefined') document.documentElement.setAttribute('data-theme',k)  // tema do site inteiro
-  }
+  // Sincroniza com o tema global controlado pelo topbar do painel (fonte única de verdade)
+  useEffect(()=>{
+    if(theme && THEMES[theme]) setThemeKey(theme)
+  },[theme])
   const t=THEMES[themeKey]||THEMES.dark
 
   const d=useMemo(()=>getFinanceData(),[])
@@ -880,6 +879,7 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
       <div style={{background:t.dark?'transparent':t.pageBg,borderRadius:t.dark?0:16,border:t.dark?'none':`1px solid ${t.line}`,padding:t.dark?'2px 0 28px':'18px 20px 28px',minHeight:'calc(100vh - 80px)'}}>
         <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"/>
         <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap"/>
+        <link rel="stylesheet" precedence="default" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.24.0/dist/tabler-icons.min.css"/>
 
         {/* Header */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
@@ -888,22 +888,9 @@ export default function GestaoHub({promoActive=false,promoType=null}:{promoActiv
             <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':amazonConnected?'carregando dados reais…':'conecte sua conta para ver seus dados'}</span></p>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            {/* Seletor de paleta */}
-            <div style={{display:'flex',gap:3,background:t.card,border:`1px solid ${t.line}`,borderRadius:9,padding:3}}>
-              {Object.values(THEMES).map(th=>{
-                const on=themeKey===th.key
-                return(
-                  <button key={th.key} onClick={()=>setTheme(th.key)} title={`Tema ${th.name}`}
-                    style={{display:'flex',alignItems:'center',gap:5,fontSize:11.5,fontWeight:on?600:400,padding:'5px 9px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',border:'none',
-                      background:on?(t.dark?'rgba(255,255,255,0.08)':'#EEF0F3'):'transparent',color:on?t.t1:t.t3}}>
-                    <span style={{width:11,height:11,borderRadius:'50%',background:th.dark?'#16162A':'#FFFFFF',border:`1.5px solid ${th.gold}`}}/>{th.name}
-                  </button>
-                )
-              })}
-            </div>
             <button onClick={()=>setHide(v=>!v)} title="Ocultar valores"
               style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t2,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
-              <i className={`ti ti-${hide?'eye-off':'eye'}`} aria-hidden="true"/>
+              <i className={`ti ti-${hide?'eye-off':'eye'}`} style={{fontSize:18}} aria-hidden="true"/>
             </button>
             <PeriodPicker value={period} custom={customRange} onChange={(k,r)=>{ setPeriod(k); setCustomRange(r) }}/>
           </div>
