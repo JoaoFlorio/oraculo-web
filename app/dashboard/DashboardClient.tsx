@@ -1559,7 +1559,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                       </div>
                       <div style={{fontSize:11,color:T.t3}}>
                         Plano: <span style={{color:T.gold,fontWeight:600}}>{(licPlan ? PLAN_CFG[licPlan]?.label : undefined) ?? licPlan}</span>
-                        {' · '}Funciona em até <span style={{color:T.t4,fontWeight:600}}>2 dispositivos</span>
+                        {' · '}Funciona em <span style={{color:T.t4,fontWeight:600}}>1 dispositivo</span> por vez
                       </div>
                     </>
                   ):(
