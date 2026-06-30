@@ -72,7 +72,7 @@ async function sendAccessEmail(opts: {
       </div>
     </div>
     <p style="font-size:11px;color:#64748B;margin:20px 0 0;line-height:1.6;">
-      Dúvidas? <a href="mailto:contato@belchiq.com.br" style="color:#F0B429;">contato@belchiq.com.br</a>
+      Dúvidas? <a href="mailto:atendimento@oraculojf.com.br" style="color:#F0B429;">atendimento@oraculojf.com.br</a>
     </p>
   </div>
 </div></body></html>`,
