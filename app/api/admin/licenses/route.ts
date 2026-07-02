@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
-import { getStaffSession } from '@/lib/auth'
+import { getAdminSession } from '@/lib/auth'
 
 const ADMIN_KEY    = process.env.INTERNAL_KEY   || ''
 const ADMIN_SECRET = process.env.ADMIN_SECRET   || ''
@@ -8,7 +8,7 @@ const BACKEND_URL  = process.env.BACKEND_URL    || 'https://central.oraculojf.co
 
 async function checkAuth(req: NextRequest) {
   if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return true
-  return !!(await getStaffSession())
+  return !!(await getAdminSession())
 }
 
 function backendHeaders() {

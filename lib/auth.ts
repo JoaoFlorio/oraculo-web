@@ -91,6 +91,13 @@ export async function getStaffSession() {
   return user
 }
 
+// Sessão só de admin — para dados sensíveis (dashboard/faturamento, licenças).
+export async function getAdminSession() {
+  const user = await getSession()
+  if (!user || user.role !== 'admin') return null
+  return user
+}
+
 export async function invalidateToken(token: string) {
   await prisma.session.deleteMany({ where: { token } })
 }
