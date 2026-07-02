@@ -30,18 +30,14 @@ export async function POST(req: NextRequest) {
   const { key, value } = await req.json()
   if (!key) return NextResponse.json({ error: 'key required' }, { status: 400 })
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: { metadata: true },
-  })
-
-  const current = (dbUser?.metadata ?? {}) as Record<string, unknown>
-  const updated = { ...current, [key]: value }
-
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { metadata: updated },
-  })
+  // Merge atômico no Postgres (jsonb ||) — evita que duas gravações quase
+  // simultâneas (read-modify-write) apaguem a key uma da outra.
+  const json = JSON.stringify(value ?? null)
+  await prisma.$executeRaw`
+    UPDATE "User"
+    SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(${key}::text, ${json}::jsonb)
+    WHERE id = ${user.id}
+  `
 
   return NextResponse.json({ ok: true })
 }

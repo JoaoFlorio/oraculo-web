@@ -43,8 +43,10 @@ export async function GET(req: NextRequest) {
     if (!res.ok) throw new Error(`Backend ${res.status}`)
     const data = await res.json()
 
-    // Aplica limite de produtos por plano
-    const limit    = PLAN_LIMIT[user.plan] ?? 6
+    // Aplica limite de produtos por plano.
+    // Plano não mapeado (id novo da Greenn, legado) NUNCA cai no limite free —
+    // quem loga é pagante; fallback é o plano pago mais restrito (mensal).
+    const limit    = PLAN_LIMIT[user.plan] ?? PLAN_LIMIT.monthly
     const products = (data.products || []).slice(0, limit)
 
     return NextResponse.json({

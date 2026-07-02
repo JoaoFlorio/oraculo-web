@@ -30,11 +30,12 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
-  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:4,    tabs:['bestsellers','extension','agente','financeiro'],                                                  modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','competitor','extension','agente','financeiro'], modal:true,  export:true  },
+  // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
+  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','extension','agente'],                                                                 modal:false, export:false },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 const GREENN: Record<string,string> = {
@@ -64,13 +65,14 @@ const NAV = [
   { id:'new',         label:'Recém Adicionados' },
   { id:'trending',    label:'Em Alta'           },
   { id:'generics',    label:'Genéricos'         },
+  { id:'saved',       label:'Salvos'            },
   { id:'competitor',  label:'Análise Rival'     },
   { id:'agente',      label:'Agente IA'         },
   { id:'extension',   label:'Extensão'          },
 ]
 const NAV_GROUPS = [
   { group:'Gestão',      ids:['financeiro'] },
-  { group:'Mineração',   ids:['bestsellers','new','trending','generics','competitor'] },
+  { group:'Mineração',   ids:['bestsellers','new','trending','generics','saved','competitor'] },
   { group:'Ferramentas', ids:['agente','extension'] },
 ]
 const REF: Record<string,number> = {
@@ -134,12 +136,22 @@ function asinToAge(asin:string):string{
 
 /* ─── CSV export ─────────────────────────────────────────────────────────── */
 function exportCSV(products: any[], category: string) {
+  // Escapa qualquer célula com vírgula/aspas/quebra de linha (evita desalinhar colunas)
+  const esc = (v: any) => {
+    const s = String(v ?? '')
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s
+  }
   const rows = [
     ['ASIN','Título','Marca','Categoria','BSR','Vendas/mês Estimadas','Score'],
-    ...products.map(p => [
-      p.asin, `"${(p.title||'').replace(/"/g,'""')}"`, p.brand||'', p.category||'',
-      p.bsr||0, p.salesEst||bsrSales(p.bsr||0), cardScore(p.bsr||0,p.salesEst||0,!p.brand),
-    ])
+    ...products.map(p => {
+      // mesma derivação do Card: fallback de vendas via BSR e genérico inclui 'genérico'
+      const sales = p.salesEst || bsrSales(p.bsr||0)
+      const isGeneric = !p.brand || p.brand.trim()==='' || p.brand.toLowerCase()==='genérico'
+      return [
+        esc(p.asin), esc(p.title||''), esc(p.brand||''), esc(p.category||''),
+        p.bsr||0, sales, cardScore(p.bsr||0, sales, isGeneric),
+      ]
+    })
   ]
   const csv  = rows.map(r=>r.join(',')).join('\n')
   const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'})
@@ -151,6 +163,17 @@ function exportCSV(products: any[], category: string) {
   URL.revokeObjectURL(url)
 }
 
+
+/* ─── Suporte WhatsApp ───────────────────────────────────────────────────── */
+const WA_LINK = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Sou%20cliente%20do%20Or%C3%A1culo%20e%20preciso%20de%20ajuda.'
+function WaIcon({size=18,c='#fff'}:{size?:number;c?:string}){
+  return(
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}>
+      <path d="M12.04 3.5a8.4 8.4 0 0 0-7.27 12.6L3.5 20.5l4.53-1.24a8.4 8.4 0 1 0 4.01-15.76z" stroke={c} strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M9.2 8.4c-.2-.45-.4-.46-.6-.47l-.5-.01c-.18 0-.46.07-.7.33s-.92.9-.92 2.2 .94 2.55 1.07 2.73c.13.17 1.82 2.9 4.48 3.95 2.21.87 2.66.7 3.14.65.48-.04 1.55-.63 1.77-1.24.22-.61.22-1.13.15-1.24-.06-.11-.24-.17-.5-.3s-1.55-.77-1.79-.85c-.24-.09-.42-.13-.59.13-.17.26-.68.85-.83 1.03-.15.17-.31.2-.57.07-.26-.13-1.1-.41-2.1-1.3-.78-.7-1.3-1.55-1.46-1.81-.15-.26-.02-.4.12-.53.11-.12.26-.31.39-.46.13-.15.17-.26.26-.44.09-.17.04-.33-.02-.46-.07-.13-.57-1.4-.8-1.91z" fill={c}/>
+    </svg>
+  )
+}
 
 /* ─── Logo mark ──────────────────────────────────────────────────────────── */
 function OracleMark({size=22}:{size?:number}){
@@ -184,6 +207,7 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     new:         <><rect x="6" y="6" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5"/><path d="M14 12h6M14 16h4M14 20h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     trending:    <><path d="M5 19l5-6 4 3 5-8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M15 8h4v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
     generics:    <><circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13h6M13 16h6M13 19h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
+    saved:       <><path d="M9 6.5A1.5 1.5 0 0 1 10.5 5h11A1.5 1.5 0 0 1 23 6.5V26l-7-4.2L9 26z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></>,
     search:      <><circle cx="14" cy="14" r="7" stroke="currentColor" strokeWidth="1.5"/><path d="M19.5 19.5L26 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     competitor: <><circle cx="16" cy="10" r="4" stroke="currentColor" strokeWidth="1.5"/><circle cx="10" cy="20" r="3" stroke="currentColor" strokeWidth="1.5"/><circle cx="22" cy="20" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13l-1.5 4M19 13l1.5 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></>,
     extension:  <><rect x="5" y="5" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.5"/><path d="M11 5v4a2 2 0 01-2 2H5M19 14h-2a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
@@ -251,7 +275,7 @@ function ScoreRing({score}:{score:number}){
 /* ─── Upgrade modal ──────────────────────────────────────────────────────── */
 function UpgradeModal({onClose}:{onClose:()=>void}){
   const plans = [
-    { id:'monthly',  label:'Mensal',    price:'R$ 79,90', period:'/mês',      color:T.pur,  features:['Acesso às 8 ferramentas','Extensão Chrome incluída','Agente IA ilimitado','Simulador Financeiro'] },
+    { id:'monthly',  label:'Mensal',    price:'R$ 79,90', period:'/mês',      color:T.pur,  features:['7 ferramentas (+ Gestão em breve)','Extensão Chrome incluída','Agente IA ilimitado','Simulador Financeiro'] },
     { id:'biannual', label:'Semestral', price:'R$ 397',   period:'/6 meses',  color:T.gold, features:['Tudo do plano Mensal','6 meses de acesso','Exportar CSV','Prioridade no suporte'], best:true },
     { id:'annual',   label:'Anual',     price:'R$ 597',   period:'/ano',      color:T.g,    features:['Tudo do plano Semestral','12 meses de acesso','Suporte VIP','Acesso antecipado a novidades'] },
   ]
@@ -277,10 +301,10 @@ function UpgradeModal({onClose}:{onClose:()=>void}){
         <div style={{padding:'28px 28px 24px',display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
           {plans.map(plan=>(
             <div key={plan.id} style={{
-              background:plan.best?`${plan.color}08`:T.card,
-              border:`1px solid ${plan.best?plan.color+'35':T.line}`,
+              background:plan.best?tint(plan.color,3):T.card,
+              border:`1px solid ${plan.best?tint(plan.color,21):T.line}`,
               borderRadius:14,padding:'20px 18px',position:'relative' as const,
-              boxShadow:plan.best?`0 0 30px ${plan.color}15`:undefined,
+              boxShadow:plan.best?`0 0 30px ${tint(plan.color,8)}`:undefined,
             }}>
               {plan.best&&(
                 <div style={{position:'absolute',top:-11,left:'50%',transform:'translateX(-50%)',background:plan.color,color:'#02020A',fontSize:9,fontWeight:800,padding:'3px 12px',borderRadius:99,letterSpacing:'0.1em',whiteSpace:'nowrap' as const}}>
@@ -301,7 +325,7 @@ function UpgradeModal({onClose}:{onClose:()=>void}){
                 ))}
               </div>
               <a href={GREENN[plan.id]} target="_blank" rel="noreferrer"
-                style={{display:'block',textAlign:'center' as const,background:plan.best?plan.color:'none',color:plan.best?'#02020A':plan.color,border:plan.best?'none':`1px solid ${plan.color}40`,fontWeight:700,fontSize:11,padding:'11px',borderRadius:9,letterSpacing:'0.08em',textDecoration:'none',textTransform:'uppercase' as const,transition:'all .15s'}}>
+                style={{display:'block',textAlign:'center' as const,background:plan.best?plan.color:'none',color:plan.best?'#02020A':plan.color,border:plan.best?'none':`1px solid ${tint(plan.color,25)}`,fontWeight:700,fontSize:11,padding:'11px',borderRadius:9,letterSpacing:'0.08em',textDecoration:'none',textTransform:'uppercase' as const,transition:'all .15s'}}>
                 Assinar
               </a>
             </div>
@@ -419,6 +443,8 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
   const [lsData,setLsData]=useState<any>(null)
   const [lsLoading,setLsLoading]=useState(true)
   const [realPrice,setRealPrice]=useState(product.price>0)
+  // true depois que o usuário edita preço/custo — o fetch não sobrescreve mais os inputs
+  const userTouched=useRef(false)
 
   // Busca score real do listing via SP-API (inclui preço real + vendas calibradas)
   useEffect(()=>{
@@ -428,7 +454,7 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
       .then(r=>r.json())
       .then(d=>{
         if(d.score) setLsData(d)
-        if(d.price>0){ setPrice(Math.round(d.price)); setCost(Math.round(d.price*.3)); setRealPrice(true) }
+        if(d.price>0 && !userTouched.current){ setPrice(Math.round(d.price)); setCost(Math.round(d.price*.3)); setRealPrice(true) }
       })
       .catch(()=>{})
       .finally(()=>setLsLoading(false))
@@ -572,7 +598,7 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
                   <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:8}}>{f.l}</div>
                   <div style={{display:'flex',alignItems:'baseline',gap:4}}>
                     <span style={{fontSize:13,color:T.t3,fontWeight:500}}>R$</span>
-                    <input type="number" min={0} value={f.v} onChange={e=>(f.s as any)(+e.target.value||0)} style={{background:'none',border:'none',color:T.gold,fontSize:22,fontWeight:700,width:'100%',outline:'none',fontFamily:'inherit'}}/>
+                    <input type="number" min={0} value={f.v} onChange={e=>{userTouched.current=true;(f.s as any)(+e.target.value||0)}} style={{background:'none',border:'none',color:T.gold,fontSize:22,fontWeight:700,width:'100%',outline:'none',fontFamily:'inherit'}}/>
                   </div>
                   {f.isPrice && realPrice && <div style={{fontSize:9,color:T.g,marginTop:4,display:'flex',alignItems:'center',gap:4}}><Ico n="pin" size={10} c={T.g}/> Preço real da Amazon</div>}
                   {f.isPrice && !realPrice && lsLoading && <div style={{fontSize:9,color:T.t3,marginTop:4}}>buscando preço real…</div>}
@@ -630,8 +656,8 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
                     <div style={{fontSize:11,color:T.t3,marginBottom:2}}>{Math.round(sc.m*100)}% · {fmtN(u)} un.</div>
                     <div style={{fontSize:11,color:T.t3,marginBottom:14}}>Receita R$ {fmtN(Math.round(u*price))}</div>
                     <div style={{borderTop:`1px solid ${T.line}`,paddingTop:12}}>
-                      <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',marginBottom:4}}>LUCRO LÍQUIDO</div>
-                      <div style={{fontSize:22,fontWeight:700,color:luc>=0?sc.c:T.r,letterSpacing:'-0.02em'}}>R$ {fmtN(Math.abs(luc))}</div>
+                      <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',marginBottom:4}}>{luc<0?'PREJUÍZO':'LUCRO LÍQUIDO'}</div>
+                      <div style={{fontSize:22,fontWeight:700,color:luc>=0?sc.c:T.r,letterSpacing:'-0.02em'}}>{luc<0?'− ':''}R$ {fmtN(Math.abs(luc))}</div>
                     </div>
                   </div>
                 )
@@ -744,12 +770,12 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
                   {recs.map((r,i)=>{
                     const hc=r.priority==='Alta'?T.r:r.priority==='Média'?T.a:T.t3
                     return(
-                      <div key={i} style={{display:'flex',gap:12,alignItems:'flex-start',background:T.bg,border:`1px solid ${hc}25`,borderLeft:`3px solid ${hc}`,borderRadius:10,padding:'11px 14px'}}>
+                      <div key={i} style={{display:'flex',gap:12,alignItems:'flex-start',background:T.bg,border:`1px solid ${tint(hc,15)}`,borderLeft:`3px solid ${hc}`,borderRadius:10,padding:'11px 14px'}}>
                         <div style={{lineHeight:1,flexShrink:0,marginTop:1,color:T.gold}}><EmojiIco e={r.icon} size={17} c={T.gold}/></div>
                         <div style={{flex:1}}>
                           <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:3}}>
                             <span style={{fontSize:12,fontWeight:600,color:T.t1}}>{r.title}</span>
-                            <span style={{fontSize:9,fontWeight:700,color:hc,background:`${hc}15`,padding:'2px 7px',borderRadius:4,letterSpacing:'0.05em',flexShrink:0}}>{r.priority}</span>
+                            <span style={{fontSize:9,fontWeight:700,color:hc,background:tint(hc,8),padding:'2px 7px',borderRadius:4,letterSpacing:'0.05em',flexShrink:0}}>{r.priority}</span>
                           </div>
                           <div style={{fontSize:11,color:T.t3,lineHeight:1.55}}>{r.desc}</div>
                         </div>
@@ -761,7 +787,7 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
             )
           })()}
           {/* Verdict */}
-          <div style={{background:`${verdict.c}08`,border:`1px solid ${verdict.c}18`,borderRadius:12,padding:'16px 20px',display:'flex',alignItems:'center',gap:16}}>
+          <div style={{background:tint(verdict.c,3),border:`1px solid ${tint(verdict.c,9)}`,borderRadius:12,padding:'16px 20px',display:'flex',alignItems:'center',gap:16}}>
             <ScoreRing score={score}/>
             <div style={{flex:1}}>
               <div style={{fontSize:13,fontWeight:600,color:verdict.c,marginBottom:4}}>{verdict.l}</div>
@@ -859,12 +885,12 @@ function ImageDownloader({images,asin,title}:{images:string[];asin:string;title:
 }
 
 /* ─── Small helpers ──────────────────────────────────────────────────────── */
-function Chip({text,c}:{text:string;c:string}){return<span style={{background:`${c}18`,color:c,border:`1px solid ${c}28`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600,letterSpacing:'0.03em'}}>{text}</span>}
+function Chip({text,c}:{text:string;c:string}){return<span style={{background:tint(c,9),color:c,border:`1px solid ${tint(c,16)}`,borderRadius:4,padding:'2px 8px',fontSize:10,fontWeight:600,letterSpacing:'0.03em'}}>{text}</span>}
 function Lbl({children,style}:{children:React.ReactNode;style?:React.CSSProperties}){return<div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,...style}}>{children}</div>}
 function Chevron({open}:{open:boolean}){return<svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{transition:'transform .2s',transform:open?'rotate(180deg)':'none',color:T.t3,flexShrink:0}}><path d="M2 3.5L5 6.5l3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>}
 
 /* ─── Product card ───────────────────────────────────────────────────────── */
-function Card({product,onClick,locked}:{product:any;onClick:()=>void;locked?:boolean}){
+function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:()=>void;locked?:boolean;saved?:boolean;onToggleSave?:()=>void}){
   const [hov,setHov]=useState(false)
   const bsr=product.bsr||0
   const sales=product.salesEst||bsrSales(bsr)
@@ -875,6 +901,9 @@ function Card({product,onClick,locked}:{product:any;onClick:()=>void;locked?:boo
 
   return(
     <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      role="button" tabIndex={0}
+      aria-label={locked?'Produto bloqueado — fazer upgrade para ver a análise':`Ver análise de ${product.title||'produto'}`}
+      onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onClick()}}}
       style={{background:hov?T.cardHov:T.card,border:`1px solid ${hov&&!locked?T.lineG:T.line}`,borderRadius:14,overflow:'hidden',cursor:'pointer',
         transition:'background .15s,border-color .15s,transform .15s,box-shadow .15s',
         transform:hov&&!locked?'translateY(-2px)':'none',
@@ -885,6 +914,19 @@ function Card({product,onClick,locked}:{product:any;onClick:()=>void;locked?:boo
       }}>
       {/* Score badge */}
       <div style={{position:'absolute',top:10,right:10,zIndex:2}}><ScoreRing score={score}/></div>
+      {/* Bookmark — salvar/remover */}
+      {onToggleSave&&!locked&&(
+        <button onClick={e=>{e.stopPropagation();onToggleSave()}}
+          title={saved?'Remover dos salvos':'Salvar produto'} aria-label={saved?'Remover dos salvos':'Salvar produto'}
+          style={{position:'absolute',top:11,right:44,zIndex:3,width:26,height:26,borderRadius:8,cursor:'pointer',
+            border:`1px solid ${saved?T.lineG:'rgba(3,3,10,0.15)'}`,
+            background:saved?'rgba(3,3,10,0.8)':'rgba(3,3,10,0.55)',backdropFilter:'blur(4px)',
+            display:'flex',alignItems:'center',justifyContent:'center',padding:0,transition:'all .15s ease-out'}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill={saved?'var(--gold)':'none'}>
+            <path d="M6.5 4.5h11a1 1 0 0 1 1 1V20l-6.5-3.8L5.5 20V5.5a1 1 0 0 1 1-1z" stroke={saved?'var(--gold)':'#C8C8E0'} strokeWidth="1.5" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      )}
       {/* Generic badge */}
       {isGeneric&&!locked&&<div style={{position:'absolute',top:10,left:10,zIndex:2,background:'rgba(3,3,10,0.8)',backdropFilter:'blur(4px)',border:`1px solid ${tint(T.pur,21)}`,borderRadius:4,padding:'2px 7px',fontSize:8,fontWeight:700,color:T.pur,letterSpacing:'0.1em'}}>GENÉRICO</div>}
       {/* Image */}
@@ -1104,13 +1146,20 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
               <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px'}}>
                 <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:14}}>Vendas: Você vs Concorrentes</div>
                 {/* Target product bar */}
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
-                  <div style={{width:54,fontSize:9,color:T.gold,textAlign:'right' as const,flexShrink:0,fontWeight:700}}>Analisado</div>
-                  <div style={{flex:1,height:20,background:T.bg,borderRadius:4,overflow:'hidden',position:'relative' as const,border:`1px solid ${T.lineG}`}}>
-                    <div style={{height:'100%',width:`${(p.salesEst/maxSales)*100}%`,background:T.gold,borderRadius:4,opacity:.9,transition:'width 1s ease',minWidth:p.salesEst>0?4:0}}/>
-                    <span style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',fontSize:8,color:'#02020A',fontWeight:700}}>{fmtK(p.salesEst)}</span>
-                  </div>
-                </div>
+                {(()=>{
+                  const pPct=(p.salesEst/maxSales)*100
+                  // Label só é escuro quando está de fato sobre a barra dourada; sobre a trilha usa cor do tema
+                  const onBar=pPct>=85
+                  return(
+                    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+                      <div style={{width:54,fontSize:9,color:T.gold,textAlign:'right' as const,flexShrink:0,fontWeight:700}}>Analisado</div>
+                      <div style={{flex:1,height:20,background:T.bg,borderRadius:4,overflow:'hidden',position:'relative' as const,border:`1px solid ${T.lineG}`}}>
+                        <div style={{height:'100%',width:`${pPct}%`,background:T.gold,borderRadius:4,opacity:.9,transition:'width 1s ease',minWidth:p.salesEst>0?4:0}}/>
+                        <span style={{position:'absolute',right:6,top:'50%',transform:'translateY(-50%)',fontSize:8,color:onBar?'#02020A':T.t1,fontWeight:700}}>{fmtK(p.salesEst)}</span>
+                      </div>
+                    </div>
+                  )
+                })()}
                 {salesChart.map((item,i)=>(
                   <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
                     <div style={{width:54,fontSize:9,color:T.t3,textAlign:'right' as const,flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{item.label}</div>
@@ -1149,7 +1198,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
             )}
 
             {/* Verdict */}
-            <div style={{background:`${verdict.c}08`,border:`1px solid ${verdict.c}20`,borderRadius:14,padding:'20px 24px',display:'flex',alignItems:'center',gap:20}}>
+            <div style={{background:tint(verdict.c,3),border:`1px solid ${tint(verdict.c,13)}`,borderRadius:14,padding:'20px 24px',display:'flex',alignItems:'center',gap:20}}>
               <GaugeArc value={opp} color={verdict.c} label="Score" size={100}/>
               <div style={{flex:1}}>
                 <div style={{fontSize:15,fontWeight:700,color:verdict.c,marginBottom:6}}>{verdict.l}</div>
@@ -1174,7 +1223,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
                         <div style={{flex:1}}>
                           <div style={{fontSize:13,fontWeight:600,color:T.t1,lineHeight:1.4}}>{rec.title}</div>
                         </div>
-                        <div style={{background:`${priorityColor}15`,border:`1px solid ${priorityColor}30`,borderRadius:99,padding:'2px 10px',fontSize:8,fontWeight:700,color:priorityColor,letterSpacing:'0.1em',textTransform:'uppercase' as const,flexShrink:0}}>
+                        <div style={{background:tint(priorityColor,8),border:`1px solid ${tint(priorityColor,19)}`,borderRadius:99,padding:'2px 10px',fontSize:8,fontWeight:700,color:priorityColor,letterSpacing:'0.1em',textTransform:'uppercase' as const,flexShrink:0}}>
                           {rec.priority}
                         </div>
                       </div>
@@ -1260,6 +1309,93 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const [pwMsg,   setPwMsg]   = useState<{ok:boolean;text:string}|null>(null)
   const PAGE = 60
 
+  /* ── Saudação real por hora local (setada no client p/ evitar mismatch SSR) ── */
+  const [greet, setGreet] = useState('Olá')
+  useEffect(()=>{
+    const h = new Date().getHours()
+    setGreet(h<12?'Bom dia':h<18?'Boa tarde':'Boa noite')
+  },[])
+  const firstName = (user.name||'').trim().split(/\s+/)[0] || 'Seller'
+
+  /* ── Avatar do usuário (foto persistida em user metadata) ── */
+  const [avatar,     setAvatar]     = useState<string|null>(null)
+  const [avatarBusy, setAvatarBusy] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  function onAvatarFile(e:React.ChangeEvent<HTMLInputElement>){
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if(!file) return
+    setAvatarBusy(true)
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = ()=>{
+      URL.revokeObjectURL(url)
+      try{
+        // redimensiona via canvas para 128x128 (cover, crop central)
+        const canvas = document.createElement('canvas')
+        canvas.width = 128; canvas.height = 128
+        const ctx = canvas.getContext('2d')
+        if(!ctx) throw new Error('canvas')
+        const s  = Math.min(img.width, img.height)
+        const sx = (img.width - s)/2, sy = (img.height - s)/2
+        ctx.drawImage(img, sx, sy, s, s, 0, 0, 128, 128)
+        let q = 0.82
+        let dataUrl = canvas.toDataURL('image/jpeg', q)
+        // garante <100KB — reduz qualidade se necessário
+        while(dataUrl.length > 100_000 && q > 0.3){ q -= 0.12; dataUrl = canvas.toDataURL('image/jpeg', q) }
+        setAvatar(dataUrl)
+        fetch('/api/user/metadata',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'profile_avatar',value:dataUrl})})
+          .catch(()=>{})
+          .finally(()=>setAvatarBusy(false))
+      }catch{ setAvatarBusy(false) }
+    }
+    img.onerror = ()=>{ URL.revokeObjectURL(url); setAvatarBusy(false) }
+    img.src = url
+  }
+
+  /* ── Produtos Salvos (snapshot real do garimpo, persistido em metadata) ── */
+  type SavedItem = {asin:string;title:string;image:string;brand:string;category:string;bsr:number;salesEst:number;savedAt:string}
+  const [saved, setSaved] = useState<SavedItem[]>([])
+  const saveTimer = useRef<ReturnType<typeof setTimeout>|null>(null)
+
+  useEffect(()=>{
+    fetch('/api/user/metadata?key=profile_avatar').then(r=>r.json())
+      .then(d=>{ if(typeof d.value==='string' && d.value.startsWith('data:image')) setAvatar(d.value) })
+      .catch(()=>{})
+    fetch('/api/user/metadata?key=saved_products').then(r=>r.json())
+      .then(d=>{ if(Array.isArray(d.value)) setSaved(d.value.filter((s:any)=>s&&s.asin)) })
+      .catch(()=>{})
+  },[])
+
+  function persistSaved(list:SavedItem[]){
+    if(saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(()=>{
+      fetch('/api/user/metadata',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'saved_products',value:list})}).catch(()=>{})
+    },350)
+  }
+  const isSaved = (asin:string)=> saved.some(s=>s.asin===asin)
+  function toggleSaved(p:any){
+    if(!p?.asin) return
+    setSaved(prev=>{
+      const exists = prev.some(s=>s.asin===p.asin)
+      const next = exists
+        ? prev.filter(s=>s.asin!==p.asin)
+        : [{
+            asin: p.asin,
+            title: p.title||'',
+            image: p.images?.[0]||p.image||'',
+            brand: p.brand||'',
+            category: p.category||'',
+            bsr: p.bsr||0,
+            salesEst: p.salesEst||bsrSales(p.bsr||0),
+            savedAt: new Date().toISOString(),
+          }, ...prev].slice(0,100) // cap 100 — o mais antigo sai
+      persistSaved(next)
+      return next
+    })
+  }
+
   async function changePassword(){
     setPwMsg(null)
     if(!pwCur||!pwNew||!pwConf){setPwMsg({ok:false,text:'Preencha todos os campos'});return}
@@ -1279,7 +1415,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     }
   }
 
-  const cfg = PLAN_CFG[user.plan] ?? PLAN_CFG.free
+  // Plano não reconhecido (id novo da Greenn, legado etc.) NUNCA cai em free —
+  // free foi descontinuado; fallback é o plano pago mais restrito (mensal).
+  const cfg = PLAN_CFG[user.plan] ?? PLAN_CFG.monthly
   const isFree = user.plan === 'free'
 
   // Aviso de plano próximo de expirar
@@ -1289,9 +1427,13 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
 
   // ASINs já mostrados, por aba+categoria → garante novidade a cada "Atualizar"
   const seenRef = useRef<Record<string, Set<string>>>({})
+  // Guarda de sequência: só a requisição mais recente pode gravar estado
+  const loadIdRef = useRef(0)
+  const [loadError, setLoadError] = useState(false)
 
   async function load(n=nav, c=cat, query='', bust=false){
-    setLoading(true); setDone(false); setPage(1)
+    const reqId = ++loadIdRef.current
+    setLoading(true); setDone(false); setPage(1); setLoadError(false)
     const key = `${n}__${c}`
     if(bust) seenRef.current[key] = new Set()          // recomeça: pool novo, esquece o visto
     const seen = (seenRef.current[key] ||= new Set())
@@ -1301,7 +1443,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       // envia os já vistos (últimos 400) para o backend não repetir
       if(seen.size) params.set('exclude',[...seen].slice(-400).join(','))
       const r = await fetch(`/api/products?${params}`)
+      if(reqId !== loadIdRef.current) return           // resposta obsoleta: outra aba/categoria venceu
+      if(r.status === 401){ router.push('/login'); return }
+      if(!r.ok) throw new Error(`HTTP ${r.status}`)
       const d = await r.json()
+      if(reqId !== loadIdRef.current) return
       const list: any[] = d.products||[]
       // pool esgotado (cliente já viu quase tudo) e não foi bust → reconstrói com produtos frescos
       if(!bust && query==='' && (d.remaining ?? list.length) < 12){
@@ -1310,7 +1456,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       list.forEach(p=>seen.add(p.asin))
       if(seen.size > 800) seenRef.current[key] = new Set(list.map(p=>p.asin))
       setProds(list)
-    }catch{ setProds([]) }
+    }catch{
+      if(reqId !== loadIdRef.current) return
+      setProds([]); setLoadError(true)
+    }
+    if(reqId !== loadIdRef.current) return
     setLoading(false); setDone(true)
   }
 
@@ -1320,8 +1470,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   function goNav(id:string){
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}
     setNav(id); setPage(1)
-    if(id==='competitor'){setProds([]);setDone(false);return}
+    if(id==='competitor'||id==='saved'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
     if(id==='extension'){
+      loadIdRef.current++;setLoading(false)
       setProds([]);setDone(false)
       if(!licKey){
         setLicLoading(true)
@@ -1340,6 +1491,8 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     setDetail(p)
   }
 
+  // Quem rola é o <main> (layout 100vh/overflow:hidden) — window.scrollTo não funciona aqui
+  const mainRef = useRef<HTMLElement>(null)
   const curNav  = NAV.find(n=>n.id===nav)
   const curCat  = CATS.find(c=>c.id===cat)
   const isCross = cat === 'all'
@@ -1351,6 +1504,14 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       {upgrade&&<UpgradeModal onClose={()=>setUpgrade(false)}/>}
       {detail&&<DetailModal product={detail} onClose={()=>setDetail(null)} promo={promo}/>}
       {promoOpen&&<PromoModal promo={promo} setPromo={setPromo} onClose={()=>setPromoOpen(false)}/>}
+
+      {/* Botão flutuante de suporte — some quando há modal aberto */}
+      {!detail&&!upgrade&&!promoOpen&&(
+        <a href={WA_LINK} target="_blank" rel="noreferrer" className="ora-wa-fab" aria-label="Suporte no WhatsApp" title="Suporte no WhatsApp"
+          style={{position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',background:T.g,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'var(--elev2)',zIndex:90}}>
+          <WaIcon size={26} c="#fff"/>
+        </a>
+      )}
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
@@ -1365,25 +1526,51 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
         input::placeholder{color:${T.t3}}
         @keyframes pulse{0%,100%{opacity:.7}50%{opacity:.35}}
         @keyframes glow{0%,100%{opacity:.7}50%{opacity:1}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes oraSpin{to{transform:rotate(360deg)}}
+        @keyframes oraDot{0%{box-shadow:0 0 0 0 color-mix(in srgb, var(--g) 45%, transparent)}70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+        .ora-card-in{animation:fadeUp .35s ease-out both;display:grid;min-width:0}
+        .ora-tab-in{animation:fadeUp .25s ease-out}
+        .ora-nav{transition:transform .15s ease-out, background .15s ease-out}
+        .ora-nav:not(.on):hover{transform:translateX(2px);background:color-mix(in srgb, var(--gold) 4%, transparent)}
+        .ora-dot{animation:oraDot 2.4s ease-out infinite}
+        .ora-spin{animation:oraSpin .9s linear infinite}
+        .ora-avatar .cam{opacity:0}
+        .ora-avatar:hover .cam,.ora-avatar .cam.busy{opacity:1}
+        .ora-wa-fab{transition:transform .18s ease-out, box-shadow .18s ease-out}
+        .ora-wa-fab:hover{transform:scale(1.06)}
+        .ora-wa-side{transition:background .15s ease-out, border-color .15s ease-out}
+        .ora-wa-side:hover{background:color-mix(in srgb, var(--g) 16%, transparent)!important}
+        button:not(:disabled):active{transform:scale(.98)}
+        @media (prefers-reduced-motion: reduce){
+          *,*::before,*::after{animation:none!important;transition:none!important}
+          button:not(:disabled):active{transform:none}
+        }
       `}</style>
 
       <div style={{display:'flex',height:'100vh',background:T.bg,color:T.t1,overflow:'hidden'}}>
 
         {/* SIDEBAR */}
-        <aside style={{width:sideOpen?240:64,background:T.sidebar,borderRight:`1px solid ${T.line}`,display:'flex',flexDirection:'column',transition:'width .22s cubic-bezier(.4,0,.2,1)',overflow:'hidden',flexShrink:0,zIndex:20}}>
+        <aside style={{width:sideOpen?248:64,background:T.sidebar,borderRight:`1px solid ${T.line}`,display:'flex',flexDirection:'column',transition:'width .22s cubic-bezier(.4,0,.2,1)',overflow:'hidden',flexShrink:0,zIndex:20,position:'relative' as const}}>
+
+          {/* Veio dourado sutil no topo */}
+          <div aria-hidden style={{position:'absolute',top:0,left:0,right:0,height:220,pointerEvents:'none',background:`radial-gradient(120% 90% at 50% 0%, ${tint(T.gold,6)} 0%, transparent 70%)`}}/>
 
           {/* Logo */}
-          <div style={{padding:'0 12px',height:60,borderBottom:`1px solid ${T.line}`,display:'flex',alignItems:'center',gap:12,flexShrink:0,cursor:'pointer'}} onClick={()=>setSideOpen(!sideOpen)}>
-            <div style={{width:40,height:40,borderRadius:10,background:'rgba(240,180,41,0.06)',border:`1px solid rgba(240,180,41,0.15)`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <div style={{padding:'0 14px',height:64,borderBottom:`1px solid ${T.line}`,display:'flex',alignItems:'center',gap:12,flexShrink:0,cursor:'pointer',position:'relative' as const}} onClick={()=>setSideOpen(!sideOpen)}
+            role="button" tabIndex={0} aria-label={sideOpen?'Recolher menu lateral':'Expandir menu lateral'} aria-expanded={sideOpen}
+            onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSideOpen(!sideOpen)}}}>
+            <div style={{width:40,height:40,borderRadius:10,background:T.goldSub,border:`1px solid ${tint(T.gold,15)}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <OracleMark size={22}/>
             </div>
             {sideOpen&&<div style={{overflow:'hidden',minWidth:0}}>
               <div style={{fontSize:16,fontWeight:800,letterSpacing:'0.24em',color:T.gold,lineHeight:1,whiteSpace:'nowrap' as const}}>ORÁCULO</div>
+              <div style={{fontSize:8,fontWeight:600,letterSpacing:'0.2em',color:T.t3,marginTop:4,textTransform:'uppercase' as const,whiteSpace:'nowrap' as const}}>Amazon Intelligence</div>
             </div>}
           </div>
 
           {/* Nav */}
-          <nav style={{flex:1,overflowY:'auto',overflowX:'hidden',padding:'8px',display:'flex',flexDirection:'column',gap:2}}>
+          <nav style={{flex:1,overflowY:'auto',overflowX:'hidden',padding:'8px',display:'flex',flexDirection:'column',gap:2,position:'relative' as const}}>
             {navGroups.map(g=>(
               <React.Fragment key={g.group}>
                 {sideOpen&&<Lbl style={{padding:'12px 8px 6px',marginBottom:2}}>{g.group}</Lbl>}
@@ -1393,14 +1580,19 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   const locked = !cfg.tabs.includes(id)
                   return(
                     <button key={id} onClick={()=>goNav(id)} title={!sideOpen?n.label:undefined}
+                      className={`ora-nav${active?' on':''}`}
                       style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:sideOpen?'8px 10px':'10px',justifyContent:sideOpen?'flex-start':'center',borderRadius:8,border:'none',cursor:'pointer',
-                        background:active?`${tint(T.gold,7)}`:'none',
-                        borderLeft:sideOpen?(active?`2px solid ${T.gold}`:'2px solid transparent'):'none',
-                        paddingLeft:sideOpen?(active?'8px':'10px'):undefined,
-                        fontFamily:'inherit',textAlign:'left' as const,outline:'none',transition:'all .12s',opacity:locked?.5:1}}>
+                        background:active?`${tint(T.gold,8)}`:'none',
+                        borderLeft:sideOpen?(active?`3px solid ${T.gold}`:'3px solid transparent'):'none',
+                        paddingLeft:sideOpen?(active?'7px':'10px'):undefined,
+                        boxShadow:active?`0 0 18px -8px ${tint(T.gold,55)}`:'none',
+                        fontFamily:'inherit',textAlign:'left' as const,outline:'none',opacity:locked?.5:1}}>
                       <NavIcon id={id} active={active}/>
                       {sideOpen&&<>
                         <span style={{fontSize:12,fontWeight:active?600:400,color:active?T.t1:T.t2,whiteSpace:'nowrap' as const,flex:1,letterSpacing:'-0.01em'}}>{n.label}</span>
+                        {id==='saved'&&saved.length>0&&(
+                          <span className="ora-num" style={{background:T.goldSub,border:`1px solid ${tint(T.gold,25)}`,color:T.gold,fontSize:9,fontWeight:700,minWidth:18,height:16,padding:'0 5px',borderRadius:99,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{saved.length}</span>
+                        )}
                         {locked&&<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1.5" y="5" width="8" height="5.5" rx="1.5" style={{stroke:T.t3}} strokeWidth="1.2"/><path d="M3.5 5V3.5a2 2 0 014 0V5" style={{stroke:T.t3}} strokeWidth="1.2" strokeLinecap="round"/></svg>}
                       </>}
                     </button>
@@ -1436,26 +1628,65 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             )}
           </nav>
 
-          {/* User */}
-          <div style={{padding:'10px 12px',borderTop:`1px solid ${T.line}`,flexShrink:0}}>
+          {/* Suporte + Perfil */}
+          <div style={{padding:'10px 12px 12px',borderTop:`1px solid ${T.line}`,flexShrink:0,display:'flex',flexDirection:'column',gap:8,position:'relative' as const}}>
+            <input ref={fileRef} type="file" accept="image/*" onChange={onAvatarFile} style={{display:'none'}} aria-hidden/>
+
+            {/* Suporte WhatsApp */}
+            <a href={WA_LINK} target="_blank" rel="noreferrer" className="ora-wa-side" aria-label="Suporte no WhatsApp" title={!sideOpen?'Suporte no WhatsApp':undefined}
+              style={{display:'flex',alignItems:'center',justifyContent:sideOpen?'flex-start':'center',gap:9,padding:sideOpen?'9px 12px':'9px 0',borderRadius:10,textDecoration:'none',
+                background:tint(T.g,10),border:`1px solid ${tint(T.g,25)}`}}>
+              <WaIcon size={15} c={T.g}/>
+              {sideOpen&&<span style={{fontSize:11,fontWeight:700,color:T.g,letterSpacing:'0.02em',whiteSpace:'nowrap' as const}}>Suporte no WhatsApp</span>}
+            </a>
+
+            {/* Card de perfil */}
             {sideOpen?(
-              <div style={{display:'flex',alignItems:'center',gap:10}}>
-                <div style={{width:30,height:30,borderRadius:'50%',background:`${cfg.color}20`,border:`1px solid ${cfg.color}40`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:cfg.color,fontWeight:700,flexShrink:0,boxShadow:isFree?undefined:`0 0 8px ${cfg.glow}`,animation:isFree?undefined:'glow 3s ease-in-out infinite'}}>
-                  {user.name?.[0]?.toUpperCase()||'?'}
+              <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:12,padding:'10px',boxShadow:'var(--elev1)',display:'flex',flexDirection:'column',gap:8}}>
+                <div style={{display:'flex',alignItems:'center',gap:10}}>
+                  <button className="ora-avatar" onClick={()=>fileRef.current?.click()} title="Alterar foto" aria-label="Alterar foto de perfil"
+                    style={{position:'relative',width:36,height:36,borderRadius:'50%',padding:0,cursor:'pointer',overflow:'hidden',flexShrink:0,
+                      border:`1px solid ${avatar?T.lineG:tint(cfg.color,35)}`,background:avatar?'transparent':tint(cfg.color,12),
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      boxShadow:isFree?undefined:`0 0 10px ${cfg.glow}`}}>
+                    {avatar
+                      ?<img src={avatar} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                      :<span style={{fontSize:13,color:cfg.color,fontWeight:700}}>{user.name?.[0]?.toUpperCase()||'?'}</span>}
+                    <span className={`cam${avatarBusy?' busy':''}`} style={{position:'absolute',inset:0,background:'rgba(3,3,10,0.55)',display:'flex',alignItems:'center',justifyContent:'center',transition:'opacity .15s'}}>
+                      {avatarBusy
+                        ?<svg className="ora-spin" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
+                        :<svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 8.5A2 2 0 0 1 6 6.5h2l1.2-1.8h5.6L16 6.5h2a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round"/><circle cx="12" cy="12.5" r="3" stroke="#fff" strokeWidth="1.5"/></svg>}
+                    </span>
+                  </button>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:600,color:T.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,letterSpacing:'-0.01em'}}>{user.name}</div>
+                    <span style={{display:'inline-flex',alignItems:'center',gap:4,marginTop:3,fontSize:8,fontWeight:700,color:cfg.color,letterSpacing:'0.1em',textTransform:'uppercase' as const,background:tint(cfg.color,10),border:`1px solid ${tint(cfg.color,22)}`,borderRadius:99,padding:'2px 7px'}}>{cfg.label}</span>
+                  </div>
+                  <button onClick={async()=>{await fetch('/api/auth/logout',{method:'POST'});router.push('/login')}} title="Sair" aria-label="Sair da conta"
+                    style={{background:'none',border:`1px solid ${T.line}`,cursor:'pointer',color:T.t3,width:26,height:26,borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,padding:0,transition:'all .15s'}}
+                    onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=tint(T.r,35);el.style.color=T.r}}
+                    onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M14 4H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7M16 8l4 4-4 4M20 12H9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </button>
                 </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:11,fontWeight:600,color:T.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,letterSpacing:'-0.01em'}}>{user.name}</div>
-                  <div style={{fontSize:8,fontWeight:700,color:cfg.color,letterSpacing:'0.12em',textTransform:'uppercase' as const,marginTop:1}}>{cfg.label}</div>
-                </div>
-                {isFree?<button onClick={()=>setUpgrade(true)} style={{background:T.goldG,border:'none',cursor:'pointer',color:'#02020A',fontSize:8,fontFamily:'inherit',padding:'4px 8px',borderRadius:5,letterSpacing:'0.06em',fontWeight:800,textTransform:'uppercase' as const,whiteSpace:'nowrap' as const}}>Upgrade</button>
-                :<button onClick={async()=>{await fetch('/api/auth/logout',{method:'POST'});router.push('/login')}} style={{background:'none',border:`1px solid ${T.line}`,cursor:'pointer',color:T.t3,fontSize:9,fontFamily:'inherit',padding:'4px 8px',borderRadius:5,letterSpacing:'0.06em',fontWeight:600,textTransform:'uppercase' as const}}>Sair</button>}
+                {isFree&&(
+                  <button onClick={()=>setUpgrade(true)} style={{width:'100%',background:T.goldG,border:'none',cursor:'pointer',color:'#02020A',fontSize:9,fontFamily:'inherit',padding:'7px',borderRadius:7,letterSpacing:'0.08em',fontWeight:800,textTransform:'uppercase' as const}}>Fazer Upgrade</button>
+                )}
               </div>
             ):(
-              <div style={{display:'flex',justifyContent:'center'}}>
-                <div style={{width:32,height:32,borderRadius:'50%',background:`${cfg.color}18`,border:`1px solid ${cfg.color}35`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:cfg.color,fontWeight:700}}>
-                  {user.name?.[0]?.toUpperCase()||'?'}
-                </div>
-              </div>
+              <button className="ora-avatar" onClick={()=>fileRef.current?.click()} title="Alterar foto" aria-label="Alterar foto de perfil"
+                style={{position:'relative',width:34,height:34,margin:'0 auto',borderRadius:'50%',padding:0,cursor:'pointer',overflow:'hidden',flexShrink:0,
+                  border:`1px solid ${avatar?T.lineG:tint(cfg.color,30)}`,background:avatar?'transparent':tint(cfg.color,10),
+                  display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {avatar
+                  ?<img src={avatar} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                  :<span style={{fontSize:12,color:cfg.color,fontWeight:700}}>{user.name?.[0]?.toUpperCase()||'?'}</span>}
+                <span className={`cam${avatarBusy?' busy':''}`} style={{position:'absolute',inset:0,background:'rgba(3,3,10,0.55)',display:'flex',alignItems:'center',justifyContent:'center',transition:'opacity .15s'}}>
+                  {avatarBusy
+                    ?<svg className="ora-spin" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
+                    :<svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 8.5A2 2 0 0 1 6 6.5h2l1.2-1.8h5.6L16 6.5h2a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round"/><circle cx="12" cy="12.5" r="3" stroke="#fff" strokeWidth="1.5"/></svg>}
+                </span>
+              </button>
             )}
           </div>
         </aside>
@@ -1467,7 +1698,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           {expiringSoon&&(
             <div style={{background:`${tint(T.a,8)}`,borderBottom:`1px solid ${tint(T.a,19)}`,padding:'8px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
               <span style={{fontSize:11,color:T.a}}>Seu plano <strong>{cfg.label}</strong> expira em <strong>{daysLeft} dias</strong>. Renove para não perder o acesso.</span>
-              <a href={GREENN[user.plan]} target="_blank" rel="noreferrer" style={{fontSize:10,fontWeight:700,color:'#02020A',background:T.a,padding:'4px 12px',borderRadius:5,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0}}>Renovar</a>
+              <a href={GREENN[user.plan] ?? GREENN.monthly} target="_blank" rel="noreferrer" style={{fontSize:10,fontWeight:700,color:'#02020A',background:T.a,padding:'4px 12px',borderRadius:5,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0}}>Renovar</a>
             </div>
           )}
 
@@ -1481,16 +1712,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
 
           {/* Topbar */}
           <header style={{height:60,background:T.sidebar,borderBottom:`1px solid ${T.line}`,display:'flex',alignItems:'center',gap:12,padding:'0 24px',flexShrink:0}}>
-            {/* Export CSV — only annual/lifetime */}
-            {cfg.export&&done&&prods.length>0&&(
-              <button onClick={()=>exportCSV(prods,cat)}
-                style={{background:'none',border:`1px solid ${T.line}`,color:T.t2,fontWeight:600,fontSize:10,padding:'8px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase' as const,display:'flex',alignItems:'center',gap:6,flexShrink:0,transition:'all .15s'}}
-                onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
-                onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t2}}>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 5.5l3 3 3-3M1 9v1a1 1 0 001 1h8a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                CSV
-              </button>
-            )}
+            {/* Saudação real por hora local */}
+            <div style={{minWidth:0}}>
+              <div style={{fontSize:14,fontWeight:700,color:T.t1,letterSpacing:'-0.02em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{greet}, {firstName}</div>
+              <div style={{fontSize:10,color:T.t3,marginTop:1}}>O que vamos garimpar hoje?</div>
+            </div>
             <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:14}}>
               <button onClick={toggleTheme} title={theme==='dark'?'Tema claro':'Tema escuro'} aria-label="Alternar tema"
                 style={{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:9,background:T.card,border:`1px solid ${T.line}`,color:T.t2,cursor:'pointer',transition:'all .15s'}}
@@ -1500,8 +1726,8 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   ?<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="1.6"/><path d="M12 2v2.2M12 19.8V22M22 12h-2.2M4.2 12H2M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
                   :<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.3 6.3 0 0 0 10.5 10.5Z" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>}
               </button>
-              <div style={{display:'flex',alignItems:'center',gap:6}}>
-                <div style={{width:6,height:6,borderRadius:'50%',background:T.g,boxShadow:`0 0 6px ${T.g}`}}/>
+              <div style={{display:'flex',alignItems:'center',gap:7}}>
+                <div className="ora-dot" style={{width:6,height:6,borderRadius:'50%',background:T.g}}/>
                 <span style={{fontSize:10,color:T.t3,fontWeight:500}}>Amazon BR</span>
               </div>
             </div>
@@ -1527,7 +1753,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           )}
 
           {/* Content */}
-          <main style={{flex:1,overflowY:'auto',padding:nav==='competitor'?'0':'28px 28px 40px',position:'relative' as const,display:'flex',flexDirection:'column'}}>
+          <main key={nav} ref={mainRef} className="ora-tab-in" style={{flex:1,overflowY:'auto',padding:nav==='competitor'?'0':'28px 28px 40px',position:'relative' as const,display:'flex',flexDirection:'column'}}>
 
             {/* Competitor Panel */}
             {nav==='competitor'&&(
@@ -1597,7 +1823,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 {/* Trocar senha */}
                 <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px',marginTop:16,boxShadow:'var(--elev1)'}}>
                   <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:6,display:'flex',alignItems:'center',gap:7}}><Ico n="lock" size={13} c={T.t2}/> Segurança da Conta</div>
-                  <div style={{fontSize:12,color:T.t3,lineHeight:1.6,marginBottom:16}}>Troque a senha gerada automaticamente por uma de sua preferência. Os outros dispositivos conectados serão desconectados.</div>
+                  <div style={{fontSize:12,color:T.t3,lineHeight:1.6,marginBottom:16}}>Troque a senha gerada automaticamente por uma de sua preferência. Se houver outra sessão aberta, ela será encerrada.</div>
                   {([
                     {ph:'Senha atual',        val:pwCur,  set:setPwCur},
                     {ph:'Nova senha',         val:pwNew,  set:setPwNew},
@@ -1700,29 +1926,88 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               </div>
             )}
 
-            {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&<>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:24}}>
-              <div>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:2}}>
-                  <span style={{fontSize:10,color:T.t3,letterSpacing:'0.04em'}}>Mineração</span>
-                  <span style={{color:T.t3,fontSize:10}}>/</span>
-                  <span style={{fontSize:10,color:T.t4}}>{curNav?.label}</span>
+            {/* Produtos Salvos — snapshot do garimpo */}
+            {nav==='saved'&&(
+              <>
+                <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
+                  <div style={{minWidth:0}}>
+                    <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
+                      <span style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const}}>Mineração</span>
+                      <span style={{color:T.t3,fontSize:9}}>/</span>
+                      <span style={{fontSize:9,fontWeight:700,color:T.gold,letterSpacing:'0.14em',textTransform:'uppercase' as const}}>Salvos</span>
+                    </div>
+                    <h1 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:6,lineHeight:1}}>Produtos Salvos</h1>
+                    <p style={{fontSize:11,color:T.t3}}>
+                      <span className="ora-num" style={{color:T.t4}}>{saved.length}</span> <span style={{color:T.t4}}>{saved.length===1?'produto salvo':'produtos salvos'}</span>
+                      {' · '}BSR e vendas capturados no momento em que você salvou
+                    </p>
+                  </div>
                 </div>
-                <h1 style={{fontSize:18,fontWeight:700,color:T.t1,letterSpacing:'-0.03em',marginBottom:4,lineHeight:1}}>{curNav?.label}</h1>
+                {saved.length===0?(
+                  <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'80px 24px',gap:6}}>
+                    <div style={{width:64,height:64,borderRadius:16,background:T.goldSub,border:`1px solid ${tint(T.gold,18)}`,display:'flex',alignItems:'center',justifyContent:'center',marginBottom:10}}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M6.5 4.5h11a1 1 0 0 1 1 1V20l-6.5-3.8L5.5 20V5.5a1 1 0 0 1 1-1z" stroke="var(--gold)" strokeWidth="1.5" strokeLinejoin="round"/></svg>
+                    </div>
+                    <div style={{fontSize:15,fontWeight:700,color:T.t1}}>Nenhum produto salvo ainda</div>
+                    <p style={{fontSize:12,color:T.t3,maxWidth:320,textAlign:'center' as const,lineHeight:1.6,marginBottom:14}}>
+                      Toque no ícone de bookmark em qualquer card da mineração para guardar o produto aqui com o snapshot do momento.
+                    </p>
+                    <button onClick={()=>goNav('bestsellers')}
+                      style={{background:T.goldG,color:'#02020A',fontWeight:700,fontSize:11,padding:'12px 26px',borderRadius:9,border:'none',cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase' as const,boxShadow:'0 4px 20px rgba(240,180,41,0.25)'}}>
+                      Garimpe em Mais Vendidos
+                    </button>
+                  </div>
+                ):(
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}}>
+                    {saved.map((s,i)=>{
+                      const sp = {...s, images: s.image?[s.image]:[]}
+                      return(
+                        <div key={s.asin} className="ora-card-in" style={{animationDelay:`${(i%12)*40}ms`}}>
+                          <Card product={sp} onClick={()=>handleCardClick(sp,false)}
+                            saved onToggleSave={()=>toggleSaved(sp)}/>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Page header + product content (hidden when competitor tab active) */}
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&<>
+            <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
+              <div style={{minWidth:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
+                  <span style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const}}>Mineração</span>
+                  <span style={{color:T.t3,fontSize:9}}>/</span>
+                  <span style={{fontSize:9,fontWeight:700,color:T.gold,letterSpacing:'0.14em',textTransform:'uppercase' as const}}>{curNav?.label}</span>
+                </div>
+                <h1 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:6,lineHeight:1}}>{curNav?.label}</h1>
                 <p style={{fontSize:11,color:T.t3}}>
                   {isCross?'Todas as categorias':curCat?.label}
-                  {done&&<> · <span style={{color:T.t4}}>{prods.length} produtos</span></>}
-                  {done&&totalP>1&&<> · pág. <span style={{color:T.t4}}>{page}/{totalP}</span></>}
+                  {done&&<> · <span className="ora-num" style={{color:T.t4}}>{prods.length}</span> <span style={{color:T.t4}}>produtos</span></>}
+                  {done&&totalP>1&&<> · pág. <span className="ora-num" style={{color:T.t4}}>{page}/{totalP}</span></>}
                 </p>
               </div>
-              <button onClick={()=>load(nav,cat,'',false)}
-                style={{display:'flex',alignItems:'center',gap:7,background:'none',border:`1px solid ${T.line}`,color:T.t3,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
-                onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
-                onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M9.5 2A5 5 0 1 0 10 5.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M9.5 2V5H6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                Atualizar
-              </button>
+              {/* Ações contextuais: CSV + Atualizar */}
+              <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+                {cfg.export&&done&&prods.length>0&&(
+                  <button onClick={()=>exportCSV(prods,cat)}
+                    style={{display:'flex',alignItems:'center',gap:6,background:'none',border:`1px solid ${T.line}`,color:T.t2,fontWeight:600,fontSize:10,padding:'8px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase' as const,transition:'all .15s'}}
+                    onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
+                    onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t2}}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 5.5l3 3 3-3M1 9v1a1 1 0 001 1h8a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    CSV
+                  </button>
+                )}
+                <button onClick={()=>load(nav,cat,'',false)}
+                  style={{display:'flex',alignItems:'center',gap:7,background:'none',border:`1px solid ${T.line}`,color:T.t3,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
+                  onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
+                  onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M9.5 2A5 5 0 1 0 10 5.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M9.5 2V5H6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  Atualizar
+                </button>
+              </div>
             </div>
 
             {/* Skeleton */}
@@ -1734,7 +2019,12 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12,position:'relative' as const}}>
                   {paged.map((p,i)=>{
                     const isLocked = isFree && i >= cfg.limit
-                    return<Card key={p.asin} product={p} locked={isLocked} onClick={()=>handleCardClick(p,isLocked)}/>
+                    return(
+                      <div key={p.asin} className="ora-card-in" style={{animationDelay:`${(i%12)*40}ms`}}>
+                        <Card product={p} locked={isLocked} onClick={()=>handleCardClick(p,isLocked)}
+                          saved={isSaved(p.asin)} onToggleSave={cfg.tabs.includes('saved')?()=>toggleSaved(p):undefined}/>
+                      </div>
+                    )
                   })}
                   {/* Upgrade overlay for free */}
                   {isFree&&(
@@ -1753,7 +2043,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                       style={{background:T.goldG,color:'#02020A',fontWeight:700,fontSize:12,padding:'13px 32px',borderRadius:10,border:'none',cursor:'pointer',letterSpacing:'0.1em',textTransform:'uppercase' as const,boxShadow:'0 4px 24px rgba(240,180,41,0.35)',marginBottom:8}}>
                       Desbloquear todos os produtos
                     </button>
-                    <div style={{fontSize:10,color:T.t3}}>A partir de R$ 47/mês · Cancele quando quiser</div>
+                    <div style={{fontSize:10,color:T.t3}}>A partir de R$ 79,90/mês · Cancele quando quiser</div>
                   </div>
                 )}
 
@@ -1782,7 +2072,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   return(
                     <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:4,marginTop:32}}>
                       {btns.map((b,i)=>(
-                        <button key={i} onClick={()=>{if(!b.dis){b.fn();window.scrollTo(0,0)}}}
+                        <button key={i} onClick={()=>{if(!b.dis){b.fn();mainRef.current?.scrollTo({top:0})}}}
                           style={{background:b.act?`${tint(T.gold,8)}`:'none',border:`1px solid ${b.act?'rgba(240,180,41,0.3)':T.line}`,color:b.act?T.gold:b.dis?T.t3:T.t2,fontWeight:b.act?700:400,fontSize:12,width:34,height:34,borderRadius:7,cursor:b.dis?'default':'pointer',fontFamily:'inherit',transition:'all .12s'}}>
                           {b.l}
                         </button>
@@ -1801,8 +2091,20 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               </div>
             )}
 
+            {/* Erro de carregamento — distinto do estado vazio */}
+            {!loading&&done&&loadError&&(
+              <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'80px 24px',gap:10}}>
+                <div style={{fontSize:14,fontWeight:700,color:T.t1}}>Não foi possível carregar os produtos</div>
+                <p style={{fontSize:12,color:T.t3,maxWidth:320,textAlign:'center' as const,lineHeight:1.6}}>Houve um problema de conexão com o servidor. Verifique sua internet e tente de novo.</p>
+                <button onClick={()=>load(nav,cat,'',false)}
+                  style={{marginTop:6,background:T.goldG,color:'#02020A',fontWeight:700,fontSize:11,padding:'11px 24px',borderRadius:9,border:'none',cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase' as const}}>
+                  Tentar novamente
+                </button>
+              </div>
+            )}
+
             {/* No results */}
-            {!loading&&done&&prods.length===0&&<div style={{textAlign:'center' as const,padding:'80px 24px',color:T.t3,fontSize:13}}>Nenhum produto encontrado. Tente outra busca ou categoria.</div>}
+            {!loading&&done&&!loadError&&prods.length===0&&<div style={{textAlign:'center' as const,padding:'80px 24px',color:T.t3,fontSize:13}}>Nenhum produto encontrado. Tente outra busca ou categoria.</div>}
             </>}
           </main>
         </div>
