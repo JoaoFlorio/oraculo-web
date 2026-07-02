@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import bcrypt from 'bcryptjs'
 import { Resend } from 'resend'
 import { prisma } from '@/lib/db'
+import { getStaffSession } from '@/lib/auth'
 
 const ADMIN_KEY    = process.env.INTERNAL_KEY  || ''
 const ADMIN_SECRET = process.env.ADMIN_SECRET  || ''
@@ -10,8 +11,9 @@ const BACKEND_URL  = process.env.BACKEND_URL   || 'https://central.oraculojf.com
 const FRONTEND_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.oraculojf.com.br'
 const resend       = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
-function checkAuth(req: NextRequest) {
-  return req.headers.get('x-admin-key') === ADMIN_KEY
+async function checkAuth(req: NextRequest) {
+  if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return true  // backend interno
+  return !!(await getStaffSession())                                          // admin/staff logado
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -114,9 +116,9 @@ async function createBackendLicense(email: string, plan: string): Promise<string
 
 // GET /api/admin/users → lista todos os usuários
 export async function GET(req: NextRequest) {
-  if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!(await checkAuth(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const users = await prisma.user.findMany({
-    select: { id: true, name: true, email: true, plan: true, active: true, expiresAt: true, createdAt: true },
+    select: { id: true, name: true, email: true, phone: true, role: true, plan: true, active: true, expiresAt: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   })
   return NextResponse.json({ users })
@@ -124,7 +126,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/admin/users → cria ou atualiza usuário + gera licença
 export async function POST(req: NextRequest) {
-  if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!(await checkAuth(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const { email, name, plan, phone, skipLicense, licenseKey: providedKey } = await req.json()
   if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
@@ -178,7 +180,7 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/admin/users → muda plano
 export async function PATCH(req: NextRequest) {
-  if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!(await checkAuth(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { email, plan } = await req.json()
   if (!email || !plan) return NextResponse.json({ error: 'email e plan obrigatórios' }, { status: 400 })
   const expiry = calcExpiry(plan)
@@ -191,7 +193,7 @@ export async function PATCH(req: NextRequest) {
 
 // PUT /api/admin/users → reseta senha + reenvia email de acesso
 export async function PUT(req: NextRequest) {
-  if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!(await checkAuth(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { email } = await req.json()
   if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
 

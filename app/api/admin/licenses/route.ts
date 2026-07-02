@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
+import { getStaffSession } from '@/lib/auth'
 
 const ADMIN_KEY    = process.env.INTERNAL_KEY   || ''
 const ADMIN_SECRET = process.env.ADMIN_SECRET   || ''
 const BACKEND_URL  = process.env.BACKEND_URL    || 'https://central.oraculojf.com.br'
 
-function checkAuth(req: NextRequest) {
-  return req.headers.get('x-admin-key') === ADMIN_KEY
+async function checkAuth(req: NextRequest) {
+  if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return true
+  return !!(await getStaffSession())
 }
 
 function backendHeaders() {
@@ -15,7 +17,7 @@ function backendHeaders() {
 
 // GET /api/admin/licenses → exporta todas as licenças
 export async function GET(req: NextRequest) {
-  if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!(await checkAuth(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const res = await fetch(`${BACKEND_URL}/api/license/export`, { headers: backendHeaders() })
   const data = await res.json()
   return NextResponse.json(data, { status: res.status })
@@ -23,7 +25,7 @@ export async function GET(req: NextRequest) {
 
 // POST /api/admin/licenses  body: { action:'deactivate'|'renew', key, plan? }
 export async function POST(req: NextRequest) {
-  if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  if (!(await checkAuth(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { action, key, plan } = await req.json()
 
   if (action === 'deactivate') {

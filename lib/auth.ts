@@ -52,12 +52,13 @@ export async function verifyToken(token: string) {
 // Folga após o vencimento (evita travar exatamente na hora da renovação recorrente).
 const GRACE_MS = 2 * 24 * 60 * 60 * 1000
 
-type AccessUser = { active?: boolean; plan?: string; expiresAt?: Date | null }
+type AccessUser = { active?: boolean; plan?: string; expiresAt?: Date | null; role?: string }
 // Regra de acesso do Oráculo: NÃO existe plano grátis. Sem pagamento = sem acesso.
 // Retorna o motivo da negação, ou null se o acesso está liberado.
 export function accessDenied(user: AccessUser | null): 'notfound' | 'inactive' | 'free' | 'expired' | null {
   if (!user) return 'notfound'
   if (!user.active) return 'inactive'
+  if (user.role === 'admin' || user.role === 'staff') return null // equipe entra independente de plano
   if (user.plan === 'free' || !user.plan) return 'free'           // sem plano pago = bloqueado
   if (user.plan === 'lifetime') return null                       // vitalício nunca expira
   if (user.expiresAt && new Date(user.expiresAt).getTime() + GRACE_MS < Date.now()) return 'expired'
@@ -78,9 +79,16 @@ export async function getSession() {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.userId },
-    select: { id: true, name: true, email: true, plan: true, active: true, expiresAt: true },
+    select: { id: true, name: true, email: true, plan: true, active: true, expiresAt: true, role: true, phone: true },
   })
   return user && !accessDenied(user) ? user : null
+}
+
+// Sessão de equipe (admin/staff) — usada pelas rotas /api/admin e pela página /admin.
+export async function getStaffSession() {
+  const user = await getSession()
+  if (!user || (user.role !== 'admin' && user.role !== 'staff')) return null
+  return user
 }
 
 export async function invalidateToken(token: string) {
