@@ -126,9 +126,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!checkAuth(req)) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { email, name, plan, skipLicense, licenseKey: providedKey } = await req.json()
+  const { email, name, plan, phone, skipLicense, licenseKey: providedKey } = await req.json()
   if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
 
+  const phoneVal = phone ? String(phone).trim() : null
   const targetPlan = plan || 'monthly'
   const expiry     = calcExpiry(targetPlan)
   const exists     = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest) {
     // compra/renovação sempre restaura o acesso de quem estava bloqueado/expirado.
     const updated = await prisma.user.update({
       where: { id: exists.id },
-      data:  { plan: targetPlan, expiresAt: expiry, active: true },
+      data:  { plan: targetPlan, expiresAt: expiry, active: true, ...(phoneVal ? { phone: phoneVal } : {}) },
     })
     // Gera licença só se não vier uma pronta (skipLicense = chamada via webhook)
     const licKey = skipLicense ? (providedKey || null) : await createBackendLicense(email, targetPlan)
@@ -160,6 +161,7 @@ export async function POST(req: NextRequest) {
       plan:      targetPlan,
       active:    true,
       expiresAt: expiry,
+      phone:     phoneVal,
     },
   })
 

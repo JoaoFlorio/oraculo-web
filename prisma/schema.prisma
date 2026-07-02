@@ -15,12 +15,35 @@ model User {
   plan      String    @default("free")
   active    Boolean   @default(true)
   expiresAt DateTime?
+  phone     String?
+  role      String    @default("client")   // client | staff | admin
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   sessions        Session[]
   resetToken      String?   @unique
   resetTokenExpAt DateTime?
   metadata        Json?     @default("{}")
+}
+
+// Vendas reais (Greenn) — fonte de verdade do faturamento. Uma linha por
+// pagamento aprovado (nova compra ou renovação). Nada de dado inventado.
+model Sale {
+  id        String    @id @default(cuid())
+  email     String
+  name      String?
+  phone     String?
+  plan      String
+  amount    Float                              // valor pago em reais (preço do plano)
+  status    String    @default("paid")         // paid | refunded | canceled
+  greennId  String?   @map("greenn_id")
+  paidAt    DateTime  @default(now()) @map("paid_at")
+  expiresAt DateTime? @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([paidAt])
+  @@index([status])
+  @@map("sales")
 }
 
 model Session {
