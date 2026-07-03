@@ -1035,11 +1035,12 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
               <i className="ti ti-circle-check" style={{fontSize:14}} aria-hidden="true"/>Conta Amazon conectada
             </span>
             <button onClick={()=>{ fetch('/api/amazon/disconnect',{method:'POST'}).then(()=>location.reload()) }} style={{background:'none',border:'none',color:t.t3,fontSize:11,cursor:'pointer',fontFamily:'inherit',textDecoration:'underline'}}>desconectar</button>
-            {adsConnected===true && (
+            {adsConnected===true && (<>
               <span style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:11.5,fontWeight:600,color:t.grn,background:t.pillGrn[0],padding:'5px 11px',borderRadius:20}}>
                 <i className="ti ti-speakerphone" style={{fontSize:13}} aria-hidden="true"/>Ads conectado
               </span>
-            )}
+              <button onClick={()=>{ if(confirm('Desconectar apenas o Ads? Sua conta Amazon (SP-API) continua conectada. Você poderá reconectar o Ads com a conta certa.')) fetch('/api/ads/disconnect',{method:'POST'}).then(()=>location.reload()) }} style={{background:'none',border:'none',color:t.t3,fontSize:11,cursor:'pointer',fontFamily:'inherit',textDecoration:'underline'}}>desconectar Ads</button>
+            </>)}
             {adsConnected===false && (
               <a href="/api/ads/connect" style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:11.5,fontWeight:600,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,padding:'6px 12px',borderRadius:20,textDecoration:'none'}}>
                 <i className="ti ti-speakerphone" style={{fontSize:13}} aria-hidden="true"/>Conectar Ads
