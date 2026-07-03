@@ -953,17 +953,21 @@ function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:(
       }}>
       {/* Score badge */}
       <div style={{position:'absolute',top:10,right:10,zIndex:2}}><ScoreRing score={score}/></div>
-      {/* Bookmark — salvar/remover */}
+      {/* Salvar / remover — pill com texto, visível sobre a imagem */}
       {onToggleSave&&!locked&&(
         <button onClick={e=>{e.stopPropagation();onToggleSave()}}
-          title={saved?'Remover dos salvos':'Salvar produto'} aria-label={saved?'Remover dos salvos':'Salvar produto'}
-          style={{position:'absolute',top:11,right:44,zIndex:3,width:26,height:26,borderRadius:8,cursor:'pointer',
-            border:`1px solid ${saved?T.lineG:'rgba(3,3,10,0.15)'}`,
-            background:saved?'rgba(3,3,10,0.8)':'rgba(3,3,10,0.55)',backdropFilter:'blur(4px)',
-            display:'flex',alignItems:'center',justifyContent:'center',padding:0,transition:'all .15s ease-out'}}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill={saved?'var(--gold)':'none'}>
-            <path d="M6.5 4.5h11a1 1 0 0 1 1 1V20l-6.5-3.8L5.5 20V5.5a1 1 0 0 1 1-1z" stroke={saved?'var(--gold)':'#C8C8E0'} strokeWidth="1.5" strokeLinejoin="round"/>
+          title={saved?'Remover dos salvos':'Salvar este produto'} aria-label={saved?'Remover dos salvos':'Salvar este produto'} aria-pressed={saved}
+          style={{position:'absolute',top:128,left:10,zIndex:3,display:'flex',alignItems:'center',gap:5,
+            padding:'5px 11px 5px 9px',borderRadius:99,cursor:'pointer',fontFamily:'inherit',fontSize:11,fontWeight:700,letterSpacing:'0.01em',
+            border:`1px solid ${saved?'rgba(240,180,41,0.7)':'rgba(255,255,255,0.14)'}`,
+            background:saved?'var(--goldG)':'rgba(3,3,10,0.72)',color:saved?'#1a1305':'#F5F5FC',
+            backdropFilter:'blur(6px)',boxShadow:'0 3px 10px rgba(0,0,0,0.4)',transition:'transform .15s ease-out, background .15s'}}
+          onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.transform='translateY(-1px)'}}
+          onMouseLeave={e=>{(e.currentTarget as HTMLElement).style.transform='none'}}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill={saved?'#1a1305':'none'}>
+            <path d="M6.5 4.5h11a1 1 0 0 1 1 1V20l-6.5-3.8L5.5 20V5.5a1 1 0 0 1 1-1z" stroke={saved?'#1a1305':'#F5F5FC'} strokeWidth="1.7" strokeLinejoin="round"/>
           </svg>
+          {saved?'Salvo':'Salvar'}
         </button>
       )}
       {/* Generic badge */}
