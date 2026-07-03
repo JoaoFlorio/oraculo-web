@@ -1885,6 +1885,16 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               {sideOpen&&<span style={{fontSize:11,fontWeight:700,color:T.g,letterSpacing:'0.02em',whiteSpace:'nowrap' as const}}>Suporte no WhatsApp</span>}
             </a>
 
+            {/* Voltar ao painel Admin — só admin/staff */}
+            {isStaff&&(
+              <a href="/admin" className="ora-wa-side" aria-label="Painel Admin" title={!sideOpen?'Painel Admin':undefined}
+                style={{display:'flex',alignItems:'center',justifyContent:sideOpen?'flex-start':'center',gap:9,padding:sideOpen?'9px 12px':'9px 0',borderRadius:10,textDecoration:'none',
+                  background:tint(T.gold,10),border:`1px solid ${tint(T.gold,25)}`}}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 10.5 12 4l9 6.5M5 9.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5" stroke={T.gold} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                {sideOpen&&<span style={{fontSize:11,fontWeight:700,color:T.gold,letterSpacing:'0.02em',whiteSpace:'nowrap' as const}}>Painel Admin</span>}
+              </a>
+            )}
+
             {/* Card de perfil */}
             {sideOpen?(
               <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:12,padding:'10px',boxShadow:'var(--elev1)',display:'flex',flexDirection:'column',gap:8}}>

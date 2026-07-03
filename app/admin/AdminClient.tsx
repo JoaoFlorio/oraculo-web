@@ -384,7 +384,10 @@ export default function AdminClient({ role, name, previewData }: { role: string;
               <div style={{ fontSize: 11, color: C.t3 }}>{name} · <span style={{ color: C.gold, textTransform: 'uppercase', fontWeight: 700 }}>{role}</span>{isPreview && ' · PREVIEW'}</div>
             </div>
           </div>
-          <button onClick={logout} className="orc-ghost" style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.t2, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', transition: 'color .15s,border-color .15s' }}>Sair</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <a href="/dashboard" className="orc-ghost" style={{ background: 'transparent', border: `1px solid ${C.gold}55`, color: C.gold, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'none', transition: 'color .15s,border-color .15s' }}>Painel do cliente ↗</a>
+            <button onClick={logout} className="orc-ghost" style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.t2, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', transition: 'color .15s,border-color .15s' }}>Sair</button>
+          </div>
         </div>
 
         {/* Tabs */}
