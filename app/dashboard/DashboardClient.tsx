@@ -31,11 +31,11 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
-  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','extension','agente'],                                                                 modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro'], modal:true,  export:true  },
+  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','extension','agente','perfil'],                                                                 modal:false, export:false },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 const GREENN: Record<string,string> = {
@@ -44,6 +44,16 @@ const GREENN: Record<string,string> = {
   annual:   'https://payfast.greenn.com.br/pm36pq4/offer/WBkId3',
   lifetime: 'https://payfast.greenn.com.br/pm36pq4/offer/WBkId3', // fallback → anual
 }
+// Preços reais dos planos (fonte: oferta Greenn ativa)
+const PLAN_PRICE: Record<string,string> = {
+  monthly:  'R$ 79,90/mês',
+  biannual: 'R$ 397/semestre',
+  annual:   'R$ 597/ano',
+}
+// Economia REAL do Anual vs 12× Mensal: 12×79,90 = R$ 958,80 − R$ 597 = R$ 361,80 (38%)
+const ANNUAL_ECON     = 12*79.90 - 597
+const ANNUAL_ECON_PCT = Math.round((ANNUAL_ECON/(12*79.90))*100)
+const ANNUAL_ECON_FMT = ANNUAL_ECON.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 
 /* ─── Data ───────────────────────────────────────────────────────────────── */
 const CATS = [
@@ -69,11 +79,13 @@ const NAV = [
   { id:'competitor',  label:'Análise Rival'     },
   { id:'agente',      label:'Agente IA'         },
   { id:'extension',   label:'Extensão'          },
+  { id:'perfil',      label:'Meu Perfil'        },
 ]
 const NAV_GROUPS = [
   { group:'Gestão',      ids:['financeiro'] },
   { group:'Mineração',   ids:['bestsellers','new','trending','generics','saved','competitor'] },
   { group:'Ferramentas', ids:['agente','extension'] },
+  { group:'Conta',       ids:['perfil'] },
 ]
 const REF: Record<string,number> = {
   electronics:.08, computers:.08, health:.08, tools:.12, toys:.16,
@@ -177,24 +189,50 @@ function WaIcon({size=18,c='#fff'}:{size?:number;c?:string}){
 
 /* ─── Logo mark ──────────────────────────────────────────────────────────── */
 function OracleMark({size=22}:{size?:number}){
-  // Olho radiante do Oráculo: almond de linha dupla + íris + sol de 12 raios.
-  const rays=[]
-  for(let i=0;i<12;i++){
-    const a=i*Math.PI/6
-    const x1=(16+Math.cos(a)*2.3).toFixed(2), y1=(16+Math.sin(a)*2.3).toFixed(2)
-    const x2=(16+Math.cos(a)*4.5).toFixed(2), y2=(16+Math.sin(a)*4.5).toFixed(2)
-    rays.push(<line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#F6D89B" strokeWidth="0.8" strokeLinecap="round"/>)
-  }
+  // Olho do Oráculo v2 — contorno almond com gradiente dourado, cílios finos
+  // assimétricos que nascem da borda do olho e íris com brilho radial.
+  // Ids de gradiente únicos por instância (React.useId) p/ coexistir na mesma página.
+  const uid = React.useId().replace(/[^a-zA-Z0-9_-]/g,'')
+  const gid = `oraG${uid}`, iid = `oraI${uid}`
+  // cílios: [ângulo°, comprimento, opacidade, espessura] — assimétricos de propósito
+  const lashes:[number,number,number,number][] = [
+    [-90,3.4,.95,.95],[-64,2.6,.72,.8],[-116,3.0,.82,.85],[-40,1.8,.5,.7],[-142,2.2,.6,.7],
+    [ 90,3.0,.85,.9],[ 63,2.0,.55,.75],[118,2.5,.7,.8],[144,1.7,.45,.65],[36,1.4,.38,.6],
+  ]
+  const rx=13.4, ry=5.1 // semi-eixos aproximados do almond
   return(
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none"
-      style={{filter:'drop-shadow(0 0 6px rgba(240,180,41,0.5))'}}>
-      <path d="M3 16 Q16 4 29 16"    stroke="#F0B429" strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M3 16 Q16 28 29 16"   stroke="#F0B429" strokeWidth="1.5" strokeLinecap="round"/>
-      <path d="M7 16 Q16 8.5 25 16"  stroke="#F0B429" strokeWidth="1"   strokeLinecap="round"/>
-      <path d="M7 16 Q16 23.5 25 16" stroke="#F0B429" strokeWidth="1"   strokeLinecap="round"/>
-      <circle cx="16" cy="16" r="5.2" stroke="#F0B429" strokeWidth="1.2"/>
-      {rays}
-      <circle cx="16" cy="16" r="1.7" fill="#F6D89B"/>
+      style={{filter:'drop-shadow(0 0 7px rgba(240,180,41,0.5))'}}>
+      <defs>
+        <linearGradient id={gid} x1="4" y1="7" x2="28" y2="25" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"  stopColor="#FFE7A6"/>
+          <stop offset="52%" stopColor="#F0B429"/>
+          <stop offset="100%" stopColor="#C48F10"/>
+        </linearGradient>
+        <radialGradient id={iid} cx="38%" cy="34%" r="85%">
+          <stop offset="0%"  stopColor="#FFF3CF"/>
+          <stop offset="45%" stopColor="#F5C654"/>
+          <stop offset="100%" stopColor="#9C6D06"/>
+        </radialGradient>
+      </defs>
+      {lashes.map(([a,len,o,w],i)=>{
+        const rad=a*Math.PI/180
+        const edge=(rx*ry)/Math.sqrt((ry*Math.cos(rad))**2+(rx*Math.sin(rad))**2)
+        const r1=edge+0.7, r2=edge+0.7+len
+        const x1=(16+Math.cos(rad)*r1).toFixed(2), y1=(16+Math.sin(rad)*r1).toFixed(2)
+        const x2=(16+Math.cos(rad)*r2).toFixed(2), y2=(16+Math.sin(rad)*r2).toFixed(2)
+        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={`url(#${gid})`} strokeWidth={w} strokeLinecap="round" opacity={o}/>
+      })}
+      {/* almond externo + interno (linha dupla) */}
+      <path d="M2.6 16 C 7.5 9.2, 24.5 9.2, 29.4 16 C 24.5 22.8, 7.5 22.8, 2.6 16 Z"
+        stroke={`url(#${gid})`} strokeWidth="1.6" strokeLinejoin="round"/>
+      <path d="M6.4 16 C 10.4 10.9, 21.6 10.9, 25.6 16 C 21.6 21.1, 10.4 21.1, 6.4 16 Z"
+        stroke={`url(#${gid})`} strokeWidth=".8" opacity=".5" strokeLinejoin="round"/>
+      {/* íris com anel gradiente + miolo radial + pupila + brilho */}
+      <circle cx="16" cy="16" r="5.3" stroke={`url(#${gid})`} strokeWidth="1.6"/>
+      <circle cx="16" cy="16" r="3.5" fill={`url(#${iid})`}/>
+      <circle cx="16" cy="16" r="1.15" fill="#2A1D03"/>
+      <circle cx="14.8" cy="14.7" r=".75" fill="rgba(255,255,255,0.9)"/>
     </svg>
   )
 }
@@ -213,6 +251,7 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     extension:  <><rect x="5" y="5" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.5"/><path d="M11 5v4a2 2 0 01-2 2H5M19 14h-2a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     agente:     <><circle cx="14" cy="10" r="5" stroke="currentColor" strokeWidth="1.5"/><path d="M10 15c-3 1.5-5 4-5 7h18c0-3-2-5.5-5-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M14 10v3M12 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     financeiro: <><path d="M6 20V14M10 20V10M14 20V6M18 20V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M6 8l4-3 4 4 4-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
+    perfil:     <><circle cx="14" cy="10.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5.5 23c1.3-4.4 4.7-6.8 8.5-6.8s7.2 2.4 8.5 6.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
   }
   return(
     <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0,color:c}}>
@@ -1307,7 +1346,22 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const [pwConf,  setPwConf]  = useState('')
   const [pwBusy,  setPwBusy]  = useState(false)
   const [pwMsg,   setPwMsg]   = useState<{ok:boolean;text:string}|null>(null)
-  const PAGE = 60
+  const PAGE = 24
+  // Pool local de produtos por aba+categoria (dedup por asin) — paginação intuitiva
+  const poolRef      = useRef<Record<string,any[]>>({})
+  const exhaustedRef = useRef<Record<string,boolean>>({})
+  const [poolExhausted, setPoolExhausted] = useState(false)
+  const [moreLoading,   setMoreLoading]   = useState(false)
+  // Ordenação client-side sobre o pool carregado (default = ordem do servidor)
+  const [sortBy, setSortBy] = useState<'default'|'sales'|'score'|'bsr'>('default')
+  // Tamanho do pool no momento em que a ordenação foi escolhida — itens que
+  // chegarem depois são anexados ao final da visão ordenada (páginas estáveis)
+  const sortBaseRef = useRef(0)
+  // Nome de exibição em memória (atualizado pela aba Perfil sem reload)
+  const [displayName, setDisplayName] = useState<string>(user.name||'')
+  const [nameInput,   setNameInput]   = useState<string>(user.name||'')
+  const [nameBusy,    setNameBusy]    = useState(false)
+  const [nameMsg,     setNameMsg]     = useState<{ok:boolean;text:string}|null>(null)
 
   /* ── Saudação real por hora local (setada no client p/ evitar mismatch SSR) ── */
   const [greet, setGreet] = useState('Olá')
@@ -1315,7 +1369,28 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     const h = new Date().getHours()
     setGreet(h<12?'Bom dia':h<18?'Boa tarde':'Boa noite')
   },[])
-  const firstName = (user.name||'').trim().split(/\s+/)[0] || 'Seller'
+  const firstName = (displayName||'').trim().split(/\s+/)[0] || 'Seller'
+
+  async function saveName(){
+    const n = nameInput.trim().replace(/\s+/g,' ')
+    // Guarda de reentrância: Enter no input não respeita o disabled do botão —
+    // evita POST duplicado em voo e POST redundante com nome igual ao atual.
+    if(nameBusy || n===displayName.trim()) return
+    setNameMsg(null)
+    if(n.length<2||n.length>60){setNameMsg({ok:false,text:'O nome deve ter entre 2 e 60 caracteres'});return}
+    setNameBusy(true)
+    try{
+      const r = await fetch('/api/user/profile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})})
+      const d = await r.json().catch(()=>({}))
+      if(!r.ok){setNameMsg({ok:false,text:d.error||'Erro ao salvar o nome'});return}
+      setDisplayName(d.name||n); setNameInput(d.name||n)
+      setNameMsg({ok:true,text:'Nome atualizado com sucesso!'})
+    }catch{
+      setNameMsg({ok:false,text:'Erro de conexão. Tente novamente.'})
+    }finally{
+      setNameBusy(false)
+    }
+  }
 
   /* ── Avatar do usuário (foto persistida em user metadata) ── */
   const [avatar,     setAvatar]     = useState<string|null>(null)
@@ -1420,10 +1495,17 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const cfg = PLAN_CFG[user.plan] ?? PLAN_CFG.monthly
   const isFree = user.plan === 'free'
 
-  // Aviso de plano próximo de expirar
-  const expiresAt = user.expiresAt ? new Date(user.expiresAt) : null
-  const daysLeft  = expiresAt ? Math.ceil((expiresAt.getTime()-Date.now())/(1000*60*60*24)) : null
-  const expiringSoon = daysLeft !== null && daysLeft <= 7 && user.plan !== 'lifetime'
+  // Cobrança coerente: aviso aos 5 dias + bloqueio total quando vencido
+  const isStaff    = user.role === 'admin' || user.role === 'staff'
+  const isLifetime = user.plan === 'lifetime'
+  const expiresAt  = user.expiresAt ? new Date(user.expiresAt) : null
+  const daysLeft   = expiresAt ? Math.ceil((expiresAt.getTime()-Date.now())/(1000*60*60*24)) : null
+  // Bloqueio total só após a MESMA folga do servidor (GRACE_MS = 2 dias em lib/auth):
+  // a renovação recorrente pode demorar a cair via webhook — não travar na virada.
+  const expired      = !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= -2
+  // Entre o vencimento e a folga: banner forte NÃO-bloqueante (renovação processando)
+  const renewGrace   = !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 0 && daysLeft > -2
+  const expiringSoon = !expired && !renewGrace && !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 5 && daysLeft > 0
 
   // ASINs já mostrados, por aba+categoria → garante novidade a cada "Atualizar"
   const seenRef = useRef<Record<string, Set<string>>>({})
@@ -1431,17 +1513,29 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const loadIdRef = useRef(0)
   const [loadError, setLoadError] = useState(false)
 
+  // Dedup por asin preservando a ordem
+  const dedupAsin = (list:any[])=>{
+    const s = new Set<string>()
+    return list.filter(p=>{ if(!p?.asin||s.has(p.asin)) return false; s.add(p.asin); return true })
+  }
+
   async function load(n=nav, c=cat, query='', bust=false){
     const reqId = ++loadIdRef.current
     setLoading(true); setDone(false); setPage(1); setLoadError(false)
+    setMoreLoading(false)
+    setSortBy('default')  // carga nova = pool novo: ordenação volta ao padrão da aba
     const key = `${n}__${c}`
     if(bust) seenRef.current[key] = new Set()          // recomeça: pool novo, esquece o visto
+    poolRef.current[key] = []                          // pool local recomeça a cada carga completa
+    exhaustedRef.current[key] = false
+    setPoolExhausted(false)
     const seen = (seenRef.current[key] ||= new Set())
     try{
       const params = new URLSearchParams({type:n,category:c,q:query})
       if(bust) params.set('bust','1')
-      // envia os já vistos (últimos 400) para o backend não repetir
-      if(seen.size) params.set('exclude',[...seen].slice(-400).join(','))
+      // envia os já vistos (últimos 800 — cobre o pool do backend mesmo com
+      // degraus relaxados; acima disso o seen é resetado abaixo) p/ não repetir
+      if(seen.size) params.set('exclude',[...seen].slice(-800).join(','))
       const r = await fetch(`/api/products?${params}`)
       if(reqId !== loadIdRef.current) return           // resposta obsoleta: outra aba/categoria venceu
       if(r.status === 401){ router.push('/login'); return }
@@ -1455,7 +1549,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       }
       list.forEach(p=>seen.add(p.asin))
       if(seen.size > 800) seenRef.current[key] = new Set(list.map(p=>p.asin))
-      setProds(list)
+      const pool = dedupAsin(list)
+      poolRef.current[key] = pool
+      setProds(pool)
     }catch{
       if(reqId !== loadIdRef.current) return
       setProds([]); setLoadError(true)
@@ -1464,13 +1560,70 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     setLoading(false); setDone(true)
   }
 
+  // Busca mais produtos p/ ampliar o pool (paginação intuitiva) — mesma chamada
+  // do Atualizar, com exclude dos já vistos. Retorna true se o pool cresceu.
+  async function loadMore(): Promise<boolean>{
+    const reqId = loadIdRef.current
+    const key = `${nav}__${cat}`
+    const seen = (seenRef.current[key] ||= new Set())
+    setMoreLoading(true)
+    try{
+      const params = new URLSearchParams({type:nav,category:cat,q:''})
+      if(seen.size) params.set('exclude',[...seen].slice(-800).join(','))
+      const r = await fetch(`/api/products?${params}`)
+      if(reqId !== loadIdRef.current) return false     // usuário trocou de aba no meio
+      if(r.status === 401){ router.push('/login'); return false }
+      if(!r.ok) throw new Error(`HTTP ${r.status}`)
+      const d = await r.json()
+      if(reqId !== loadIdRef.current) return false
+      const list: any[] = d.products||[]
+      list.forEach(p=>p?.asin&&seen.add(p.asin))
+      const pool = poolRef.current[key] || []
+      const have = new Set(pool.map(p=>p.asin))
+      const fresh = list.filter(p=>p?.asin&&!have.has(p.asin))
+      // Só marca "fim dos dados" quando o backend REPORTOU remaining — resposta
+      // sem o campo (erro/contrato quebrado) é falha recuperável, não esgotamento.
+      const remainingKnown = typeof d.remaining === 'number'
+      if(remainingKnown && (fresh.length===0 || (d.remaining===0 && list.length<12))){
+        exhaustedRef.current[key] = true
+        setPoolExhausted(true)
+      }
+      if(fresh.length===0) return false
+      const next = [...pool,...fresh]
+      poolRef.current[key] = next
+      setProds(next)
+      return true
+    }catch{
+      return false
+    }finally{
+      setMoreLoading(false)
+    }
+  }
+
+  // Troca de página com scroll pro topo do grid
+  const gridRef = useRef<HTMLDivElement>(null)
+  function gotoPage(n:number){
+    setPage(n)
+    const el = gridRef.current
+    const top = el ? Math.max(0, el.offsetTop - 16) : 0
+    mainRef.current?.scrollTo({top, behavior:'smooth'})
+  }
+  async function goNext(){
+    const total = Math.ceil(prods.length/PAGE)
+    if(page < total){ gotoPage(page+1); return }
+    if(poolExhausted || moreLoading) return
+    const grew = await loadMore()                      // página ainda não carregada → busca mais
+    if(grew) gotoPage(page+1)
+  }
+
   // Carregamento inicial usa cache se disponível → não sobrecarrega a API
   useEffect(()=>{ load('bestsellers','all','',false) },[]) // eslint-disable-line
 
   function goNav(id:string){
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}
     setNav(id); setPage(1)
-    if(id==='competitor'||id==='saved'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
+    setSortBy('default')  // cada aba tem semântica própria — não herda ordenação
+    if(id==='competitor'||id==='saved'||id==='perfil'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
     if(id==='extension'){
       loadIdRef.current++;setLoading(false)
       setProds([]);setDone(false)
@@ -1480,6 +1633,16 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           if(d.key){setLicKey(d.key);setLicPlan(d.plan)}
         }).finally(()=>setLicLoading(false))
       }
+      return
+    }
+    // volta pra uma aba já garimpada → restaura o pool acumulado sem nova chamada
+    const key = `${id}__${cat}`
+    const pool = poolRef.current[key]
+    if(pool&&pool.length){
+      loadIdRef.current++
+      setLoading(false); setLoadError(false); setMoreLoading(false)
+      setProds(pool); setDone(true)
+      setPoolExhausted(!!exhaustedRef.current[key])
       return
     }
     // troca de aba usa cache → rápido; "Atualizar" força bust
@@ -1496,8 +1659,20 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const curNav  = NAV.find(n=>n.id===nav)
   const curCat  = CATS.find(c=>c.id===cat)
   const isCross = cat === 'all'
-  const totalP  = Math.ceil(prods.length/PAGE)
-  const paged   = prods.slice((page-1)*PAGE,page*PAGE)
+  // Ordenação client-side sobre o pool (default = ordem do servidor).
+  // Ordena só o SNAPSHOT do momento em que o usuário escolheu a ordenação —
+  // itens que chegarem depois (goNext/loadMore) entram ao FINAL, sem se
+  // intercalar nas páginas já vistas (a página atual não muda sob o usuário).
+  const pSales = (p:any)=> p.salesEst||bsrSales(p.bsr||0)
+  const pIsGen = (p:any)=> !p.brand||p.brand.trim()===''||p.brand.toLowerCase()==='genérico'
+  const sortCmp = (a:any,b:any)=>
+    sortBy==='sales' ? pSales(b)-pSales(a)
+    : sortBy==='score' ? cardScore(b.bsr||0,pSales(b),pIsGen(b))-cardScore(a.bsr||0,pSales(a),pIsGen(a))
+    : (a.bsr||Number.MAX_SAFE_INTEGER)-(b.bsr||Number.MAX_SAFE_INTEGER)
+  const sortedProds = sortBy==='default' ? prods
+    : [...prods.slice(0,sortBaseRef.current)].sort(sortCmp).concat(prods.slice(sortBaseRef.current))
+  const totalP  = Math.ceil(sortedProds.length/PAGE)
+  const paged   = sortedProds.slice((page-1)*PAGE,page*PAGE)
 
   return(
     <>
@@ -1505,8 +1680,64 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       {detail&&<DetailModal product={detail} onClose={()=>setDetail(null)} promo={promo}/>}
       {promoOpen&&<PromoModal promo={promo} setPromo={setPromo} onClose={()=>setPromoOpen(false)}/>}
 
+      {/* BLOQUEIO VENCIDO — overlay premium sem fechar: só renovar ou sair */}
+      {expired&&(
+        <div role="dialog" aria-modal="true" aria-label="Seu acesso venceu"
+          style={{position:'fixed',inset:0,zIndex:1200,background:'rgba(1,1,8,0.72)',backdropFilter:'blur(16px)',overflowY:'auto',padding:'40px 16px',display:'flex',alignItems:'flex-start',justifyContent:'center'}}>
+          <div style={{width:'100%',maxWidth:520,background:T.modal,border:`1px solid ${T.lineG}`,borderRadius:20,overflow:'hidden',boxShadow:'0 40px 90px rgba(0,0,0,0.85)',animation:'fadeUp .35s ease-out both'}}>
+            {/* Header */}
+            <div style={{padding:'34px 32px 24px',textAlign:'center' as const,borderBottom:`1px solid ${T.line}`,background:'linear-gradient(180deg,rgba(240,180,41,0.08) 0%,transparent 100%)'}}>
+              <div style={{display:'flex',justifyContent:'center',marginBottom:16}}>
+                <div style={{width:56,height:56,borderRadius:16,background:T.goldSub,border:`1px solid ${tint(T.gold,25)}`,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <OracleMark size={30}/>
+                </div>
+              </div>
+              <h2 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Seu acesso venceu</h2>
+              <p style={{fontSize:12.5,color:T.t2,lineHeight:1.65,maxWidth:380,margin:'0 auto'}}>
+                O plano <strong style={{color:T.t1}}>{cfg.label}</strong> venceu em <strong style={{color:T.a}}>{expiresAt?.toLocaleDateString('pt-BR')}</strong>.
+                Renove agora para voltar a garimpar — seus produtos salvos continuam guardados.
+              </p>
+            </div>
+            {/* Renovação */}
+            <div style={{padding:'24px 28px 20px',display:'flex',flexDirection:'column',gap:10}}>
+              {user.plan!=='annual'&&(
+                <a href={GREENN[user.plan]??GREENN.monthly} target="_blank" rel="noreferrer"
+                  style={{display:'block',textAlign:'center' as const,background:T.goldG,color:'#02020A',fontWeight:800,fontSize:12,padding:'14px',borderRadius:10,textDecoration:'none',letterSpacing:'0.08em',textTransform:'uppercase' as const,boxShadow:'0 4px 20px rgba(240,180,41,0.3)',transition:'transform .15s'}}>
+                  Renovar {cfg.label} — {PLAN_PRICE[user.plan]??PLAN_PRICE.monthly}
+                </a>
+              )}
+              {/* Anual destacado — economia REAL */}
+              <a href={GREENN.annual} target="_blank" rel="noreferrer"
+                style={{position:'relative' as const,display:'block',textAlign:'center' as const,textDecoration:'none',borderRadius:12,padding:'16px 14px 14px',
+                  background:user.plan==='annual'?T.goldG:tint(T.gold,4),
+                  border:`1px solid ${user.plan==='annual'?'transparent':tint(T.gold,30)}`,
+                  boxShadow:user.plan==='annual'?'0 4px 20px rgba(240,180,41,0.3)':`0 0 24px ${tint(T.gold,8)}`,transition:'transform .15s'}}>
+                <span style={{position:'absolute',top:-9,left:'50%',transform:'translateX(-50%)',background:T.gold,color:'#02020A',fontSize:8,fontWeight:800,padding:'3px 10px',borderRadius:99,letterSpacing:'0.12em',whiteSpace:'nowrap' as const}}>MELHOR VALOR</span>
+                <span style={{display:'block',fontSize:12,fontWeight:800,letterSpacing:'0.08em',textTransform:'uppercase' as const,color:user.plan==='annual'?'#02020A':T.gold,marginBottom:3}}>
+                  {user.plan==='annual'?'Renovar Anual — R$ 597/ano':'Vire Anual — R$ 597/ano'}
+                </span>
+                <span className="ora-num" style={{display:'block',fontSize:10.5,color:user.plan==='annual'?'rgba(2,2,10,0.75)':T.t2}}>
+                  economize R$ {ANNUAL_ECON_FMT}/ano ({ANNUAL_ECON_PCT}%) vs mensal
+                </span>
+              </a>
+            </div>
+            {/* Suporte + sair */}
+            <div style={{padding:'0 28px 26px',display:'flex',flexDirection:'column',gap:12,alignItems:'center'}}>
+              <a href={WA_LINK} target="_blank" rel="noreferrer"
+                style={{display:'inline-flex',alignItems:'center',gap:7,fontSize:11.5,fontWeight:600,color:T.g,textDecoration:'none'}}>
+                <WaIcon size={15} c={T.g}/> Precisa de ajuda? Fale com o suporte
+              </a>
+              <button onClick={async()=>{await fetch('/api/auth/logout',{method:'POST'});router.push('/login')}}
+                style={{background:'none',border:'none',color:T.t3,cursor:'pointer',fontSize:11,fontFamily:'inherit',letterSpacing:'0.04em',textDecoration:'underline',textUnderlineOffset:3}}>
+                Sair da conta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Botão flutuante de suporte — some quando há modal aberto */}
-      {!detail&&!upgrade&&!promoOpen&&(
+      {!detail&&!upgrade&&!promoOpen&&!expired&&(
         <a href={WA_LINK} target="_blank" rel="noreferrer" className="ora-wa-fab" aria-label="Suporte no WhatsApp" title="Suporte no WhatsApp"
           style={{position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',background:T.g,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'var(--elev2)',zIndex:90}}>
           <WaIcon size={26} c="#fff"/>
@@ -1564,7 +1795,8 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               <OracleMark size={22}/>
             </div>
             {sideOpen&&<div style={{overflow:'hidden',minWidth:0}}>
-              <div style={{fontSize:16,fontWeight:800,letterSpacing:'0.24em',color:T.gold,lineHeight:1,whiteSpace:'nowrap' as const}}>ORÁCULO</div>
+              <div style={{fontSize:16,fontWeight:800,letterSpacing:'0.24em',lineHeight:1,whiteSpace:'nowrap' as const,color:T.gold,
+                background:'var(--goldTextG)',WebkitBackgroundClip:'text',backgroundClip:'text',WebkitTextFillColor:'transparent'}}>ORÁCULO</div>
               <div style={{fontSize:8,fontWeight:600,letterSpacing:'0.2em',color:T.t3,marginTop:4,textTransform:'uppercase' as const,whiteSpace:'nowrap' as const}}>Amazon Intelligence</div>
             </div>}
           </div>
@@ -1613,9 +1845,18 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                     const active=cat===c.id
                     return(
                       <button key={c.id} onClick={()=>{
-                        setCat(c.id); setPage(1)
+                        setCat(c.id); setPage(1); setSortBy('default')
                         const target=nav==='search'?'bestsellers':nav
                         if(nav==='search') setNav('bestsellers')
+                        const k=`${target}__${c.id}`
+                        const pool=poolRef.current[k]
+                        if(pool&&pool.length){
+                          loadIdRef.current++
+                          setLoading(false);setLoadError(false);setMoreLoading(false)
+                          setProds(pool);setDone(true)
+                          setPoolExhausted(!!exhaustedRef.current[k])
+                          return
+                        }
                         load(target,c.id,'',false)
                       }} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 20px',borderRadius:7,border:'none',cursor:'pointer',marginBottom:1,background:active?`${tint(T.gold,3)}`:'none',fontFamily:'inherit',textAlign:'left' as const}}>
                         <div style={{width:4,height:4,borderRadius:'50%',background:active?T.gold:T.t3,flexShrink:0}}/>
@@ -1651,7 +1892,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                       boxShadow:isFree?undefined:`0 0 10px ${cfg.glow}`}}>
                     {avatar
                       ?<img src={avatar} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-                      :<span style={{fontSize:13,color:cfg.color,fontWeight:700}}>{user.name?.[0]?.toUpperCase()||'?'}</span>}
+                      :<span style={{fontSize:13,color:cfg.color,fontWeight:700}}>{displayName?.[0]?.toUpperCase()||'?'}</span>}
                     <span className={`cam${avatarBusy?' busy':''}`} style={{position:'absolute',inset:0,background:'rgba(3,3,10,0.55)',display:'flex',alignItems:'center',justifyContent:'center',transition:'opacity .15s'}}>
                       {avatarBusy
                         ?<svg className="ora-spin" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
@@ -1659,7 +1900,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                     </span>
                   </button>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:11,fontWeight:600,color:T.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,letterSpacing:'-0.01em'}}>{user.name}</div>
+                    <div style={{fontSize:11,fontWeight:600,color:T.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,letterSpacing:'-0.01em'}}>{displayName}</div>
                     <span style={{display:'inline-flex',alignItems:'center',gap:4,marginTop:3,fontSize:8,fontWeight:700,color:cfg.color,letterSpacing:'0.1em',textTransform:'uppercase' as const,background:tint(cfg.color,10),border:`1px solid ${tint(cfg.color,22)}`,borderRadius:99,padding:'2px 7px'}}>{cfg.label}</span>
                   </div>
                   <button onClick={async()=>{await fetch('/api/auth/logout',{method:'POST'});router.push('/login')}} title="Sair" aria-label="Sair da conta"
@@ -1680,7 +1921,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   display:'flex',alignItems:'center',justifyContent:'center'}}>
                 {avatar
                   ?<img src={avatar} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-                  :<span style={{fontSize:12,color:cfg.color,fontWeight:700}}>{user.name?.[0]?.toUpperCase()||'?'}</span>}
+                  :<span style={{fontSize:12,color:cfg.color,fontWeight:700}}>{displayName?.[0]?.toUpperCase()||'?'}</span>}
                 <span className={`cam${avatarBusy?' busy':''}`} style={{position:'absolute',inset:0,background:'rgba(3,3,10,0.55)',display:'flex',alignItems:'center',justifyContent:'center',transition:'opacity .15s'}}>
                   {avatarBusy
                     ?<svg className="ora-spin" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
@@ -1694,11 +1935,36 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
         {/* MAIN */}
         <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
 
-          {/* Expiry warning banner */}
+          {/* Vencido DENTRO da folga de 2 dias (GRACE_MS do servidor) — banner forte
+              não-bloqueante: a renovação recorrente pode estar processando na Greenn */}
+          {renewGrace&&(
+            <div style={{background:tint(T.r,8),borderBottom:`1px solid ${tint(T.r,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:12,flexShrink:0,flexWrap:'wrap' as const}}>
+              <span style={{fontSize:11,color:T.t1,flex:1,minWidth:220}}>
+                Seu plano <strong style={{color:T.r}}>{cfg.label}</strong> venceu{expiresAt?<> em <strong className="ora-num" style={{color:T.r}}>{expiresAt.toLocaleDateString('pt-BR')}</strong></>:null}. Se você já renovou, a confirmação chega em instantes — caso contrário, renove agora para não perder o acesso.
+              </span>
+              <a href={GREENN[user.plan] ?? GREENN.monthly} target="_blank" rel="noreferrer"
+                style={{fontSize:10,fontWeight:800,color:'#02020A',background:T.goldG,padding:'6px 14px',borderRadius:6,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0,boxShadow:'0 2px 12px rgba(240,180,41,0.3)'}}>
+                Renovar agora
+              </a>
+            </div>
+          )}
+
+          {/* Aviso de vencimento — 5 dias, âmbar→dourado, com atalho pro Anual */}
           {expiringSoon&&(
-            <div style={{background:`${tint(T.a,8)}`,borderBottom:`1px solid ${tint(T.a,19)}`,padding:'8px 24px',display:'flex',alignItems:'center',justifyContent:'space-between',flexShrink:0}}>
-              <span style={{fontSize:11,color:T.a}}>Seu plano <strong>{cfg.label}</strong> expira em <strong>{daysLeft} dias</strong>. Renove para não perder o acesso.</span>
-              <a href={GREENN[user.plan] ?? GREENN.monthly} target="_blank" rel="noreferrer" style={{fontSize:10,fontWeight:700,color:'#02020A',background:T.a,padding:'4px 12px',borderRadius:5,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0}}>Renovar</a>
+            <div style={{background:`linear-gradient(90deg, ${tint(T.a,10)} 0%, ${tint(T.gold,10)} 100%)`,borderBottom:`1px solid ${tint(T.gold,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:12,flexShrink:0,flexWrap:'wrap' as const}}>
+              <span style={{fontSize:11,color:T.t1,flex:1,minWidth:220}}>
+                Seu plano <strong style={{color:T.a}}>{cfg.label}</strong> vence em <strong className="ora-num" style={{color:T.a}}>{daysLeft} {daysLeft===1?'dia':'dias'}</strong>{expiresAt?<> ({expiresAt.toLocaleDateString('pt-BR')})</>:null}. Renove para não perder o acesso.
+              </span>
+              <a href={GREENN[user.plan] ?? GREENN.monthly} target="_blank" rel="noreferrer"
+                style={{fontSize:10,fontWeight:800,color:'#02020A',background:T.goldG,padding:'6px 14px',borderRadius:6,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0,boxShadow:'0 2px 12px rgba(240,180,41,0.3)'}}>
+                Renovar agora
+              </a>
+              {user.plan!=='annual'&&(
+                <a href={GREENN.annual} target="_blank" rel="noreferrer"
+                  style={{fontSize:10,fontWeight:700,color:T.gold,background:T.goldSub,border:`1px solid ${tint(T.gold,25)}`,padding:'5px 12px',borderRadius:99,textDecoration:'none',flexShrink:0}}>
+                  Vire Anual e economize {ANNUAL_ECON_PCT}%
+                </a>
+              )}
             </div>
           )}
 
@@ -1820,31 +2086,206 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   ))}
                 </div>
 
-                {/* Trocar senha */}
-                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'20px 24px',marginTop:16,boxShadow:'var(--elev1)'}}>
-                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:6,display:'flex',alignItems:'center',gap:7}}><Ico n="lock" size={13} c={T.t2}/> Segurança da Conta</div>
-                  <div style={{fontSize:12,color:T.t3,lineHeight:1.6,marginBottom:16}}>Troque a senha gerada automaticamente por uma de sua preferência. Se houver outra sessão aberta, ela será encerrada.</div>
-                  {([
-                    {ph:'Senha atual',        val:pwCur,  set:setPwCur},
-                    {ph:'Nova senha',         val:pwNew,  set:setPwNew},
-                    {ph:'Confirmar nova senha',val:pwConf, set:setPwConf},
-                  ] as const).map((f,i)=>(
-                    <input key={i} type="password" placeholder={f.ph} value={f.val}
-                      onChange={e=>{f.set(e.target.value);setPwMsg(null)}}
-                      onKeyDown={e=>{if(e.key==='Enter')changePassword()}}
-                      autoComplete={i===0?'current-password':'new-password'}
-                      style={{width:'100%',boxSizing:'border-box' as const,background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px 14px',marginBottom:10,color:T.t1,fontSize:13,fontFamily:'inherit',outline:'none'}}/>
-                  ))}
-                  {pwMsg&&(
-                    <div style={{fontSize:12,fontWeight:600,color:pwMsg.ok?T.g:T.r,marginBottom:12,marginTop:2}}>{pwMsg.text}</div>
-                  )}
-                  <button onClick={changePassword} disabled={pwBusy}
-                    style={{width:'100%',background:pwBusy?T.line:T.goldG,border:'none',color:'#03030A',fontWeight:800,fontSize:12,padding:'13px',borderRadius:10,cursor:pwBusy?'default':'pointer',fontFamily:'inherit',letterSpacing:'0.06em',opacity:pwBusy?.6:1,transition:'all .2s'}}>
-                    {pwBusy?'Salvando…':'ALTERAR SENHA'}
-                  </button>
-                </div>
               </div>
             )}
+
+            {/* Meu Perfil */}
+            {nav==='perfil'&&(()=>{
+              const PLAN_DAYS: Record<string,number> = { monthly:30, biannual:180, annual:365 }
+              const cycleDays  = PLAN_DAYS[user.plan]
+              const cycleStart = expiresAt&&cycleDays ? new Date(expiresAt.getTime()-cycleDays*86400000) : null
+              const cyclePct   = expiresAt&&cycleStart ? Math.min(100,Math.max(0,((Date.now()-cycleStart.getTime())/(cycleDays*86400000))*100)) : null
+              const status = isLifetime ? 'Vitalício ∞'
+                : (daysLeft!==null&&daysLeft<=0) ? 'Vencido'
+                : (daysLeft!==null&&daysLeft<=10) ? `Vence em ${daysLeft} ${daysLeft===1?'dia':'dias'}`
+                : 'Ativo'
+              const statusColor = isLifetime ? T.g
+                : (daysLeft!==null&&daysLeft<=0) ? T.r
+                : (daysLeft!==null&&daysLeft<=10) ? T.a
+                : T.g
+              const plans = [
+                { id:'monthly',  label:'Mensal',    price:'R$ 79,90', period:'/ 30 dias'  },
+                { id:'biannual', label:'Semestral', price:'R$ 397',   period:'/ 180 dias' },
+                { id:'annual',   label:'Anual',     price:'R$ 597',   period:'/ 365 dias', best:true },
+              ]
+              const cardStyle: React.CSSProperties = { background:T.card, border:`1px solid ${T.line}`, borderRadius:14, padding:'22px 24px', boxShadow:'var(--elev1)' }
+              return(
+                <div style={{maxWidth:620,margin:'0 auto',width:'100%',display:'flex',flexDirection:'column',gap:16}}>
+                  <div style={{marginBottom:4}}>
+                    <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
+                      <span style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const}}>Conta</span>
+                      <span style={{color:T.t3,fontSize:9}}>/</span>
+                      <span style={{fontSize:9,fontWeight:700,color:T.gold,letterSpacing:'0.14em',textTransform:'uppercase' as const}}>Meu Perfil</span>
+                    </div>
+                    <h1 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',lineHeight:1}}>Meu Perfil</h1>
+                  </div>
+
+                  {/* Card identidade */}
+                  <div style={cardStyle}>
+                    <Lbl style={{marginBottom:16}}>Identidade</Lbl>
+                    <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:18}}>
+                      <button className="ora-avatar" onClick={()=>fileRef.current?.click()} title="Alterar foto" aria-label="Alterar foto de perfil"
+                        style={{position:'relative',width:76,height:76,borderRadius:'50%',padding:0,cursor:'pointer',overflow:'hidden',flexShrink:0,
+                          border:`2px solid ${avatar?T.lineG:tint(cfg.color,35)}`,background:avatar?'transparent':tint(cfg.color,12),
+                          display:'flex',alignItems:'center',justifyContent:'center',
+                          boxShadow:isFree?undefined:`0 0 18px ${cfg.glow}`}}>
+                        {avatar
+                          ?<img src={avatar} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                          :<span style={{fontSize:26,color:cfg.color,fontWeight:700}}>{displayName?.[0]?.toUpperCase()||'?'}</span>}
+                        <span className={`cam${avatarBusy?' busy':''}`} style={{position:'absolute',inset:0,background:'rgba(3,3,10,0.55)',display:'flex',alignItems:'center',justifyContent:'center',transition:'opacity .15s'}}>
+                          {avatarBusy
+                            ?<svg className="ora-spin" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
+                            :<svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 8.5A2 2 0 0 1 6 6.5h2l1.2-1.8h5.6L16 6.5h2a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round"/><circle cx="12" cy="12.5" r="3" stroke="#fff" strokeWidth="1.5"/></svg>}
+                        </span>
+                      </button>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:14,fontWeight:700,color:T.t1,letterSpacing:'-0.01em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{displayName}</div>
+                        <div style={{fontSize:11,color:T.t3,marginTop:3}}>Toque na foto para alterar</div>
+                      </div>
+                    </div>
+                    {/* Nome editável */}
+                    <div style={{marginBottom:12}}>
+                      <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:8}}>Nome</div>
+                      <div style={{display:'flex',gap:8}}>
+                        <input value={nameInput} maxLength={60}
+                          onChange={e=>{setNameInput(e.target.value);setNameMsg(null)}}
+                          onKeyDown={e=>{if(e.key==='Enter')saveName()}}
+                          placeholder="Seu nome"
+                          style={{flex:1,minWidth:0,background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'11px 14px',color:T.t1,fontSize:13,fontFamily:'inherit',outline:'none'}}/>
+                        <button onClick={saveName} disabled={nameBusy||nameInput.trim()===displayName.trim()}
+                          style={{flexShrink:0,background:nameBusy?T.line:T.goldG,border:'none',color:'#03030A',fontWeight:800,fontSize:11,padding:'0 20px',borderRadius:10,cursor:nameBusy?'default':'pointer',fontFamily:'inherit',letterSpacing:'0.06em',opacity:(nameBusy||nameInput.trim()===displayName.trim())?.6:1,transition:'all .2s'}}>
+                          {nameBusy?'Salvando…':'Salvar'}
+                        </button>
+                      </div>
+                      {nameMsg&&<div style={{fontSize:11.5,fontWeight:600,color:nameMsg.ok?T.g:T.r,marginTop:8}}>{nameMsg.text}</div>}
+                    </div>
+                    {/* E-mail somente leitura */}
+                    <div>
+                      <div style={{fontSize:9,color:T.t3,fontWeight:600,letterSpacing:'0.1em',textTransform:'uppercase' as const,marginBottom:8}}>E-mail</div>
+                      <div style={{background:T.bg,border:`1px dashed ${T.line}`,borderRadius:10,padding:'11px 14px',color:T.t3,fontSize:13,display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}>
+                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{user.email}</span>
+                        <span style={{fontSize:8,fontWeight:700,color:T.t3,letterSpacing:'0.08em',textTransform:'uppercase' as const,border:`1px solid ${T.line}`,borderRadius:5,padding:'2px 7px',flexShrink:0}}>somente leitura</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card plano */}
+                  <div style={cardStyle}>
+                    <Lbl style={{marginBottom:16}}>Meu Plano</Lbl>
+                    <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14,flexWrap:'wrap' as const}}>
+                      <span style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:10,fontWeight:800,color:cfg.color,letterSpacing:'0.1em',textTransform:'uppercase' as const,background:tint(cfg.color,10),border:`1px solid ${tint(cfg.color,22)}`,borderRadius:99,padding:'5px 13px'}}>{cfg.label}</span>
+                      <span style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:10.5,fontWeight:700,color:statusColor}}>
+                        <span style={{width:6,height:6,borderRadius:'50%',background:statusColor}}/>
+                        {status}
+                      </span>
+                    </div>
+                    {isLifetime?(
+                      <div style={{fontSize:12,color:T.t3,lineHeight:1.6}}>Seu acesso não expira. Aproveite o Oráculo para sempre.</div>
+                    ):expiresAt?(
+                      <>
+                        {cyclePct!==null&&(
+                          <div style={{marginBottom:10}}>
+                            <div style={{height:6,background:T.bg,border:`1px solid ${T.line}`,borderRadius:99,overflow:'hidden'}}>
+                              <div style={{height:'100%',width:`${cyclePct}%`,background:cyclePct>=85?T.a:T.goldG,borderRadius:99,transition:'width .6s ease'}}/>
+                            </div>
+                            <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}>
+                              <span style={{fontSize:9.5,color:T.t3}}>{cycleStart?.toLocaleDateString('pt-BR')}</span>
+                              <span className="ora-num" style={{fontSize:9.5,color:T.t4,fontWeight:600}}>{Math.round(cyclePct)}% do ciclo</span>
+                              <span style={{fontSize:9.5,color:T.t3}}>{expiresAt.toLocaleDateString('pt-BR')}</span>
+                            </div>
+                          </div>
+                        )}
+                        <div style={{fontSize:12,color:T.t4}}>
+                          Válido até <strong className="ora-num" style={{color:T.t1}}>{expiresAt.toLocaleDateString('pt-BR')}</strong>
+                          {daysLeft!==null&&daysLeft>0&&<> · <span className="ora-num" style={{color:statusColor,fontWeight:700}}>{daysLeft}</span> {daysLeft===1?'dia restante':'dias restantes'}</>}
+                        </div>
+                      </>
+                    ):(
+                      <div style={{fontSize:12,color:T.t3}}>Sem data de vencimento registrada.</div>
+                    )}
+                  </div>
+
+                  {/* Card trocar de plano */}
+                  <div style={cardStyle}>
+                    <Lbl style={{marginBottom:16}}>Trocar de Plano</Lbl>
+                    {isLifetime?(
+                      <div style={{display:'flex',alignItems:'center',gap:12,background:tint(T.g,5),border:`1px solid ${tint(T.g,18)}`,borderRadius:12,padding:'16px 18px'}}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}}><circle cx="12" cy="12" r="9.5" stroke={T.g} strokeWidth="1.5"/><path d="M8 12.2l2.6 2.6L16 9.6" stroke={T.g} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:700,color:T.g,marginBottom:2}}>Você tem acesso vitalício</div>
+                          <div style={{fontSize:11.5,color:T.t3,lineHeight:1.5}}>Nada a renovar, nada a pagar. O Oráculo é seu.</div>
+                        </div>
+                      </div>
+                    ):(
+                      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                        {plans.map(p=>{
+                          const isCurrent = user.plan===p.id
+                          return(
+                            <div key={p.id} style={{position:'relative' as const,display:'flex',alignItems:'center',gap:14,borderRadius:12,padding:'14px 16px',
+                              background:p.best?tint(T.gold,4):T.bg,
+                              border:`1px solid ${p.best?tint(T.gold,28):T.line}`,
+                              boxShadow:p.best?`0 0 22px ${tint(T.gold,7)}`:undefined}}>
+                              {p.best&&(
+                                <span style={{position:'absolute',top:-9,left:16,background:T.gold,color:'#02020A',fontSize:8,fontWeight:800,padding:'2px 9px',borderRadius:99,letterSpacing:'0.12em',whiteSpace:'nowrap' as const}}>MELHOR VALOR</span>
+                              )}
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{display:'flex',alignItems:'baseline',gap:6,flexWrap:'wrap' as const}}>
+                                  <span style={{fontSize:13,fontWeight:800,color:p.best?T.gold:T.t1}}>{p.label}</span>
+                                  <span className="ora-num" style={{fontSize:13,fontWeight:700,color:T.t1}}>{p.price}</span>
+                                  <span style={{fontSize:10,color:T.t3}}>{p.period}</span>
+                                </div>
+                                {p.best&&(
+                                  <div className="ora-num" style={{fontSize:10,color:T.gold,marginTop:3,fontWeight:600}}>
+                                    economize R$ {ANNUAL_ECON_FMT}/ano ({ANNUAL_ECON_PCT}%) vs mensal
+                                  </div>
+                                )}
+                              </div>
+                              {isCurrent?(
+                                <span style={{flexShrink:0,fontSize:9,fontWeight:800,color:T.t3,letterSpacing:'0.08em',textTransform:'uppercase' as const,border:`1px solid ${T.line}`,borderRadius:99,padding:'6px 12px'}}>Plano atual</span>
+                              ):(
+                                <a href={GREENN[p.id]} target="_blank" rel="noreferrer"
+                                  style={{flexShrink:0,display:'block',textAlign:'center' as const,fontSize:10,fontWeight:800,letterSpacing:'0.08em',textTransform:'uppercase' as const,textDecoration:'none',padding:'8px 16px',borderRadius:8,transition:'all .15s',
+                                    background:p.best?T.goldG:'none',
+                                    color:p.best?'#02020A':T.gold,
+                                    border:p.best?'none':`1px solid ${tint(T.gold,25)}`,
+                                    boxShadow:p.best?'0 3px 14px rgba(240,180,41,0.3)':undefined}}>
+                                  {isCurrent?'Renovar':'Assinar'}
+                                </a>
+                              )}
+                            </div>
+                          )
+                        })}
+                        <div style={{fontSize:10,color:T.t3,textAlign:'center' as const,marginTop:2}}>Pagamento seguro via Greenn · ativação automática no mesmo e-mail</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card segurança — movido da aba Extensão */}
+                  <div style={cardStyle}>
+                    <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:6,display:'flex',alignItems:'center',gap:7}}><Ico n="lock" size={13} c={T.t2}/> Segurança da Conta</div>
+                    <div style={{fontSize:12,color:T.t3,lineHeight:1.6,marginBottom:16}}>Troque a senha gerada automaticamente por uma de sua preferência. Se houver outra sessão aberta, ela será encerrada.</div>
+                    {([
+                      {ph:'Senha atual',        val:pwCur,  set:setPwCur},
+                      {ph:'Nova senha',         val:pwNew,  set:setPwNew},
+                      {ph:'Confirmar nova senha',val:pwConf, set:setPwConf},
+                    ] as const).map((f,i)=>(
+                      <input key={i} type="password" placeholder={f.ph} value={f.val}
+                        onChange={e=>{f.set(e.target.value);setPwMsg(null)}}
+                        onKeyDown={e=>{if(e.key==='Enter')changePassword()}}
+                        autoComplete={i===0?'current-password':'new-password'}
+                        style={{width:'100%',boxSizing:'border-box' as const,background:T.bg,border:`1px solid ${T.line}`,borderRadius:10,padding:'12px 14px',marginBottom:10,color:T.t1,fontSize:13,fontFamily:'inherit',outline:'none'}}/>
+                    ))}
+                    {pwMsg&&(
+                      <div style={{fontSize:12,fontWeight:600,color:pwMsg.ok?T.g:T.r,marginBottom:12,marginTop:2}}>{pwMsg.text}</div>
+                    )}
+                    <button onClick={changePassword} disabled={pwBusy}
+                      style={{width:'100%',background:pwBusy?T.line:T.goldG,border:'none',color:'#03030A',fontWeight:800,fontSize:12,padding:'13px',borderRadius:10,cursor:pwBusy?'default':'pointer',fontFamily:'inherit',letterSpacing:'0.06em',opacity:pwBusy?.6:1,transition:'all .2s'}}>
+                      {pwBusy?'Salvando…':'ALTERAR SENHA'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Agente IA Panel */}
             {nav==='agente'&&(
@@ -1974,7 +2415,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             )}
 
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&nav!=='perfil'&&<>
             <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
               <div style={{minWidth:0}}>
                 <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
@@ -1989,8 +2430,18 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   {done&&totalP>1&&<> · pág. <span className="ora-num" style={{color:T.t4}}>{page}/{totalP}</span></>}
                 </p>
               </div>
-              {/* Ações contextuais: CSV + Atualizar */}
+              {/* Ações contextuais: Ordenar + CSV + Atualizar */}
               <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+                {done&&prods.length>0&&(
+                  <select value={sortBy} aria-label="Ordenar produtos" title="Ordenar produtos"
+                    onChange={e=>{sortBaseRef.current=prods.length;setSortBy(e.target.value as 'default'|'sales'|'score'|'bsr');setPage(1)}}
+                    style={{background:T.card,border:`1px solid ${T.line}`,color:sortBy==='default'?T.t3:T.gold,fontWeight:600,fontSize:10,padding:'8px 10px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.04em',outline:'none',transition:'all .15s'}}>
+                    <option value="default">Ordenar: Padrão</option>
+                    <option value="sales">Ordenar: Mais vendidos</option>
+                    <option value="score">Ordenar: Melhor score</option>
+                    <option value="bsr">Ordenar: Menor BSR</option>
+                  </select>
+                )}
                 {cfg.export&&done&&prods.length>0&&(
                   <button onClick={()=>exportCSV(prods,cat)}
                     style={{display:'flex',alignItems:'center',gap:6,background:'none',border:`1px solid ${T.line}`,color:T.t2,fontWeight:600,fontSize:10,padding:'8px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase' as const,transition:'all .15s'}}
@@ -2000,7 +2451,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                     CSV
                   </button>
                 )}
-                <button onClick={()=>load(nav,cat,'',false)}
+                {/* Atualizar NÃO manda bust: a novidade vem do exclude + shuffle do serve;
+                    o rebuild do pool (caro na SP-API) fica reservado p/ remaining<12 no load */}
+                <button onClick={()=>load(nav,cat,'',false)} title="Limpa o garimpo atual e redistribui produtos novos"
                   style={{display:'flex',alignItems:'center',gap:7,background:'none',border:`1px solid ${T.line}`,color:T.t3,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
                   onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
                   onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
@@ -2016,7 +2469,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {/* Grid */}
             {!loading&&done&&prods.length>0&&(
               <>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12,position:'relative' as const}}>
+                <div ref={gridRef} style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12,position:'relative' as const}}>
                   {paged.map((p,i)=>{
                     const isLocked = isFree && i >= cfg.limit
                     return(
@@ -2047,8 +2500,8 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   </div>
                 )}
 
-                {/* Pagination */}
-                {!isFree&&totalP>1&&(()=>{
+                {/* Paginação intuitiva — pool acumulado, avançar busca mais produtos */}
+                {!isFree&&(()=>{
                   // Constrói lista de páginas com elipses: 1 … p-1 p p+1 … N
                   const nums: (number|'…')[] = []
                   if (totalP <= 9) {
@@ -2060,23 +2513,31 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                     if (page < totalP-2) nums.push('…')
                     nums.push(totalP)
                   }
-                  type Btn={l:string;fn:()=>void;dis:boolean;act:boolean}
-                  const btns:Btn[]=[
-                    {l:'←',fn:()=>setPage(p=>Math.max(1,p-1)),dis:page===1,act:false},
-                    ...nums.map(n=>n==='…'
-                      ?{l:'…',fn:()=>{},dis:true,act:false}
-                      :{l:String(n),fn:()=>setPage(n as number),dis:false,act:page===n}
-                    ),
-                    {l:'→',fn:()=>setPage(p=>Math.min(totalP,p+1)),dis:page===totalP,act:false},
-                  ]
+                  const btnStyle=(act:boolean,dis:boolean):React.CSSProperties=>({
+                    background:act?`${tint(T.gold,8)}`:'none',border:`1px solid ${act?'rgba(240,180,41,0.3)':T.line}`,
+                    color:act?T.gold:dis?T.t3:T.t2,fontWeight:act?700:400,fontSize:12,width:34,height:34,borderRadius:7,
+                    cursor:dis?'default':'pointer',fontFamily:'inherit',transition:'all .12s',
+                    display:'flex',alignItems:'center',justifyContent:'center',opacity:dis?.55:1,
+                  })
+                  const nextExhausted = poolExhausted && page>=totalP
+                  const nextDis = nextExhausted || moreLoading
                   return(
                     <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:4,marginTop:32}}>
-                      {btns.map((b,i)=>(
-                        <button key={i} onClick={()=>{if(!b.dis){b.fn();mainRef.current?.scrollTo({top:0})}}}
-                          style={{background:b.act?`${tint(T.gold,8)}`:'none',border:`1px solid ${b.act?'rgba(240,180,41,0.3)':T.line}`,color:b.act?T.gold:b.dis?T.t3:T.t2,fontWeight:b.act?700:400,fontSize:12,width:34,height:34,borderRadius:7,cursor:b.dis?'default':'pointer',fontFamily:'inherit',transition:'all .12s'}}>
-                          {b.l}
-                        </button>
-                      ))}
+                      <button aria-label="Página anterior" disabled={page===1}
+                        onClick={()=>{if(page>1)gotoPage(page-1)}} style={btnStyle(false,page===1)}>←</button>
+                      {nums.map((n,i)=>n==='…'
+                        ?<span key={`e${i}`} style={{color:T.t3,fontSize:12,width:22,textAlign:'center' as const}}>…</span>
+                        :<button key={n} onClick={()=>{if(page!==n)gotoPage(n as number)}} aria-label={`Página ${n}`} aria-current={page===n?'page':undefined}
+                            className="ora-num" style={btnStyle(page===n,false)}>{n}</button>
+                      )}
+                      <button aria-label="Próxima página" disabled={nextDis} onClick={goNext}
+                        title={nextExhausted?'Você viu tudo por aqui — toque em Atualizar para redistribuir':'Próxima página'}
+                        style={btnStyle(false,nextDis)}>
+                        {moreLoading
+                          ?<svg className="ora-spin" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke={T.gold} strokeWidth="2" strokeLinecap="round"/></svg>
+                          :'→'}
+                      </button>
+                      {moreLoading&&<span style={{fontSize:10,color:T.t3,marginLeft:8}}>garimpando mais produtos…</span>}
                     </div>
                   )
                 })()}

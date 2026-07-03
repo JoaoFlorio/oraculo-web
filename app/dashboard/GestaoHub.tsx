@@ -606,22 +606,95 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:b
     </div>}
   </>)
 }
-function Analitico({realDre,hide,connected,mockM}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[]}){
+function Analitico({realDre,hide,connected,mockM,costs={}}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>}){
   const t=useT()
   if(connected && !realDre) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
   if(realDre){
+    const produtos:any[] = realDre.produtos||[]
     const reembolsos:any[] = realDre.reembolsos||[]
-    const vendaPorSku:Record<string,number> = {}
-    for(const p of (realDre.produtos||[])) vendaPorSku[p.sku]=p.units
+    // reembolsos agregados por SKU (p/ coluna da tabela geral)
+    const refBySku:Record<string,{units:number;valor:number}> = {}
+    for(const r of reembolsos){ const a=refBySku[r.sku]||(refBySku[r.sku]={units:0,valor:0}); a.units+=r.units||0; a.valor+=r.valor||0 }
     const totalDev = reembolsos.reduce((s,r)=>s+(r.valor||0),0)
+    const totalDevUn = reembolsos.reduce((s,r)=>s+(r.units||0),0)
+    const receitaTotal = produtos.reduce((s,p)=>s+(p.receita||0),0)
+    const unidadesTotal = produtos.reduce((s,p)=>s+(p.units||0),0)
+    // lucro/margem com o MESMO critério das outras abas: receita − CMV − taxas rateadas por faturamento
+    const L=realDre.linhas||{}
+    const fat=L.receitaBruta||0
+    const feesTot=(L.comissao||0)+(L.fba||0)+(L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.outrasTaxas||0)
+    const rows=[...produtos].sort((a:any,b:any)=>(b.receita||0)-(a.receita||0)).map((p:any)=>{
+      const receita=p.receita||0, units=p.units||0
+      const ticket=units>0?receita/units:0
+      const shareRec=receitaTotal>0?receita/receitaTotal*100:0
+      const custoU=costs[p.sku]||0, temCusto=custoU>0
+      const custoTotal=custoU*units
+      const share=fat>0?receita/fat:0
+      const lucro=receita-custoTotal-feesTot*share
+      const margem=receita>0?lucro/receita*100:0
+      const ref=refBySku[p.sku]||{units:0,valor:0}
+      return {p,receita,units,ticket,shareRec,custoTotal,temCusto,lucro,margem,ref}
+    })
+    const comCusto=rows.filter(r=>r.temCusto)
+    const recCusto=comCusto.reduce((s,r)=>s+r.receita,0)
+    const margemMedia = recCusto>0 ? comCusto.reduce((s,r)=>s+r.lucro,0)/recCusto*100 : null
+    if(produtos.length===0 && reembolsos.length===0)
+      return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhuma venda no período selecionado — nada para analisar por aqui.</div>
+    const Chip=({label,value,color}:{label:string;value:string;color?:string})=>(
+      <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:11,padding:'9px 14px',display:'flex',flexDirection:'column' as const,gap:3,minWidth:130,flex:'1 1 130px'}}>
+        <span style={{fontSize:10,color:t.t3,fontFamily:FG,fontWeight:600,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>{label}</span>
+        <span style={{fontSize:15,fontWeight:700,fontFamily:FG,color:color||t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(6px)':'none'}}>{value}</span>
+      </div>
+    )
     return(<>
-      <Hint>Reembolsos por produto (base de repasse) · acha o que vende mas volta. Total devolvido no período: <b style={{color:t.red}}>{brl2(totalDev)}</b></Hint>
+      <Hint>Analítico geral do período · desempenho por produto com ticket médio, participação na receita e reembolsos.</Hint>
+      {/* Mini-KPIs do período */}
+      <div style={{display:'flex',gap:11,flexWrap:'wrap' as const,marginBottom:16}}>
+        <Chip label="Receita do período" value={brl2(receitaTotal)} color={t.t1}/>
+        <Chip label="Unidades" value={String(unidadesTotal)}/>
+        <Chip label="Produtos vendidos" value={String(produtos.length)}/>
+        <Chip label="Reembolsos" value={`${totalDevUn} un · ${brl2(totalDev)}`} color={totalDev>0?t.red:t.t1}/>
+        <Chip label="Margem média" value={margemMedia!=null?pc(margemMedia):'—'} color={margemMedia!=null?(margemMedia>=0?t.grn:t.red):t.t3}/>
+      </div>
+      {margemMedia==null && <div style={{fontSize:10.5,color:t.t3,marginBottom:14,fontFamily:FG}}>Margem média aparece quando você informa os custos (CMV) em Gerenciamento.</div>}
+      {/* Tabela por produto (receita DESC) */}
+      {produtos.length===0 ? (
+        <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG,marginBottom:22}}>Nenhuma venda no período selecionado.</div>
+      ) : (
+        <Table head={[
+          {label:'Produto',w:'24%'},{label:'Unid.',right:true},{label:'Receita',right:true},{label:'Ticket médio',right:true},
+          {label:'% da receita',right:true},{label:'Custo total',right:true},{label:'Lucro bruto',right:true},{label:'Margem',right:true},{label:'Reembolsos',right:true},
+        ]}>
+          {rows.map((r,i)=>(
+            <tr key={i}>
+              <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}}/>
+              <NumTd>{r.units}</NumTd>
+              <NumTd strong hide={hide}>{brl2(r.receita)}</NumTd>
+              <NumTd hide={hide}>{brl2(r.ticket)}</NumTd>
+              <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right'}}>
+                <div style={{fontSize:12,fontFamily:FG,fontWeight:600,color:t.t2,fontVariantNumeric:'tabular-nums'}}>{r.shareRec.toFixed(1).replace('.',',')}%</div>
+                <div style={{height:3,borderRadius:2,background:t.dark?'rgba(255,255,255,0.08)':'#EFF1F4',marginTop:4,overflow:'hidden'}}>
+                  <div style={{width:`${Math.min(100,Math.max(0,r.shareRec))}%`,height:'100%',borderRadius:2,background:t.vio}}/>
+                </div>
+              </td>
+              <NumTd color={r.temCusto?t.gold:t.t3} hide={hide}>{r.temCusto?brl2(r.custoTotal):'—'}</NumTd>
+              <NumTd color={r.temCusto?(r.lucro>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto?brl2(r.lucro):'—'}</NumTd>
+              <PillTd>{r.temCusto?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
+              <NumTd color={r.ref.units>0?t.red:t.t3} hide={hide}>{r.ref.units>0?`${r.ref.units} un · ${brl2(r.ref.valor)}`:'0'}</NumTd>
+            </tr>
+          ))}
+        </Table>
+      )}
+      {produtos.length>0 && <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Custo total, lucro e margem usam o CMV informado em Gerenciamento + comissão/FBA rateados por faturamento.</div>}
+      {/* Detalhe: reembolsos por produto (seção existente) */}
+      <div style={{fontFamily:FG,fontSize:15,fontWeight:600,color:t.t1,margin:'22px 0 8px'}}>Reembolsos por produto</div>
+      <Hint>Base de repasse · acha o que vende mas volta. Total devolvido no período: <b style={{color:t.red}}>{brl2(totalDev)}</b></Hint>
       {reembolsos.length===0 ? (
         <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhuma devolução no período selecionado. 🎉</div>
       ) : (
         <Table head={[{label:'Produto',w:'46%'},{label:'Devolvidas',right:true},{label:'R$ devolvido',right:true},{label:'Taxa devol.',right:true}]}>
           {reembolsos.map((r,i)=>{
-            const vendidas=vendaPorSku[r.sku]||0
+            const vendidas=produtos.find((p:any)=>p.sku===r.sku)?.units||0
             const taxa=vendidas>0?(r.units/vendidas*100):0
             return(<tr key={i}>
               <ProdCell p={{id:r.sku,image:r.image,name:r.name||r.sku,sku:r.sku}}/>
@@ -678,7 +751,7 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide,connected}:{realDre?:any
     <div style={{fontSize:11,color:t.t3,marginTop:8}}>Salvo automaticamente · volte ao Resumo pra ver Lucro Bruto, Margem, ROI e MPA reais.</div>
   </>)
 }
-function Fulfillment({inv,realDre,connected,mockM}:{inv?:any;realDre?:any;connected?:boolean|null;mockM?:ProductMetrics[]}){
+function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realDre?:any;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;hide:boolean}){
   const t=useT()
   if(connected){
     if(!inv) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando estoque FBA da Amazon…</div>
@@ -688,7 +761,38 @@ function Fulfillment({inv,realDre,connected,mockM}:{inv?:any;realDre?:any;connec
     for(const p of (realDre?.produtos||[])) vendaPorSku[p.sku]=p.units
     const from=realDre?.period?.from, to=realDre?.period?.to
     const days = from&&to ? Math.max(1,Math.round((Date.parse(to)-Date.parse(from))/86400000)) : 30
+    // ── KPIs do estoque (topo) — só dados reais: preço médio do período (realDre) e custo do Gerenciamento ──
+    const unidadesEstoque = itens.reduce((s,it)=>s+(it.fulfillable||0),0)
+    const precoPorSku:Record<string,number> = {}
+    for(const p of (realDre?.produtos||[])) if((p.units||0)>0 && (p.receita||0)>0) precoPorSku[p.sku]=p.receita/p.units
+    let vendaProj=0, semPreco=0
+    for(const it of itens){
+      const preco=precoPorSku[it.sku]
+      if(preco!=null) vendaProj+=(it.fulfillable||0)*preco
+      else if((it.fulfillable||0)>0) semPreco++   // sem venda no período → sem preço → fica fora (nada de preço inventado)
+    }
+    const capital = itens.reduce((s,it)=>s+(it.fulfillable||0)*(costs[it.sku]||0),0)
+    const temCusto = itens.some(it=>(costs[it.sku]||0)>0)
+    // SKUs com estoque mas SEM custo definido: o capital exibido é parcial — avisa
+    const semCusto = itens.filter(it=>(it.fulfillable||0)>0 && !((costs[it.sku]||0)>0)).length
+    const noteStyle:React.CSSProperties={fontSize:10,color:t.t3,marginTop:5,textAlign:'center' as const,fontFamily:FG,lineHeight:1.3}
     return(<>
+      {!inv.error && (
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:13,marginBottom:16,alignItems:'start'}}>
+          <div>
+            <KPI label="Unidades em estoque" value={String(unidadesEstoque)} color={t.blue} hide={hide}/>
+          </div>
+          <div>
+            <KPI label="Venda projetada do estoque" value={brl2(vendaProj)} color={t.grn} hide={hide}/>
+            {semPreco>0 && <div style={noteStyle}>{semPreco} SKU{semPreco>1?'s':''} sem preço no período não somado{semPreco>1?'s':''}</div>}
+          </div>
+          <div>
+            <KPI label="Capital em estoque (custo)" value={temCusto?brl2(capital):'—'} color={t.gold} hide={hide}/>
+            {!temCusto && <div style={noteStyle}>Defina os custos em Gerenciamento</div>}
+            {temCusto && semCusto>0 && <div style={noteStyle}>{semCusto} SKU{semCusto>1?'s':''} sem custo não somado{semCusto>1?'s':''}</div>}
+          </div>
+        </div>
+      )}
       <Hint>Estoque FBA real · cobertura estimada pela velocidade de venda · alerta de ruptura e excesso.</Hint>
       {inv.error ? (
         <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Estoque FBA temporariamente indisponível (verificando permissão da API).</div>
@@ -766,7 +870,7 @@ const TABS = [
   {id:'ads',label:'Ads',icon:'ti-speakerphone'},
   {id:'analit',label:'Analítico',icon:'ti-chart-dots'},
   {id:'gerenc',label:'Gerenciamento',icon:'ti-adjustments'},
-  {id:'fulfil',label:'Fulfillment',icon:'ti-truck-delivery'},
+  {id:'fulfil',label:'Estoque FBA',icon:'ti-truck-delivery'},
   {id:'relat',label:'Relatório',icon:'ti-file-text'},
   {id:'dre',label:'DRE',icon:'ti-building-bank'},
 ]
@@ -963,9 +1067,9 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
         {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={costs} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
-        {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m}/>}
+        {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={costs}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide} connected={amazonConnected}/>}
-        {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m}/>}
+        {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={costs} hide={hide}/>}
         {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={costs}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
       </div>

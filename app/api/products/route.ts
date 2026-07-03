@@ -58,6 +58,8 @@ export async function GET(req: NextRequest) {
     })
   } catch (e: any) {
     console.error('[products]', e.message)
-    return NextResponse.json({ products: [] })
+    // Erro transitório do backend NÃO pode parecer "pool vazio" (200 sem
+    // `remaining`) — o cliente marcaria fim-dos-dados permanente. Devolve erro.
+    return NextResponse.json({ products: [], error: true }, { status: 502 })
   }
 }

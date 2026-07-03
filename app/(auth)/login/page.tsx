@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -15,34 +15,56 @@ const t1    = '#F3F3FB'
 const t2    = '#9DA2BC'
 const t3    = '#666B85'
 
-/* ── Marca: olho do Oráculo (almond de linha dupla + 12 raios) ───── */
+/* ── Marca: olho do Oráculo v2 — contorno almond com gradiente dourado,
+   cílios finos assimétricos que nascem da borda e íris com brilho radial.
+   Ids únicos por instância (useId) — a marca aparece 2× na página. ─────── */
 function OracleEye({ size = 72 }: { size?: number }) {
-  const rays = Array.from({ length: 12 }, (_, i) => {
-    const a  = (i * 30 * Math.PI) / 180
-    const cx = 48, cy = 48, r1 = 37.5, r2 = 44
-    return {
-      x1: (cx + r1 * Math.cos(a)).toFixed(2), y1: (cy + r1 * Math.sin(a)).toFixed(2),
-      x2: (cx + r2 * Math.cos(a)).toFixed(2), y2: (cy + r2 * Math.sin(a)).toFixed(2),
-    }
-  })
+  const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+  const gid = `ogG${uid}`, iid = `ogI${uid}`
+  // cílios: [ângulo°, comprimento, opacidade, espessura] — assimétricos de propósito
+  const lashes: [number, number, number, number][] = [
+    [-90, 10, .95, 1.6], [-64, 7.5, .75, 1.3], [-116, 8.6, .85, 1.4], [-40, 5.2, .5, 1.1], [-142, 6.4, .62, 1.1],
+    [90, 8.6, .85, 1.5], [63, 5.8, .58, 1.2], [118, 7.2, .7, 1.3], [144, 5, .45, 1.1], [36, 4.2, .38, 1],
+  ]
+  const cx = 48, cy = 48, rx = 37, ry = 16.9 // semi-eixos aproximados do almond
   return (
     <svg width={size} height={size} viewBox="0 0 96 96" fill="none" aria-hidden="true"
-      style={{ filter: 'drop-shadow(0 0 16px rgba(240,180,41,0.22))' }}>
-      {rays.map((r, i) => (
-        <line key={i} x1={r.x1} y1={r.y1} x2={r.x2} y2={r.y2}
-          stroke={gold} strokeWidth="1.5" strokeLinecap="round" opacity="0.5" />
-      ))}
-      {/* almond externo */}
+      style={{ filter: 'drop-shadow(0 0 16px rgba(240,180,41,0.32))' }}>
+      <defs>
+        <linearGradient id={gid} x1="11" y1="26" x2="85" y2="70" gradientUnits="userSpaceOnUse">
+          <stop offset="0%"  stopColor="#FFE7A6" />
+          <stop offset="52%" stopColor="#F0B429" />
+          <stop offset="100%" stopColor="#C48F10" />
+        </linearGradient>
+        <radialGradient id={iid} cx="38%" cy="34%" r="85%">
+          <stop offset="0%"  stopColor="#FFF3CF" />
+          <stop offset="45%" stopColor="#F5C654" />
+          <stop offset="100%" stopColor="#9C6D06" />
+        </radialGradient>
+      </defs>
+      {lashes.map(([a, len, o, w], i) => {
+        const rad = (a * Math.PI) / 180
+        const edge = (rx * ry) / Math.sqrt((ry * Math.cos(rad)) ** 2 + (rx * Math.sin(rad)) ** 2)
+        const r1 = edge + 2, r2 = edge + 2 + len
+        return (
+          <line key={i}
+            x1={(cx + r1 * Math.cos(rad)).toFixed(2)} y1={(cy + r1 * Math.sin(rad)).toFixed(2)}
+            x2={(cx + r2 * Math.cos(rad)).toFixed(2)} y2={(cy + r2 * Math.sin(rad)).toFixed(2)}
+            stroke={`url(#${gid})`} strokeWidth={w} strokeLinecap="round" opacity={o} />
+        )
+      })}
+      {/* almond externo (gradiente) */}
       <path d="M11 48 C 26.5 25.5, 69.5 25.5, 85 48 C 69.5 70.5, 26.5 70.5, 11 48 Z"
-        stroke={gold} strokeWidth="1.5" strokeLinejoin="round" />
+        stroke={`url(#${gid})`} strokeWidth="1.6" strokeLinejoin="round" />
       {/* almond interno (linha dupla) */}
       <path d="M17.5 48 C 30.5 30.5, 65.5 30.5, 78.5 48 C 65.5 65.5, 30.5 65.5, 17.5 48 Z"
-        stroke={gold} strokeWidth="1" opacity="0.55" strokeLinejoin="round" />
-      {/* íris + pupila */}
-      <circle cx="48" cy="48" r="12.5" stroke={gold} strokeWidth="1.5" />
-      <circle cx="48" cy="48" r="8.5" stroke={gold} strokeWidth="1" opacity="0.45" />
-      <circle cx="48" cy="48" r="4.5" fill={gold} />
-      <circle cx="46" cy="45.6" r="1.3" fill="rgba(255,255,255,0.55)" />
+        stroke={`url(#${gid})`} strokeWidth="1" opacity="0.5" strokeLinejoin="round" />
+      {/* íris: anel gradiente + miolo radial + pupila + brilho */}
+      <circle cx="48" cy="48" r="13" stroke={`url(#${gid})`} strokeWidth="1.6" />
+      <circle cx="48" cy="48" r="9" fill={`url(#${iid})`} />
+      <circle cx="48" cy="48" r="3.4" fill="#2A1D03" />
+      <circle cx="44.8" cy="44.4" r="1.9" fill="rgba(255,255,255,0.9)" />
+      <circle cx="51.5" cy="52.5" r=".9" fill="rgba(255,255,255,0.45)" />
     </svg>
   )
 }
@@ -107,7 +129,9 @@ function BrandCore({ condensed }: { condensed?: boolean }) {
       <div style={{
         fontFamily: "'Bricolage Grotesque','Plus Jakarta Sans',sans-serif", fontWeight: 800,
         fontSize: condensed ? 19 : 26, letterSpacing: '0.35em', marginRight: '-0.35em',
-        color: t1, marginTop: condensed ? 14 : 22, lineHeight: 1,
+        color: gold, marginTop: condensed ? 14 : 22, lineHeight: 1,
+        background: 'linear-gradient(115deg,#FFE7A6 0%,#F0B429 48%,#C48F10 100%)',
+        WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent',
       }}>
         ORÁCULO
       </div>
