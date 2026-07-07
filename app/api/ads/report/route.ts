@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const qs = new URLSearchParams({ email: user.email })
   if (searchParams.get('window')) qs.set('window', searchParams.get('window')!)
   try {
-    const res = await fetch(`${BACKEND}/api/ads/report?${qs.toString()}`, { cache: 'no-store' })
+    const res = await fetch(`${BACKEND}/api/ads/report?${qs.toString()}`, { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
     return NextResponse.json(await res.json(), { status: res.status })
   } catch {
     return NextResponse.json({ error: 'Erro ao consultar ads' }, { status: 500 })

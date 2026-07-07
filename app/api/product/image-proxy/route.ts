@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
+import { getSession } from '@/lib/auth'
 
 /**
  * GET /api/product/image-proxy?url=AMAZON_URL&filename=nome.jpg
  *
  * Faz proxy da imagem da Amazon server-side (contorna CORS)
  * e retorna com Content-Disposition: attachment para download direto.
+ * Exige sessão — não é um proxy aberto para terceiros usarem o nosso IP.
  */
 export async function GET(req: NextRequest) {
-  const url      = req.nextUrl.searchParams.get('url')      || ''
-  const filename = req.nextUrl.searchParams.get('filename') || 'imagem.jpg'
+  const user = await getSession()
+  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+
+  const url = req.nextUrl.searchParams.get('url') || ''
+  // Sanitiza o filename (evita injeção no header Content-Disposition).
+  const filename = (req.nextUrl.searchParams.get('filename') || 'imagem.jpg').replace(/[^\w.\-]+/g, '_').slice(0, 80) || 'imagem.jpg'
 
   if (!url) return NextResponse.json({ error: 'url obrigatória' }, { status: 400 })
 
