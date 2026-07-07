@@ -948,11 +948,11 @@ export default function PlanosPage() {
         <div className="mq-track">
           {[
             'Mais Vendidos','Em Alta','Recém Adicionados','Genéricos','Análise Rival',
-            'Extensão Chrome','Agente IA','Simulador Financeiro','847 Sellers',
-            'Dados Diários','Amazon FBA Brasil','12.847 Produtos',
+            'Extensão Chrome','Agente IA','Simulador Financeiro','DRE Automática',
+            'Calculadora FBA','Amazon FBA Brasil','Dados Reais',
             'Mais Vendidos','Em Alta','Recém Adicionados','Genéricos','Análise Rival',
-            'Extensão Chrome','Agente IA','Simulador Financeiro','847 Sellers',
-            'Dados Diários','Amazon FBA Brasil','12.847 Produtos',
+            'Extensão Chrome','Agente IA','Simulador Financeiro','DRE Automática',
+            'Calculadora FBA','Amazon FBA Brasil','Dados Reais',
           ].map((t, i) => (
             <span key={i} className="mq-item">
               {t}
@@ -966,10 +966,10 @@ export default function PlanosPage() {
       <div className="proof">
         <div className="proof-grid">
           {[
-            {v:'12.847',l:'produtos analisados\npor dia'},
-            {v:'847',   l:'sellers ativos\nna plataforma'},
-            {v:'8',     l:'ferramentas\nexclusivas'},
-            {v:'40×',   l:'mais rápido que\npesquisa manual'},
+            {v:'100%', l:'dados reais\nda Amazon'},
+            {v:'4',    l:'modalidades na\ncalculadora FBA'},
+            {v:'DRE',  l:'financeira\nautomática'},
+            {v:'R$79', l:'por mês pra\ncomeçar'},
           ].map((n, i) => (
             <div className="pnum" key={i}>
               <span className="pnum-n">{n.v}</span>
@@ -993,7 +993,7 @@ export default function PlanosPage() {
         <div className="sec-in">
           <span className="stag">// ferramentas</span>
           <h2 className="sh">O que o Oráculo<br /><em>enxerga por você.</em></h2>
-          <p className="sp">8 ferramentas integradas. Dados reais. Decisões certas.</p>
+          <p className="sp">8 ferramentas integradas. Dados reais. <span style={{opacity:.65}}>(as telas abaixo são exemplos ilustrativos)</span></p>
 
           <div className="bento">
 
