@@ -466,13 +466,14 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
 
 /* ── Abas tabulares ─────────────────────────────────────────────────────── */
 function Vendas({realM,mockM,hide,connected}:{realM?:ProductMetrics[]|null;mockM?:ProductMetrics[];hide:boolean;connected?:boolean|null}){
+  void mockM   // nunca renderiza mock — só dado real (evita produtos fabricados)
   if(connected===false) return <ConnectEmpty/>
-  if(connected && !realM) return <LoadingBox/>
-  const rows=[...(realM||mockM||[])].sort((a,b)=>b.revenue-a.revenue)
+  if(!realM) return <LoadingBox/>
+  const rows=[...realM].sort((a,b)=>b.revenue-a.revenue)
   return(<>
     <Hint>Ranking por receita · ordena os produtos por faturamento e mostra a margem real.</Hint>
     <Table head={[{label:'Produto',w:'46%'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true}]}>
-      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
+      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd><Pill kind={p.margin>20?'grn':p.margin>0?'gold':'red'}>{pc(p.margin)}</Pill></PillTd></tr>)}
     </Table>
   </>)
 }
