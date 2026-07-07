@@ -92,7 +92,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (e: any) {
+    // Sempre responde {ok:true} — um 500 no caminho "existe" (ex.: falha no envio do
+    // e-mail) confirmaria que a conta existe. Loga internamente sem revelar nada.
     console.error('[forgot-password]', e)
-    return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
+    return NextResponse.json({ ok: true })
   }
 }
