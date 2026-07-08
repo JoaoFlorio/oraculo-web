@@ -169,10 +169,12 @@ export function demoFinance(cfg: DemoConfig, from: string, to: string, daily: bo
   }
 }
 
-// Relatório de Ads fake, coerente com o TACOS/ROAS. Keyed por janela (today/7d/…).
-export function demoAdsReport(cfg: DemoConfig, window: string): any {
-  const { from, to } = windowRange(window)
-  const { revenue } = periodRevenue(cfg, from, to)
+// Relatório de Ads fake, coerente com o TACOS/ROAS. Aceita from/to explícito (período
+// exato do seletor, inclusive "custom"/calendário) — senão cai na janela nomeada. Sem
+// isso, "Ontem"/calendário caíam em '30d' e mostravam o gasto de 30 dias (R$160k) num dia.
+export function demoAdsReport(cfg: DemoConfig, window: string, from?: string, to?: string): any {
+  const range = (from && to) ? { from, to } : windowRange(window)
+  const { revenue } = periodRevenue(cfg, range.from, range.to)
   const spend = coreDre(cfg, revenue).ads   // MESMO gasto da DRE (garante MPA = alvo)
   const sales = r2(spend * cfg.roas)
   const acos = sales > 0 ? r2(spend / sales * 100) : 0
@@ -184,7 +186,7 @@ export function demoAdsReport(cfg: DemoConfig, window: string): any {
     { campaign: 'SP · Auto — Descoberta', frac: 0.16 },
   ]
   const byCampaign = camps.map(c => ({ campaign: c.campaign, spend: r2(spend * c.frac), sales: r2(sales * c.frac), clicks: Math.round(spend * c.frac / 1.3), impressions: Math.round(spend * c.frac / 1.3 * 22) }))
-  return { connected: true, ready: true, cached: true, stale: false, window, updatedAt: new Date().toISOString(), period: { from, to }, spend, sales, purchases: Math.round(sales / (avgTicket(cfg) || 1)), clicks: Math.round(spend / 1.3), impressions: Math.round(spend / 1.3 * 22), acos, roas, byCampaign, demo: true }
+  return { connected: true, ready: true, cached: true, stale: false, window, updatedAt: new Date().toISOString(), period: { from: range.from, to: range.to }, spend, sales, purchases: Math.round(sales / (avgTicket(cfg) || 1)), clicks: Math.round(spend / 1.3), impressions: Math.round(spend / 1.3 * 22), acos, roas, byCampaign, demo: true }
 }
 
 // Estoque FBA fake por produto.

@@ -934,9 +934,12 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
     if(!adsConnected) return
     let alive=true, tries=0
     const win=adsWindow(period)
+    // Manda também o from/to exato do período: a conta demo usa isso p/ o Ads bater com
+    // o dia/intervalo escolhido (inclusive "custom"/calendário). Backend real usa a janela.
+    const qs=`window=${win}&from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`
     setAdsData(null); setAdsLoading(true)
     const tick=()=>{
-      fetch(`/api/ads/report?window=${win}`).then(r=>r.json()).then(d=>{
+      fetch(`/api/ads/report?${qs}`).then(r=>r.json()).then(d=>{
         if(!alive) return
         if(d && d.ready){ setAdsData(d); setAdsLoading(false) }
         else if(d && d.generating && tries++<70){ setTimeout(tick,12000) }  // 1ª geração leva ~10min: insiste ~14min
@@ -945,7 +948,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
     }
     tick()
     return ()=>{ alive=false }
-  },[adsConnected,period])
+  },[adsConnected,period,range.from,range.to])
   const adsSpend = adsData?.ready ? Number(adsData.spend)||0 : null
   // Custo (CMV) por SKU — informado pelo seller, salvo no metadata do usuário
   const [costs,setCosts]=useState<Record<string,number>>({})

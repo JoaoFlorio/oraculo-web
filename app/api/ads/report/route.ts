@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { searchParams } = new URL(req.url)
   const demo = await demoConfigFor(user)
-  if (demo) return NextResponse.json(demoAdsReport(demo, searchParams.get('window') || '30d'))
+  if (demo) return NextResponse.json(demoAdsReport(demo, searchParams.get('window') || '30d', searchParams.get('from') || undefined, searchParams.get('to') || undefined))
   const qs = new URLSearchParams({ email: user.email })
   if (searchParams.get('window')) qs.set('window', searchParams.get('window')!)
   try {
