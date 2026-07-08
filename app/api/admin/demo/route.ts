@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   const existing = await prisma.user.findUnique({ where: { email } })
   let plainPassword: string | null = null
-  const data: any = { role: 'demo', active: true, plan: 'lifetime', name: 'Conta Demo (apresentação)', metadata }
+  const data: any = { role: 'demo', active: true, plan: 'lifetime', name: config.name || 'João Florio', metadata }
 
   if (body.password) { plainPassword = String(body.password); data.password = await bcrypt.hash(plainPassword, 12) }
   else if (!existing) { plainPassword = genPassword(); data.password = await bcrypt.hash(plainPassword, 12) }

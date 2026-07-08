@@ -721,6 +721,10 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                 <div style={{ fontSize: 12.5, color: C.t3 }}>Carregando…</div>
               ) : (
                 <form onSubmit={saveDemo} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  <div>
+                    <div style={{ ...upLabel, marginBottom: 6 }}>Nome exibido na conta</div>
+                    <input value={demoCfg.name ?? ''} onChange={e => setCfg('name', e.target.value)} placeholder="João Florio" className="orc-in" style={inputSt} />
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div><div style={{ ...upLabel, marginBottom: 6 }}>E-mail de acesso</div><input value={demoEmail} onChange={e => setDemoEmail(e.target.value)} className="orc-in" style={inputSt} /></div>
                     <div><div style={{ ...upLabel, marginBottom: 6 }}>Senha (branco = manter/gerar)</div><input value={demoPass} onChange={e => setDemoPass(e.target.value)} placeholder="••••••" className="orc-in" style={inputSt} /></div>

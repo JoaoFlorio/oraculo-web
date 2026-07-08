@@ -9,6 +9,7 @@
 export type DemoProduct = { sku: string; name: string; share: number; price: number }
 
 export type DemoConfig = {
+  name: string           // nome exibido na conta (ex.: João Florio)
   revToday: number       // faturamento de hoje
   rev7d: number          // faturamento dos últimos 7 dias (total)
   rev30d: number         // faturamento dos últimos 30 dias (total)
@@ -21,6 +22,7 @@ export type DemoConfig = {
 }
 
 export const DEFAULT_DEMO_CONFIG: DemoConfig = {
+  name: 'João Florio',
   revToday: 16583.53,
   rev7d: 439549.95,
   rev30d: 1883785.50,          // ~ rev7d/7 × 30
@@ -63,26 +65,36 @@ export function demoCosts(cfg: DemoConfig): Record<string, number> {
   return out
 }
 
-// Peso diário determinístico (sem aleatoriedade — reproduzível) com variação suave.
-const weight = (i: number) => 0.80 + 0.35 * Math.abs(Math.sin(i * 1.3 + 0.5))
-
-// Série de faturamento dos últimos 30 dias ([29] = hoje). Respeita: hoje=revToday,
-// soma dos últimos 7 = rev7d, soma dos 30 = rev30d.
-function dailyValues(cfg: DemoConfig): number[] {
-  const arr = new Array(30).fill(0)
-  arr[29] = cfg.revToday
-  const rest7 = Math.max(0, cfg.rev7d - cfg.revToday)
-  let w6 = 0; for (let i = 23; i <= 28; i++) w6 += weight(i)
-  for (let i = 23; i <= 28; i++) arr[i] = r2(rest7 * weight(i) / w6)
-  const rest23 = Math.max(0, cfg.rev30d - cfg.rev7d)
-  let w23 = 0; for (let i = 0; i <= 22; i++) w23 += weight(i)
-  for (let i = 0; i <= 22; i++) arr[i] = r2(rest23 * weight(i) / (w23 || 1))
-  return arr
-}
-
 function seriesDates(): Date[] {
   const t = new Date(); t.setHours(0, 0, 0, 0)
   return Array.from({ length: 30 }, (_, i) => { const d = new Date(t); d.setDate(d.getDate() - (29 - i)); return d })
+}
+
+// Peso diário determinístico: sazonalidade de dia-da-semana (fim de semana ~20% mais
+// fraco) + variação orgânica reproduzível. Faz cada dia ter um faturamento PRÓPRIO e
+// realista (não um valor chapado), sem quebrar os totais.
+function dayWeight(date: Date, i: number): number {
+  const dow = date.getDay()                              // 0=Dom .. 6=Sáb
+  const week = (dow === 0 || dow === 6) ? 0.80 : 1.05    // dia útil > fim de semana
+  const wobble = 0.90 + 0.20 * Math.abs(Math.sin(i * 2.3 + 1.1))
+  return week * wobble
+}
+
+// Série de faturamento dos últimos 30 dias ([29] = hoje). Respeita: hoje=revToday,
+// soma dos últimos 7 = rev7d, soma dos 30 = rev30d — com valor DIA A DIA realista.
+function dailyValues(cfg: DemoConfig): number[] {
+  const dates = seriesDates()
+  const arr = new Array(30).fill(0)
+  arr[29] = cfg.revToday                                 // hoje (dia em andamento)
+  // 6 dias anteriores a hoje (23..28): somam rev7d - hoje, ponderados por dia da semana
+  const rest7 = Math.max(0, cfg.rev7d - cfg.revToday)
+  let w6 = 0; for (let i = 23; i <= 28; i++) w6 += dayWeight(dates[i], i)
+  for (let i = 23; i <= 28; i++) arr[i] = r2(rest7 * dayWeight(dates[i], i) / (w6 || 1))
+  // dias 0..22: somam rev30d - rev7d
+  const rest23 = Math.max(0, cfg.rev30d - cfg.rev7d)
+  let w23 = 0; for (let i = 0; i <= 22; i++) w23 += dayWeight(dates[i], i)
+  for (let i = 0; i <= 22; i++) arr[i] = r2(rest23 * dayWeight(dates[i], i) / (w23 || 1))
+  return arr
 }
 
 function avgTicket(cfg: DemoConfig): number {
