@@ -67,16 +67,33 @@ export function demoCosts(cfg: DemoConfig): Record<string, number> {
   return out
 }
 
+// Fuso de Brasília (UTC-3, fixo desde 2019 — sem horário de verão). O servidor do
+// Railway roda em UTC, mas o cliente (browser) monta os ranges de período no fuso
+// dele (BRT). Ancorar a série ao BRT garante que "ontem"/"hoje" caiam no dia certo
+// independente do TZ do servidor — senão o fim-de-dia BRT vaza pro dia seguinte em UTC
+// e "Ontem" acabava mostrando o valor de Hoje.
+const BRT_OFFSET_MS = 3 * 3600000
+// Epoch (ms) da meia-noite BRT do dia de calendário BRT que contém o instante `t`.
+function brtDayStartMs(t: number): number {
+  const shifted = t - BRT_OFFSET_MS
+  return Math.floor(shifted / 86400000) * 86400000 + BRT_OFFSET_MS
+}
+// Rótulo dd/mm no fuso BRT (determinístico em qualquer TZ de servidor).
+function mmdd(d: Date): string {
+  const b = new Date(d.getTime() - BRT_OFFSET_MS)
+  return `${String(b.getUTCDate()).padStart(2, '0')}/${String(b.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
 function seriesDates(): Date[] {
-  const t = new Date(); t.setHours(0, 0, 0, 0)
-  return Array.from({ length: 30 }, (_, i) => { const d = new Date(t); d.setDate(d.getDate() - (29 - i)); return d })
+  const todayStart = brtDayStartMs(Date.now())          // meia-noite BRT de hoje
+  return Array.from({ length: 30 }, (_, i) => new Date(todayStart - (29 - i) * 86400000))
 }
 
 // Peso diário determinístico: sazonalidade de dia-da-semana (fim de semana ~20% mais
 // fraco) + variação orgânica reproduzível. Faz cada dia ter um faturamento PRÓPRIO e
 // realista (não um valor chapado), sem quebrar os totais.
 function dayWeight(date: Date, i: number): number {
-  const dow = date.getDay()                              // 0=Dom .. 6=Sáb
+  const dow = new Date(date.getTime() - BRT_OFFSET_MS).getUTCDay() // dia da semana em BRT (0=Dom..6=Sáb)
   const week = (dow === 0 || dow === 6) ? 0.80 : 1.05    // dia útil > fim de semana
   const wobble = 0.90 + 0.20 * Math.abs(Math.sin(i * 2.3 + 1.1))
   return week * wobble
@@ -114,18 +131,19 @@ function avgTicket(cfg: DemoConfig): number {
 // casar datas — evita o bug de fronteira em que "7 dias" pegava 8 dias de calendário.
 function periodRevenue(cfg: DemoConfig, from: string, to: string): { revenue: number; daily: { date: string; receita: number; pedidos: number }[] } {
   const vals = dailyValues(cfg), dates = seriesDates(), MS = 86400000, ticket = avgTicket(cfg) || 1
-  const t0 = new Date(); t0.setHours(0, 0, 0, 0)
-  const fromMs = new Date(from).getTime(), toD = new Date(to)
-  const toDay = new Date(toD.getFullYear(), toD.getMonth(), toD.getDate())
-  const nDays = Math.max(1, Math.round((toD.getTime() - fromMs) / MS))          // quantos dias o período cobre
-  const endOffset = Math.max(0, Math.round((t0.getTime() - toDay.getTime()) / MS)) // termina quantos dias atrás (0 = hoje)
+  const fromMs = new Date(from).getTime(), toMs = new Date(to).getTime()
+  // Tudo ancorado à meia-noite BRT (não ao TZ do servidor) — ver brtDayStartMs.
+  const t0 = brtDayStartMs(Date.now())                                          // meia-noite BRT de hoje
+  const toDay = brtDayStartMs(toMs)                                             // meia-noite BRT do fim do período
+  const nDays = Math.max(1, Math.round((toMs - fromMs) / MS))                   // quantos dias o período cobre
+  const endOffset = Math.max(0, Math.round((t0 - toDay) / MS))                  // termina quantos dias atrás (0 = hoje)
   const endIdx = 29 - endOffset
   const startIdx = Math.max(0, endIdx - (nDays - 1))
   let revenue = 0
   const daily: { date: string; receita: number; pedidos: number }[] = []
   for (let i = startIdx; i <= endIdx && i >= 0 && i <= 29; i++) {
     revenue += vals[i]
-    daily.push({ date: `${String(dates[i].getDate()).padStart(2, '0')}/${String(dates[i].getMonth() + 1).padStart(2, '0')}`, receita: vals[i], pedidos: Math.max(1, Math.round(vals[i] / ticket)) })
+    daily.push({ date: mmdd(dates[i]), receita: vals[i], pedidos: Math.max(1, Math.round(vals[i] / ticket)) })
   }
   return { revenue: r2(revenue), daily }
 }
@@ -155,7 +173,7 @@ function coreDre(cfg: DemoConfig, R: number) {
 export function demoFinance(cfg: DemoConfig, from: string, to: string, daily: boolean): any {
   if (daily) {
     const vals = dailyValues(cfg), dates = seriesDates(), ticket = avgTicket(cfg) || 1
-    const series = vals.map((v, i) => ({ date: `${String(dates[i].getDate()).padStart(2, '0')}/${String(dates[i].getMonth() + 1).padStart(2, '0')}`, receita: v, pedidos: Math.max(1, Math.round(v / ticket)) }))
+    const series = vals.map((v, i) => ({ date: mmdd(dates[i]), receita: v, pedidos: Math.max(1, Math.round(v / ticket)) }))
     return { connected: true, period: { from, to }, daily: series, receita: r2(vals.reduce((s, v) => s + v, 0)) }
   }
   const { revenue: R, daily: dailyArr } = periodRevenue(cfg, from, to)
