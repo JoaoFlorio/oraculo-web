@@ -48,6 +48,8 @@ export default function ForgotPasswordPage() {
       const data = await res.json()
       if (!res.ok) { setError(data.error); return }
       setSent(true)
+    } catch {
+      setError('Falha de conexão. Verifique sua internet e tente de novo.')
     } finally {
       setLoading(false)
     }

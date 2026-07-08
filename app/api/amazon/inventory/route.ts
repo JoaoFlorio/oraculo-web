@@ -8,7 +8,7 @@ export async function GET() {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   try {
-    const res = await fetch(`${BACKEND}/api/amazon/inventory?email=${encodeURIComponent(user.email)}`, { cache: 'no-store' })
+    const res = await fetch(`${BACKEND}/api/amazon/inventory?email=${encodeURIComponent(user.email)}`, { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
     return NextResponse.json(await res.json(), { status: res.status })
   } catch {
     return NextResponse.json({ error: 'Erro ao consultar estoque' }, { status: 500 })

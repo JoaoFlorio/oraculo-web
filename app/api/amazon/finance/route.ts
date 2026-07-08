@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (searchParams.get('to')) qs.set('to', searchParams.get('to')!)
   if (searchParams.get('daily')) qs.set('daily', searchParams.get('daily')!)
   try {
-    const res = await fetch(`${BACKEND}/api/amazon/finance?${qs.toString()}`, { cache: 'no-store' })
+    const res = await fetch(`${BACKEND}/api/amazon/finance?${qs.toString()}`, { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
     return NextResponse.json(await res.json(), { status: res.status })
   } catch {
     return NextResponse.json({ error: 'Erro ao consultar a Amazon' }, { status: 500 })

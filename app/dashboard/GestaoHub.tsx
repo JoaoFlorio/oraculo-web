@@ -302,30 +302,8 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
 }
 function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnected}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null}){
   const t=useT()
-  const d=useMemo(()=>getFinanceData(),[])
-  const s=useMemo(()=>summary(d),[d])
-  const kpis=[
-    {label:'Faturamento',value:brl(s.faturamento),delta:'+12,4%',up:true,icon:'ti-cash',color:t.gold},
-    {label:'Líq. Marketplace',value:brl(s.liqMarketplace),delta:'+9,1%',up:true,icon:'ti-building-bank',color:t.t1},
-    {label:'Lucro Bruto',value:brl(s.lucroBruto),delta:'+15,2%',up:true,icon:'ti-trending-up',color:t.grn},
-    {label:'Margem',value:pc(s.margem),delta:'+1,8pp',up:true,icon:'ti-percentage',color:t.grn},
-    {label:'Nº de Vendas',value:String(s.orders),delta:'+8',up:true,icon:'ti-shopping-cart',color:t.t1},
-    {label:'Unidades',value:String(s.unidades),delta:'+74',up:true,icon:'ti-package',color:t.t1},
-    {label:'Ticket Médio',value:brl(s.ticketMedio),delta:'+3,2%',up:true,icon:'ti-receipt',color:t.t1},
-    {label:'ROI',value:pc(s.roi),delta:'+6pp',up:true,icon:'ti-rotate-clockwise',color:t.grn},
-    {label:'Valor em Ads',value:brl(s.ads),delta:'+5,0%',up:false,icon:'ti-speakerphone',color:t.gold},
-    {label:'TACOS',value:pc(s.tacos),delta:'-0,4pp',up:true,icon:'ti-target',color:t.gold},
-    {label:'Lucro pós-ADS',value:brl(s.lucroPosAds),delta:'+17%',up:true,icon:'ti-coin',color:t.grn},
-    {label:'MPA',value:pc(s.mpa),delta:'+2,1pp',up:true,icon:'ti-chart-pie',color:t.grn},
-  ]
-  const comp=[
-    {name:'Lucro líquido',value:Math.max(0,Math.round(s.lucroLiquido)),color:t.grn},
-    {name:'CMV',value:Math.round(s.cmv),color:t.vio},
-    {name:'Comissão',value:Math.round(s.comissao),color:t.gold},
-    {name:'Ads',value:Math.round(s.ads),color:t.red},
-    {name:'FBA',value:Math.round(s.fba),color:t.blue},
-    {name:'Outros',value:Math.round(s.armazenagem+s.remocao+s.refunds+s.tax),color:t.t3},
-  ]
+  // (Removidos os KPIs/composição MOCK com deltas fabricados "+12,4%" etc. — eram
+  // código morto: o render usa só RK.kpis (real), loadingKpis ou emptyKpis.)
   // ── KPIs e rosca REAIS quando conectado ──
   const RK = realDre ? (()=>{
     const L=realDre.linhas||{}
@@ -408,7 +386,7 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'16px 18px',marginBottom:16}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
         <span style={{fontFamily:FG,fontSize:15,fontWeight:600,color:t.t1}}>Resumo de Receitas</span>
-        <span style={{fontFamily:FG,fontSize:11,color:t.t3}}>{realChart?'últimos 30 dias':d.period}</span>
+        <span style={{fontFamily:FG,fontSize:11,color:t.t3}}>{realChart?'últimos 30 dias':'período selecionado'}</span>
       </div>
       <div style={{height:300}}>
         <ResponsiveContainer width="100%" height="100%">
@@ -466,13 +444,15 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
 
 /* ── Abas tabulares ─────────────────────────────────────────────────────── */
 function Vendas({realM,mockM,hide,connected}:{realM?:ProductMetrics[]|null;mockM?:ProductMetrics[];hide:boolean;connected?:boolean|null}){
+  const t=useT()
+  void mockM   // nunca renderiza mock — só dado real (evita produtos fabricados)
   if(connected===false) return <ConnectEmpty/>
-  if(connected && !realM) return <LoadingBox/>
-  const rows=[...(realM||mockM||[])].sort((a,b)=>b.revenue-a.revenue)
+  if(!realM) return <LoadingBox/>
+  const rows=[...realM].sort((a,b)=>b.revenue-a.revenue)
   return(<>
-    <Hint>Ranking por receita · ordena os produtos por faturamento e mostra a margem real.</Hint>
+    <Hint>Ranking por receita. A margem só aparece quando você informa o custo (CMV) na aba Gerenciamento — sem custo, mostramos "—".</Hint>
     <Table head={[{label:'Produto',w:'46%'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true}]}>
-      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd><Pill kind={p.margin>20?'grn':'gold'}>{pc(p.margin)}</Pill></PillTd></tr>)}
+      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd>{p.unitCost>0?<Pill kind={p.margin>20?'grn':p.margin>0?'gold':'red'}>{pc(p.margin)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd></tr>)}
     </Table>
   </>)
 }

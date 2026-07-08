@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (!asin) return NextResponse.json({ error: 'ASIN obrigatório' }, { status: 400 })
 
   try {
-    const res = await fetch(`${BACKEND}/api/product/competitor?asin=${asin}`, {
+    const res = await fetch(`${BACKEND}/api/product/competitor?asin=${encodeURIComponent(asin)}`, {
       headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' },
       cache: 'no-store',
     })

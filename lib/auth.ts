@@ -2,29 +2,13 @@ import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 import { prisma } from './db'
 
-const SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'oraculo-secret-change-in-prod')
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET ausente em produção — defina no Railway (oraculo-web).')
+}
+const SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'oraculo-secret-dev-only')
 export const COOKIE = 'oraculo_session'
 
-const MAX_SESSIONS = 1   // 1 acesso simultâneo: novo login encerra o anterior
-
 export async function createToken(userId: string): Promise<string> {
-  // Remove sessões expiradas primeiro
-  await prisma.session.deleteMany({
-    where: { userId, expiresAt: { lt: new Date() } },
-  })
-
-  // Se já atingiu MAX_SESSIONS, encerra a(s) sessão(ões) anterior(es) antes de abrir a nova
-  const active = await prisma.session.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'asc' },
-  })
-  if (active.length >= MAX_SESSIONS) {
-    const toDelete = active.slice(0, active.length - MAX_SESSIONS + 1)
-    await prisma.session.deleteMany({
-      where: { id: { in: toDelete.map((s: any) => s.id) } },
-    })
-  }
-
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
   const token = await new SignJWT({ userId })
@@ -32,10 +16,13 @@ export async function createToken(userId: string): Promise<string> {
     .setExpirationTime('30d')
     .sign(SECRET)
 
-  // Persiste sessão no banco
-  await prisma.session.create({
-    data: { userId, token, expiresAt },
-  })
+  // 1 sessão / 1 dispositivo, ATÔMICO: encerra todas as sessões anteriores do
+  // usuário e cria a nova numa transação. A versão anterior tinha race — dois
+  // logins simultâneos podiam abrir 2 sessões (furava o anti-compartilhamento).
+  await prisma.$transaction([
+    prisma.session.deleteMany({ where: { userId } }),
+    prisma.session.create({ data: { userId, token, expiresAt } }),
+  ])
 
   return token
 }

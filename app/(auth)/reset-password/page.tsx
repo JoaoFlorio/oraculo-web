@@ -59,6 +59,8 @@ function ResetForm() {
       if (!res.ok) { setError(data.error); return }
       setDone(true)
       setTimeout(() => router.push('/login'), 3000)
+    } catch {
+      setError('Falha de conexão. Verifique sua internet e tente de novo.')
     } finally {
       setLoading(false)
     }
