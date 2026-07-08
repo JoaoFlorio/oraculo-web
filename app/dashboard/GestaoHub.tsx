@@ -76,8 +76,11 @@ function periodLabel(key:string, custom:{from:Date;to:Date}|null):string{
   return 'Selecione um período'
 }
 // Mapeia o período para a janela de ads cacheada no backend.
+// 'ontem' agora bate com o dia anterior (antes caía em 'today' → mostrava o gasto
+// parcial de hoje em vez do gasto real de ontem).
 function adsWindow(key:string):string{
-  return key==='hoje'?'today':key==='ontem'?'today':key==='7d'?'7d':key==='mes'?'month':key==='mespass'?'lastmonth':'30d'
+  const m:Record<string,string>={hoje:'today',ontem:'yesterday','7d':'7d','15d':'15d','30d':'30d',mes:'month',mespass:'lastmonth',ano:'year'}
+  return m[key]||'30d'
 }
 /* ── Seletor de período (presets + calendário "Personalizado", estilo Gestor) ── */
 const sameDay=(a:Date,b:Date)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate()
