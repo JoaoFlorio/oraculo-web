@@ -104,8 +104,8 @@ export default function Hero() {
           <span className="ora-display" style={{ fontWeight: 700, fontSize: 19, letterSpacing: '.02em' }}>ORÁCULO</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 28 }} className="ora-nav-links">
-          {['Poderes', 'Como funciona', 'Preços', 'FAQ'].map((l) => (
-            <a key={l} href="#" style={{ color: 'var(--tx2)', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>{l}</a>
+          {[{l:'Poderes',h:'#poderes'},{l:'Como funciona',h:'#como-funciona'},{l:'Preços',h:'/planos'}].map(({l,h}) => (
+            <a key={l} href={h} style={{ color: 'var(--tx2)', fontSize: 14, fontWeight: 500, textDecoration: 'none' }}>{l}</a>
           ))}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

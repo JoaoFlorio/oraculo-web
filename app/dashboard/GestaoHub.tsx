@@ -444,14 +444,15 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
 
 /* ── Abas tabulares ─────────────────────────────────────────────────────── */
 function Vendas({realM,mockM,hide,connected}:{realM?:ProductMetrics[]|null;mockM?:ProductMetrics[];hide:boolean;connected?:boolean|null}){
+  const t=useT()
   void mockM   // nunca renderiza mock — só dado real (evita produtos fabricados)
   if(connected===false) return <ConnectEmpty/>
   if(!realM) return <LoadingBox/>
   const rows=[...realM].sort((a,b)=>b.revenue-a.revenue)
   return(<>
-    <Hint>Ranking por receita · ordena os produtos por faturamento e mostra a margem real.</Hint>
+    <Hint>Ranking por receita. A margem só aparece quando você informa o custo (CMV) na aba Gerenciamento — sem custo, mostramos "—".</Hint>
     <Table head={[{label:'Produto',w:'46%'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true}]}>
-      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd><Pill kind={p.margin>20?'grn':p.margin>0?'gold':'red'}>{pc(p.margin)}</Pill></PillTd></tr>)}
+      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd>{p.unitCost>0?<Pill kind={p.margin>20?'grn':p.margin>0?'gold':'red'}>{pc(p.margin)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd></tr>)}
     </Table>
   </>)
 }
