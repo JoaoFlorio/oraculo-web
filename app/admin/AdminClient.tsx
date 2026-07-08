@@ -734,8 +734,8 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                     <div style={{ ...upLabel, marginBottom: 8 }}>Números da operação demo</div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
                       {([
-                        ['revToday', 'Faturamento hoje (R$)'], ['rev7d', 'Faturamento 7 dias (R$)'], ['rev30d', 'Faturamento 30 dias (R$)'], ['marginPct', 'Margem final % (MPA)'],
-                        ['tacosPct', 'TACOS % (ads)'], ['commissionPct', 'Comissão Amazon %'], ['fbaPct', 'Tarifa FBA %'], ['roas', 'ROAS (vendas/ads)'],
+                        ['revToday', 'Faturamento hoje (R$)'], ['revYesterday', 'Faturamento ontem (R$)'], ['rev7d', 'Faturamento 7 dias (R$)'], ['rev30d', 'Faturamento 30 dias (R$)'],
+                        ['marginPct', 'Margem final % (MPA)'], ['tacosPct', 'TACOS % (ads)'], ['commissionPct', 'Comissão Amazon %'], ['fbaPct', 'Tarifa FBA %'], ['roas', 'ROAS (vendas/ads)'],
                       ] as const).map(([k, l]) => (
                         <div key={k}><div style={{ fontSize: 9.5, color: C.t3, marginBottom: 5 }}>{l}</div><input type="number" step="0.01" value={demoCfg[k] ?? ''} onChange={e => setCfg(k, Number(e.target.value))} className="orc-in" style={{ ...inputSt, padding: '9px 11px' }} /></div>
                       ))}

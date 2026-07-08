@@ -11,6 +11,7 @@ export type DemoProduct = { sku: string; name: string; share: number; price: num
 export type DemoConfig = {
   name: string           // nome exibido na conta (ex.: João Florio)
   revToday: number       // faturamento de hoje
+  revYesterday: number   // faturamento de ontem (dia próprio, dentro do total dos 7 dias)
   rev7d: number          // faturamento dos últimos 7 dias (total)
   rev30d: number         // faturamento dos últimos 30 dias (total)
   marginPct: number      // margem FINAL alvo (MPA = lucro pós-ADS / faturamento)
@@ -24,6 +25,7 @@ export type DemoConfig = {
 export const DEFAULT_DEMO_CONFIG: DemoConfig = {
   name: 'João Florio',
   revToday: 16583.53,
+  revYesterday: 89872.40,
   rev7d: 439549.95,
   rev30d: 1883785.50,          // ~ rev7d/7 × 30
   marginPct: 16,
@@ -86,10 +88,14 @@ function dailyValues(cfg: DemoConfig): number[] {
   const dates = seriesDates()
   const arr = new Array(30).fill(0)
   arr[29] = cfg.revToday                                 // hoje (dia em andamento)
-  // 6 dias anteriores a hoje (23..28): somam rev7d - hoje, ponderados por dia da semana
-  const rest7 = Math.max(0, cfg.rev7d - cfg.revToday)
-  let w6 = 0; for (let i = 23; i <= 28; i++) w6 += dayWeight(dates[i], i)
-  for (let i = 23; i <= 28; i++) arr[i] = r2(rest7 * dayWeight(dates[i], i) / (w6 || 1))
+  // ontem (dia 28): valor PRÓPRIO configurável. Clampado ao que sobra dos 7 dias
+  // (rev7d - hoje) pra nunca estourar o total do período de 7 dias.
+  const yest = Math.max(0, Math.min(cfg.revYesterday || 0, Math.max(0, cfg.rev7d - cfg.revToday)))
+  arr[28] = r2(yest)
+  // 5 dias anteriores a ontem (23..27): somam rev7d - hoje - ontem, ponderados por dia da semana
+  const rest5 = Math.max(0, cfg.rev7d - cfg.revToday - yest)
+  let w5 = 0; for (let i = 23; i <= 27; i++) w5 += dayWeight(dates[i], i)
+  for (let i = 23; i <= 27; i++) arr[i] = r2(rest5 * dayWeight(dates[i], i) / (w5 || 1))
   // dias 0..22: somam rev30d - rev7d
   const rest23 = Math.max(0, cfg.rev30d - cfg.rev7d)
   let w23 = 0; for (let i = 0; i <= 22; i++) w23 += dayWeight(dates[i], i)
