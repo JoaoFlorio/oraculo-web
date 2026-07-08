@@ -45,7 +45,7 @@ type AccessUser = { active?: boolean; plan?: string; expiresAt?: Date | null; ro
 export function accessDenied(user: AccessUser | null): 'notfound' | 'inactive' | 'free' | 'expired' | null {
   if (!user) return 'notfound'
   if (!user.active) return 'inactive'
-  if (user.role === 'admin' || user.role === 'staff') return null // equipe entra independente de plano
+  if (user.role === 'admin' || user.role === 'staff' || user.role === 'demo') return null // equipe/demo entram independente de plano
   if (user.plan === 'free' || !user.plan) return 'free'           // sem plano pago = bloqueado
   if (user.plan === 'lifetime') return null                       // vitalício nunca expira
   if (user.expiresAt && new Date(user.expiresAt).getTime() + GRACE_MS < Date.now()) return 'expired'

@@ -1,0 +1,201 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Conta DEMO da Gestão — dados 100% fictícios, coerentes e configuráveis, para o
+// João apresentar a ferramenta a alunos SEM expor sua loja real. Ativado só quando
+// o usuário logado tem role='demo'. Os endpoints (finance/ads/status/inventory)
+// devolvem esta geração no lugar da SP-API real. Toda a Gestão (Resumo/Vendas/ABC/
+// Analítico/Ads/Estoque) deriva desses payloads, então fica tudo fake e consistente.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DemoProduct = { sku: string; name: string; share: number; price: number }
+
+export type DemoConfig = {
+  revToday: number       // faturamento de hoje
+  rev7d: number          // faturamento dos últimos 7 dias (total)
+  rev30d: number         // faturamento dos últimos 30 dias (total)
+  marginPct: number      // margem FINAL alvo (MPA = lucro pós-ADS / faturamento)
+  tacosPct: number       // gasto em ads / faturamento
+  commissionPct: number  // comissão Amazon
+  fbaPct: number         // tarifa FBA
+  roas: number           // retorno do ads (vendas por ads / gasto)
+  products: DemoProduct[]
+}
+
+export const DEFAULT_DEMO_CONFIG: DemoConfig = {
+  revToday: 16583.53,
+  rev7d: 439549.95,
+  rev30d: 1883785.50,          // ~ rev7d/7 × 30
+  marginPct: 16,
+  tacosPct: 8.5,
+  commissionPct: 15,
+  fbaPct: 8,
+  roas: 6.2,
+  products: [
+    { sku: 'DEMO-01', name: 'Kit Organizador de Gavetas 6 peças', share: 0.22, price: 89.90 },
+    { sku: 'DEMO-02', name: 'Luminária LED de Mesa Articulada',   share: 0.18, price: 129.90 },
+    { sku: 'DEMO-03', name: 'Garrafa Térmica Inox 1,2L',          share: 0.15, price: 74.90 },
+    { sku: 'DEMO-04', name: 'Suporte Ergonômico para Notebook',   share: 0.14, price: 112.50 },
+    { sku: 'DEMO-05', name: 'Kit 4 Potes Herméticos com Vedação', share: 0.11, price: 59.90 },
+    { sku: 'DEMO-06', name: 'Massageador Facial Recarregável',    share: 0.10, price: 149.90 },
+    { sku: 'DEMO-07', name: 'Organizador de Cabos Adesivo 12un',  share: 0.10, price: 39.90 },
+  ],
+}
+
+export function mergeDemoConfig(partial: any): DemoConfig {
+  const c = { ...DEFAULT_DEMO_CONFIG, ...(partial || {}) }
+  if (!Array.isArray(c.products) || !c.products.length) c.products = DEFAULT_DEMO_CONFIG.products
+  return c as DemoConfig
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100
+
+// Fração do preço que é custo (CMV), calculada p/ a margem final bater exatamente:
+// MPA = 1 - comissão% - fba% - tacos% - custo%  →  custo% = 1 - (comissão+fba+tacos+MPA).
+function costRatio(cfg: DemoConfig): number {
+  const r = 1 - (cfg.commissionPct + cfg.fbaPct + cfg.tacosPct + cfg.marginPct) / 100
+  return Math.max(0.05, Math.min(0.9, r))
+}
+
+// Custo por SKU — grava no metadata `gestao_cmv` do demo (o front calcula o CMV daí).
+export function demoCosts(cfg: DemoConfig): Record<string, number> {
+  const cr = costRatio(cfg)
+  const out: Record<string, number> = {}
+  for (const p of cfg.products) out[p.sku] = r2(p.price * cr)
+  return out
+}
+
+// Peso diário determinístico (sem aleatoriedade — reproduzível) com variação suave.
+const weight = (i: number) => 0.80 + 0.35 * Math.abs(Math.sin(i * 1.3 + 0.5))
+
+// Série de faturamento dos últimos 30 dias ([29] = hoje). Respeita: hoje=revToday,
+// soma dos últimos 7 = rev7d, soma dos 30 = rev30d.
+function dailyValues(cfg: DemoConfig): number[] {
+  const arr = new Array(30).fill(0)
+  arr[29] = cfg.revToday
+  const rest7 = Math.max(0, cfg.rev7d - cfg.revToday)
+  let w6 = 0; for (let i = 23; i <= 28; i++) w6 += weight(i)
+  for (let i = 23; i <= 28; i++) arr[i] = r2(rest7 * weight(i) / w6)
+  const rest23 = Math.max(0, cfg.rev30d - cfg.rev7d)
+  let w23 = 0; for (let i = 0; i <= 22; i++) w23 += weight(i)
+  for (let i = 0; i <= 22; i++) arr[i] = r2(rest23 * weight(i) / (w23 || 1))
+  return arr
+}
+
+function seriesDates(): Date[] {
+  const t = new Date(); t.setHours(0, 0, 0, 0)
+  return Array.from({ length: 30 }, (_, i) => { const d = new Date(t); d.setDate(d.getDate() - (29 - i)); return d })
+}
+
+function avgTicket(cfg: DemoConfig): number {
+  // ticket médio ponderado pelos preços dos produtos
+  const w = cfg.products.reduce((s, p) => s + p.share, 0) || 1
+  return cfg.products.reduce((s, p) => s + p.price * p.share, 0) / w
+}
+
+// Soma o faturamento do período [from,to] a partir da série diária + devolve o daily.
+// Usa OFFSET de dias (nº de dias no período + quantos dias atrás termina) em vez de
+// casar datas — evita o bug de fronteira em que "7 dias" pegava 8 dias de calendário.
+function periodRevenue(cfg: DemoConfig, from: string, to: string): { revenue: number; daily: { date: string; receita: number; pedidos: number }[] } {
+  const vals = dailyValues(cfg), dates = seriesDates(), MS = 86400000, ticket = avgTicket(cfg) || 1
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0)
+  const fromMs = new Date(from).getTime(), toD = new Date(to)
+  const toDay = new Date(toD.getFullYear(), toD.getMonth(), toD.getDate())
+  const nDays = Math.max(1, Math.round((toD.getTime() - fromMs) / MS))          // quantos dias o período cobre
+  const endOffset = Math.max(0, Math.round((t0.getTime() - toDay.getTime()) / MS)) // termina quantos dias atrás (0 = hoje)
+  const endIdx = 29 - endOffset
+  const startIdx = Math.max(0, endIdx - (nDays - 1))
+  let revenue = 0
+  const daily: { date: string; receita: number; pedidos: number }[] = []
+  for (let i = startIdx; i <= endIdx && i >= 0 && i <= 29; i++) {
+    revenue += vals[i]
+    daily.push({ date: `${String(dates[i].getDate()).padStart(2, '0')}/${String(dates[i].getMonth() + 1).padStart(2, '0')}`, receita: vals[i], pedidos: Math.max(1, Math.round(vals[i] / ticket)) })
+  }
+  return { revenue: r2(revenue), daily }
+}
+
+// Núcleo da DRE demo p/ um faturamento R: produtos, taxas, CMV e o ADS que faz a
+// margem final (MPA) bater EXATAMENTE o alvo (corrige o arredondamento de unidades:
+// MPA = (liq - cmv - ads)/R = marginPct/100). Compartilhado entre a DRE e o
+// relatório de Ads — assim o "Valor em Ads" do Resumo e a aba Ads mostram o MESMO gasto.
+function coreDre(cfg: DemoConfig, R: number) {
+  const costs = demoCosts(cfg)
+  const produtos = cfg.products.map(p => {
+    const receita = r2(p.share * R)
+    const units = Math.max(0, Math.round(receita / p.price))
+    return { sku: p.sku, asin: `B0DEMO${p.sku.slice(-2)}`, units, receita, name: p.name, image: '' }
+  }).filter(p => p.units > 0).sort((a, b) => b.receita - a.receita)
+  const vendas = produtos.reduce((s, p) => s + p.units, 0)
+  const comissao = r2(R * cfg.commissionPct / 100)
+  const fba = r2(R * cfg.fbaPct / 100)
+  const liqMarketplace = r2(R - comissao - fba)
+  const cmv = produtos.reduce((s, p) => s + p.units * (costs[p.sku] || 0), 0)
+  const ads = Math.max(0, r2(liqMarketplace - cmv - R * cfg.marginPct / 100))
+  return { produtos, vendas, comissao, fba, liqMarketplace, cmv, ads }
+}
+
+// DRE fake p/ o período. Mesmo shape do backend real (computeOrdersDRE) — a Gestão
+// inteira deriva daqui. Só o modo `daily` devolve a série de 30 dias do gráfico.
+export function demoFinance(cfg: DemoConfig, from: string, to: string, daily: boolean): any {
+  if (daily) {
+    const vals = dailyValues(cfg), dates = seriesDates(), ticket = avgTicket(cfg) || 1
+    const series = vals.map((v, i) => ({ date: `${String(dates[i].getDate()).padStart(2, '0')}/${String(dates[i].getMonth() + 1).padStart(2, '0')}`, receita: v, pedidos: Math.max(1, Math.round(v / ticket)) }))
+    return { connected: true, period: { from, to }, daily: series, receita: r2(vals.reduce((s, v) => s + v, 0)) }
+  }
+  const { revenue: R, daily: dailyArr } = periodRevenue(cfg, from, to)
+  const c = coreDre(cfg, R)
+  return {
+    connected: true,
+    period: { from, to },
+    linhas: { receitaBruta: R, devolucoes: 0, receitaLiquida: R, comissao: c.comissao, taxaPrograma: 0, fba: c.fba, armazenagem: 0, assinatura: 0, outrasTaxas: 0, ads: c.ads },
+    liqMarketplace: c.liqMarketplace,
+    vendas: c.vendas, unidades: c.vendas,
+    faturamento: R,
+    ticket: c.vendas > 0 ? r2(R / c.vendas) : 0,
+    produtos: c.produtos,
+    reembolsos: [],
+    daily: dailyArr,
+    demo: true,
+  }
+}
+
+// Relatório de Ads fake, coerente com o TACOS/ROAS. Keyed por janela (today/7d/…).
+export function demoAdsReport(cfg: DemoConfig, window: string): any {
+  const { from, to } = windowRange(window)
+  const { revenue } = periodRevenue(cfg, from, to)
+  const spend = coreDre(cfg, revenue).ads   // MESMO gasto da DRE (garante MPA = alvo)
+  const sales = r2(spend * cfg.roas)
+  const acos = sales > 0 ? r2(spend / sales * 100) : 0
+  const roas = spend > 0 ? r2(sales / spend) : 0
+  const camps = [
+    { campaign: 'SP · Marca — Exato', frac: 0.34 },
+    { campaign: 'SP · Genéricos — Amplo', frac: 0.28 },
+    { campaign: 'SP · Concorrentes — Frase', frac: 0.22 },
+    { campaign: 'SP · Auto — Descoberta', frac: 0.16 },
+  ]
+  const byCampaign = camps.map(c => ({ campaign: c.campaign, spend: r2(spend * c.frac), sales: r2(sales * c.frac), clicks: Math.round(spend * c.frac / 1.3), impressions: Math.round(spend * c.frac / 1.3 * 22) }))
+  return { connected: true, ready: true, cached: true, stale: false, window, updatedAt: new Date().toISOString(), period: { from, to }, spend, sales, purchases: Math.round(sales / (avgTicket(cfg) || 1)), clicks: Math.round(spend / 1.3), impressions: Math.round(spend / 1.3 * 22), acos, roas, byCampaign, demo: true }
+}
+
+// Estoque FBA fake por produto.
+export function demoInventory(cfg: DemoConfig): any {
+  const itens = cfg.products.map((p, i) => {
+    const fulfillable = 40 + ((i * 37) % 220)
+    return { sku: p.sku, asin: `B0DEMO${p.sku.slice(-2)}`, name: p.name, image: '', fulfillable, inbound: (i * 13) % 60, reserved: (i * 7) % 20, unfulfillable: 0 }
+  })
+  return { connected: true, itens, demo: true }
+}
+
+// Faixa de datas equivalente à janela de ads (espelha o backend).
+function windowRange(window: string): { from: string; to: string } {
+  const now = new Date(); const to = now.toISOString()
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).toISOString()
+  const y = new Date(now); y.setDate(y.getDate() - 1)
+  switch (window) {
+    case 'today':     return { from: startOf(now), to }
+    case 'yesterday': return { from: startOf(y), to: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59).toISOString() }
+    case '7d':        return { from: new Date(now.getTime() - 7 * 86400000).toISOString(), to }
+    case '15d':       return { from: new Date(now.getTime() - 15 * 86400000).toISOString(), to }
+    case 'month':     return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to }
+    case 'year':      return { from: new Date(now.getFullYear(), 0, 1).toISOString(), to }
+    default:          return { from: new Date(now.getTime() - 30 * 86400000).toISOString(), to } // 30d
+  }
+}

@@ -190,7 +190,7 @@ function RevChart({ series, days }: { series: { date: string; amount: number }[]
 export default function AdminClient({ role, name, previewData }: { role: string; name: string; previewData?: any }) {
   // Funcionário (staff) só cadastra cliente; admin vê o centro de decisão completo.
   const isAdmin = role === 'admin'
-  const [tab, setTab] = useState<'overview' | 'clients' | 'new' | 'team'>(isAdmin ? 'overview' : 'new')
+  const [tab, setTab] = useState<'overview' | 'clients' | 'new' | 'team' | 'demo'>(isAdmin ? 'overview' : 'new')
   const [data, setData] = useState<any>(previewData || null)
   const [days, setDays] = useState(90)
   const [licenses, setLicenses] = useState<any[]>([])
@@ -206,6 +206,13 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   const [teamCreated, setTeamCreated] = useState<{ name: string; email: string; password: string } | null>(null)
   const [teamLoading, setTeamLoading] = useState(false)
   const [teamMsg, setTeamMsg] = useState<string | null>(null)
+  // Conta demo (apresentação)
+  const [demoCfg, setDemoCfg] = useState<any>(null)
+  const [demoEmail, setDemoEmail] = useState('demo@oraculojf.com.br')
+  const [demoPass, setDemoPass] = useState('')
+  const [demoResult, setDemoResult] = useState<{ email: string; password: string | null } | null>(null)
+  const [demoLoading, setDemoLoading] = useState(false)
+  const [demoMsg, setDemoMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   const isPreview = !!previewData
 
@@ -221,6 +228,30 @@ export default function AdminClient({ role, name, previewData }: { role: string;
     if (t && Array.isArray(t.team)) setTeam(t.team)
   }
   useEffect(() => { load() /* eslint-disable-next-line */ }, [days])
+
+  // Carrega a config da conta demo (uma vez, só admin)
+  useEffect(() => {
+    if (isPreview || !isAdmin) return
+    fetch('/api/admin/demo').then(r => r.ok ? r.json() : null).then(d => {
+      if (d) { setDemoCfg(d.config); if (d.email) setDemoEmail(d.email) }
+    }).catch(() => {})
+  /* eslint-disable-next-line */ }, [])
+
+  function setCfg(key: string, value: any) { setDemoCfg((c: any) => ({ ...(c || {}), [key]: value })) }
+  function setProd(i: number, key: string, value: any) {
+    setDemoCfg((c: any) => { const products = [...(c?.products || [])]; products[i] = { ...products[i], [key]: value }; return { ...c, products } })
+  }
+
+  async function saveDemo(e: React.FormEvent) {
+    e.preventDefault(); setDemoLoading(true); setDemoMsg(null)
+    try {
+      const r = await fetch('/api/admin/demo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: demoEmail, password: demoPass || undefined, config: demoCfg }) })
+      const d = await r.json()
+      setDemoLoading(false)
+      if (r.ok) { setDemoResult({ email: d.email, password: d.password }); setDemoPass(''); setDemoCfg(d.config); setDemoMsg({ text: 'Conta demo salva. Faça login com ela para apresentar.', ok: true }) }
+      else setDemoMsg({ text: d.error || 'Erro ao salvar', ok: false })
+    } catch { setDemoLoading(false); setDemoMsg({ text: 'Falha de conexão.', ok: false }) }
+  }
 
   async function createClient(e: React.FormEvent) {
     e.preventDefault(); setLoading(true); setMsg(null); setCreated(null)
@@ -392,7 +423,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {([['overview', 'Visão geral'], ['clients', 'Clientes'], ['new', 'Novo cliente'], ['team', 'Equipe']] as const).map(([id, label]) => (
+          {([['overview', 'Visão geral'], ['clients', 'Clientes'], ['new', 'Novo cliente'], ['team', 'Equipe'], ['demo', 'Conta Demo']] as const).map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={chip(tab === id)}>{label}</button>
           ))}
         </div>
@@ -670,6 +701,74 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                     Envie estes dados ao funcionário; ele acessa <span style={{ color: C.gold }}>/login</span> e cai direto no cadastro de clientes. A senha é exibida apenas uma vez.
                   </div>
                   <button onClick={() => setTeamCreated(null)} className="orc-ghost" style={{ marginTop: 10, background: 'none', border: `1px solid ${C.line}`, borderRadius: 7, color: C.t3, fontSize: 11, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .15s,border-color .15s' }}>Fechar</button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'demo' && (
+          <div style={{ maxWidth: 780 }}>
+            <div style={{ ...card, padding: '24px 26px' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: C.t1, marginBottom: 4 }}>Conta de demonstração</div>
+              <div style={{ fontSize: 12.5, color: C.t2, lineHeight: 1.6, marginBottom: 18 }}>Uma conta com dados <b style={{ color: C.gold }}>100% fictícios</b> da Gestão para você apresentar a alunos sem expor sua loja real. Faça login com ela e todas as abas (Resumo, Vendas, Curva ABC, Ads, Estoque) mostram os números abaixo — de forma coerente. Sua conta e seus produtos reais nunca aparecem.</div>
+
+              {demoMsg && (
+                <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, fontSize: 12.5, background: demoMsg.ok ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${demoMsg.ok ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`, color: demoMsg.ok ? C.green : C.red }}>{demoMsg.text}</div>
+              )}
+
+              {!demoCfg ? (
+                <div style={{ fontSize: 12.5, color: C.t3 }}>Carregando…</div>
+              ) : (
+                <form onSubmit={saveDemo} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div><div style={{ ...upLabel, marginBottom: 6 }}>E-mail de acesso</div><input value={demoEmail} onChange={e => setDemoEmail(e.target.value)} className="orc-in" style={inputSt} /></div>
+                    <div><div style={{ ...upLabel, marginBottom: 6 }}>Senha (branco = manter/gerar)</div><input value={demoPass} onChange={e => setDemoPass(e.target.value)} placeholder="••••••" className="orc-in" style={inputSt} /></div>
+                  </div>
+
+                  <div>
+                    <div style={{ ...upLabel, marginBottom: 8 }}>Números da operação demo</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                      {([
+                        ['revToday', 'Faturamento hoje (R$)'], ['rev7d', 'Faturamento 7 dias (R$)'], ['rev30d', 'Faturamento 30 dias (R$)'], ['marginPct', 'Margem final % (MPA)'],
+                        ['tacosPct', 'TACOS % (ads)'], ['commissionPct', 'Comissão Amazon %'], ['fbaPct', 'Tarifa FBA %'], ['roas', 'ROAS (vendas/ads)'],
+                      ] as const).map(([k, l]) => (
+                        <div key={k}><div style={{ fontSize: 9.5, color: C.t3, marginBottom: 5 }}>{l}</div><input type="number" step="0.01" value={demoCfg[k] ?? ''} onChange={e => setCfg(k, Number(e.target.value))} className="orc-in" style={{ ...inputSt, padding: '9px 11px' }} /></div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ ...upLabel, marginBottom: 8 }}>Produtos demo &nbsp;<span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400, color: C.t3 }}>(nome · participação 0–1 · preço)</span></div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {(demoCfg.products || []).map((p: any, i: number) => (
+                        <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 92px 92px', gap: 8 }}>
+                          <input value={p.name} onChange={e => setProd(i, 'name', e.target.value)} className="orc-in" style={inputSt} />
+                          <input type="number" step="0.01" value={p.share} onChange={e => setProd(i, 'share', Number(e.target.value))} className="orc-in" style={inputSt} />
+                          <input type="number" step="0.01" value={p.price} onChange={e => setProd(i, 'price', Number(e.target.value))} className="orc-in" style={inputSt} />
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: C.t3, marginTop: 8, lineHeight: 1.5 }}>A margem final ({demoCfg.marginPct}%) é atingida ajustando o custo dos produtos automaticamente (comissão + FBA + ads + margem = 100%). As participações somam ~1.</div>
+                  </div>
+
+                  <button type="submit" disabled={demoLoading} className="orc-gold" style={{ alignSelf: 'flex-start', background: GOLD_GRAD, color: '#02020A', border: 'none', borderRadius: 10, padding: '11px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: demoLoading ? 0.6 : 1 }}>{demoLoading ? 'Salvando…' : 'Salvar conta demo'}</button>
+                </form>
+              )}
+
+              {demoResult && (
+                <div style={{ marginTop: 18, padding: '14px 16px', borderRadius: 12, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.3)' }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.green, marginBottom: 10 }}>Conta demo pronta</div>
+                  {[['E-mail', demoResult.email], ['Senha', demoResult.password || '(mantida)']].map(([l, v]) => (
+                    <div key={l} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 8 }}>
+                      <div style={{ ...upLabel, marginBottom: 6 }}>{l}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <code style={{ ...num, fontSize: 12, color: C.gold, flex: 1, wordBreak: 'break-all' }}>{v}</code>
+                        <CopyBtn value={String(v)} />
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ fontSize: 11, color: C.t2, lineHeight: 1.55, marginTop: 4 }}>Faça login em <span style={{ color: C.gold }}>/login</span> com essa conta para apresentar. A senha só aparece agora.</div>
                 </div>
               )}
             </div>

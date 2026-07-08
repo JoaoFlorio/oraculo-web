@@ -9,6 +9,7 @@ export default async function DashboardPage() {
   // Default: só o João. Liberar geral depois = setar GESTAO_ALLOWLIST=* (ou remover o gate).
   const allow = (process.env.GESTAO_ALLOWLIST || 'joaoflorio1023@gmail.com')
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
-  const gestaoEnabled = allow.includes('*') || allow.includes(String(user.email || '').toLowerCase())
+  // Conta demo sempre vê a Gestão (é o ponto dela — apresentar a Gestão fake).
+  const gestaoEnabled = user.role === 'demo' || allow.includes('*') || allow.includes(String(user.email || '').toLowerCase())
   return <DashboardClient user={user} gestaoEnabled={gestaoEnabled} />
 }

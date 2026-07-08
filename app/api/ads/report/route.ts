@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
+import { demoConfigFor } from '@/lib/demo'
+import { demoAdsReport } from '@/lib/demoGestao'
 
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
 
@@ -8,6 +10,8 @@ export async function GET(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { searchParams } = new URL(req.url)
+  const demo = await demoConfigFor(user)
+  if (demo) return NextResponse.json(demoAdsReport(demo, searchParams.get('window') || '30d'))
   const qs = new URLSearchParams({ email: user.email })
   if (searchParams.get('window')) qs.set('window', searchParams.get('window')!)
   try {
