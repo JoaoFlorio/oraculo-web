@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation'
 import { getSession } from '@/lib/auth'
+import { prisma } from '@/lib/db'
+import { TERMS_VERSION } from '@/lib/terms'
 import DashboardClient from './DashboardClient'
+import TermsGate from './TermsGate'
 
 export default async function DashboardPage() {
   const user = await getSession()
@@ -13,5 +16,21 @@ export default async function DashboardPage() {
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
   // Conta demo sempre vê a Gestão (é o ponto dela — apresentar a Gestão fake).
   const gestaoEnabled = user.role === 'demo' || allow.includes('*') || allow.includes(String(user.email || '').toLowerCase())
-  return <DashboardClient user={user} gestaoEnabled={gestaoEnabled} />
+
+  // Aceite dos Termos de Uso: cliente precisa ter aceitado a VERSÃO vigente (registrado
+  // em metadata.terms via /api/user/accept-terms). Admin/staff/demo são isentos (equipe
+  // e conta de apresentação — não são consumidores do contrato de adesão).
+  let needsTerms = false
+  if (!user.role || user.role === 'client') {
+    const u = await prisma.user.findUnique({ where: { id: user.id }, select: { metadata: true } })
+    const terms = ((u?.metadata ?? {}) as Record<string, any>).terms
+    needsTerms = terms?.version !== TERMS_VERSION
+  }
+
+  return (
+    <>
+      <DashboardClient user={user} gestaoEnabled={gestaoEnabled} />
+      {needsTerms && <TermsGate />}
+    </>
+  )
 }
