@@ -16,6 +16,72 @@ function b64ToUint8(base64: string): Uint8Array {
   return Uint8Array.from(raw, c => c.charCodeAt(0))
 }
 
+// Tutorial VISUAL do iPhone — desenha as telas do Safari (barra inferior, share
+// sheet e confirmação) com destaque dourado em exatamente onde tocar. Nasceu do
+// teste real: o usuário se perdia nos menus novos do iOS ("⋯"/"Menu da Página"),
+// onde a opção NÃO fica.
+function IosSteps() {
+  const box: React.CSSProperties = { background: '#15151F', border: '1px solid rgba(100,116,139,0.25)', borderRadius: 10, padding: '10px 10px 8px', marginTop: 10 }
+  const cap: React.CSSProperties = { fontSize: 12, color: '#CBD5E1', lineHeight: 1.55, margin: '8px 2px 0' }
+  const g = GOLD, dim = '#5A5F6E'
+  return (
+    <>
+      <p style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.6, margin: 0 }}>
+        ⚠️ <strong style={{ color: '#FB7185' }}>Atenção:</strong> a opção <strong style={{ color: '#CBD5E1' }}>não fica</strong> no menu <strong style={{ color: '#CBD5E1' }}>"⋯"</strong> nem no "Menu da Página". É no botão <strong style={{ color: g }}>Compartilhar (□↑)</strong>, no <strong style={{ color: '#CBD5E1' }}>meio da barra de baixo</strong> do Safari:
+      </p>
+
+      {/* Passo 1 — barra do Safari com o share destacado */}
+      <div style={box}>
+        <svg viewBox="0 0 300 66" width="100%" role="img" aria-label="Barra inferior do Safari com o botão compartilhar destacado no centro">
+          <rect x="0" y="6" width="300" height="54" rx="16" fill="#1C1C27"/>
+          <path d="M52 25 l-9 8 9 8" stroke="#3E7BFA" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M94 25 l9 8 -9 8" stroke={dim} strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+          <circle cx="150" cy="33" r="23" fill="rgba(240,180,41,0.13)" stroke={g} strokeWidth="2.2"/>
+          <rect x="141" y="29" width="18" height="14" rx="3" stroke={g} strokeWidth="2" fill="none"/>
+          <path d="M150 35 v-15 M144 25 l6 -6 6 6" stroke={g} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M206 26 c-5-3.5-11-3.5-11 1 v14 c0-4 6-4 11-1 c5-3 11-3 11 1 v-14 c0-4.5-6-4.5-11-1 v15" stroke={dim} strokeWidth="1.9" fill="none" strokeLinejoin="round"/>
+          <rect x="246" y="27" width="13" height="13" rx="2.5" stroke={dim} strokeWidth="1.9" fill="none"/>
+          <rect x="251" y="22" width="13" height="13" rx="2.5" stroke={dim} strokeWidth="1.9" fill="#1C1C27"/>
+        </svg>
+        <p style={cap}><strong style={{ color: g }}>Passo 1:</strong> toca no botão <strong>do meio</strong> da barra de baixo (quadrado com seta pra cima)</p>
+      </div>
+
+      {/* Passo 2 — share sheet com a opção destacada */}
+      <div style={box}>
+        <svg viewBox="0 0 300 112" width="100%" role="img" aria-label="Lista do compartilhar com a opção Adicionar à Tela de Início destacada">
+          <rect width="300" height="112" rx="12" fill="#232330"/>
+          <text x="16" y="26" fill="#8B93A5" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Adicionar a Favoritos</text>
+          <path d="M276 14 v14 l-5.5 -4 -5.5 4 v-14 Z" stroke="#8B93A5" strokeWidth="1.6" fill="none" strokeLinejoin="round"/>
+          <line x1="12" y1="38" x2="288" y2="38" stroke="#34344A" strokeWidth="1"/>
+          <rect x="5" y="44" width="290" height="34" rx="9" fill="rgba(240,180,41,0.10)" stroke={g} strokeWidth="1.8"/>
+          <text x="16" y="66" fill="#FFFFFF" fontSize="13" fontWeight="700" fontFamily="Inter,-apple-system,sans-serif">Adicionar à Tela de Início</text>
+          <rect x="264" y="52" width="18" height="18" rx="4.5" stroke={g} strokeWidth="1.8" fill="none"/>
+          <path d="M273 56.5 v9 M268.5 61 h9" stroke={g} strokeWidth="1.8" strokeLinecap="round"/>
+          <line x1="12" y1="86" x2="288" y2="86" stroke="#34344A" strokeWidth="1"/>
+          <text x="16" y="104" fill="#6B7386" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Marcar Página</text>
+        </svg>
+        <p style={cap}><strong style={{ color: g }}>Passo 2:</strong> na lista que abrir, <strong>desliza pra cima</strong> até achar e toca em <strong>"Adicionar à Tela de Início"</strong></p>
+      </div>
+
+      {/* Passo 3 — confirmação */}
+      <div style={box}>
+        <svg viewBox="0 0 300 46" width="100%" role="img" aria-label="Confirmação com o botão Adicionar destacado">
+          <rect width="300" height="46" rx="12" fill="#232330"/>
+          <text x="14" y="28" fill="#3E7BFA" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Cancelar</text>
+          <text x="150" y="28" fill="#FFFFFF" fontSize="12" fontWeight="600" textAnchor="middle" fontFamily="Inter,-apple-system,sans-serif">Tela de Início</text>
+          <rect x="222" y="8" width="66" height="30" rx="9" fill={g}/>
+          <text x="255" y="28" fill="#111111" fontSize="12.5" fontWeight="800" textAnchor="middle" fontFamily="Inter,-apple-system,sans-serif">Adicionar</text>
+        </svg>
+        <p style={cap}><strong style={{ color: g }}>Passo 3:</strong> toca em <strong>"Adicionar"</strong> — o olho dourado 👁️ aparece na tua tela inicial</p>
+      </div>
+
+      <p style={{ fontSize: 11.5, color: '#94A3B8', lineHeight: 1.6, margin: '10px 2px 0' }}>
+        Depois, <strong style={{ color: '#CBD5E1' }}>abre o ORÁCULO pelo ícone novo</strong> 👁️ e volta neste guia pra ativar as notificações de venda (passo 2 abaixo).
+      </p>
+    </>
+  )
+}
+
 export default function AppInstall() {
   const [open, setOpen] = useState(false)
   const [banner, setBanner] = useState(false)
@@ -123,14 +189,7 @@ export default function AppInstall() {
               {standalone ? (
                 <p style={p}>Você já está usando o app instalado. 👏</p>
               ) : isIOS ? (
-                <>
-                  <p style={p}>No <strong style={{ color: '#CBD5E1' }}>iPhone (Safari)</strong>:</p>
-                  <ol style={{ margin: '8px 0 0', paddingLeft: 18, fontSize: 12, color: '#94A3B8', lineHeight: 1.9 }}>
-                    <li>Toque no botão <strong style={{ color: '#CBD5E1' }}>Compartilhar</strong> <span style={{ color: GOLD }}>(quadrado com seta ↑)</span> na barra do Safari</li>
-                    <li>Deslize e toque em <strong style={{ color: '#CBD5E1' }}>"Adicionar à Tela de Início"</strong></li>
-                    <li>Toque em <strong style={{ color: '#CBD5E1' }}>"Adicionar"</strong> — o olho dourado aparece na sua tela 👁️</li>
-                  </ol>
-                </>
+                <IosSteps />
               ) : installEvt ? (
                 <>
                   <p style={p}>No Android é 1 toque:</p>
