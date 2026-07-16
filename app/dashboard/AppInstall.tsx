@@ -82,11 +82,60 @@ function IosSteps() {
   )
 }
 
+// Tutorial VISUAL do Android (Chrome) — pro caso do prompt nativo não disparar
+// (ou de alguém no iPhone/desktop querer ver como é no Android).
+function AndroidSteps({ installEvt, onInstall }: { installEvt: any; onInstall: () => void }) {
+  const box: React.CSSProperties = { background: '#15151F', border: '1px solid rgba(100,116,139,0.25)', borderRadius: 10, padding: '10px 10px 8px', marginTop: 10 }
+  const cap: React.CSSProperties = { fontSize: 12, color: '#CBD5E1', lineHeight: 1.55, margin: '8px 2px 0' }
+  const g = GOLD, dim = '#5A5F6E'
+  if (installEvt) {
+    return (
+      <>
+        <p style={{ fontSize: 12, color: '#94A3B8', margin: 0 }}>No Android é 1 toque:</p>
+        <button onClick={onInstall} style={{ width: '100%', padding: '11px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', background: 'linear-gradient(135deg,#F0B429,#FFD700,#C8960C)', color: '#02020A', fontSize: 13, fontWeight: 800, fontFamily: 'inherit', marginTop: 10 }}>📲 Instalar o ORÁCULO agora</button>
+      </>
+    )
+  }
+  return (
+    <>
+      <p style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.6, margin: 0 }}>No <strong style={{ color: '#CBD5E1' }}>Android (Chrome)</strong>:</p>
+      <div style={box}>
+        <svg viewBox="0 0 300 52" width="100%" role="img" aria-label="Barra do Chrome com o menu de três pontos destacado">
+          <rect x="0" y="6" width="300" height="40" rx="12" fill="#1C1C27"/>
+          <rect x="14" y="14" width="222" height="24" rx="12" fill="#2A2A38"/>
+          <text x="30" y="30" fill="#8B93A5" fontSize="11" fontFamily="Inter,-apple-system,sans-serif">app.oraculojf.com.br</text>
+          <circle cx="270" cy="26" r="16" fill="rgba(240,180,41,0.13)" stroke={g} strokeWidth="2"/>
+          <circle cx="270" cy="19.5" r="2" fill={g}/><circle cx="270" cy="26" r="2" fill={g}/><circle cx="270" cy="32.5" r="2" fill={g}/>
+        </svg>
+        <p style={cap}><strong style={{ color: g }}>Passo 1:</strong> toca no menu <strong>⋮</strong> (três pontinhos, canto superior direito)</p>
+      </div>
+      <div style={box}>
+        <svg viewBox="0 0 300 106" width="100%" role="img" aria-label="Menu do Chrome com Adicionar à tela inicial destacado">
+          <rect width="300" height="106" rx="12" fill="#232330"/>
+          <text x="16" y="25" fill="#8B93A5" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Compartilhar…</text>
+          <line x1="12" y1="36" x2="288" y2="36" stroke="#34344A" strokeWidth="1"/>
+          <rect x="5" y="42" width="290" height="32" rx="9" fill="rgba(240,180,41,0.10)" stroke={g} strokeWidth="1.8"/>
+          <text x="16" y="63" fill="#FFFFFF" fontSize="13" fontWeight="700" fontFamily="Inter,-apple-system,sans-serif">Adicionar à tela inicial</text>
+          <rect x="262" y="49" width="13" height="18" rx="3" stroke={g} strokeWidth="1.7" fill="none"/>
+          <path d="M281 54 v8 M277 58 h8" stroke={g} strokeWidth="1.7" strokeLinecap="round"/>
+          <line x1="12" y1="82" x2="288" y2="82" stroke="#34344A" strokeWidth="1"/>
+          <text x="16" y="99" fill="#6B7386" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Configurações</text>
+        </svg>
+        <p style={cap}><strong style={{ color: g }}>Passo 2:</strong> toca em <strong>"Adicionar à tela inicial"</strong> → <strong>"Instalar"</strong> — o olho dourado 👁️ aparece na tua tela</p>
+      </div>
+    </>
+  )
+}
+
 export default function AppInstall() {
   const [open, setOpen] = useState(false)
   const [banner, setBanner] = useState(false)
   const [standalone, setStandalone] = useState(false)
   const [isIOS, setIsIOS] = useState(false)
+  // Plataforma do tutorial: pré-marcada pela detecção (userAgent), mas o usuário
+  // pode trocar — detecção falha em iPad modo-desktop, navegadores alternativos,
+  // ou quando alguém abre no PC querendo ver como fazer no celular.
+  const [plat, setPlat] = useState<'android' | 'ios'>('android')
   const [installEvt, setInstallEvt] = useState<any>(null)
   const [pushOn, setPushOn] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
@@ -98,7 +147,9 @@ export default function AppInstall() {
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {})
     const alone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true
     setStandalone(alone)
-    setIsIOS(/iphone|ipad|ipod/i.test(navigator.userAgent))
+    const ios = /iphone|ipad|ipod/i.test(navigator.userAgent)
+    setIsIOS(ios)
+    setPlat(ios ? 'ios' : 'android')
     const onPrompt = (e: Event) => { e.preventDefault(); setInstallEvt(e) }
     window.addEventListener('beforeinstallprompt', onPrompt)
     // push já ativo NESTE dispositivo?
@@ -188,15 +239,23 @@ export default function AppInstall() {
               <div style={h}>1️⃣ Instalar o app {standalone && <span style={{ color: '#34D399' }}>— instalado ✓</span>}</div>
               {standalone ? (
                 <p style={p}>Você já está usando o app instalado. 👏</p>
-              ) : isIOS ? (
-                <IosSteps />
-              ) : installEvt ? (
-                <>
-                  <p style={p}>No Android é 1 toque:</p>
-                  <button onClick={install} style={btn}>📲 Instalar o ORÁCULO agora</button>
-                </>
               ) : (
-                <p style={p}>No <strong style={{ color: '#CBD5E1' }}>Android (Chrome)</strong>: toque no menu <strong style={{ color: '#CBD5E1' }}>⋮</strong> (canto superior) → <strong style={{ color: '#CBD5E1' }}>"Adicionar à tela inicial"</strong> → <strong style={{ color: '#CBD5E1' }}>"Instalar"</strong>.</p>
+                <>
+                  {/* Seletor Android/iPhone — pré-marcado pela detecção, trocável */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 11.5, color: '#94A3B8', alignSelf: 'center' }}>Seu celular é:</span>
+                    {(['android', 'ios'] as const).map(k => (
+                      <button key={k} onClick={() => setPlat(k)}
+                        style={{ flex: 1, padding: '8px 6px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700,
+                          border: `1px solid ${plat === k ? 'rgba(240,180,41,0.55)' : 'rgba(100,116,139,0.3)'}`,
+                          background: plat === k ? 'rgba(240,180,41,0.12)' : 'transparent',
+                          color: plat === k ? GOLD : '#94A3B8' }}>
+                        {k === 'android' ? '🤖 Android' : '🍎 iPhone'}
+                      </button>
+                    ))}
+                  </div>
+                  {plat === 'ios' ? <IosSteps /> : <AndroidSteps installEvt={installEvt} onInstall={install} />}
+                </>
               )}
             </div>
 
