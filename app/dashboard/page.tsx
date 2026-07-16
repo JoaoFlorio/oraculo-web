@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { TERMS_VERSION } from '@/lib/terms'
 import DashboardClient from './DashboardClient'
 import TermsGate from './TermsGate'
+import AppInstall from './AppInstall'
 
 export default async function DashboardPage() {
   const user = await getSession()
@@ -30,6 +31,7 @@ export default async function DashboardPage() {
   return (
     <>
       <DashboardClient user={user} gestaoEnabled={gestaoEnabled} />
+      <AppInstall />
       {needsTerms && <TermsGate />}
     </>
   )
