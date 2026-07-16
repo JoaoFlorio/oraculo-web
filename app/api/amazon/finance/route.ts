@@ -23,6 +23,8 @@ export async function GET(req: NextRequest) {
   if (searchParams.get('from')) qs.set('from', searchParams.get('from')!)
   if (searchParams.get('to')) qs.set('to', searchParams.get('to')!)
   if (searchParams.get('daily')) qs.set('daily', searchParams.get('daily')!)
+  // Espelho Local: força a fonte (mirror|live) — validação lado a lado dos números.
+  if (searchParams.get('source')) qs.set('source', searchParams.get('source')!)
   try {
     const res = await fetch(`${BACKEND}/api/amazon/finance?${qs.toString()}`, { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
     return NextResponse.json(await res.json(), { status: res.status })
