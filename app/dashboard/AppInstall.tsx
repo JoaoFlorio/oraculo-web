@@ -26,44 +26,56 @@ function IosSteps() {
   const g = GOLD, dim = '#5A5F6E'
   return (
     <>
-      <p style={{ fontSize: 12, color: '#94A3B8', lineHeight: 1.6, margin: 0 }}>
-        ⚠️ <strong style={{ color: '#FB7185' }}>Atenção:</strong> a opção <strong style={{ color: '#CBD5E1' }}>não fica</strong> no menu <strong style={{ color: '#CBD5E1' }}>"⋯"</strong> nem no "Menu da Página". É no botão <strong style={{ color: g }}>Compartilhar (□↑)</strong>, no <strong style={{ color: '#CBD5E1' }}>meio da barra de baixo</strong> do Safari:
-      </p>
-
-      {/* Passo 1 — barra do Safari com o share destacado */}
+      {/* Passo 1 — barra do Safari novo (endereço embaixo) com o ⋯ destacado */}
       <div style={box}>
-        <svg viewBox="0 0 300 66" width="100%" role="img" aria-label="Barra inferior do Safari com o botão compartilhar destacado no centro">
-          <rect x="0" y="6" width="300" height="54" rx="16" fill="#1C1C27"/>
-          <path d="M52 25 l-9 8 9 8" stroke="#3E7BFA" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M94 25 l9 8 -9 8" stroke={dim} strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-          <circle cx="150" cy="33" r="23" fill="rgba(240,180,41,0.13)" stroke={g} strokeWidth="2.2"/>
-          <rect x="141" y="29" width="18" height="14" rx="3" stroke={g} strokeWidth="2" fill="none"/>
-          <path d="M150 35 v-15 M144 25 l6 -6 6 6" stroke={g} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M206 26 c-5-3.5-11-3.5-11 1 v14 c0-4 6-4 11-1 c5-3 11-3 11 1 v-14 c0-4.5-6-4.5-11-1 v15" stroke={dim} strokeWidth="1.9" fill="none" strokeLinejoin="round"/>
-          <rect x="246" y="27" width="13" height="13" rx="2.5" stroke={dim} strokeWidth="1.9" fill="none"/>
-          <rect x="251" y="22" width="13" height="13" rx="2.5" stroke={dim} strokeWidth="1.9" fill="#1C1C27"/>
+        <svg viewBox="0 0 300 58" width="100%" role="img" aria-label="Barra inferior do Safari com o botão de três pontinhos destacado à direita">
+          <circle cx="26" cy="29" r="17" fill="#23232F"/>
+          <path d="M30 21 l-8 8 8 8" stroke="#3E7BFA" strokeWidth="2.3" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+          <rect x="52" y="11" width="184" height="36" rx="18" fill="#23232F"/>
+          <text x="68" y="34" fill="#B8BFCE" fontSize="12" fontFamily="Inter,-apple-system,sans-serif">app.oraculojf.com.br</text>
+          <path d="M222 23 a7 7 0 1 1 -3 12 M222 23 v-5 M222 23 h5" stroke={dim} strokeWidth="1.7" fill="none" strokeLinecap="round"/>
+          <circle cx="272" cy="29" r="18" fill="rgba(240,180,41,0.13)" stroke={g} strokeWidth="2.2"/>
+          <circle cx="264" cy="29" r="2.2" fill={g}/><circle cx="272" cy="29" r="2.2" fill={g}/><circle cx="280" cy="29" r="2.2" fill={g}/>
         </svg>
-        <p style={cap}><strong style={{ color: g }}>Passo 1:</strong> toca no botão <strong>do meio</strong> da barra de baixo (quadrado com seta pra cima)</p>
+        <p style={cap}><strong style={{ color: g }}>Passo 1:</strong> toca nos <strong>três pontinhos ⋯</strong> no canto de baixo do Safari <span style={{ color: '#94A3B8' }}>(se a tua barra mostrar direto o botão □↑, toca nele e pula pro passo 3)</span></p>
       </div>
 
-      {/* Passo 2 — share sheet com a opção destacada */}
+      {/* Passo 2 — menu com Compartilhar no topo */}
       <div style={box}>
-        <svg viewBox="0 0 300 112" width="100%" role="img" aria-label="Lista do compartilhar com a opção Adicionar à Tela de Início destacada">
-          <rect width="300" height="112" rx="12" fill="#232330"/>
-          <text x="16" y="26" fill="#8B93A5" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Adicionar a Favoritos</text>
-          <path d="M276 14 v14 l-5.5 -4 -5.5 4 v-14 Z" stroke="#8B93A5" strokeWidth="1.6" fill="none" strokeLinejoin="round"/>
-          <line x1="12" y1="38" x2="288" y2="38" stroke="#34344A" strokeWidth="1"/>
-          <rect x="5" y="44" width="290" height="34" rx="9" fill="rgba(240,180,41,0.10)" stroke={g} strokeWidth="1.8"/>
-          <text x="16" y="66" fill="#FFFFFF" fontSize="13" fontWeight="700" fontFamily="Inter,-apple-system,sans-serif">Adicionar à Tela de Início</text>
-          <rect x="264" y="52" width="18" height="18" rx="4.5" stroke={g} strokeWidth="1.8" fill="none"/>
-          <path d="M273 56.5 v9 M268.5 61 h9" stroke={g} strokeWidth="1.8" strokeLinecap="round"/>
-          <line x1="12" y1="86" x2="288" y2="86" stroke="#34344A" strokeWidth="1"/>
-          <text x="16" y="104" fill="#6B7386" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Marcar Página</text>
+        <svg viewBox="0 0 300 104" width="100%" role="img" aria-label="Menu do Safari com a opção Compartilhar destacada">
+          <rect width="300" height="104" rx="12" fill="#232330"/>
+          <rect x="5" y="7" width="290" height="33" rx="9" fill="rgba(240,180,41,0.10)" stroke={g} strokeWidth="1.8"/>
+          <text x="16" y="29" fill="#FFFFFF" fontSize="13" fontWeight="700" fontFamily="Inter,-apple-system,sans-serif">Compartilhar</text>
+          <rect x="264" y="15" width="15" height="12" rx="2.5" stroke={g} strokeWidth="1.8" fill="none"/>
+          <path d="M271.5 20 v-11 M267 13 l4.5 -4.5 4.5 4.5" stroke={g} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+          <line x1="12" y1="48" x2="288" y2="48" stroke="#34344A" strokeWidth="1"/>
+          <text x="16" y="68" fill="#8B93A5" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Adicionar a Favoritos</text>
+          <path d="M276 57 v13 l-5 -3.6 -5 3.6 v-13 Z" stroke="#8B93A5" strokeWidth="1.5" fill="none" strokeLinejoin="round"/>
+          <line x1="12" y1="78" x2="288" y2="78" stroke="#34344A" strokeWidth="1"/>
+          <text x="16" y="96" fill="#6B7386" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Nova Aba</text>
         </svg>
-        <p style={cap}><strong style={{ color: g }}>Passo 2:</strong> na lista que abrir, <strong>desliza pra cima</strong> até achar e toca em <strong>"Adicionar à Tela de Início"</strong></p>
+        <p style={cap}><strong style={{ color: g }}>Passo 2:</strong> toca em <strong>"Compartilhar"</strong> (a primeira opção)</p>
       </div>
 
-      {/* Passo 3 — confirmação */}
+      {/* Passo 3 — share sheet: rolar pra baixo até a opção */}
+      <div style={box}>
+        <svg viewBox="0 0 300 130" width="100%" role="img" aria-label="Lista do compartilhar com a opção Adicionar à Tela de Início destacada">
+          <rect width="300" height="130" rx="12" fill="#232330"/>
+          <text x="16" y="24" fill="#8B93A5" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Buscar na Página</text>
+          <path d="M270 12 a6 6 0 1 0 4 10 l5 5" stroke="#8B93A5" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+          <line x1="12" y1="36" x2="288" y2="36" stroke="#34344A" strokeWidth="1"/>
+          <rect x="5" y="42" width="290" height="34" rx="9" fill="rgba(240,180,41,0.10)" stroke={g} strokeWidth="1.8"/>
+          <text x="16" y="64" fill="#FFFFFF" fontSize="13" fontWeight="700" fontFamily="Inter,-apple-system,sans-serif">Adicionar à Tela de Início</text>
+          <rect x="264" y="50" width="18" height="18" rx="4.5" stroke={g} strokeWidth="1.8" fill="none"/>
+          <path d="M273 54.5 v9 M268.5 59 h9" stroke={g} strokeWidth="1.8" strokeLinecap="round"/>
+          <line x1="12" y1="84" x2="288" y2="84" stroke="#34344A" strokeWidth="1"/>
+          <text x="16" y="103" fill="#6B7386" fontSize="12.5" fontFamily="Inter,-apple-system,sans-serif">Marcação</text>
+          <text x="150" y="122" fill="#8B93A5" fontSize="10.5" textAnchor="middle" fontFamily="Inter,-apple-system,sans-serif">↓ desliza a lista pra baixo até aparecer ↓</text>
+        </svg>
+        <p style={cap}><strong style={{ color: g }}>Passo 3:</strong> vai abrir a tela de compartilhar (com teus contatos e apps) — <strong>desliza a lista pra baixo</strong> (ou toca em <strong>"Ver Mais"</strong>) até achar e toca em <strong>"Adicionar à Tela de Início"</strong></p>
+      </div>
+
+      {/* Passo 4 — confirmação */}
       <div style={box}>
         <svg viewBox="0 0 300 46" width="100%" role="img" aria-label="Confirmação com o botão Adicionar destacado">
           <rect width="300" height="46" rx="12" fill="#232330"/>
@@ -72,7 +84,7 @@ function IosSteps() {
           <rect x="222" y="8" width="66" height="30" rx="9" fill={g}/>
           <text x="255" y="28" fill="#111111" fontSize="12.5" fontWeight="800" textAnchor="middle" fontFamily="Inter,-apple-system,sans-serif">Adicionar</text>
         </svg>
-        <p style={cap}><strong style={{ color: g }}>Passo 3:</strong> toca em <strong>"Adicionar"</strong> — o olho dourado 👁️ aparece na tua tela inicial</p>
+        <p style={cap}><strong style={{ color: g }}>Passo 4:</strong> toca em <strong>"Adicionar"</strong> — o olho dourado 👁️ aparece na tua tela inicial</p>
       </div>
 
       <p style={{ fontSize: 11.5, color: '#94A3B8', lineHeight: 1.6, margin: '10px 2px 0' }}>
