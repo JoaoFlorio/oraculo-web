@@ -556,7 +556,7 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
           <button onClick={onClose} style={{background:'none',border:`1px solid ${T.line}`,color:T.t2,width:32,height:32,borderRadius:8,cursor:'pointer',fontSize:12,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}>✕</button>
         </div>
         {/* KPIs */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',borderBottom:`1px solid ${T.line}`}}>
+        <div className="ora-kpis4" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',borderBottom:`1px solid ${T.line}`}}>
           {[{v:bsr>0?`#${fmtN(bsr)}`:'—',l:'BSR Amazon',c:T.t1,num:true},{v:`~${fmtK(sales)}/mês`,l:'Vendas estimadas',c:dem.c,num:true},{v:dem.l,l:'Nível de Demanda',c:dem.c,num:false},{v:lsLoading?'…':`${score}/100`,l:lsData?'Score Real Listing':'Score Oráculo',c:sc,num:true}].map((k,i)=>(
             <div key={i} style={{padding:'18px 20px',borderRight:i<3?`1px solid ${T.line}`:'none',textAlign:'center' as const}}>
               <div className={k.num?'ora-num':undefined} style={{fontSize:20,fontWeight:700,color:k.c,letterSpacing:'-0.02em',marginBottom:4,lineHeight:1}}>{k.v}</div>
@@ -1325,6 +1325,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const [loading,  setLoading]  = useState(false)
   const [done,     setDone]     = useState(false)
   const [sideOpen, setSideOpen] = useState(true)
+  const [mobileNav, setMobileNav] = useState(false) // sidebar off-canvas no mobile (≤920px)
   const [catOpen,  setCatOpen]  = useState(false)
   // Tema escuro/claro — escolha do cliente, persistida em localStorage
   const [theme, setTheme] = useState<'dark'|'light'>('dark')
@@ -1624,6 +1625,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   useEffect(()=>{ load('bestsellers','all','',false) },[]) // eslint-disable-line
 
   function goNav(id:string){
+    setMobileNav(false) // fecha o menu off-canvas ao navegar (mobile)
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}
     setNav(id); setPage(1)
     setSortBy('default')  // cada aba tem semântica própria — não herda ordenação
@@ -1777,6 +1779,27 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
         .ora-wa-side{transition:background .15s ease-out, border-color .15s ease-out}
         .ora-wa-side:hover{background:color-mix(in srgb, var(--g) 16%, transparent)!important}
         button:not(:disabled):active{transform:scale(.98)}
+        /* ── Responsivo (mobile/tablet ≤920px) ─────────────────────────────────
+           Só atua abaixo de 920px — desktop fica intocado. Sidebar vira off-canvas
+           (hambúrguer no topbar), grids de KPI caem pra 2 colunas e tabelas ganham
+           scroll horizontal. !important é necessário p/ vencer os estilos inline. */
+        .ora-burger{display:none}
+        .ora-backdrop{display:none}
+        @media (max-width:920px){
+          .ora-burger{display:flex}
+          .ora-side{position:fixed!important;top:0;left:0;bottom:0;width:272px!important;z-index:1200!important;transform:translateX(-105%);transition:transform .25s ease!important;box-shadow:0 0 70px rgba(0,0,0,.55)}
+          .ora-side.mopen{transform:translateX(0)}
+          .ora-backdrop{display:block;position:fixed;inset:0;background:rgba(1,1,8,0.62);backdrop-filter:blur(3px);z-index:1195}
+          .ora-main-pad{padding:16px 12px 90px!important}
+          .ora-hidemob{display:none!important}
+          .ora-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+          .ora-kpis4{grid-template-columns:repeat(2,1fr)!important}
+          .ora-tscroll{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
+          .ora-tscroll table{min-width:640px}
+          .ora-tabs{overflow-x:auto!important;flex-wrap:nowrap!important;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
+          .ora-tabs::-webkit-scrollbar{display:none}
+          .ora-wrap{flex-wrap:wrap!important}
+        }
         @media (prefers-reduced-motion: reduce){
           *,*::before,*::after{animation:none!important;transition:none!important}
           button:not(:disabled):active{transform:none}
@@ -1786,7 +1809,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       <div style={{display:'flex',height:'100vh',background:T.bg,color:T.t1,overflow:'hidden'}}>
 
         {/* SIDEBAR */}
-        <aside style={{width:sideOpen?248:64,background:T.sidebar,borderRight:`1px solid ${T.line}`,display:'flex',flexDirection:'column',transition:'width .22s cubic-bezier(.4,0,.2,1)',overflow:'hidden',flexShrink:0,zIndex:20,position:'relative' as const}}>
+        <aside className={`ora-side${mobileNav?' mopen':''}`} style={{width:sideOpen?248:64,background:T.sidebar,borderRight:`1px solid ${T.line}`,display:'flex',flexDirection:'column',transition:'width .22s cubic-bezier(.4,0,.2,1)',overflow:'hidden',flexShrink:0,zIndex:20,position:'relative' as const}}>
 
           {/* Veio dourado sutil no topo */}
           <div aria-hidden style={{position:'absolute',top:0,left:0,right:0,height:220,pointerEvents:'none',background:`radial-gradient(120% 90% at 50% 0%, ${tint(T.gold,6)} 0%, transparent 70%)`}}/>
@@ -1946,6 +1969,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           </div>
         </aside>
 
+        {/* Backdrop do menu mobile (só existe em ≤920px via CSS) */}
+        {mobileNav&&<div className="ora-backdrop" onClick={()=>setMobileNav(false)} aria-hidden />}
+
         {/* MAIN */}
         <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
 
@@ -1992,6 +2018,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
 
           {/* Topbar */}
           <header style={{height:60,background:T.sidebar,borderBottom:`1px solid ${T.line}`,display:'flex',alignItems:'center',gap:12,padding:'0 24px',flexShrink:0}}>
+            {/* Hambúrguer — só aparece no mobile (≤920px, via CSS) e abre a sidebar off-canvas */}
+            <button className="ora-burger" onClick={()=>{setSideOpen(true);setMobileNav(true)}} aria-label="Abrir menu"
+              style={{background:'transparent',border:`1px solid ${T.line}`,color:T.t2,borderRadius:9,width:36,height:36,cursor:'pointer',flexShrink:0,alignItems:'center',justifyContent:'center'}}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 6.5h16M4 12h16M4 17.5h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            </button>
             {/* Saudação real por hora local */}
             <div style={{minWidth:0}}>
               <div style={{fontSize:14,fontWeight:700,color:T.t1,letterSpacing:'-0.02em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{greet}, {firstName}</div>
@@ -2033,7 +2064,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           )}
 
           {/* Content */}
-          <main key={nav} ref={mainRef} className="ora-tab-in" style={{flex:1,overflowY:'auto',padding:nav==='competitor'?'0':'28px 28px 40px',position:'relative' as const,display:'flex',flexDirection:'column'}}>
+          <main key={nav} ref={mainRef} className={`ora-tab-in${nav==='competitor'?'':' ora-main-pad'}`} style={{flex:1,overflowY:'auto',padding:nav==='competitor'?'0':'28px 28px 40px',position:'relative' as const,display:'flex',flexDirection:'column'}}>
 
             {/* Competitor Panel */}
             {nav==='competitor'&&(

@@ -214,7 +214,9 @@ function Table({head,children}:{head:{label:string;right?:boolean;w?:string}[];c
   const t=useT()
   return(
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,overflow:'hidden'}}>
-      <div style={{overflowX:'auto' as const}}>
+      {/* ora-tscroll: no mobile a tabela ganha min-width e rola horizontal (tableLayout
+          fixed + width 100% esmagaria as colunas em telas estreitas) */}
+      <div className="ora-tscroll" style={{overflowX:'auto' as const}}>
         <table style={{width:'100%',borderCollapse:'collapse' as const,tableLayout:'fixed' as const}}>
           <thead><tr style={{background:t.dark?'rgba(255,255,255,0.02)':'#FAFBFC'}}>
             {head.map((h,i)=><th key={i} style={{width:h.w,textAlign:h.right?'right':'left',padding:'10px 8px',fontSize:10.5,fontWeight:600,color:t.t3,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>{h.label}</th>)}
@@ -382,7 +384,7 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
   }) : []
   return(<>
     {/* 1) KPIs — cards estilo Gestor, 4 por linha */}
-    <div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:13,marginBottom:16}}>
+    <div className="ora-kpis" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:13,marginBottom:16}}>
       {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
     </div>
     {/* 2) Gráfico de receitas — sempre 30 dias por data, largura cheia */}
