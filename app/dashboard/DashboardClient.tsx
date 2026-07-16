@@ -1799,6 +1799,10 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           .ora-tabs{overflow-x:auto!important;flex-wrap:nowrap!important;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
           .ora-tabs::-webkit-scrollbar{display:none}
           .ora-wrap{flex-wrap:wrap!important}
+          /* Header de página: título em cima, barra de ações quebra pra baixo
+             (o flexShrink:0 da barra esmagava o título e vazava da tela) */
+          .ora-phead{flex-wrap:wrap!important;align-items:flex-start!important}
+          .ora-ptools{flex-wrap:wrap!important;max-width:100%}
         }
         @media (prefers-reduced-motion: reduce){
           *,*::before,*::after{animation:none!important;transition:none!important}
@@ -2461,7 +2465,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
 
             {/* Page header + product content (hidden when competitor tab active) */}
             {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&nav!=='perfil'&&<>
-            <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
+            <div className="ora-phead" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
               <div style={{minWidth:0}}>
                 <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
                   <span style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const}}>Mineração</span>
@@ -2476,7 +2480,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 </p>
               </div>
               {/* Ações contextuais: Ordenar + CSV + Atualizar */}
-              <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+              <div className="ora-ptools" style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
                 {done&&prods.length>0&&(
                   <select value={sortBy} aria-label="Ordenar produtos" title="Ordenar produtos"
                     onChange={e=>{sortBaseRef.current=prods.length;setSortBy(e.target.value as 'default'|'sales'|'score'|'bsr');setPage(1)}}
