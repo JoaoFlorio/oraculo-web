@@ -1,20 +1,27 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import AssistenteChat from './assistente/AssistenteChat'
 
-// Botão flutuante (canto inferior direito) que abre o Assistente num painel
-// sobreposto — disponível de qualquer aba do dashboard. Mexe só neste componente,
-// montado uma vez no dashboard; não toca na navegação existente.
+// Botão flutuante que abre o Assistente num painel sobreposto — de qualquer aba.
+// Fica ACIMA do FAB do WhatsApp (que é bottom:24/right:24/z-index:90). Também
+// abre ao receber o evento 'oraculo:abrir-assistente' (disparado, p.ex., pela aba
+// Agente IA). Mexe só neste componente; não toca na navegação existente.
 export default function AssistenteFab() {
   const [aberto, setAberto] = useState(false)
 
+  useEffect(() => {
+    const abrir = () => setAberto(true)
+    window.addEventListener('oraculo:abrir-assistente', abrir)
+    return () => window.removeEventListener('oraculo:abrir-assistente', abrir)
+  }, [])
+
   return (
     <>
-      {/* Painel do chat */}
+      {/* Painel do chat (acima do botão) */}
       {aberto && (
         <div style={{
-          position: 'fixed', zIndex: 60, right: 20, bottom: 92,
-          width: 'min(400px, calc(100vw - 32px))', height: 'min(600px, calc(100dvh - 130px))',
+          position: 'fixed', zIndex: 95, right: 24, bottom: 156,
+          width: 'min(400px, calc(100vw - 32px))', height: 'min(600px, calc(100dvh - 190px))',
           background: 'var(--modal, var(--bg))', border: '1px solid var(--line)',
           borderRadius: 16, boxShadow: '0 24px 60px rgba(0,0,0,0.45)',
           display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -30,20 +37,20 @@ export default function AssistenteFab() {
         </div>
       )}
 
-      {/* Botão flutuante */}
+      {/* Botão flutuante — empilhado acima do WhatsApp */}
       <button
         onClick={() => setAberto((v) => !v)}
         aria-label="Abrir assistente"
         style={{
-          position: 'fixed', zIndex: 61, right: 20, bottom: 20,
-          height: 56, minWidth: 56, padding: aberto ? 0 : '0 20px 0 16px', width: aberto ? 56 : 'auto',
+          position: 'fixed', zIndex: 96, right: 24, bottom: 88,
+          height: 52, minWidth: 52, padding: aberto ? 0 : '0 18px 0 14px', width: aberto ? 52 : 'auto',
           borderRadius: 999, border: 'none', cursor: 'pointer',
-          background: 'var(--gold)', color: '#1a1200', fontWeight: 800, fontSize: 14,
+          background: 'var(--gold)', color: '#1a1200', fontWeight: 800, fontSize: 13.5,
           display: 'flex', alignItems: 'center', gap: 8,
           boxShadow: '0 10px 30px color-mix(in srgb, var(--gold) 40%, transparent)',
         }}
       >
-        <span style={{ fontSize: 20 }}>{aberto ? '×' : '✦'}</span>
+        <span style={{ fontSize: 19 }}>{aberto ? '×' : '✦'}</span>
         {!aberto && <span>Assistente</span>}
       </button>
     </>

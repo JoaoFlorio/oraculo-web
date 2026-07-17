@@ -2401,8 +2401,20 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   </svg>
                   ABRIR AGENTE NO CHATGPT
                 </a>
-                <div style={{textAlign:'center' as const,fontSize:11,color:T.t3,marginBottom:32}}>
+                <div style={{textAlign:'center' as const,fontSize:11,color:T.t3,marginBottom:16}}>
                   Abre no ChatGPT — use sua conta existente, sem custos adicionais
+                </div>
+
+                {/* Assistente do Oráculo (IA que lê seus números + tira dúvidas) */}
+                <button
+                  onClick={()=>window.dispatchEvent(new Event('oraculo:abrir-assistente'))}
+                  style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,width:'100%',background:T.card,color:T.t1,fontWeight:700,fontSize:13.5,padding:'14px 20px',borderRadius:14,border:`1px solid ${T.line}`,cursor:'pointer',marginBottom:8,fontFamily:'inherit'}}
+                >
+                  <span style={{width:24,height:24,borderRadius:999,background:T.gold,display:'grid',placeItems:'center',color:'#1a1200',fontWeight:800,fontSize:13}}>✦</span>
+                  Falar com o Assistente do Oráculo
+                </button>
+                <div style={{textAlign:'center' as const,fontSize:11,color:T.t3,marginBottom:32}}>
+                  Pergunte sobre faturamento, lucro, estoque e Ads — ou tire dúvidas do Oráculo
                 </div>
 
                 {/* O que o agente faz */}
