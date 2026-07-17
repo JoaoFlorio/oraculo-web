@@ -1824,7 +1824,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           .ora-burger{display:flex}
           .ora-side{position:fixed!important;top:0;left:0;bottom:0;width:272px!important;z-index:1200!important;transform:translateX(-105%);transition:transform .25s ease!important;box-shadow:0 0 70px rgba(0,0,0,.55)}
           .ora-side.mopen{transform:translateX(0)}
-          .ora-backdrop{display:block;position:fixed;inset:0;background:rgba(1,1,8,0.62);backdrop-filter:blur(3px);z-index:1195}
+          /* cursor:pointer é OBRIGATÓRIO: sem ele o iOS Safari não dispara click
+             em div "não-interativa" — o toque fora do menu não fechava no iPhone */
+          .ora-backdrop{display:block;position:fixed;inset:0;background:rgba(1,1,8,0.62);backdrop-filter:blur(3px);z-index:1195;cursor:pointer}
           .ora-main-pad{padding:16px 12px 90px!important}
           .ora-hidemob{display:none!important}
           .ora-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
@@ -2009,7 +2011,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
         </aside>
 
         {/* Backdrop do menu mobile (só existe em ≤920px via CSS) */}
-        {mobileNav&&<div className="ora-backdrop" onClick={()=>setMobileNav(false)} aria-hidden />}
+        {mobileNav&&<div className="ora-backdrop" onClick={()=>setMobileNav(false)} onTouchEnd={()=>setMobileNav(false)} role="button" aria-label="Fechar menu" />}
 
         {/* MAIN */}
         <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
