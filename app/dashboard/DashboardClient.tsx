@@ -102,7 +102,11 @@ const fmtK =(n:number)=>n>=1000?`${(n/1000).toFixed(1).replace('.0','')}k`:`${n}
 const fmtN =(n:number)=>Math.round(n).toLocaleString('pt-BR')
 const fmtR =(n:number)=>n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 const sColor=(s:number)=>s>=70?T.g:s>=50?T.a:T.r
-const dInfo =(s:number)=>s>=500?{l:'Muito Alta',c:T.g}:s>=250?{l:'Alta',c:T.g}:s>=120?{l:'Média',c:T.a}:s>=50?{l:'Baixa',c:T.a}:{l:'Muito Baixa',c:T.r}
+// Pisos IDÊNTICOS ao DEMAND_FLOORS do backend (salesEstimate.ts) — fonte única de
+// "nível de demanda". Alinhar aqui evita o card dizer "Alta" e o backend "Média".
+const dInfo =(s:number)=>s>=400?{l:'Muito Alta',c:T.g}:s>=150?{l:'Alta',c:T.g}:s>=65?{l:'Média',c:T.a}:s>=30?{l:'Baixa',c:T.a}:{l:'Muito Baixa',c:T.r}
+// Nível de demanda: prefere o rótulo já calculado pelo backend (pool), cai no dInfo local.
+const demInfo=(p:any,sales:number)=> p?.demandLabel ? {l:p.demandLabel as string, c:(p.demandColor as string)||dInfo(sales).c} : dInfo(sales)
 // Score para cards: usa BSR + vendas estimadas + genérico (sem margem — não disponível no card)
 function cardScore(bsr:number,salesEst:number,isGeneric:boolean):number{
   const b=bsr<=50?40:bsr<=200?35:bsr<=500?28:bsr<=1000?22:bsr<=3000?16:bsr<=10000?10:bsr<=30000?6:2
@@ -501,7 +505,9 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
 
   const bsr=product.bsr||0
   const sales=lsData?.salesEst||product.salesEst||bsrSales(bsr)
-  const dem=dInfo(sales)
+  // Se a listing-score trouxe vendas próprias, recalcula pelo dInfo (mesmos pisos);
+  // senão usa o rótulo do backend. Coerente em qualquer caminho.
+  const dem=lsData?.salesEst?dInfo(sales):demInfo(product,sales)
   const ref=REF[catId]||.15
   const refFee=promo.active&&(promo.type==='comissao'||promo.type==='ambas') ? 0 : +(price*ref).toFixed(2)
   const fba=promo.active&&(promo.type==='fba'||promo.type==='ambas') ? 0 : (price<50?12:price<150?18:price<400?24:32)
@@ -933,10 +939,15 @@ function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:(
   const [hov,setHov]=useState(false)
   const bsr=product.bsr||0
   const sales=product.salesEst||bsrSales(bsr)
-  const isGeneric=!product.brand||product.brand.trim()===''||product.brand.toLowerCase()==='genérico'
+  // Genérico: prefere o flag do backend (detector forte c/ blocklist de marcas);
+  // cai no heurístico local só quando o backend não mandou.
+  const isGeneric = typeof product.isGeneric==='boolean' ? product.isGeneric
+    : (!product.brand||product.brand.trim()===''||product.brand.toLowerCase()==='genérico')
   const score=cardScore(bsr,sales,isGeneric)
   const sc=sColor(score)
-  const salesColor=sales>=1000?T.g:sales>=300?T.a:T.t4
+  // Cor da venda alinhada aos pisos de demanda (Alta≥150 verde · Média≥65 âmbar).
+  const salesColor=sales>=150?T.g:sales>=65?T.a:T.t4
+  const dem=demInfo(product,sales)
 
   return(
     <div onClick={onClick} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
@@ -977,7 +988,10 @@ function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:(
         {product.images?.[0]?<img src={product.images[0]} alt="" style={{maxHeight:138,maxWidth:'88%',objectFit:'contain',transition:'transform .3s cubic-bezier(.34,1.56,.64,1)',transform:hov?'scale(1.08)':'scale(1)'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>:<div style={{width:44,height:44,background:'#e8e8f0',borderRadius:8}}/>}
       </div>
       <div style={{padding:'14px 14px 16px',flex:1,display:'flex',flexDirection:'column',gap:0}}>
-        {sales>0&&bsr>0&&<div style={{display:'flex',alignItems:'baseline',gap:5,marginBottom:8}}><span className="ora-num" style={{fontSize:22,fontWeight:700,color:salesColor,letterSpacing:'-0.03em',lineHeight:1}}>~{fmtK(sales)}</span><span style={{fontSize:10,color:T.t3,fontWeight:500}}>est./mês</span></div>}
+        {sales>0&&bsr>0&&<div style={{display:'flex',alignItems:'center',gap:7,marginBottom:8,flexWrap:'wrap' as const}}>
+          <div style={{display:'flex',alignItems:'baseline',gap:5}}><span className="ora-num" style={{fontSize:22,fontWeight:700,color:salesColor,letterSpacing:'-0.03em',lineHeight:1}}>~{fmtK(sales)}</span><span style={{fontSize:10,color:T.t3,fontWeight:500}}>est./mês</span></div>
+          <span style={{fontSize:9,fontWeight:700,letterSpacing:'0.04em',textTransform:'uppercase' as const,color:dem.c,background:`${dem.c}1f`,borderRadius:5,padding:'2px 6px'}}>{dem.l}</span>
+        </div>}
         <p style={{fontSize:12,fontWeight:500,color:T.t1,lineHeight:1.58,flex:1,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any,overflow:'hidden',marginBottom:10}}>{product.title}</p>
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
           {bsr>0&&<span style={{fontSize:10,color:T.t3}}>BSR <strong style={{color:T.t2,fontWeight:600}}>#{fmtN(bsr)}</strong></span>}
@@ -1567,13 +1581,17 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
 
   // Busca mais produtos p/ ampliar o pool (paginação intuitiva) — mesma chamada
   // do Atualizar, com exclude dos já vistos. Retorna true se o pool cresceu.
-  async function loadMore(): Promise<boolean>{
+  // bust=true força o backend a RECONSTRUIR o pool (rotação de keywords) — usado
+  // pelo scroll infinito quando o pool atual esgota, pra continuar trazendo produto
+  // NOVO em vez de dar "fim dos dados". Retorna true se o pool cresceu.
+  async function loadMore(bust=false): Promise<boolean>{
     const reqId = loadIdRef.current
     const key = `${nav}__${cat}`
     const seen = (seenRef.current[key] ||= new Set())
     setMoreLoading(true)
     try{
       const params = new URLSearchParams({type:nav,category:cat,q:''})
+      if(bust) params.set('bust','1')
       if(seen.size) params.set('exclude',[...seen].slice(-800).join(','))
       const r = await fetch(`/api/products?${params}`)
       if(reqId !== loadIdRef.current) return false     // usuário trocou de aba no meio
@@ -1583,16 +1601,10 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       if(reqId !== loadIdRef.current) return false
       const list: any[] = d.products||[]
       list.forEach(p=>p?.asin&&seen.add(p.asin))
+      if(seen.size > 1600) seenRef.current[key] = new Set([...seen].slice(-1200)) // cap p/ infinito longo
       const pool = poolRef.current[key] || []
       const have = new Set(pool.map(p=>p.asin))
       const fresh = list.filter(p=>p?.asin&&!have.has(p.asin))
-      // Só marca "fim dos dados" quando o backend REPORTOU remaining — resposta
-      // sem o campo (erro/contrato quebrado) é falha recuperável, não esgotamento.
-      const remainingKnown = typeof d.remaining === 'number'
-      if(remainingKnown && (fresh.length===0 || (d.remaining===0 && list.length<12))){
-        exhaustedRef.current[key] = true
-        setPoolExhausted(true)
-      }
       if(fresh.length===0) return false
       const next = [...pool,...fresh]
       poolRef.current[key] = next
@@ -1605,21 +1617,26 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     }
   }
 
-  // Troca de página com scroll pro topo do grid
+  // Alimenta o scroll infinito: revela o já carregado; se acabou, busca mais; se o
+  // pool esgotou, rebusca (bust) girando keywords. Só marca "fim" quando nem o
+  // bust traz novidade (catálogo/keywords realmente esgotados p/ a categoria).
+  const feedingRef = useRef(false)
+  async function feedMore(){
+    if(feedingRef.current || moreLoading || loading || !done || isFree) return
+    const key = `${nav}__${cat}`
+    if(page*PAGE < prods.length){ setPage(p=>p+1); return }   // ainda há carregado: revela
+    if(exhaustedRef.current[key]) return
+    feedingRef.current = true
+    try{
+      let grew = await loadMore(false)
+      if(!grew) grew = await loadMore(true)                    // pool seco → rebusca fresca
+      if(grew) setPage(p=>p+1)
+      else { exhaustedRef.current[key] = true; setPoolExhausted(true) }
+    } finally { feedingRef.current = false }
+  }
+
+  // Grid ref (mantido p/ ancoragem; scroll infinito dispensa navegação por páginas).
   const gridRef = useRef<HTMLDivElement>(null)
-  function gotoPage(n:number){
-    setPage(n)
-    const el = gridRef.current
-    const top = el ? Math.max(0, el.offsetTop - 16) : 0
-    mainRef.current?.scrollTo({top, behavior:'smooth'})
-  }
-  async function goNext(){
-    const total = Math.ceil(prods.length/PAGE)
-    if(page < total){ gotoPage(page+1); return }
-    if(poolExhausted || moreLoading) return
-    const grew = await loadMore()                      // página ainda não carregada → busca mais
-    if(grew) gotoPage(page+1)
-  }
 
   // Carregamento inicial usa cache se disponível → não sobrecarrega a API
   useEffect(()=>{ load('bestsellers','all','',false) },[]) // eslint-disable-line
@@ -1678,7 +1695,21 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const sortedProds = sortBy==='default' ? prods
     : [...prods.slice(0,sortBaseRef.current)].sort(sortCmp).concat(prods.slice(sortBaseRef.current))
   const totalP  = Math.ceil(sortedProds.length/PAGE)
-  const paged   = sortedProds.slice((page-1)*PAGE,page*PAGE)
+  // Scroll infinito (pago): mostra acumulado até page*PAGE. Free: só a 1ª leva (com locks).
+  const shown   = isFree ? sortedProds.slice(0,PAGE) : sortedProds.slice(0,page*PAGE)
+
+  // Observa o sentinela no fim do grid → alimenta o scroll infinito automaticamente.
+  const sentinelRef = useRef<HTMLDivElement>(null)
+  useEffect(()=>{
+    const el = sentinelRef.current
+    if(!el || isFree) return
+    const io = new IntersectionObserver(
+      entries=>{ if(entries[0]?.isIntersecting) feedMore() },
+      { root: mainRef.current, rootMargin: '600px 0px' }   // pré-carrega antes de chegar no fim
+    )
+    io.observe(el)
+    return ()=>io.disconnect()
+  })   // sem deps: re-observa a cada render (o grid/estado muda) — barato
 
   return(
     <>
@@ -2475,8 +2506,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 <h1 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:6,lineHeight:1}}>{curNav?.label}</h1>
                 <p style={{fontSize:11,color:T.t3}}>
                   {isCross?'Todas as categorias':curCat?.label}
-                  {done&&<> · <span className="ora-num" style={{color:T.t4}}>{prods.length}</span> <span style={{color:T.t4}}>produtos</span></>}
-                  {done&&totalP>1&&<> · pág. <span className="ora-num" style={{color:T.t4}}>{page}/{totalP}</span></>}
+                  {done&&<> · <span className="ora-num" style={{color:T.t4}}>{prods.length}</span> <span style={{color:T.t4}}>produtos{!isFree&&!poolExhausted?'+':''}</span></>}
                 </p>
               </div>
               {/* Ações contextuais: Ordenar + CSV + Atualizar */}
@@ -2519,7 +2549,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {!loading&&done&&prods.length>0&&(
               <>
                 <div ref={gridRef} style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12,position:'relative' as const}}>
-                  {paged.map((p,i)=>{
+                  {shown.map((p,i)=>{
                     const isLocked = isFree && i >= cfg.limit
                     return(
                       <div key={p.asin} className="ora-card-in" style={{animationDelay:`${(i%12)*40}ms`}}>
@@ -2549,47 +2579,23 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   </div>
                 )}
 
-                {/* Paginação intuitiva — pool acumulado, avançar busca mais produtos */}
-                {!isFree&&(()=>{
-                  // Constrói lista de páginas com elipses: 1 … p-1 p p+1 … N
-                  const nums: (number|'…')[] = []
-                  if (totalP <= 9) {
-                    for (let i=1;i<=totalP;i++) nums.push(i)
-                  } else {
-                    nums.push(1)
-                    if (page > 3) nums.push('…')
-                    for (let i=Math.max(2,page-1);i<=Math.min(totalP-1,page+1);i++) nums.push(i)
-                    if (page < totalP-2) nums.push('…')
-                    nums.push(totalP)
-                  }
-                  const btnStyle=(act:boolean,dis:boolean):React.CSSProperties=>({
-                    background:act?`${tint(T.gold,8)}`:'none',border:`1px solid ${act?'rgba(240,180,41,0.3)':T.line}`,
-                    color:act?T.gold:dis?T.t3:T.t2,fontWeight:act?700:400,fontSize:12,width:34,height:34,borderRadius:7,
-                    cursor:dis?'default':'pointer',fontFamily:'inherit',transition:'all .12s',
-                    display:'flex',alignItems:'center',justifyContent:'center',opacity:dis?.55:1,
-                  })
-                  const nextExhausted = poolExhausted && page>=totalP
-                  const nextDis = nextExhausted || moreLoading
-                  return(
-                    <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:4,marginTop:32}}>
-                      <button aria-label="Página anterior" disabled={page===1}
-                        onClick={()=>{if(page>1)gotoPage(page-1)}} style={btnStyle(false,page===1)}>←</button>
-                      {nums.map((n,i)=>n==='…'
-                        ?<span key={`e${i}`} style={{color:T.t3,fontSize:12,width:22,textAlign:'center' as const}}>…</span>
-                        :<button key={n} onClick={()=>{if(page!==n)gotoPage(n as number)}} aria-label={`Página ${n}`} aria-current={page===n?'page':undefined}
-                            className="ora-num" style={btnStyle(page===n,false)}>{n}</button>
-                      )}
-                      <button aria-label="Próxima página" disabled={nextDis} onClick={goNext}
-                        title={nextExhausted?'Você viu tudo por aqui — toque em Atualizar para redistribuir':'Próxima página'}
-                        style={btnStyle(false,nextDis)}>
-                        {moreLoading
-                          ?<svg className="ora-spin" width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke={T.gold} strokeWidth="2" strokeLinecap="round"/></svg>
-                          :'→'}
-                      </button>
-                      {moreLoading&&<span style={{fontSize:10,color:T.t3,marginLeft:8}}>garimpando mais produtos…</span>}
+                {/* Scroll infinito — sentinela + status. Sem "fim dos dados" seco:
+                    quando o pool esgota, o feedMore rebusca girando keywords. */}
+                {!isFree&&(
+                  <>
+                    <div ref={sentinelRef} aria-hidden style={{height:1}}/>
+                    <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:8,minHeight:44,marginTop:24}}>
+                      {moreLoading ? (
+                        <><svg className="ora-spin" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke={T.gold} strokeWidth="2" strokeLinecap="round"/></svg>
+                        <span style={{fontSize:11,color:T.t3}}>garimpando mais produtos…</span></>
+                      ) : poolExhausted ? (
+                        <span style={{fontSize:11,color:T.t3}}>Você já viu os melhores de {isCross?'todas as categorias':`“${curCat?.label}”`} por aqui. Toque em <button onClick={()=>load(nav,cat,'',true)} style={{background:'none',border:'none',color:T.gold,fontWeight:600,cursor:'pointer',fontFamily:'inherit',fontSize:11,padding:0}}>Atualizar</button> pra rodar novas buscas.</span>
+                      ) : page*PAGE < sortedProds.length ? (
+                        <button onClick={()=>setPage(p=>p+1)} style={{background:'none',border:`1px solid ${T.line}`,color:T.t2,fontSize:11,padding:'8px 18px',borderRadius:8,cursor:'pointer',fontFamily:'inherit'}}>Mostrar mais</button>
+                      ) : null}
                     </div>
-                  )
-                })()}
+                  </>
+                )}
               </>
             )}
 
