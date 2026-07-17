@@ -5,6 +5,7 @@ import { TERMS_VERSION } from '@/lib/terms'
 import DashboardClient from './DashboardClient'
 import TermsGate from './TermsGate'
 import AppInstall from './AppInstall'
+import AssistenteFab from './AssistenteFab'
 
 export default async function DashboardPage() {
   const user = await getSession()
@@ -32,6 +33,7 @@ export default async function DashboardPage() {
     <>
       <DashboardClient user={user} gestaoEnabled={gestaoEnabled} />
       <AppInstall />
+      {gestaoEnabled && <AssistenteFab />}
       {needsTerms && <TermsGate />}
     </>
   )
