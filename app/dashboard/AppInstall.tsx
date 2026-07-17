@@ -152,6 +152,7 @@ export default function AppInstall() {
   const [pushOn, setPushOn] = useState<boolean | null>(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'fail'>('idle')
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -164,9 +165,26 @@ export default function AppInstall() {
     setPlat(ios ? 'ios' : 'android')
     const onPrompt = (e: Event) => { e.preventDefault(); setInstallEvt(e) }
     window.addEventListener('beforeinstallprompt', onPrompt)
-    // push já ativo NESTE dispositivo?
+    // Push ativo DE VERDADE = inscrição local NO aparelho + registrada NO SERVIDOR.
+    // (Só a local não basta: se a sessão tinha caído na hora do "ativar", o servidor
+    // nunca soube — e nenhum push sai. Era o "ativo ✓" que não notificava nada.)
+    // SELF-HEAL: existe local? re-registra no servidor agora (upsert idempotente).
     if ('serviceWorker' in navigator && 'PushManager' in window) {
-      navigator.serviceWorker.ready.then(r => r.pushManager.getSubscription()).then(s => setPushOn(!!s)).catch(() => setPushOn(false))
+      navigator.serviceWorker.ready
+        .then(r => r.pushManager.getSubscription())
+        .then(async (sub) => {
+          if (!sub) { setPushOn(false); return }
+          try {
+            const heal = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) })
+            if (heal.ok) { setPushOn(true); return }
+          } catch {}
+          // re-registro falhou → confere o que o servidor tem
+          try {
+            const st = await fetch('/api/push/status').then(x => x.json())
+            setPushOn(!!st.subscribed)
+          } catch { setPushOn(false) }
+        })
+        .catch(() => setPushOn(false))
     } else setPushOn(false)
     // banner: só se falta instalar OU falta push, e não foi dispensado
     try {
@@ -206,9 +224,23 @@ export default function AppInstall() {
       if (!key) { setMsg('Notificações indisponíveis no momento. Tente mais tarde.'); setBusy(false); return }
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToUint8(key) as BufferSource })
       const r = await fetch('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) })
-      if (r.ok) { setPushOn(true); setMsg('') } else setMsg('Falha ao registrar. Tente novamente.')
+      if (r.ok) { setPushOn(true); setMsg('') }
+      else if (r.status === 401) setMsg('Sua sessão expirou — faça login de novo e tente ativar.')
+      else setMsg('Falha ao registrar. Tente novamente.')
     } catch { setMsg('Não foi possível ativar. Tente novamente.') }
     setBusy(false)
+  }
+
+  // Push de teste imediato — prova que a entrega funciona sem esperar uma venda.
+  async function sendTest() {
+    if (testState === 'sending') return
+    setTestState('sending')
+    try {
+      const r = await fetch('/api/push/test', { method: 'POST' })
+      const d = await r.json().catch(() => ({}))
+      setTestState(r.ok && d.ok ? 'sent' : 'fail')
+    } catch { setTestState('fail') }
+    setTimeout(() => setTestState('idle'), 6000)
   }
 
   const card: React.CSSProperties = { background: 'rgba(240,180,41,0.05)', border: '1px solid rgba(240,180,41,0.22)', borderRadius: 12, padding: '14px 16px', marginBottom: 12 }
@@ -275,7 +307,15 @@ export default function AppInstall() {
             <div style={card}>
               <div style={h}>2️⃣ Ativar o aviso de venda {pushOn && <span style={{ color: '#34D399' }}>— ativo ✓</span>}</div>
               {pushOn ? (
-                <p style={p}>Prontinho: a cada venda na Amazon, seu celular avisa. 💰</p>
+                <>
+                  <p style={p}>Prontinho: a cada venda na Amazon, seu celular avisa. 💰</p>
+                  <button onClick={sendTest} disabled={testState === 'sending'}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, marginTop: 10,
+                      border: '1px solid rgba(240,180,41,0.4)', background: 'transparent',
+                      color: testState === 'sent' ? '#34D399' : testState === 'fail' ? '#FB7185' : GOLD }}>
+                    {testState === 'sending' ? 'Enviando…' : testState === 'sent' ? '✓ Teste enviado — chegou aí?' : testState === 'fail' ? 'Falhou — reative as notificações' : '🔔 Enviar notificação de teste'}
+                  </button>
+                </>
               ) : (
                 <>
                   <p style={p}>Receba <strong style={{ color: '#CBD5E1' }}>"💰 Nova venda!"</strong> com o valor do pedido, na hora, mesmo com o app fechado.{isIOS ? ' No iPhone, ative DEPOIS de instalar (abra pelo ícone da tela inicial).' : ''}</p>

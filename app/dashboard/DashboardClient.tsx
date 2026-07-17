@@ -1641,6 +1641,10 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // Carregamento inicial usa cache se disponível → não sobrecarrega a API
   useEffect(()=>{ load('bestsellers','all','',false) },[]) // eslint-disable-line
 
+  // Renovação DESLIZANTE da sessão: cada visita ao painel/app estende a validade
+  // (sessão >7d é re-emitida por +30d). O app PWA em uso nunca expira.
+  useEffect(()=>{ fetch('/api/auth/refresh',{method:'POST'}).catch(()=>{}) },[])
+
   function goNav(id:string){
     setMobileNav(false) // fecha o menu off-canvas ao navegar (mobile)
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}

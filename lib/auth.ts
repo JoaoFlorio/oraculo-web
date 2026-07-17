@@ -8,6 +8,12 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'oraculo-secret-dev-only')
 export const COOKIE = 'oraculo_session'
 
+// Até 2 sessões simultâneas por usuário: computador + celular (app PWA). O
+// deleteMany total anterior derrubava o app do celular toda vez que o dono
+// logava no desktop ("fica deslogando"). Anti-compartilhamento continua: um 3º
+// aparelho derruba a sessão mais antiga — emprestar a conta desloga alguém.
+const MAX_SESSIONS = 2
+
 export async function createToken(userId: string): Promise<string> {
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
 
@@ -16,13 +22,13 @@ export async function createToken(userId: string): Promise<string> {
     .setExpirationTime('30d')
     .sign(SECRET)
 
-  // 1 sessão / 1 dispositivo, ATÔMICO: encerra todas as sessões anteriores do
-  // usuário e cria a nova numa transação. A versão anterior tinha race — dois
-  // logins simultâneos podiam abrir 2 sessões (furava o anti-compartilhamento).
-  await prisma.$transaction([
-    prisma.session.deleteMany({ where: { userId } }),
-    prisma.session.create({ data: { userId, token, expiresAt } }),
-  ])
+  await prisma.$transaction(async (tx) => {
+    await tx.session.create({ data: { userId, token, expiresAt } })
+    const keep = await tx.session.findMany({
+      where: { userId }, orderBy: { createdAt: 'desc' }, take: MAX_SESSIONS, select: { id: true },
+    })
+    await tx.session.deleteMany({ where: { userId, id: { notIn: keep.map(k => k.id) } } })
+  })
 
   return token
 }
