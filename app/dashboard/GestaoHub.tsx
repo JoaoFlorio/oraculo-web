@@ -159,16 +159,17 @@ function PeriodPicker({value,custom,onChange}:{value:string;custom:{from:Date;to
 }
 
 // Converte os produtos reais (com nome/foto) em ProductMetrics p/ as abas Vendas/Curva ABC.
-function realProductMetrics(realDre:any, costs:Record<string,number>):ProductMetrics[]{
+function realProductMetrics(realDre:any, costs:Record<string,number>, aliquota=0):ProductMetrics[]{
   const prods=realDre?.produtos||[]
   const recLiq=realDre?.linhas?.receitaLiquida||0
   const liqRatio=recLiq>0?(realDre.liqMarketplace||0)/recLiq:0   // rateia o líquido do marketplace por receita
   return prods.map((p:any)=>{
     const cost=costs[p.sku]||0, cmv=p.units*cost
-    const grossP=p.receita*liqRatio-cmv
+    const tax=p.receita*(aliquota/100)                          // imposto = alíquota % sobre a receita
+    const grossP=p.receita*liqRatio-cmv-tax
     const margin=p.receita>0?grossP/p.receita*100:0
     const roi=cmv>0?grossP/cmv*100:0
-    return {id:p.sku,name:p.name||p.sku,sku:p.sku,asin:p.asin||'',image:p.image||'',units:p.units,price:p.units>0?p.receita/p.units:0,unitCost:cost,adsSpend:0,adsSales:0,refundUnits:0,stockFBA:0,bsr:0,revenue:p.receita,commission:0,fbaFee:0,cmv,tax:0,refundValue:0,grossProfit:grossP,acos:0,roas:0,margin,roi,coverageDays:0} as ProductMetrics
+    return {id:p.sku,name:p.name||p.sku,sku:p.sku,asin:p.asin||'',image:p.image||'',units:p.units,price:p.units>0?p.receita/p.units:0,unitCost:cost,adsSpend:0,adsSales:0,refundUnits:0,stockFBA:0,bsr:0,revenue:p.receita,commission:0,fbaFee:0,cmv,tax,refundValue:0,grossProfit:grossP,acos:0,roas:0,margin,roi,coverageDays:0} as ProductMetrics
   })
 }
 function realAbc(metrics:ProductMetrics[]){
@@ -305,7 +306,7 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
   while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
   return out
 }
-function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnected}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null}){
+function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void}){
   const t=useT()
   // (Removidos os KPIs/composição MOCK com deltas fabricados "+12,4%" etc. — eram
   // código morto: o render usa só RK.kpis (real), loadingKpis ou emptyKpis.)
@@ -375,7 +376,8 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
     const custoU=costs[p.sku]||0, cmvP=custoU*units
     const repres=fatTot>0?receita/fatTot*100:0
     const share=fatTot>0?receita/fatTot:0
-    const lucro=receita-cmvP-feesTot*share                 // lucro bruto (antes de ads)
+    const impP=receita*(imposto/100)                       // imposto = alíquota % sobre a receita
+    const lucro=receita-cmvP-feesTot*share-impP            // lucro bruto (antes de ads)
     const margem=receita>0?lucro/receita*100:0
     const custoAds=adsTot*share
     const lucroPos=lucro-custoAds
@@ -420,9 +422,9 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
           <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5}}>Nenhuma venda no período selecionado.</div>
         ) : (
           <Table head={[
-            {label:'Produto',w:'26%'},{label:'Preço méd.',right:true},{label:'Custo un.',right:true},{label:'Unid.',right:true},
+            {label:'Produto',w:'24%'},{label:'Preço méd.',right:true},{label:'Custo un.',right:true},{label:'Unid.',right:true},
             {label:'Faturado',right:true},{label:'Repres.',right:true},{label:'Lucro',right:true},{label:'Margem',right:true},
-            {label:'Custo Ads',right:true},{label:'Lucro pós ADS',right:true},{label:'MPA',right:true},
+            {label:'Custo Ads',right:true},{label:'Lucro pós ADS',right:true},{label:'MPA',right:true},{label:'',right:true},
           ]}>
             {top15.map((r,i)=>(
               <tr key={i}>
@@ -437,6 +439,7 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
                 <NumTd color={r.custoAds>0?t.t1:t.t3} hide={hide}>{r.custoAds>0?brl2(r.custoAds):'—'}</NumTd>
                 <NumTd color={r.custoU>0?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.custoU>0?brl2(r.lucroPos):'—'}</NumTd>
                 <PillTd>{r.custoU>0?<Pill kind={r.mpa>15?'grn':r.mpa>0?'gold':'red'}>{pc(r.mpa)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd>
+                <PillTd><ZoomBtn onClick={()=>onDetail?.(r.p)}/></PillTd>
               </tr>
             ))}
           </Table>
@@ -448,19 +451,152 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
 }
 
 /* ── Abas tabulares ─────────────────────────────────────────────────────── */
-function Vendas({realM,mockM,hide,connected}:{realM?:ProductMetrics[]|null;mockM?:ProductMetrics[];hide:boolean;connected?:boolean|null}){
+function Vendas({realM,mockM,hide,connected,onDetail}:{realM?:ProductMetrics[]|null;mockM?:ProductMetrics[];hide:boolean;connected?:boolean|null;onDetail?:(p:any)=>void}){
   const t=useT()
   void mockM   // nunca renderiza mock — só dado real (evita produtos fabricados)
   if(connected===false) return <ConnectEmpty/>
   if(!realM) return <LoadingBox/>
   const rows=[...realM].sort((a,b)=>b.revenue-a.revenue)
   return(<>
-    <Hint>Ranking por receita. A margem só aparece quando você informa o custo (CMV) na aba Gerenciamento — sem custo, mostramos "—".</Hint>
-    <Table head={[{label:'Produto',w:'46%'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true}]}>
-      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd>{p.unitCost>0?<Pill kind={p.margin>20?'grn':p.margin>0?'gold':'red'}>{pc(p.margin)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd></tr>)}
+    <Hint>Ranking por receita. Clique na 🔍 pra ver tudo que é descontado (comissão, FBA, ads, imposto, custo) até a margem final — e os pedidos daquele produto.</Hint>
+    <Table head={[{label:'Produto',w:'46%'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true},{label:'',right:true}]}>
+      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd>{p.unitCost>0?<Pill kind={p.margin>20?'grn':p.margin>0?'gold':'red'}>{pc(p.margin)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd><PillTd><ZoomBtn onClick={()=>onDetail?.({sku:p.sku,name:p.name,image:p.image,asin:p.asin})}/></PillTd></tr>)}
     </Table>
   </>)
 }
+// Botão lupinha (abre o detalhamento do produto).
+function ZoomBtn({onClick}:{onClick:()=>void}){
+  const t=useT()
+  return(
+    <button onClick={onClick} title="Ver detalhamento" style={{width:30,height:30,borderRadius:8,border:`1px solid ${t.line2}`,background:t.dark?'rgba(255,255,255,0.04)':'#FFFFFF',color:t.t2,cursor:'pointer',display:'inline-flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+      <i className="ti ti-zoom-money" style={{fontSize:15}}/>
+    </button>
+  )
+}
+
+/* ── Modal de detalhamento do produto (lupinha estilo Gestor) ─────────────── */
+// Mostra TUDO que é descontado (comissão, FBA, ads, imposto, custo) → margem final,
+// no agregado do período + a lista dos pedidos daquele produto (do Espelho Local).
+// Todos os rateios usam share de faturamento — reconcilia com o Top 15 e a DRE.
+function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{produto:{sku:string;name:string;image?:string;asin?:string};realDre:any;adsReal?:any;costs:Record<string,number>;imposto:number;hide:boolean;onClose:()=>void}){
+  const t=useT()
+  const [orders,setOrders]=useState<any|null>(null)
+  const p=(realDre?.produtos||[]).find((x:any)=>x.sku===produto.sku)
+  const from=realDre?.period?.from, to=realDre?.period?.to
+
+  useEffect(()=>{
+    const esc=(e:KeyboardEvent)=>{ if(e.key==='Escape') onClose() }
+    document.addEventListener('keydown',esc)
+    return ()=>document.removeEventListener('keydown',esc)
+  },[onClose])
+  useEffect(()=>{
+    let alive=true; setOrders(null)
+    const qs=new URLSearchParams({sku:produto.sku}); if(from) qs.set('from',from); if(to) qs.set('to',to)
+    fetch(`/api/amazon/orders?${qs}`).then(r=>r.json()).then(d=>{ if(alive) setOrders(d) }).catch(()=>{ if(alive) setOrders({available:false}) })
+    return ()=>{ alive=false }
+  },[produto.sku,from,to])
+
+  const L=realDre?.linhas||{}
+  const fatTot=L.receitaBruta||0
+  const feesTot=(L.comissao||0)+(L.fba||0)+(L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.outrasTaxas||0)
+  const adsTot=adsReal?.ready?(Number(adsReal.spend)||0):0
+  const receita=p?.receita||0, units=p?.units||0
+  const share=fatTot>0?receita/fatTot:0
+  const custoU=costs[produto.sku]||0, cmvP=custoU*units
+  // Decompõe o feesTot do produto em comissão/FBA proporcionais (só p/ exibir separado).
+  const comShare=feesTot>0?(L.comissao||0)/feesTot:0
+  const fbaShare=feesTot>0?((L.fba||0)+(L.taxaPrograma||0))/feesTot:0
+  const outShare=1-comShare-fbaShare
+  const feesP=feesTot*share
+  const comissaoP=feesP*comShare, fbaP=feesP*fbaShare, outrosP=feesP*outShare
+  const adsP=adsTot*share
+  const impP=receita*(imposto/100)
+  const liqMkt=receita-feesP
+  const lucro=receita-feesP-adsP-impP-cmvP
+  const margem=receita>0?lucro/receita*100:0
+  const temCusto=custoU>0
+
+  const Row=({label,val,sign,strong,color}:{label:string;val:number;sign?:'-'|'=';strong?:boolean;color?:string;hide?:boolean})=>(
+    <div style={{display:'flex',justifyContent:'space-between',padding:'8px 2px',borderBottom:`1px solid ${t.line}`,fontSize:strong?14:13}}>
+      <span style={{color:strong?t.t1:t.t2,fontWeight:strong?600:400}}>{sign==='='?'= ':sign==='-'?'(–) ':''}{label}</span>
+      <span style={{color:color||t.t1,fontWeight:strong?700:500,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide?'blur(6px)':'none'}}>{brl2(val||0)}</span>
+    </div>
+  )
+  const card:React.CSSProperties={background:t.card,border:`1px solid ${t.line}`,borderRadius:16,width:'min(760px,96vw)',maxHeight:'92vh',overflowY:'auto',padding:'20px 22px',boxShadow:'0 24px 70px rgba(0,0,0,0.35)'}
+  return(
+    <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:60,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'4vh 12px',backdropFilter:'blur(2px)'}}>
+      <div onClick={e=>e.stopPropagation()} style={card}>
+        {/* Header */}
+        <div style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:16}}>
+          <Thumb p={{id:produto.sku,name:produto.name,image:produto.image}}/>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontSize:14.5,fontWeight:600,color:t.t1,lineHeight:1.3}}>{produto.name}</div>
+            <div style={{fontSize:10.5,color:t.t3,marginTop:2}}>SKU {produto.sku}{produto.asin?` · ASIN ${produto.asin}`:''}{from&&to?` · ${from.slice(0,10).split('-').reverse().join('/')} a ${to.slice(0,10).split('-').reverse().join('/')}`:''}</div>
+          </div>
+          <button onClick={onClose} style={{background:'none',border:'none',color:t.t3,fontSize:22,cursor:'pointer',lineHeight:1,padding:0}} title="Fechar">×</button>
+        </div>
+
+        {/* Waterfall — tudo que é descontado até a margem final */}
+        <div style={{background:t.dark?'rgba(255,255,255,0.02)':'#FAFBFC',border:`1px solid ${t.line}`,borderRadius:12,padding:'14px 16px',marginBottom:16}}>
+          <Row label={`Faturado (${units} un.)`} val={receita} strong hide={hide}/>
+          <Row label="Comissão Amazon" val={comissaoP} sign="-" color={t.red} hide={hide}/>
+          <Row label="Taxa FBA" val={fbaP} sign="-" color={t.red} hide={hide}/>
+          {outrosP>0.005 && <Row label="Outras taxas" val={outrosP} sign="-" color={t.red} hide={hide}/>}
+          <Row label="Líq. do Marketplace" val={liqMkt} sign="=" strong color={t.grn} hide={hide}/>
+          <Row label={adsReal?.ready?'Ads (Advertising API)':'Ads (parcial)'} val={adsP} sign="-" color={t.red} hide={hide}/>
+          {imposto>0 && <Row label={`Imposto (${pc(imposto)})`} val={impP} sign="-" color={t.red} hide={hide}/>}
+          <Row label="Custo do produto (CMV)" val={cmvP} sign="-" color={temCusto?t.red:t.t3} hide={hide}/>
+          <div style={{height:1,background:t.line,margin:'8px 0'}}/>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <span style={{fontSize:13.5,fontWeight:700,color:t.t1}}>Lucro do período</span>
+            <div style={{display:'flex',alignItems:'center',gap:10}}>
+              {temCusto&&<Pill kind={margem>20?'grn':margem>0?'gold':'red'}>{pc(margem)}</Pill>}
+              <span style={{fontSize:15,fontWeight:700,fontFamily:FG,color:temCusto?(lucro>=0?t.grn:t.red):t.t3,filter:hide?'blur(6px)':'none'}}>{temCusto?brl2(lucro):'informe o custo'}</span>
+            </div>
+          </div>
+        </div>
+        {!temCusto && <div style={{fontSize:10.5,color:t.t3,marginBottom:14}}>Informe o custo (CMV) deste produto na aba <b>Gerenciamento</b> pra ver o lucro e a margem finais.</div>}
+
+        {/* Lista de pedidos do produto (Espelho Local) */}
+        <div style={{fontSize:12.5,fontWeight:600,color:t.t1,marginBottom:8}}>Pedidos deste produto</div>
+        {orders===null ? (
+          <div style={{color:t.t3,fontSize:12,fontFamily:FG,padding:'12px 0'}}>Carregando pedidos…</div>
+        ) : !orders.available ? (
+          <div style={{color:t.t3,fontSize:11.5,fontFamily:FG,padding:'10px 0'}}>Detalhe por pedido {orders.reason==='demo'?'não disponível na conta demo':'sincronizando — disponível em instantes'}.</div>
+        ) : (orders.orders||[]).length===0 ? (
+          <div style={{color:t.t3,fontSize:11.5,fontFamily:FG,padding:'10px 0'}}>Nenhum pedido deste produto no período.</div>
+        ) : (
+          <Table head={[{label:'Data',w:'20%'},{label:'Un.',right:true},{label:'Total',right:true},{label:'Líq. Mkt',right:true},...(imposto>0?[{label:'Imposto',right:true}]:[]),{label:'Custo',right:true},{label:'Lucro',right:true},{label:'Margem',right:true}]}>
+            {(orders.orders||[]).map((o:any,i:number)=>{
+              const rShare=receita>0?o.receita/receita:0        // rateia os custos do produto por receita do pedido
+              const oFees=feesP*rShare, oAds=adsP*rShare, oImp=o.receita*(imposto/100), oCmv=custoU*o.qty
+              const oLiq=o.receita-oFees
+              const oLucro=o.receita-oFees-oAds-oImp-oCmv
+              const oMarg=o.receita>0?oLucro/o.receita*100:0
+              return(
+                <tr key={i}>
+                  <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,fontSize:11.5,color:t.t2}}>
+                    <div>{o.date?.slice(0,10).split('-').reverse().join('/')}</div>
+                    <div style={{fontSize:9.5,color:t.t3}}>{o.channel==='AFN'?'FBA':'FBM'}{/pending/i.test(o.status||'')?' · Pendente':''}</div>
+                  </td>
+                  <NumTd>{o.qty}</NumTd>
+                  <NumTd strong hide={hide}>{brl2(o.receita)}</NumTd>
+                  <NumTd color={t.t2} hide={hide}>{brl2(oLiq)}</NumTd>
+                  {imposto>0 && <NumTd color={t.red} hide={hide}>{brl2(oImp)}</NumTd>}
+                  <NumTd color={temCusto?t.t1:t.t3} hide={hide}>{temCusto?brl2(oCmv):'—'}</NumTd>
+                  <NumTd color={temCusto?(oLucro>=0?t.grn:t.red):t.t3} hide={hide}>{temCusto?brl2(oLucro):'—'}</NumTd>
+                  <PillTd>{temCusto?<Pill kind={oMarg>20?'grn':oMarg>0?'gold':'red'}>{pc(oMarg)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd>
+                </tr>
+              )
+            })}
+          </Table>
+        )}
+        <div style={{fontSize:10,color:t.t3,marginTop:10}}>Comissão, FBA e ads rateados por participação na receita — os pedidos somam o total do período. Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
+      </div>
+    </div>
+  )
+}
+
 const clsColor=(t:Theme,cls:string)=> cls==='A'?t.grn:cls==='B'?t.blue:cls==='C'?t.gold:t.t3
 function ClassBadge({t,cls}:{t:Theme;cls:string}){
   const c=clsColor(t,cls)
@@ -591,7 +727,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:b
     </div>}
   </>)
 }
-function Analitico({realDre,hide,connected,mockM,costs={}}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>}){
+function Analitico({realDre,hide,connected,mockM,costs={},imposto=0}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;imposto?:number}){
   const t=useT()
   if(connected && !realDre) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
   if(realDre){
@@ -615,7 +751,8 @@ function Analitico({realDre,hide,connected,mockM,costs={}}:{realDre?:any;hide:bo
       const custoU=costs[p.sku]||0, temCusto=custoU>0
       const custoTotal=custoU*units
       const share=fat>0?receita/fat:0
-      const lucro=receita-custoTotal-feesTot*share
+      const impP=receita*(imposto/100)
+      const lucro=receita-custoTotal-feesTot*share-impP
       const margem=receita>0?lucro/receita*100:0
       const ref=refBySku[p.sku]||{units:0,valor:0}
       return {p,receita,units,ticket,shareRec,custoTotal,temCusto,lucro,margem,ref}
@@ -695,7 +832,7 @@ function Analitico({realDre,hide,connected,mockM,costs={}}:{realDre?:any;hide:bo
   void mockM
   return <ConnectEmpty/>   // não conectado → vazio (sem mock)
 }
-function Gerenciamento({realDre,costs,onCost,mockM,hide,connected}:{realDre?:any;costs:Record<string,number>;onCost:(sku:string,v:number)=>void;mockM:ProductMetrics[];hide:boolean;connected?:boolean|null}){
+function Gerenciamento({realDre,costs,onCost,mockM,hide,connected,imposto=0,onImposto}:{realDre?:any;costs:Record<string,number>;onCost:(sku:string,v:number)=>void;mockM:ProductMetrics[];hide:boolean;connected?:boolean|null;imposto?:number;onImposto?:(v:number)=>void}){
   const t=useT()
   void mockM
   if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon para informar o custo (CMV) dos seus produtos."/>
@@ -706,6 +843,14 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide,connected}:{realDre?:any
   const inp:React.CSSProperties={width:84,background:t.dark?'rgba(255,255,255,0.05)':'#FFFFFF',border:`1px solid ${t.line2}`,borderRadius:7,color:t.t1,fontSize:12.5,fontWeight:600,padding:'6px 8px',fontFamily:'inherit',outline:'none',textAlign:'right'}
   return(<>
     <Hint>Informe o custo unitário de cada produto vendido. É o que falta pro Oráculo calcular o seu <b>lucro real</b> — a Amazon não sabe quanto você paga.</Hint>
+    {/* Alíquota de imposto — dedução % sobre a receita em todas as abas (Simples/DAS, etc.) */}
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'12px 16px',marginBottom:14,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const}}>
+      <div style={{minWidth:0}}>
+        <div style={{fontSize:12.5,fontWeight:600,color:t.t1}}>Alíquota de imposto (%)</div>
+        <div style={{fontSize:10.5,color:t.t3,marginTop:2}}>Ex.: alíquota do Simples/DAS sobre a receita. Entra como dedução no lucro e na margem de todas as abas. Deixe 0 se não quiser considerar.</div>
+      </div>
+      <input type="number" min={0} max={100} step={0.1} value={imposto||''} placeholder="0" onChange={e=>onImposto?.(Math.max(0,Math.min(100,parseFloat(e.target.value)||0)))} style={{...inp,width:96}}/>
+    </div>
     <Table head={[{label:'Produto',w:'42%'},{label:'Un. vendidas',right:true},{label:'Receita',right:true},{label:'Custo unit.',right:true},{label:'CMV',right:true}]}>
       {prods.map((p)=>{
         const cost=costs[p.sku]||0
@@ -964,8 +1109,19 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
       return next
     })
   }
+  // Alíquota de imposto (%) — informada pelo seller (default 0 → não deduz nada).
+  const [imposto,setImposto]=useState<number>(0)
+  const impTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
+  useEffect(()=>{ fetch('/api/user/metadata?key=gestao_imposto').then(r=>r.json()).then(d=>{ const v=Number(d?.value); if(isFinite(v)&&v>0) setImposto(v) }).catch(()=>{}) },[])
+  const saveImposto=(val:number)=>{
+    setImposto(val)
+    if(impTimer.current) clearTimeout(impTimer.current)
+    impTimer.current=setTimeout(()=>{ fetch('/api/user/metadata',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'gestao_imposto',value:val})}).catch(()=>{}) },1200)
+  }
+  // Produto selecionado para o modal de detalhamento (lupinha).
+  const [detail,setDetail]=useState<{sku:string;name:string;image?:string;asin?:string}|null>(null)
   const cmv = realDre?.produtos ? realDre.produtos.reduce((sum:number,p:any)=>sum+p.units*(costs[p.sku]||0),0) : 0
-  const realM = realDre?.produtos ? realProductMetrics(realDre,costs) : null
+  const realM = realDre?.produtos ? realProductMetrics(realDre,costs,imposto) : null
   const realAbcData = realM ? realAbc(realM) : null
   useEffect(()=>{
     let s = (typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')) || ''
@@ -1052,15 +1208,18 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
         </div>
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected}/>}
-        {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
+        {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide} onDetail={setDetail}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={costs} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
-        {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={costs}/>}
-        {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide} connected={amazonConnected}/>}
+        {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={costs} imposto={imposto}/>}
+        {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={costs} hide={hide}/>}
         {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={costs}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
+
+        {/* Modal de detalhamento (lupinha) — sobre qualquer aba */}
+        {detail && realDre && <ProdutoDetalhe produto={detail} realDre={realDre} adsReal={adsData} costs={costs} imposto={imposto} hide={hide} onClose={()=>setDetail(null)}/>}
       </div>
     </ThemeCtx.Provider>
   )
