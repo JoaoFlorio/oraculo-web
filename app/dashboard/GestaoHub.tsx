@@ -568,30 +568,35 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
         ) : (
           <Table head={[{label:'Data',w:'20%'},{label:'Un.',right:true},{label:'Total',right:true},{label:'Líq. Mkt',right:true},...(imposto>0?[{label:'Imposto',right:true}]:[]),{label:'Custo',right:true},{label:'Lucro',right:true},{label:'Margem',right:true}]}>
             {(orders.orders||[]).map((o:any,i:number)=>{
+              // Pedido pendente: a Amazon segura o valor até confirmar (pagamento+envio).
+              // Não computa custo/lucro contra receita 0 — mostra "—" e o selo Pendente
+              // (evita "prejuízo" fantasma de −CMV). Igual ao Gestor, que zera tudo.
+              const pend=/pending/i.test(o.status||'') || (o.receita||0)<=0
               const rShare=receita>0?o.receita/receita:0        // rateia os custos do produto por receita do pedido
               const oFees=feesP*rShare, oAds=adsP*rShare, oImp=o.receita*(imposto/100), oCmv=custoU*o.qty
               const oLiq=o.receita-oFees
               const oLucro=o.receita-oFees-oAds-oImp-oCmv
               const oMarg=o.receita>0?oLucro/o.receita*100:0
+              const dash=<span style={{fontSize:11,color:t.t3}}>—</span>
               return(
                 <tr key={i}>
                   <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,fontSize:11.5,color:t.t2}}>
                     <div>{o.date?.slice(0,10).split('-').reverse().join('/')}</div>
-                    <div style={{fontSize:9.5,color:t.t3}}>{o.channel==='AFN'?'FBA':'FBM'}{/pending/i.test(o.status||'')?' · Pendente':''}</div>
+                    <div style={{fontSize:9.5,color:pend?t.gold:t.t3}}>{o.channel==='AFN'?'FBA':'FBM'}{pend?' · Pendente':''}</div>
                   </td>
                   <NumTd>{o.qty}</NumTd>
-                  <NumTd strong hide={hide}>{brl2(o.receita)}</NumTd>
-                  <NumTd color={t.t2} hide={hide}>{brl2(oLiq)}</NumTd>
-                  {imposto>0 && <NumTd color={t.red} hide={hide}>{brl2(oImp)}</NumTd>}
-                  <NumTd color={temCusto?t.t1:t.t3} hide={hide}>{temCusto?brl2(oCmv):'—'}</NumTd>
-                  <NumTd color={temCusto?(oLucro>=0?t.grn:t.red):t.t3} hide={hide}>{temCusto?brl2(oLucro):'—'}</NumTd>
-                  <PillTd>{temCusto?<Pill kind={oMarg>20?'grn':oMarg>0?'gold':'red'}>{pc(oMarg)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd>
+                  <NumTd strong hide={hide}>{pend?dash:brl2(o.receita)}</NumTd>
+                  <NumTd color={t.t2} hide={hide}>{pend?dash:brl2(oLiq)}</NumTd>
+                  {imposto>0 && <NumTd color={t.red} hide={hide}>{pend?dash:brl2(oImp)}</NumTd>}
+                  <NumTd color={temCusto?t.t1:t.t3} hide={hide}>{pend?dash:(temCusto?brl2(oCmv):'—')}</NumTd>
+                  <NumTd color={temCusto?(oLucro>=0?t.grn:t.red):t.t3} hide={hide}>{pend?dash:(temCusto?brl2(oLucro):'—')}</NumTd>
+                  <PillTd>{pend?<Pill kind="gold">Pendente</Pill>:(temCusto?<Pill kind={oMarg>20?'grn':oMarg>0?'gold':'red'}>{pc(oMarg)}</Pill>:dash)}</PillTd>
                 </tr>
               )
             })}
           </Table>
         )}
-        <div style={{fontSize:10,color:t.t3,marginTop:10}}>Comissão, FBA e ads rateados por participação na receita — os pedidos somam o total do período. Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
+        <div style={{fontSize:10,color:t.t3,marginTop:10}}>Comissão, FBA e ads rateados por participação na receita. Pedidos <b>Pendentes</b> ainda não têm valor liberado pela Amazon (aguardam confirmação) — entram no cálculo quando o pedido é faturado. Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
       </div>
     </div>
   )
