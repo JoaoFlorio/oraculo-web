@@ -1901,6 +1901,21 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               </React.Fragment>
             ))}
 
+            {/* App & Avisos — entrada PERMANENTE pro guia de instalação + push.
+                O banner some por 30 dias quando dispensado; sem esta porta o
+                cliente ficava sem como ativar/testar a notificação de venda. */}
+            <button onClick={()=>{setMobileNav(false); window.dispatchEvent(new Event('ora-open-app'))}}
+              title={!sideOpen?'App & Avisos':undefined} className="ora-nav"
+              style={{width:'100%',display:'flex',alignItems:'center',gap:10,padding:sideOpen?'8px 10px':'10px',justifyContent:sideOpen?'flex-start':'center',borderRadius:8,border:'none',cursor:'pointer',background:'none',
+                borderLeft:sideOpen?'3px solid transparent':'none',fontFamily:'inherit',textAlign:'left' as const,outline:'none'}}>
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" style={{flexShrink:0}} aria-hidden>
+                <rect x="7" y="2.5" width="10" height="19" rx="2.4" style={{stroke:T.t3}} strokeWidth="1.5"/>
+                <path d="M11 18.4h2" style={{stroke:T.t3}} strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M18.5 7.5a4.2 4.2 0 011.6 3.2M18.5 5a6.8 6.8 0 014.1 5.7" style={{stroke:T.gold}} strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+              {sideOpen&&<span style={{fontSize:12,fontWeight:400,color:T.t2,whiteSpace:'nowrap' as const,flex:1,letterSpacing:'-0.01em'}}>App &amp; Avisos</span>}
+            </button>
+
             {/* Categories */}
             {sideOpen&&(
               <>

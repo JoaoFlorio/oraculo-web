@@ -165,6 +165,10 @@ export default function AppInstall() {
     setPlat(ios ? 'ios' : 'android')
     const onPrompt = (e: Event) => { e.preventDefault(); setInstallEvt(e) }
     window.addEventListener('beforeinstallprompt', onPrompt)
+    // Entrada permanente: o item "App & Avisos" do menu abre este guia. Sem isso,
+    // quem dispensou o banner ficava 30 dias sem conseguir chegar no push.
+    const openGuide = () => setOpen(true)
+    window.addEventListener('ora-open-app', openGuide)
     // Push ativo DE VERDADE = inscrição local NO aparelho + registrada NO SERVIDOR.
     // (Só a local não basta: se a sessão tinha caído na hora do "ativar", o servidor
     // nunca soube — e nenhum push sai. Era o "ativo ✓" que não notificava nada.)
@@ -191,7 +195,10 @@ export default function AppInstall() {
       const until = Number(localStorage.getItem(DISMISS_KEY) || 0)
       if (Date.now() > until) setBanner(true)
     } catch { setBanner(true) }
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt)
+      window.removeEventListener('ora-open-app', openGuide)
+    }
   }, [])
 
   const done = standalone && pushOn === true
