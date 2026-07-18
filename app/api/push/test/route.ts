@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
 
@@ -6,14 +6,16 @@ const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.u
 
 // Dispara um push de teste imediato pro usuário logado — prova na hora que a
 // entrega funciona (independente do vigia de vendas).
-export async function POST() {
+// body { kind:'sale' } → simula o cha-ching real (último pedido do Espelho).
+export async function POST(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const kind = await req.json().then(b => b?.kind).catch(() => undefined)
   try {
     const r = await fetch(`${BACKEND}/api/push/test`, {
       method: 'POST', cache: 'no-store',
       headers: { 'Content-Type': 'application/json', 'x-internal-key': process.env.INTERNAL_KEY || '' },
-      body: JSON.stringify({ email: user.email }),
+      body: JSON.stringify({ email: user.email, kind }),
     })
     return NextResponse.json(await r.json(), { status: r.status })
   } catch {

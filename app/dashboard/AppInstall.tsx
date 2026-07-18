@@ -239,11 +239,14 @@ export default function AppInstall() {
   }
 
   // Push de teste imediato — prova que a entrega funciona sem esperar uma venda.
-  async function sendTest() {
+  // kind='sale' simula o cha-ching real (usa o último pedido de verdade).
+  async function sendTest(kind?: 'sale') {
     if (testState === 'sending') return
     setTestState('sending')
     try {
-      const r = await fetch('/api/push/test', { method: 'POST' })
+      const r = await fetch('/api/push/test', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind }),
+      })
       const d = await r.json().catch(() => ({}))
       setTestState(r.ok && d.ok ? 'sent' : 'fail')
     } catch { setTestState('fail') }
@@ -316,12 +319,22 @@ export default function AppInstall() {
               {pushOn ? (
                 <>
                   <p style={p}>Prontinho: a cada venda na Amazon, seu celular avisa. 💰</p>
-                  <button onClick={sendTest} disabled={testState === 'sending'}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, marginTop: 10,
-                      border: '1px solid rgba(240,180,41,0.4)', background: 'transparent',
-                      color: testState === 'sent' ? '#34D399' : testState === 'fail' ? '#FB7185' : GOLD }}>
-                    {testState === 'sending' ? 'Enviando…' : testState === 'sent' ? '✓ Teste enviado — chegou aí?' : testState === 'fail' ? 'Falhou — reative as notificações' : '🔔 Enviar notificação de teste'}
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button onClick={() => sendTest()} disabled={testState === 'sending'}
+                      style={{ flex: 1, padding: '9px 10px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700,
+                        border: '1px solid rgba(240,180,41,0.4)', background: 'transparent',
+                        color: testState === 'sent' ? '#34D399' : testState === 'fail' ? '#FB7185' : GOLD }}>
+                      {testState === 'sending' ? 'Enviando…' : testState === 'sent' ? '✓ Enviado!' : testState === 'fail' ? 'Falhou' : '🔔 Testar'}
+                    </button>
+                    <button onClick={() => sendTest('sale')} disabled={testState === 'sending'}
+                      style={{ flex: 1.4, padding: '9px 10px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700,
+                        border: '1px solid rgba(52,211,153,0.45)', background: 'rgba(52,211,153,0.08)', color: '#34D399' }}>
+                      💰 Simular venda
+                    </button>
+                  </div>
+                  <p style={{ fontSize: 10.5, color: '#64748B', margin: '7px 2px 0', lineHeight: 1.5 }}>
+                    "Simular venda" manda o aviso igualzinho ao de uma venda real, com o valor do seu último pedido.
+                  </p>
                 </>
               ) : (
                 <>
