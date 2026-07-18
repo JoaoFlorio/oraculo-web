@@ -5,6 +5,7 @@ import { TERMS_VERSION } from '@/lib/terms'
 import DashboardClient from './DashboardClient'
 import TermsGate from './TermsGate'
 import AppInstall from './AppInstall'
+import AppSplash from './AppSplash'
 import AssistenteFab from './AssistenteFab'
 
 export default async function DashboardPage() {
@@ -31,6 +32,8 @@ export default async function DashboardPage() {
 
   return (
     <>
+      {/* Abertura animada — só no app instalado, 1x por sessão */}
+      <AppSplash />
       <DashboardClient user={user} gestaoEnabled={gestaoEnabled} />
       {/* isAdmin libera o simulador de venda no guia do app (o servidor também
           exige admin — o cliente nunca deve receber um "💰 Nova venda!" falso). */}

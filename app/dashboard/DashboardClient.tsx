@@ -1824,9 +1824,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           .ora-burger{display:flex}
           .ora-side{position:fixed!important;top:0;left:0;bottom:0;width:272px!important;z-index:1200!important;transform:translateX(-105%);transition:transform .25s ease!important;box-shadow:0 0 70px rgba(0,0,0,.55)}
           .ora-side.mopen{transform:translateX(0)}
-          /* cursor:pointer é OBRIGATÓRIO: sem ele o iOS Safari não dispara click
-             em div "não-interativa" — o toque fora do menu não fechava no iPhone */
-          .ora-backdrop{display:block;position:fixed;inset:0;background:rgba(1,1,8,0.62);backdrop-filter:blur(3px);z-index:1195;cursor:pointer}
+          /* cursor:pointer + SEM backdrop-filter: o blur em elemento fixed trava o
+             hit-testing do toque em algumas versões do iOS — o toque fora do menu
+             não fechava. O ✕ no topo do menu é a garantia (não depende disso). */
+          .ora-backdrop{display:block;position:fixed;inset:0;background:rgba(1,1,8,0.72);z-index:1195;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+          .ora-mclose{display:flex!important}
           .ora-main-pad{padding:16px 12px 90px!important}
           .ora-hidemob{display:none!important}
           .ora-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
@@ -1862,11 +1864,19 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             <div style={{width:40,height:40,borderRadius:10,background:T.goldSub,border:`1px solid ${tint(T.gold,15)}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <OracleMark size={22}/>
             </div>
-            {sideOpen&&<div style={{overflow:'hidden',minWidth:0}}>
+            {sideOpen&&<div style={{overflow:'hidden',minWidth:0,flex:1}}>
               <div style={{fontSize:16,fontWeight:800,letterSpacing:'0.24em',lineHeight:1,whiteSpace:'nowrap' as const,color:T.gold,
                 background:'var(--goldTextG)',WebkitBackgroundClip:'text',backgroundClip:'text',WebkitTextFillColor:'transparent'}}>ORÁCULO</div>
               <div style={{fontSize:8,fontWeight:600,letterSpacing:'0.2em',color:T.t3,marginTop:4,textTransform:'uppercase' as const,whiteSpace:'nowrap' as const}}>Amazon Intelligence</div>
             </div>}
+            {/* ✕ fechar (só mobile) — garantia de fechamento independente do
+                backdrop, que no iOS já se mostrou não confiável pra toque. */}
+            {mobileNav&&(
+              <button className="ora-mclose" onPointerDown={e=>{e.stopPropagation();setMobileNav(false)}} onClick={e=>e.stopPropagation()} aria-label="Fechar menu"
+                style={{display:'none',alignItems:'center',justifyContent:'center',width:34,height:34,flexShrink:0,borderRadius:9,
+                  border:`1px solid ${T.line}`,background:'rgba(255,255,255,0.04)',color:T.t2,fontSize:17,lineHeight:1,cursor:'pointer',
+                  fontFamily:'inherit',touchAction:'manipulation',WebkitTapHighlightColor:'transparent'}}>✕</button>
+            )}
           </div>
 
           {/* Nav */}
@@ -2026,7 +2036,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
         </aside>
 
         {/* Backdrop do menu mobile (só existe em ≤920px via CSS) */}
-        {mobileNav&&<div className="ora-backdrop" onClick={()=>setMobileNav(false)} onTouchEnd={()=>setMobileNav(false)} role="button" aria-label="Fechar menu" />}
+        {mobileNav&&<div className="ora-backdrop" onPointerDown={()=>setMobileNav(false)} onClick={()=>setMobileNav(false)} role="button" aria-label="Fechar menu" />}
 
         {/* MAIN */}
         <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
