@@ -1,5 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
+
+// Simulador de venda: chunk SEPARADO, baixado só quando isAdmin=true. Assim o
+// código não vai no bundle do cliente — ele não vê nem descobre no DevTools.
+const AdminSaleSim = dynamic(() => import('./AdminSaleSim'), { ssr: false })
 
 // PWA + push de venda — a parte que o CLIENTE vê:
 // • registra o service worker (public/sw.js);
@@ -153,7 +158,6 @@ export default function AppInstall({ isAdmin = false }: { isAdmin?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'fail'>('idle')
-  const [valor, setValor] = useState('')   // simulação admin: valor do pedido (vazio = último real)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -240,16 +244,12 @@ export default function AppInstall({ isAdmin = false }: { isAdmin?: boolean }) {
   }
 
   // Push de teste imediato — prova que a entrega funciona sem esperar uma venda.
-  // kind='sale' simula o cha-ching real (usa o último pedido de verdade).
-  async function sendTest(kind?: 'sale') {
+  // (A simulação de VENDA vive no AdminSaleSim, carregado só p/ admin.)
+  async function sendTest() {
     if (testState === 'sending') return
     setTestState('sending')
     try {
-      const v = parseFloat(valor.replace(',', '.'))
-      const r = await fetch('/api/push/test', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, ...(kind === 'sale' && isFinite(v) && v > 0 ? { valor: v } : {}) }),
-      })
+      const r = await fetch('/api/push/test', { method: 'POST' })
       const d = await r.json().catch(() => ({}))
       setTestState(r.ok && d.ok ? 'sent' : 'fail')
     } catch { setTestState('fail') }
@@ -329,29 +329,10 @@ export default function AppInstall({ isAdmin = false }: { isAdmin?: boolean }) {
                     {testState === 'sending' ? 'Enviando…' : testState === 'sent' ? '✓ Teste enviado — chegou aí?' : testState === 'fail' ? 'Falhou — reative as notificações' : '🔔 Enviar notificação de teste'}
                   </button>
 
-                  {/* Simulador de venda — SÓ ADMIN. Um cliente recebendo
-                      "💰 Nova venda! R$ X" sem ter vendido seria péssimo.
-                      O servidor também exige admin (não basta esconder o botão). */}
-                  {isAdmin && (
-                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed rgba(100,116,139,0.3)' }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', letterSpacing: '0.1em', marginBottom: 7 }}>ADMIN · SIMULAR CHA-CHING</div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <div style={{ position: 'relative', flex: 1 }}>
-                          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11.5, color: '#64748B', pointerEvents: 'none' }}>R$</span>
-                          <input value={valor} onChange={e => setValor(e.target.value)} inputMode="decimal" placeholder="último pedido"
-                            style={{ width: '100%', padding: '9px 10px 9px 30px', borderRadius: 9, border: '1px solid rgba(100,116,139,0.35)', background: '#15151F', color: '#F1F5F9', fontSize: 12, fontFamily: 'inherit', outline: 'none' }} />
-                        </div>
-                        <button onClick={() => sendTest('sale')} disabled={testState === 'sending'}
-                          style={{ flex: '0 0 auto', padding: '9px 14px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700,
-                            border: '1px solid rgba(52,211,153,0.45)', background: 'rgba(52,211,153,0.08)', color: '#34D399' }}>
-                          💰 Disparar
-                        </button>
-                      </div>
-                      <p style={{ fontSize: 10.5, color: '#64748B', margin: '7px 2px 0', lineHeight: 1.5 }}>
-                        Manda o aviso idêntico ao de uma venda real. Em branco = usa o valor do seu último pedido.
-                      </p>
-                    </div>
-                  )}
+                  {/* Simulador de venda — SÓ ADMIN, em chunk carregado sob demanda.
+                      Um cliente recebendo "💰 Nova venda! R$ X" sem ter vendido
+                      seria péssimo; e ele não deve nem saber que isso existe. */}
+                  {isAdmin && <AdminSaleSim />}
                 </>
               ) : (
                 <>
