@@ -139,7 +139,7 @@ function AndroidSteps({ installEvt, onInstall }: { installEvt: any; onInstall: (
   )
 }
 
-export default function AppInstall() {
+export default function AppInstall({ isAdmin = false }: { isAdmin?: boolean }) {
   const [open, setOpen] = useState(false)
   const [banner, setBanner] = useState(false)
   const [standalone, setStandalone] = useState(false)
@@ -153,6 +153,7 @@ export default function AppInstall() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'fail'>('idle')
+  const [valor, setValor] = useState('')   // simulação admin: valor do pedido (vazio = último real)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -244,8 +245,10 @@ export default function AppInstall() {
     if (testState === 'sending') return
     setTestState('sending')
     try {
+      const v = parseFloat(valor.replace(',', '.'))
       const r = await fetch('/api/push/test', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, ...(kind === 'sale' && isFinite(v) && v > 0 ? { valor: v } : {}) }),
       })
       const d = await r.json().catch(() => ({}))
       setTestState(r.ok && d.ok ? 'sent' : 'fail')
@@ -319,22 +322,36 @@ export default function AppInstall() {
               {pushOn ? (
                 <>
                   <p style={p}>Prontinho: a cada venda na Amazon, seu celular avisa. 💰</p>
-                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                    <button onClick={() => sendTest()} disabled={testState === 'sending'}
-                      style={{ flex: 1, padding: '9px 10px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700,
-                        border: '1px solid rgba(240,180,41,0.4)', background: 'transparent',
-                        color: testState === 'sent' ? '#34D399' : testState === 'fail' ? '#FB7185' : GOLD }}>
-                      {testState === 'sending' ? 'Enviando…' : testState === 'sent' ? '✓ Enviado!' : testState === 'fail' ? 'Falhou' : '🔔 Testar'}
-                    </button>
-                    <button onClick={() => sendTest('sale')} disabled={testState === 'sending'}
-                      style={{ flex: 1.4, padding: '9px 10px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700,
-                        border: '1px solid rgba(52,211,153,0.45)', background: 'rgba(52,211,153,0.08)', color: '#34D399' }}>
-                      💰 Simular venda
-                    </button>
-                  </div>
-                  <p style={{ fontSize: 10.5, color: '#64748B', margin: '7px 2px 0', lineHeight: 1.5 }}>
-                    "Simular venda" manda o aviso igualzinho ao de uma venda real, com o valor do seu último pedido.
-                  </p>
+                  <button onClick={() => sendTest()} disabled={testState === 'sending'}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, marginTop: 10,
+                      border: '1px solid rgba(240,180,41,0.4)', background: 'transparent',
+                      color: testState === 'sent' ? '#34D399' : testState === 'fail' ? '#FB7185' : GOLD }}>
+                    {testState === 'sending' ? 'Enviando…' : testState === 'sent' ? '✓ Teste enviado — chegou aí?' : testState === 'fail' ? 'Falhou — reative as notificações' : '🔔 Enviar notificação de teste'}
+                  </button>
+
+                  {/* Simulador de venda — SÓ ADMIN. Um cliente recebendo
+                      "💰 Nova venda! R$ X" sem ter vendido seria péssimo.
+                      O servidor também exige admin (não basta esconder o botão). */}
+                  {isAdmin && (
+                    <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed rgba(100,116,139,0.3)' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', letterSpacing: '0.1em', marginBottom: 7 }}>ADMIN · SIMULAR CHA-CHING</div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ position: 'relative', flex: 1 }}>
+                          <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11.5, color: '#64748B', pointerEvents: 'none' }}>R$</span>
+                          <input value={valor} onChange={e => setValor(e.target.value)} inputMode="decimal" placeholder="último pedido"
+                            style={{ width: '100%', padding: '9px 10px 9px 30px', borderRadius: 9, border: '1px solid rgba(100,116,139,0.35)', background: '#15151F', color: '#F1F5F9', fontSize: 12, fontFamily: 'inherit', outline: 'none' }} />
+                        </div>
+                        <button onClick={() => sendTest('sale')} disabled={testState === 'sending'}
+                          style={{ flex: '0 0 auto', padding: '9px 14px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700,
+                            border: '1px solid rgba(52,211,153,0.45)', background: 'rgba(52,211,153,0.08)', color: '#34D399' }}>
+                          💰 Disparar
+                        </button>
+                      </div>
+                      <p style={{ fontSize: 10.5, color: '#64748B', margin: '7px 2px 0', lineHeight: 1.5 }}>
+                        Manda o aviso idêntico ao de uma venda real. Em branco = usa o valor do seu último pedido.
+                      </p>
+                    </div>
+                  )}
                 </>
               ) : (
                 <>

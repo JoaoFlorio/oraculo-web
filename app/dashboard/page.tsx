@@ -32,7 +32,9 @@ export default async function DashboardPage() {
   return (
     <>
       <DashboardClient user={user} gestaoEnabled={gestaoEnabled} />
-      <AppInstall />
+      {/* isAdmin libera o simulador de venda no guia do app (o servidor também
+          exige admin — o cliente nunca deve receber um "💰 Nova venda!" falso). */}
+      <AppInstall isAdmin={user.role === 'admin'} />
       {gestaoEnabled && <AssistenteFab />}
       {needsTerms && <TermsGate />}
     </>
