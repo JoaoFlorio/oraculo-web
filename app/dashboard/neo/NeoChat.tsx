@@ -11,8 +11,8 @@ import { useEffect, useRef, useState } from 'react'
  *
  * Voz, sem custo de API (tudo no navegador):
  *  - ENTRADA: Web Speech Recognition (pt-BR) — botão de microfone transcreve
- *    a fala pro campo. Só aparece se o navegador suportar.
- *  - SAÍDA: speechSynthesis — com o toggle "Voz" ligado, o NEO lê a resposta.
+ *    a fala pro campo. Funciona bem; fica ligado.
+ *  - SAÍDA: speechSynthesis — DESLIGADA (ver VOZ_SAIDA abaixo).
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 type Img = { mediaType: string; data: string }
@@ -27,6 +27,23 @@ const SUGESTOES = [
   'Onde estou perdendo margem?',
 ]
 const MAX_IMGS = 3
+
+/**
+ * Voz de saída (o NEO falando a resposta em voz alta) — DESLIGADA por decisão
+ * de produto, não por bug: o código todo abaixo funciona.
+ *
+ * O motivo: a Web Speech API usa as vozes instaladas NO APARELHO do cliente, e
+ * em pt-BR o que existe é ruim. No Mac de teste as opções eram Luciana
+ * (feminina), as Eloquence (robôs de leitor de tela) e o Felipe (aquela voz de
+ * meme). Num produto premium, recurso que só soa mal é pior que recurso nenhum.
+ *
+ * Pra ter uma voz masculina brasileira decente e IGUAL pra todo cliente, o
+ * caminho é TTS pago no backend (Google Chirp 3 HD ≈ US$30/milhão de caracteres,
+ * com 1 milhão grátis/mês — cobre a base atual). Decisão em aberto com o João.
+ *
+ * Pra religar a voz do aparelho: basta trocar para `true`.
+ */
+const VOZ_SAIDA = false
 
 const SEV = {
   critico: { cor: '#ff4d4d', rotulo: 'Precisa de decisão hoje' },
@@ -126,7 +143,7 @@ export default function NeoChat() {
   // na primeira chamada — sem escutar 'voiceschanged' a gente acabava falando
   // com a voz padrão do sistema (que nem sempre é português).
   useEffect(() => {
-    if (!('speechSynthesis' in window)) return
+    if (!VOZ_SAIDA || !('speechSynthesis' in window)) return
     const carregar = () => {
       const pt = window.speechSynthesis.getVoices().filter((v) => /^pt[-_]?br/i.test(v.lang || ''))
       if (!pt.length) return
@@ -227,7 +244,7 @@ export default function NeoChat() {
       if (!res.ok || !data || data?.error) setErro(data?.error || 'O NEO não conseguiu responder agora. Tente de novo em instantes.')
       else {
         setMsgs([...historico, { role: 'assistant', text: data.reply || '(sem resposta)' }])
-        if (vozAtiva && data.reply) falar(data.reply)
+        if (VOZ_SAIDA && vozAtiva && data.reply) falar(data.reply)
       }
     } catch (e: any) {
       // Distingue "demorou demais" de "caiu a conexão" — dizer "erro de rede"
@@ -415,7 +432,7 @@ export default function NeoChat() {
             <div className="neoTitle">AGENTE <b>NEO</b></div>
             <div className="neoSub">Inteligência · João Flório</div>
           </div>
-          {'speechSynthesis' in (typeof window !== 'undefined' ? window : {} as any) && (
+          {VOZ_SAIDA && 'speechSynthesis' in (typeof window !== 'undefined' ? window : {} as any) && (
             <button
               className={`neoVoice${vozAtiva ? ' on' : ''}`}
               onClick={() => {
@@ -431,7 +448,7 @@ export default function NeoChat() {
           {/* Seletor de voz — aparece com a voz ligada e mais de uma opção pt-BR.
               Cada aparelho traz um conjunto diferente de vozes instaladas, então
               a escolha final é do vendedor; a gente só chuta a masculina. */}
-          {vozAtiva && vozes.length > 1 && (
+          {VOZ_SAIDA && vozAtiva && vozes.length > 1 && (
             <select className="neoVozSel" value={vozNome} title="Trocar a voz do NEO"
               onChange={(e) => {
                 const nome = e.target.value
