@@ -71,7 +71,7 @@ export default function Gestao() {
                 border: '1px solid rgba(240,194,98,0.25)',
                 boxShadow: '0 50px 130px -40px rgba(0,0,0,.95), 0 0 100px -40px rgba(240,194,98,.4)',
               }}>
-                <ScaledFrame designWidth={860}>
+                <ScaledFrame designWidth={860} minScale={0.7}>
                   <DashboardMock />
                 </ScaledFrame>
               </div>

@@ -6,7 +6,7 @@
 
 import Image from 'next/image'
 import Reveal from './Reveal'
-import { EyeMark } from './Hero'
+import { EyeMark } from './marks'
 
 export default function Footer() {
   return (
@@ -52,11 +52,12 @@ export default function Footer() {
           <EyeMark size={24} />
           <span className="ora-display" style={{ fontWeight: 700, fontSize: 16, letterSpacing: '.04em', color: 'var(--tx1)' }}>ORÁCULO</span>
         </div>
-        <nav style={{ display: 'flex', gap: '10px 22px', flexWrap: 'wrap' }} aria-label="Rodapé">
+        <nav className="ora-footer-nav" style={{ display: 'flex', gap: '10px 22px', flexWrap: 'wrap' }} aria-label="Rodapé">
           {[
             { l: 'Gestão', h: '#gestao' },
             { l: 'Como funciona', h: '#como-funciona' },
             { l: 'Mineração', h: '#mineracao' },
+            { l: 'NEO', h: '#agente' },
             { l: 'Preços', h: '#planos' },
             { l: 'Entrar', h: '/login' },
           ].map(({ l, h }) => (
@@ -64,7 +65,8 @@ export default function Footer() {
           ))}
         </nav>
         <div style={{ fontSize: 12, color: 'var(--tx3)', textAlign: 'right' }}>
-          <a href="mailto:atendimento@oraculojf.com.br" style={{ color: 'var(--tx2)', textDecoration: 'none' }}>
+          <a href="mailto:atendimento@oraculojf.com.br" className="ora-footer-mail"
+            style={{ color: 'var(--tx2)', textDecoration: 'none' }}>
             atendimento@oraculojf.com.br
           </a>
           <div style={{ marginTop: 4 }}>© 2026 Oráculo — Todos os direitos reservados.</div>

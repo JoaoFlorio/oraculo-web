@@ -6,11 +6,11 @@
  * Produtos desenhados em SVG (nada de foto).
  */
 
-import { Flame, Sparkles, Users, Target, BarChart3, Brain, CircleDollarSign } from 'lucide-react'
+import { Flame, Users, Target, BarChart3, Brain, CircleDollarSign } from 'lucide-react'
 import Reveal from './Reveal'
-import { SectionHead, MiniFeature, FootIcon } from './Section'
-import { RunWhenVisible, Float, IntUp, PctUp, Trend, Spark, Donut, Bars, ScaledFrame, useRun } from './ui'
-import { Bottle } from './Hero'
+import { SectionHead, MiniFeature } from './Section'
+import { RunWhenVisible, Float, IntUp, PctUp, Trend, Spark, Donut, Bars, ScaledFrame } from './ui'
+import { Bottle } from './marks'
 
 const T = {
   card: 'rgba(255,255,255,0.028)',
@@ -315,7 +315,7 @@ export default function Mineracao() {
                   <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 4 }}>Em Alta</div>
                   <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--emerald)' }}>+<PctUp value={24.8} /></div>
                   <div style={{ margin: '7px 0 4px' }}><Spark data={[8, 12, 10, 16, 14, 20, 18, 25, 30]} w={118} h={26} /></div>
-                  <Trend value="vs 30 dias anteriores" label="" size={9.5} />
+                  <Trend value="vs 30 dias anteriores" label="" />
                 </div>
               </Float>
               <Float delay={0.8} amp={6}>
@@ -344,14 +344,14 @@ export default function Mineracao() {
 
             {/* painel central */}
             <Reveal delay={0.1}>
-              <ScaledFrame designWidth={620}>
+              <ScaledFrame designWidth={620} minScale={0.78}>
                 <MiningPanel />
               </ScaledFrame>
             </Reveal>
 
             {/* modal à direita */}
             <Reveal delay={0.22}>
-              <ScaledFrame designWidth={380}>
+              <ScaledFrame designWidth={380} minScale={0.88}>
                 <AnalysisModal />
               </ScaledFrame>
             </Reveal>

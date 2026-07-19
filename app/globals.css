@@ -153,9 +153,50 @@ body {
 @keyframes ora-bob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(8px)} }
 .ora-scrollcue{ animation:ora-bob 1.8s ease-in-out infinite; }
 
-.ora-nav-links a{ white-space:nowrap; transition:color .2s; }
+/* padding vertical dá ao link inline um alvo de ~44px sem mudar o visual —
+   vale em qualquer tela, já que 1024px também é iPad em paisagem (touch). */
+.ora-nav-links a{ white-space:nowrap; transition:color .2s; padding:12px 2px; }
 .ora-nav-links a:hover{ color:var(--gold) !important; }
-@media (max-width: 920px){ .ora-nav-links{ display:none !important; } }
+
+/* ── nav: links inline no desktop, drawer no mobile/tablet ───────────── */
+.ora-nav-burger{
+  display:none; align-items:center; justify-content:center;
+  width:44px; height:44px; border-radius:12px; cursor:pointer; /* alvo de toque 44px */
+  color:var(--tx1); background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.12); backdrop-filter:blur(8px);
+  transition:border-color .2s, background .2s;
+}
+.ora-nav-burger:hover{ border-color:rgba(240,194,98,.5); background:rgba(240,194,98,.08); }
+.ora-nav-burger:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
+
+.ora-nav-scrim{
+  position:fixed; inset:0; z-index:40;
+  background:rgba(4,4,12,.72); backdrop-filter:blur(4px);
+}
+.ora-nav-panel{
+  position:fixed; z-index:41; top:80px; left:16px; right:16px;
+  display:flex; flex-direction:column; gap:4px; padding:14px;
+  border-radius:18px; outline:none;
+  background:linear-gradient(180deg, rgba(20,20,40,.97), rgba(9,9,22,.99));
+  border:1px solid rgba(240,194,98,.28);
+  box-shadow:0 40px 90px -30px rgba(0,0,0,.9), 0 0 70px -30px rgba(240,194,98,.35);
+  max-height:calc(100dvh - 100px); overflow-y:auto;
+}
+.ora-nav-panel-link{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 14px; border-radius:12px; text-decoration:none;
+  color:var(--tx1); font-size:16px; font-weight:600;
+  border:1px solid transparent; transition:background .2s, border-color .2s;
+}
+.ora-nav-panel-link:hover, .ora-nav-panel-link:focus-visible{
+  background:rgba(240,194,98,.07); border-color:rgba(240,194,98,.28); outline:none;
+}
+
+@media (max-width: 1000px){
+  .ora-nav-links{ display:none !important; }
+  .ora-nav-cta{ display:none !important; }
+  .ora-nav-burger{ display:inline-flex; }
+}
 
 /* ── primitivas de seção ─────────────────────────────────────────────── */
 .ora-section{ position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:clamp(72px,11vh,130px) 24px; }
@@ -202,10 +243,14 @@ body {
   .ora-contrast > div:nth-child(2){ transform:rotate(90deg); padding:6px 0 !important; }
 }
 
+/* ⚠️ Grids que contêm mockups (ScaledFrame desenha em px fixo) precisam de
+   `minmax(0, 1fr)` — com `1fr` puro o track herda o min-content do mockup
+   (860px) e estoura o layout inteiro no mobile. */
+
 /* ── hero v2: grid texto+laptop, cards flutuantes, trust bar ─────────── */
 @media (max-width: 1080px){
-  .ora-hero-grid{ grid-template-columns:1fr !important; text-align:left; }
-  .ora-hero-eye{ right:-40% !important; top:-2% !important; opacity:.7; }
+  .ora-hero-grid{ grid-template-columns:minmax(0,1fr) !important; text-align:left; }
+  .ora-hero-eye{ right:-34% !important; top:-2% !important; opacity:.55; }
 }
 @media (max-width: 1080px){
   .ora-hero-cards{ grid-template-columns:repeat(6,1fr) !important; }
@@ -241,7 +286,7 @@ body {
 
 /* gestão: laterais somem em telas médias */
 @media (max-width: 1150px){
-  .ora-gestao-grid{ grid-template-columns:1fr !important; }
+  .ora-gestao-grid{ grid-template-columns:minmax(0,1fr) !important; }
   .ora-gestao-side{ display:none !important; }
 }
 .ora-mini4{ }
@@ -250,23 +295,173 @@ body {
 
 /* mineração */
 @media (max-width: 1120px){
-  .ora-mine-grid{ grid-template-columns:1fr !important; }
+  .ora-mine-grid{ grid-template-columns:minmax(0,1fr) !important; }
   .ora-mine-stats{ flex-direction:row !important; flex-wrap:wrap; }
   .ora-mine-stats > *{ flex:1 1 160px; }
 }
 @media (max-width: 900px){
-  .ora-rival-grid{ grid-template-columns:1fr !important; }
+  .ora-rival-grid{ grid-template-columns:minmax(0,1fr) !important; }
+  .ora-rival-cols{ grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
 }
 
 /* inteligência */
 @media (max-width: 1080px){
-  .ora-intel-grid{ grid-template-columns:1fr !important; }
+  .ora-intel-grid{ grid-template-columns:minmax(0,1fr) !important; }
 }
 
 /* planos */
 @media (max-width: 980px){
-  .ora-planos-grid{ grid-template-columns:1fr !important; max-width:440px; margin-left:auto !important; margin-right:auto !important; }
+  .ora-planos-grid{ grid-template-columns:minmax(0,1fr) !important; max-width:440px; margin-left:auto !important; margin-right:auto !important; }
   .ora-plan-hot{ transform:none !important; }
+}
+
+/* acesso fundador — borda cônica girando + layout */
+.ora-founder-border{
+  position:absolute; inset:-40%;
+  background:conic-gradient(from 0deg,
+    rgba(240,194,98,0) 0deg, rgba(240,194,98,.9) 40deg, rgba(255,231,166,1) 60deg,
+    rgba(240,194,98,.9) 80deg, rgba(240,194,98,0) 140deg,
+    rgba(240,194,98,0) 200deg, rgba(240,194,98,.5) 260deg, rgba(240,194,98,0) 320deg);
+  animation:ora-founder-spin 7s linear infinite;
+}
+@keyframes ora-founder-spin{ to{ transform:rotate(360deg); } }
+.ora-founder{ box-shadow:0 40px 110px -30px rgba(0,0,0,.85), 0 0 90px -20px rgba(240,194,98,.45); }
+@media (max-width: 900px){
+  .ora-founder-grid{ grid-template-columns:1fr !important; }
+}
+@media (prefers-reduced-motion: reduce){
+  .ora-founder-border{ animation:none !important; }
+}
+
+/* ── legibilidade: texto de apoio nunca abaixo de 12px no celular ────── */
+.ora-trend{ font-size:11px; line-height:1.35; }
+@media (max-width: 760px){
+  .ora-trend{ font-size:12px; }
+}
+
+/* alvos de toque: links de texto viram áreas de 44px em telas de toque.
+   Usa largura (e não `pointer:coarse`) porque tablets/2-em-1 e navegadores
+   em modo responsivo reportam ponteiro fino mesmo sendo usados com o dedo. */
+/* alvo de 44px em qualquer tela: o rodapé tem folga de sobra e o ganho de
+   usabilidade no toque não custa nada no visual do desktop. */
+.ora-footer-nav a, .ora-footer-mail{
+  min-height:44px; display:inline-flex; align-items:center; padding:0 6px; margin:0 -6px;
+}
+.ora-brand-link{ padding:7px 4px; }
+
+/* ── marca do NEO (monograma + argola girando) ───────────────────────── */
+.neo-mark{
+  position:relative; display:inline-grid; place-items:center; flex-shrink:0;
+}
+.neo-mark-halo{
+  position:absolute; inset:-14%; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, rgba(240,194,98,.26) 0%, transparent 70%);
+  animation:neo-mark-pulse 3.2s ease-in-out infinite;
+}
+@keyframes neo-mark-pulse{ 0%,100%{opacity:.5; transform:scale(1)} 50%{opacity:1; transform:scale(1.08)} }
+.neo-mark-ring{
+  position:absolute; inset:0; width:100%; height:100%;
+  animation:neo-mark-spin 11s linear infinite;
+}
+@keyframes neo-mark-spin{ to{ transform:rotate(360deg); } }
+.neo-mark-n{
+  position:relative; font-weight:800; line-height:1; letter-spacing:.01em;
+  background:linear-gradient(150deg,#FFE7A6 0%,#F0C262 45%,#C48F10 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+
+.neo-lockup{ display:inline-flex; align-items:center; gap:14px; }
+.neo-lockup-text{ display:flex; flex-direction:column; gap:5px; min-width:0; }
+.neo-lockup-word{
+  font-weight:800; letter-spacing:.1em; line-height:1; color:var(--tx1); white-space:nowrap;
+}
+.neo-lockup-tag{
+  letter-spacing:.28em; text-transform:uppercase; color:var(--tx3);
+  font-weight:600; white-space:nowrap;
+}
+@media (max-width: 520px){
+  .neo-lockup{ gap:11px; }
+  .neo-lockup-tag{ letter-spacing:.18em; }
+}
+@media (prefers-reduced-motion: reduce){
+  .neo-mark-ring, .neo-mark-halo{ animation:none !important; }
+}
+
+/* ── selo flutuante da marca (olho + argola girando) ─────────────────── */
+.ora-seal{
+  position:fixed; right:22px; bottom:22px; z-index:35;
+  display:inline-flex; align-items:center; gap:0;
+  text-decoration:none; cursor:pointer;
+  padding:6px; border-radius:999px;
+  background:linear-gradient(180deg, rgba(20,20,40,.78), rgba(9,9,22,.88));
+  border:1px solid rgba(240,194,98,.28);
+  box-shadow:0 18px 44px -14px rgba(0,0,0,.9), 0 0 44px -16px rgba(240,194,98,.5);
+  backdrop-filter:blur(10px);
+  transition:border-color .25s, box-shadow .25s, transform .25s;
+}
+.ora-seal:hover{
+  border-color:rgba(240,194,98,.6); transform:translateY(-2px);
+  box-shadow:0 22px 54px -14px rgba(0,0,0,.9), 0 0 60px -12px rgba(240,194,98,.65);
+}
+.ora-seal:focus-visible{ outline:2px solid var(--gold); outline-offset:3px; }
+
+.ora-seal-label{
+  display:inline-block; overflow:hidden; white-space:nowrap;
+  font-size:13.5px; font-weight:700; color:#FFE7A6;
+  padding-left:12px; padding-right:6px;
+}
+
+.ora-seal-disc{
+  position:relative; width:54px; height:54px; flex-shrink:0;
+  display:grid; place-items:center;
+}
+.ora-seal-halo{
+  position:absolute; inset:-6px; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle, rgba(240,194,98,.28) 0%, transparent 68%);
+  animation:ora-seal-pulse 3s ease-in-out infinite;
+}
+@keyframes ora-seal-pulse{ 0%,100%{opacity:.55; transform:scale(1)} 50%{opacity:1; transform:scale(1.1)} }
+
+.ora-seal-ring, .ora-seal-ring2{ position:absolute; inset:0; width:100%; height:100%; }
+.ora-seal-ring{ animation:ora-seal-spin 9s linear infinite; }
+.ora-seal-ring2{ animation:ora-seal-spin 6s linear infinite reverse; }
+@keyframes ora-seal-spin{ to{ transform:rotate(360deg); } }
+
+.ora-seal-eye{ position:relative; width:26px; height:26px; }
+
+@media (max-width: 620px){
+  .ora-seal{ right:16px; bottom:16px; }
+  .ora-seal-disc{ width:48px; height:48px; }
+  .ora-seal-eye{ width:23px; height:23px; }
+  /* no celular o rótulo não abre (não há hover) — só o selo */
+  .ora-seal-label{ display:none; }
+}
+@media (prefers-reduced-motion: reduce){
+  .ora-seal-ring, .ora-seal-ring2, .ora-seal-halo{ animation:none !important; }
+}
+
+/* mockup que não coube: vira área de arrasto horizontal.
+   A barra fina dourada é a própria affordance — sinaliza "tem mais aqui". */
+.ora-frame-scroll{
+  scrollbar-width:thin; scrollbar-color:rgba(240,194,98,.5) transparent;
+  overscroll-behavior-x:contain; /* não "vaza" o arrasto pra navegação do browser */
+  scroll-snap-type:x proximity;
+}
+.ora-frame-scroll::-webkit-scrollbar{ height:5px; }
+.ora-frame-scroll::-webkit-scrollbar-track{ background:rgba(255,255,255,.04); border-radius:99px; }
+.ora-frame-scroll::-webkit-scrollbar-thumb{
+  background:linear-gradient(90deg,#C48F10,#F0C262); border-radius:99px;
+}
+
+/* ── dobra Agente I.A ────────────────────────────────────────────────── */
+@media (max-width: 1080px){
+  .ora-agente-grid{ grid-template-columns:minmax(0,1fr) !important; }
+}
+@media (max-width: 620px){
+  .ora-agente-diffs{ grid-template-columns:minmax(0,1fr) !important; }
+  /* o "VS" gira e o duelo empilha */
+  .ora-agente-vs{ grid-template-columns:minmax(0,1fr) !important; }
+  .ora-agente-vs > div:nth-child(2){ padding:2px 0; }
 }
 
 /* faq (details/summary) */

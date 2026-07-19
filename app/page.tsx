@@ -5,9 +5,11 @@ import ComoFunciona from '@/components/landing/ComoFunciona'
 import Gestao from '@/components/landing/Gestao'
 import Mineracao from '@/components/landing/Mineracao'
 import Inteligencia from '@/components/landing/Inteligencia'
+import Agente from '@/components/landing/Agente'
 import Planos from '@/components/landing/Planos'
 import Faq from '@/components/landing/Faq'
 import Footer from '@/components/landing/Footer'
+import FloatingSeal from '@/components/landing/FloatingSeal'
 
 const display = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-display', display: 'swap' })
 const body = DM_Sans({ subsets: ['latin'], variable: '--font-body', display: 'swap' })
@@ -32,9 +34,11 @@ export default function Home() {
       <Gestao />
       <Mineracao />
       <Inteligencia />
+      <Agente />
       <Planos />
       <Faq />
       <Footer />
+      <FloatingSeal />
     </main>
   )
 }

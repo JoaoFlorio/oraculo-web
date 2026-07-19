@@ -6,11 +6,11 @@
  * Acento violeta nesta dobra.
  */
 
-import { Bot, Send, Gauge, CircleDollarSign, ShoppingCart, PieChart, Eye, Zap, Cpu, Shield } from 'lucide-react'
+import { Bot, Send, Gauge, CircleDollarSign, ShoppingCart, PieChart, Eye, Cpu, Shield } from 'lucide-react'
 import Reveal from './Reveal'
 import { SectionHead, MiniFeature } from './Section'
-import { RunWhenVisible, ScaledFrame, Float, PctUp, MoneyUp } from './ui'
-import { Bottle } from './Hero'
+import { RunWhenVisible, ScaledFrame } from './ui'
+import { Bottle } from './marks'
 
 const T = {
   card: 'rgba(255,255,255,0.028)', line: 'rgba(255,255,255,0.065)',
@@ -265,18 +265,18 @@ export default function Inteligencia() {
             gap: 20, alignItems: 'start', marginTop: 'clamp(44px, 7vh, 70px)',
           }}>
             <Reveal delay={0.08}>
-              <ScaledFrame designWidth={660}>
+              <ScaledFrame designWidth={660} minScale={0.8}>
                 <AmazonMock />
               </ScaledFrame>
             </Reveal>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
               <Reveal delay={0.18}>
-                <ScaledFrame designWidth={380}>
+                <ScaledFrame designWidth={380} minScale={0.88}>
                   <CalcMock />
                 </ScaledFrame>
               </Reveal>
               <Reveal delay={0.28}>
-                <ScaledFrame designWidth={380}>
+                <ScaledFrame designWidth={380} minScale={0.88}>
                   <AgentMock />
                 </ScaledFrame>
               </Reveal>

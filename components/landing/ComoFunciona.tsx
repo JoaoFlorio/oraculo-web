@@ -137,7 +137,7 @@ export default function ComoFunciona() {
                     <div>
                       <div style={{ fontSize: 11, color: 'var(--tx2)', marginBottom: 4 }}>{k.l}</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--tx1)' }}>{k.v}</div>
-                      <div style={{ marginTop: 4 }}><Trend value={k.t} label="vs 30 dias ant." size={9.5} /></div>
+                      <div style={{ marginTop: 4 }}><Trend value={k.t} label="vs 30 dias ant." /></div>
                     </div>
                     <Spark data={k.s} w={92} h={34} color="var(--emerald)" delay={i * 0.15} />
                   </div>
