@@ -847,7 +847,7 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide,connected,imposto=0,onIm
   const cmvTotal=prods.reduce((sum,p)=>sum+p.units*(costs[p.sku]||0),0)
   const inp:React.CSSProperties={width:84,background:t.dark?'rgba(255,255,255,0.05)':'#FFFFFF',border:`1px solid ${t.line2}`,borderRadius:7,color:t.t1,fontSize:12.5,fontWeight:600,padding:'6px 8px',fontFamily:'inherit',outline:'none',textAlign:'right'}
   return(<>
-    <Hint>Informe o custo unitário de cada produto vendido. É o que falta pro Oráculo calcular o seu <b>lucro real</b> — a Amazon não sabe quanto você paga.</Hint>
+    <Hint>Informe o custo unitário de cada produto vendido. É o que falta pro Oráculo calcular o seu <b>lucro real</b> — a Amazon não sabe quanto você paga. Os que ainda faltam estão marcados em <b style={{color:t.gold}}>dourado</b>.</Hint>
     {/* Alíquota de imposto — dedução % sobre a receita em todas as abas (Simples/DAS, etc.) */}
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'12px 16px',marginBottom:14,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const}}>
       <div style={{minWidth:0}}>
@@ -860,8 +860,9 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide,connected,imposto=0,onIm
       {prods.map((p)=>{
         const cost=costs[p.sku]||0
         const cmv=p.units*cost
+        const falta=(p.units||0)>0 && cost<=0   // vendeu mas não tem custo → destaca
         return(
-          <tr key={p.sku}>
+          <tr key={p.sku} style={falta?{background:t.dark?'rgba(240,180,41,0.055)':'#FFFDF5'}:undefined}>
             <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`}}>
               <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0}}>
                 <Thumb p={{id:p.sku,name:p.name||p.sku,image:p.image}}/>
@@ -873,7 +874,8 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide,connected,imposto=0,onIm
             </td>
             <NumTd>{p.units}</NumTd>
             <NumTd hide={hide}>{brl2(p.receita)}</NumTd>
-            <PillTd><input type="number" min={0} step={0.5} value={cost||''} placeholder="0,00" onChange={e=>onCost(p.sku,parseFloat(e.target.value)||0)} style={inp}/></PillTd>
+            <PillTd><input type="number" min={0} step={0.5} value={cost||''} placeholder={falta?'informe':'0,00'} onChange={e=>onCost(p.sku,parseFloat(e.target.value)||0)}
+              style={falta?{...inp,border:`1px solid ${t.gold}`,boxShadow:`0 0 0 3px ${t.dark?'rgba(240,180,41,0.10)':'rgba(240,180,41,0.14)'}`}:inp}/></PillTd>
             <NumTd color={t.gold} hide={hide}>{cmv>0?brl2(cmv):'—'}</NumTd>
           </tr>
         )
@@ -1127,6 +1129,10 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
   const [detail,setDetail]=useState<{sku:string;name:string;image?:string;asin?:string}|null>(null)
   const cmv = realDre?.produtos ? realDre.produtos.reduce((sum:number,p:any)=>sum+p.units*(costs[p.sku]||0),0) : 0
   const realM = realDre?.produtos ? realProductMetrics(realDre,costs,imposto) : null
+  // Produtos que VENDERAM no período mas estão sem custo (CMV) informado — sem
+  // isso o Oráculo não tem como calcular lucro/margem/ROI/MPA (mostra "—").
+  const prodsComVenda = (realDre?.produtos||[]).filter((p:any)=>(p.units||0)>0).length
+  const semCusto = (realDre?.produtos||[]).filter((p:any)=>(p.units||0)>0 && !((costs[p.sku]||0)>0))
   const realAbcData = realM ? realAbc(realM) : null
   useEffect(()=>{
     let s = (typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')) || ''
@@ -1207,10 +1213,35 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
                 style={{display:'flex',alignItems:'center',gap:6,fontSize:12.5,whiteSpace:'nowrap' as const,padding:'7px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',border:'1px solid transparent',
                   background:on?t.gold:'transparent',color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2,fontWeight:on?600:500}}>
                 <i className={`ti ${tb.icon}`} style={{fontSize:14}} aria-hidden="true"/>{tb.label}
+                {/* Contador de produtos sem custo na aba Gerenciamento */}
+                {tb.id==='gerenc' && semCusto.length>0 && (
+                  <span style={{background:on?'rgba(0,0,0,0.22)':t.pillGold[0],color:on?'inherit':t.pillGold[1],fontSize:9.5,fontWeight:700,minWidth:17,height:16,padding:'0 5px',borderRadius:99,display:'flex',alignItems:'center',justifyContent:'center'}}>{semCusto.length}</span>
+                )}
               </button>
             )
           })}
         </div>
+
+        {/* ⚠️ Produtos vendidos SEM custo informado → Lucro/Margem/ROI/Lucro pós
+            ADS/MPA aparecem como "—". Era a dúvida nº1 dos clientes ("os números
+            não aparecem"): a Amazon informa o que você VENDEU, não o que PAGOU. */}
+        {semCusto.length>0 && tab!=='gerenc' && (
+          <div style={{display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap' as const,background:t.dark?'rgba(240,180,41,0.07)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(240,180,41,0.3)':'#FDE68A'}`,borderRadius:12,padding:'13px 15px',marginBottom:16}}>
+            <i className="ti ti-alert-triangle" style={{fontSize:17,color:t.gold,marginTop:1,flexShrink:0}} aria-hidden="true"/>
+            <div style={{flex:1,minWidth:200}}>
+              <div style={{fontSize:12.5,fontWeight:600,color:t.t1,marginBottom:3}}>
+                {semCusto.length===prodsComVenda ? 'Você ainda não informou o custo dos seus produtos' : `${semCusto.length} de ${prodsComVenda} produtos estão sem custo cadastrado`}
+              </div>
+              <div style={{fontSize:11.5,color:t.t2,lineHeight:1.55}}>
+                <b>Lucro, Margem, ROI, Lucro pós ADS e MPA</b> só aparecem depois que você informa quanto paga por cada produto — a Amazon envia o que você <i>vendeu</i>, nunca o que você <i>pagou</i>.
+              </div>
+            </div>
+            <button onClick={()=>goTab('gerenc')}
+              style={{flexShrink:0,background:t.gold,color:t.dark?'#1c1606':'#3a2a05',border:'none',borderRadius:9,padding:'9px 14px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+              Informar custos
+            </button>
+          </div>
+        )}
 
         {/* Conteúdo */}
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
