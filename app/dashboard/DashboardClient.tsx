@@ -1645,6 +1645,33 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // (sessão >7d é re-emitida por +30d). O app PWA em uso nunca expira.
   useEffect(()=>{ fetch('/api/auth/refresh',{method:'POST'}).catch(()=>{}) },[])
 
+  // ── Fechar o menu ao tocar FORA dele (mobile) ────────────────────────────
+  // NÃO depende do backdrop receber o evento: escuta no DOCUMENTO em fase de
+  // CAPTURA, então funciona mesmo que algo esteja por cima do backdrop ou que
+  // o iOS entregue o toque direto pro conteúdo. Também ENGOLE o clique seguinte
+  // — sem isso o botão que estava atrás do menu era acionado junto ("clico fora,
+  // não fecha e ainda executa o comando de trás"). Fecha no primeiro toque e
+  // esse toque não vale como clique em mais nada.
+  useEffect(()=>{
+    if(!mobileNav) return
+    const swallowOnce=(e:Event)=>{
+      e.preventDefault(); e.stopPropagation()
+      document.removeEventListener('click',swallowOnce,true)
+    }
+    const onDown=(e:Event)=>{
+      const t=e.target as Element|null
+      if(t?.closest?.('.ora-side')) return           // tocou DENTRO do menu: ignora
+      e.preventDefault(); e.stopPropagation()
+      setMobileNav(false)
+      document.addEventListener('click',swallowOnce,true)
+    }
+    document.addEventListener('pointerdown',onDown,true)
+    return ()=>{
+      document.removeEventListener('pointerdown',onDown,true)
+      document.removeEventListener('click',swallowOnce,true)
+    }
+  },[mobileNav])
+
   function goNav(id:string){
     setMobileNav(false) // fecha o menu off-canvas ao navegar (mobile)
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}
