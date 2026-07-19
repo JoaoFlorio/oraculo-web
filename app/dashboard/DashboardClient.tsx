@@ -1805,8 +1805,10 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
         </div>
       )}
 
-      {/* Botão flutuante de suporte — some quando há modal aberto */}
-      {!detail&&!upgrade&&!promoOpen&&!expired&&(
+      {/* Botão flutuante de suporte — some quando há modal aberto e na aba do
+          NEO (lá ele cobria o botão de enviar no celular; o suporte continua
+          acessível pela bolinha e pelo menu lateral) */}
+      {!detail&&!upgrade&&!promoOpen&&!expired&&nav!=='agente'&&(
         <a href={WA_LINK} target="_blank" rel="noreferrer" className="ora-wa-fab" aria-label="Suporte no WhatsApp" title="Suporte no WhatsApp"
           style={{position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',background:T.g,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'var(--elev2)',zIndex:90}}>
           <WaIcon size={26} c="#fff"/>
@@ -2158,7 +2160,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           )}
 
           {/* Content */}
-          <main key={nav} ref={mainRef} className={`ora-tab-in${nav==='competitor'?'':' ora-main-pad'}`} style={{flex:1,overflowY:'auto',padding:nav==='competitor'?'0':'28px 28px 40px',position:'relative' as const,display:'flex',flexDirection:'column'}}>
+          <main key={nav} ref={mainRef} className={`ora-tab-in${nav==='competitor'||nav==='agente'?'':' ora-main-pad'}`} style={{flex:1,overflowY:nav==='agente'?'hidden':'auto',padding:nav==='competitor'||nav==='agente'?'0':'28px 28px 40px',position:'relative' as const,display:'flex',flexDirection:'column'}}>
 
             {/* Competitor Panel */}
             {nav==='competitor'&&(
@@ -2430,7 +2432,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 vendedor e aponta a decisão. Absorveu o criador de anúncios (o
                 botão pro GPT de imagens vive dentro do chat). */}
             {nav==='agente'&&(
-              <div style={{maxWidth:880,margin:'0 auto',height:'calc(100dvh - 140px)',minHeight:460}}>
+              <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
                 <NeoChat/>
               </div>
             )}

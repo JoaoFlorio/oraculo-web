@@ -98,6 +98,43 @@ function rico(texto: string) {
   return partes.map((p, i) => (i % 2 === 1 ? <strong key={i}>{p}</strong> : p))
 }
 
+// ── A marca do NEO ───────────────────────────────────────────────────────────
+// Monograma "N" com dois anéis de mira em contra-rotação e um nó de dados
+// pulsando exatamente no meio da diagonal — HUD de sala de comando, não
+// mascote. `on` acelera os anéis (o NEO trabalhando). Os pathLength são
+// normalizados pra o tracejado fechar sem emenda.
+function NeoMark({ size = 46, on = false }: { size?: number; on?: boolean }) {
+  return (
+    <div className={`neoMark${on ? ' on' : ''}`} style={{ width: size, height: size }} aria-hidden>
+      <svg viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="neoG" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stopColor="#ffe9a8" />
+            <stop offset=".55" stopColor="#f0b429" />
+            <stop offset="1" stopColor="#b07c0c" />
+          </linearGradient>
+        </defs>
+        {/* anel externo segmentado, giro lento */}
+        <g className="nmRing">
+          <circle cx="50" cy="50" r="46.5" fill="none" stroke="url(#neoG)" strokeWidth="1.6"
+            pathLength={140} strokeDasharray="4 6" strokeLinecap="round" opacity=".5" />
+        </g>
+        {/* arco interno, contra-rotação */}
+        <g className="nmArc">
+          <circle cx="50" cy="50" r="38" fill="none" stroke="#f0b429" strokeWidth="2.6"
+            pathLength={100} strokeDasharray="24 76" strokeLinecap="round" />
+        </g>
+        {/* o N */}
+        <path d="M33 70V30l34 40V30" fill="none" stroke="url(#neoG)"
+          strokeWidth="8" strokeLinecap="square" />
+        {/* nó de dados no centro da diagonal (a linha 33,30→67,70 passa em 50,50) */}
+        <rect className="nmNode" x="45.6" y="45.6" width="8.8" height="8.8"
+          transform="rotate(45 50 50)" fill="#ffedb0" />
+      </svg>
+    </div>
+  )
+}
+
 export default function NeoChat() {
   const [ins, setIns] = useState<Insight>(null)
   const [carregandoIns, setCarregandoIns] = useState(true)
@@ -265,37 +302,39 @@ export default function NeoChat() {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
+        /* Página inteira: o ambiente É a tela, sem caixa flutuando no meio. */
         .neoRoot{ position:relative; height:100%; min-height:0; display:flex; flex-direction:column;
-          background:#050505; border:1px solid rgba(240,180,41,.14); border-radius:22px; overflow:hidden;
-          box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04); }
+          background:#050508; overflow:hidden; }
         /* atmosfera: aura dourada + grade fina + vinheta */
         .neoRoot::before{ content:''; position:absolute; inset:0; pointer-events:none;
           background:
-            radial-gradient(58% 42% at 50% -6%, rgba(240,180,41,.16), transparent 62%),
-            radial-gradient(80% 60% at 50% 115%, rgba(240,180,41,.05), transparent 60%),
-            repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 44px),
-            repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 1px, transparent 1px 44px); }
+            radial-gradient(60% 44% at 50% -8%, rgba(240,180,41,.17), transparent 62%),
+            radial-gradient(90% 60% at 50% 118%, rgba(240,180,41,.06), transparent 60%),
+            repeating-linear-gradient(0deg, rgba(255,255,255,.016) 0 1px, transparent 1px 46px),
+            repeating-linear-gradient(90deg, rgba(255,255,255,.016) 0 1px, transparent 1px 46px); }
         .neoRoot::after{ content:''; position:absolute; inset:0; pointer-events:none;
-          background:radial-gradient(120% 90% at 50% 50%, transparent 60%, rgba(0,0,0,.5) 100%); }
+          background:radial-gradient(130% 95% at 50% 45%, transparent 60%, rgba(0,0,0,.5) 100%); }
         .neoIn{ position:relative; z-index:1; display:flex; flex-direction:column; height:100%; min-height:0; }
 
-        /* ── Núcleo (orbe) ── */
-        .neoOrb{ position:relative; width:46px; height:46px; border-radius:50%; flex-shrink:0;
-          background: radial-gradient(circle at 32% 28%, #ffedb0 0%, #f0b429 36%, #8a5f06 70%, #1d1502 100%);
-          box-shadow: 0 0 22px rgba(240,180,41,.5), 0 0 70px rgba(240,180,41,.16), inset 0 0 14px rgba(0,0,0,.5);
-          animation: neoBreathe 4.4s ease-in-out infinite; }
-        .neoOrb::after{ content:''; position:absolute; inset:-7px; border-radius:50%;
-          border:1.5px solid rgba(240,180,41,0); border-top-color:rgba(240,180,41,.8); border-right-color:rgba(240,180,41,.25);
-          animation: neoSpin 7s linear infinite; }
-        .neoOrb.on{ animation-duration: 1.6s; }
-        .neoOrb.on::after{ animation-duration: 1.1s; }
-        .neoOrb.fala{ animation-duration: .9s; }
+        /* Coluna de leitura: o fundo é full-bleed, o conteúdo respira no centro. */
+        .neoCol{ width:100%; max-width:1000px; margin:0 auto; padding:0 24px; box-sizing:border-box; }
+
+        /* ── A marca (monograma N + anéis de mira) ── */
+        .neoMark{ position:relative; flex-shrink:0; filter:drop-shadow(0 0 12px rgba(240,180,41,.32)); }
+        .neoMark svg{ width:100%; height:100%; display:block; overflow:visible; }
+        .nmRing{ transform-origin:50% 50%; animation:neoSpin 16s linear infinite; }
+        .nmArc{ transform-origin:50% 50%; animation:neoSpinRev 7s linear infinite; }
+        .nmNode{ animation:nmPulse 2.6s ease-in-out infinite; }
+        .neoMark.on .nmRing{ animation-duration:2.4s; }
+        .neoMark.on .nmArc{ animation-duration:1s; }
         @keyframes neoBreathe{ 0%,100%{ transform:scale(1); filter:brightness(1);} 50%{ transform:scale(1.07); filter:brightness(1.22);} }
         @keyframes neoSpin{ to{ transform:rotate(360deg);} }
+        @keyframes neoSpinRev{ to{ transform:rotate(-360deg);} }
+        @keyframes nmPulse{ 0%,100%{ opacity:.7; } 50%{ opacity:1; } }
 
         /* ── Cabeçalho ── */
-        .neoHead{ display:flex; align-items:center; gap:14px; padding:18px 20px 14px;
-          border-bottom:1px solid rgba(240,180,41,.1); animation:neoUp .5s ease both; }
+        .neoHead{ border-bottom:1px solid rgba(240,180,41,.1); padding:18px 0 14px; animation:neoUp .5s ease both; }
+        .neoHeadIn{ display:flex; align-items:center; gap:14px; }
         .neoTitle{ font-family:'Unbounded', sans-serif; font-weight:900; font-size:20px; letter-spacing:.14em;
           color:#f5efdf; line-height:1; }
         .neoTitle b{ color:#f0b429; font-weight:900; }
@@ -315,7 +354,7 @@ export default function NeoChat() {
           box-shadow:0 0 24px rgba(240,180,41,.35); }
 
         /* ── Insight ── */
-        .neoInsight{ margin:16px 20px 0; position:relative; border-radius:14px; overflow:hidden;
+        .neoInsight{ position:relative; border-radius:14px; overflow:hidden;
           background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.012));
           border:1px solid rgba(255,255,255,.07); padding:15px 18px 15px 22px; animation:neoUp .55s .08s ease both; }
         .neoInsight::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
@@ -327,15 +366,16 @@ export default function NeoChat() {
         .neoInsTxt{ font-size:14.5px; line-height:1.65; color:#e9e4d4; white-space:pre-wrap; }
 
         /* ── Conversa ── */
-        .neoScroll{ flex:1; min-height:0; overflow-y:auto; padding:18px 20px 8px; display:flex; flex-direction:column; gap:18px;
+        .neoScroll{ flex:1; min-height:0; overflow-y:auto; padding:18px 0 8px;
           scrollbar-width:thin; scrollbar-color:rgba(240,180,41,.3) transparent; }
         .neoScroll::-webkit-scrollbar{ width:5px; }
         .neoScroll::-webkit-scrollbar-thumb{ background:rgba(240,180,41,.28); border-radius:99px; }
+        .neoThread{ display:flex; flex-direction:column; gap:18px; min-height:100%; }
 
         .neoEmpty{ margin:auto; text-align:center; padding:12px 20px 28px; animation:neoUp .6s .15s ease both; }
-        .neoEmptyOrb{ width:76px; height:76px; margin:0 auto 20px; }
-        .neoEmptyT{ font-family:'Unbounded', sans-serif; font-weight:700; font-size:15px; letter-spacing:.06em; color:#f5efdf; margin-bottom:8px; }
-        .neoEmptyS{ font-size:13px; color:rgba(233,228,212,.5); max-width:400px; margin:0 auto 22px; line-height:1.65; }
+        .neoEmptyMark{ display:flex; justify-content:center; margin-bottom:24px; }
+        .neoEmptyT{ font-family:'Unbounded', sans-serif; font-weight:700; font-size:17px; letter-spacing:.06em; color:#f5efdf; margin-bottom:8px; }
+        .neoEmptyS{ font-size:13.5px; color:rgba(233,228,212,.5); max-width:430px; margin:0 auto 24px; line-height:1.65; }
         .neoChips{ display:flex; flex-wrap:wrap; gap:9px; justify-content:center; }
         .neoChip{ font-family:'IBM Plex Mono', monospace; font-size:11px; letter-spacing:.06em;
           color:rgba(245,239,223,.75); background:rgba(240,180,41,.05); border:1px solid rgba(240,180,41,.2);
@@ -366,8 +406,9 @@ export default function NeoChat() {
           border:1px solid rgba(255,77,77,.25); border-radius:12px; padding:10px 14px; }
 
         /* ── Entrada ── */
-        .neoBar{ display:flex; align-items:center; gap:9px; padding:14px 16px 16px; border-top:1px solid rgba(240,180,41,.1);
+        .neoBar{ padding:14px 0 16px; border-top:1px solid rgba(240,180,41,.1);
           background:linear-gradient(180deg, transparent, rgba(240,180,41,.025)); }
+        .neoBarIn{ display:flex; align-items:center; gap:9px; }
         .neoIconBtn{ width:44px; height:46px; flex-shrink:0; display:grid; place-items:center; cursor:pointer;
           background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.1); border-radius:13px;
           color:rgba(245,239,223,.7); font-size:17px; transition:all .25s; }
@@ -387,13 +428,14 @@ export default function NeoChat() {
         .neoSend:hover{ transform:translateY(-1px); box-shadow:0 10px 30px rgba(240,180,41,.42); }
         .neoSend:disabled{ opacity:.55; transform:none; cursor:default; }
 
-        .neoGpt{ align-self:flex-start; margin:14px 20px 0; display:inline-flex; align-items:center; gap:7px;
+        .neoGpt{ align-self:flex-start; display:inline-flex; align-items:center; gap:7px;
           font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase;
           color:rgba(49,209,131,.85); background:rgba(49,209,131,.06); border:1px solid rgba(49,209,131,.25);
           border-radius:999px; padding:7px 13px; text-decoration:none; transition:all .25s; animation:neoUp .55s .12s ease both; }
         .neoGpt:hover{ background:rgba(49,209,131,.14); }
 
-        .neoAviso{ margin:20px; padding:18px 20px; border-radius:14px; border:1px solid rgba(240,180,41,.2);
+        .neoAviso{ margin:20px auto; width:calc(100% - 48px); max-width:952px; box-sizing:border-box;
+          padding:18px 20px; border-radius:14px; border:1px solid rgba(240,180,41,.2);
           border-left:3px solid #f0b429; background:rgba(240,180,41,.05); animation:neoUp .5s ease both; }
         .neoAvisoT{ font-family:'Unbounded', sans-serif; font-weight:700; font-size:14px; color:#f5efdf; margin-bottom:8px; }
         .neoAvisoTx{ font-size:13.5px; line-height:1.7; color:rgba(233,228,212,.65); }
@@ -402,32 +444,46 @@ export default function NeoChat() {
         @keyframes neoUp{ from{ opacity:0; transform:translateY(10px);} to{ opacity:1; transform:none;} }
 
         .neoSend .arr{ display:none; }
+
+        /* Tablet: coluna ganha respiro lateral maior */
+        @media (min-width:641px) and (max-width:1080px){
+          .neoCol{ padding:0 28px; }
+        }
         @media (max-width:640px){
+          .neoCol{ padding:0 14px; }
           .neoTitle{ font-size:16px; }
           .neoSub{ font-size:8.5px; letter-spacing:.2em; }
           .neoVoice span.lbl{ display:none; }
           .neoVoice{ padding:8px 11px; }
           .neoVozSel{ max-width:96px; font-size:10px; padding:7px 8px; }
-          .neoHead{ padding:14px 14px 12px; gap:11px; }
-          .neoOrb{ width:40px; height:40px; }
-          .neoInsight{ margin:12px 14px 0; padding:13px 14px 13px 18px; }
+          .neoHead{ padding:12px 0 11px; }
+          .neoHeadIn{ gap:11px; }
+          .neoHeadIn .neoMark{ width:38px !important; height:38px !important; }
+          .neoInsight{ padding:13px 14px 13px 18px; }
           .neoInsTxt{ font-size:13.5px; }
-          .neoScroll{ padding:14px 14px 6px; }
+          .neoScroll{ padding:14px 0 6px; }
+          .neoEmptyMark .neoMark{ width:72px !important; height:72px !important; }
+          .neoEmptyT{ font-size:15px; }
           .neoMsgTxt{ font-size:14px; }
-          .neoBar{ padding:10px 10px 12px; gap:6px; }
+          .neoBar{ padding:10px 0 12px; }
+          .neoBarIn{ gap:6px; }
           .neoIconBtn{ width:40px; height:44px; border-radius:11px; }
           .neoSend{ padding:0 15px; height:44px; border-radius:11px; }
           .neoSend .txt{ display:none; }
           .neoSend .arr{ display:inline; font-size:16px; }
           .neoInput{ height:44px; padding:0 12px; font-size:14px; }
-          .neoGpt{ margin:12px 14px 0; }
+          .neoAviso{ width:calc(100% - 28px); }
+        }
+        @media (prefers-reduced-motion: reduce){
+          .nmRing,.nmArc,.nmNode,.neoDot{ animation:none !important; }
         }
       `}</style>
 
       <div className="neoIn">
         {/* Cabeçalho */}
         <div className="neoHead">
-          <div className={`neoOrb${loading ? ' on' : ''}${falando ? ' fala' : ''}`} />
+         <div className="neoCol neoHeadIn">
+          <NeoMark size={46} on={loading || falando} />
           <div>
             <div className="neoTitle">AGENTE <b>NEO</b></div>
             <div className="neoSub">Inteligência · João Flório</div>
@@ -464,6 +520,7 @@ export default function NeoChat() {
               {vozes.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
             </select>
           )}
+         </div>
         </div>
 
         {/* Sem Amazon conectada */}
@@ -488,7 +545,8 @@ export default function NeoChat() {
           <>
             {/* Insight do dia */}
             {(carregandoIns || ins) && (
-              <div className="neoInsight" style={{ ['--sev' as any]: sev?.cor || 'rgba(240,180,41,.5)' }}>
+              <div className="neoCol" style={{ marginTop: 16 }}>
+               <div className="neoInsight" style={{ ['--sev' as any]: sev?.cor || 'rgba(240,180,41,.5)' }}>
                 {carregandoIns ? (
                   <div className="neoInsTag" style={{ marginBottom: 0 }}><span className="neoDot" />Lendo sua operação…</div>
                 ) : ins && sev ? (
@@ -497,16 +555,20 @@ export default function NeoChat() {
                     <div className="neoInsTxt">{rico(ins.texto)}</div>
                   </>
                 ) : null}
+               </div>
               </div>
             )}
 
-            <a className="neoGpt" href={GPT_AGENT_URL} target="_blank" rel="noreferrer">◈ Gerar imagens no Agente GPT ↗</a>
+            <div className="neoCol" style={{ marginTop: 14 }}>
+              <a className="neoGpt" href={GPT_AGENT_URL} target="_blank" rel="noreferrer">◈ Gerar imagens no Agente GPT ↗</a>
+            </div>
 
             {/* Conversa */}
             <div ref={scrollRef} className="neoScroll">
+             <div className="neoCol neoThread">
               {vazio && !loading && (
                 <div className="neoEmpty">
-                  <div className="neoOrb neoEmptyOrb" />
+                  <div className="neoEmptyMark"><NeoMark size={96} /></div>
                   <div className="neoEmptyT">Sem rodeio. Olha o número.</div>
                   <div className="neoEmptyS">Eu leio a sua operação de verdade — DRE, estoque, anúncios, histórico — e te aponto a decisão. Pergunta.</div>
                   <div className="neoChips">
@@ -540,11 +602,12 @@ export default function NeoChat() {
                 </div>
               )}
               {erro && <div className="neoErr">{erro}</div>}
+             </div>
             </div>
 
             {/* Miniaturas de anexos */}
             {pend.length > 0 && (
-              <div style={{ display: 'flex', gap: 8, padding: '8px 20px 0' }}>
+              <div className="neoCol" style={{ display: 'flex', gap: 8, paddingTop: 8 }}>
                 {pend.map((im, k) => (
                   <div key={k} style={{ position: 'relative' }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -558,11 +621,16 @@ export default function NeoChat() {
 
             {/* Barra de entrada */}
             <div className="neoBar">
+             <div className="neoCol neoBarIn">
               <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => anexar(e.target.files)} />
-              <button className="neoIconBtn" onClick={() => fileRef.current?.click()} disabled={loading || pend.length >= MAX_IMGS} title="Anexar imagem" aria-label="Anexar imagem">📎</button>
+              <button className="neoIconBtn" onClick={() => fileRef.current?.click()} disabled={loading || pend.length >= MAX_IMGS} title="Anexar imagem" aria-label="Anexar imagem">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 11.5 12.6 19a5.1 5.1 0 0 1-7.2-7.2l8-8a3.4 3.4 0 0 1 4.8 4.8l-7.8 7.8a1.7 1.7 0 0 1-2.4-2.4l7-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
+              </button>
               {suportaMic && (
                 <button className={`neoIconBtn${gravando ? ' rec' : ''}`} onClick={toggleMic} disabled={loading}
-                  title={gravando ? 'Gravando — clique para parar' : 'Falar com o NEO'} aria-label="Falar">🎙</button>
+                  title={gravando ? 'Gravando — clique para parar' : 'Falar com o NEO'} aria-label="Falar">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.7"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
+                </button>
               )}
               <input
                 className="neoInput"
@@ -575,6 +643,7 @@ export default function NeoChat() {
               <button className="neoSend" onClick={() => enviar(input)} disabled={loading} aria-label="Enviar">
                 {loading ? '···' : <><span className="txt">ENVIAR</span><span className="arr">↑</span></>}
               </button>
+             </div>
             </div>
           </>
         )}
