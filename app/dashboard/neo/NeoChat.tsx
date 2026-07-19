@@ -156,6 +156,7 @@ export default function NeoChat() {
   const [vozes, setVozes] = useState<SpeechSynthesisVoice[]>([])
   const [vozNome, setVozNome] = useState('')
   const recRef = useRef<any>(null)
+  const ultimoEnvioRef = useRef<Msg[] | null>(null)   // p/ o botão "tentar de novo"
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -270,16 +271,37 @@ export default function NeoChat() {
     setInput('')
     setPend([])
     setLoading(true)
+    ultimoEnvioRef.current = historico
     try {
-      const res = await fetch('/api/agent/chat', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        signal: AbortSignal.timeout(180_000),
-        body: JSON.stringify({ agent: 'neo', messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })) }),
-      })
-      const data = await res.json().catch(() => null)
-      if (!res.ok || !data || data?.error) setErro(data?.error || 'O NEO não conseguiu responder agora. Tente de novo em instantes.')
-      else {
+      const corpo = JSON.stringify({ agent: 'neo', messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })) })
+
+      // Tenta até 3 vezes. O caso clássico: deploy do backend derruba as
+      // requisições por ~40s e devolve uma página de erro (nem JSON é). Sem
+      // retry isso vira "o NEO não conseguiu responder" na frente do cliente —
+      // com retry, vira só uma resposta um pouco mais lenta.
+      let data: any = null, ultimoStatus = 0
+      for (let t = 1; t <= 3; t++) {
+        const res = await fetch('/api/agent/chat', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          signal: AbortSignal.timeout(180_000),
+          body: corpo,
+        })
+        ultimoStatus = res.status
+        data = await res.json().catch(() => null)
+        // 4xx é erro nosso (nada a ganhar repetindo). 5xx / resposta não-JSON
+        // é transitório: espera e tenta de novo.
+        const transitorio = !data || (res.status >= 500 && res.status !== 504)
+        if (!transitorio) break
+        if (t < 3) { setSeg(0); await new Promise((r) => setTimeout(r, t * 2500)) }
+      }
+
+      if (!data || data?.error) {
+        // O detalhe técnico vai pro console (dá pra depurar depois sem sujar a
+        // tela do vendedor no meio de uma apresentação).
+        console.error('[NEO] falhou:', ultimoStatus, data)
+        setErro(data?.error || 'O NEO não conseguiu responder agora. Tente de novo em instantes.')
+      } else {
         setMsgs([...historico, { role: 'assistant', text: data.reply || '(sem resposta)' }])
         if (VOZ_SAIDA && vozAtiva && data.reply) falar(data.reply)
       }
@@ -292,6 +314,29 @@ export default function NeoChat() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Reenvia a última pergunta sem o vendedor precisar redigitar — em cima de
+  // um palco, "tentar de novo" tem que ser um clique.
+  async function tentarNovamente() {
+    const h = ultimoEnvioRef.current
+    if (!h || loading) return
+    setErro(null)
+    setMsgs(h)
+    setLoading(true)
+    try {
+      const res = await fetch('/api/agent/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        signal: AbortSignal.timeout(180_000),
+        body: JSON.stringify({ agent: 'neo', messages: h.map((m) => ({ role: m.role, content: toApiContent(m) })) }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!data || data?.error) setErro(data?.error || 'Ainda sem resposta. Aguarde alguns segundos e tente outra vez.')
+      else setMsgs([...h, { role: 'assistant', text: data.reply || '(sem resposta)' }])
+    } catch {
+      setErro('Ainda sem resposta. Aguarde alguns segundos e tente outra vez.')
+    } finally { setLoading(false) }
   }
 
   const sev = ins ? SEV[ins.severidade] : null
@@ -403,7 +448,14 @@ export default function NeoChat() {
         @keyframes neoScanX{ 0%{ left:-36%; } 100%{ left:100%; } }
 
         .neoErr{ align-self:flex-start; font-size:13px; color:#ffb3b3; background:rgba(255,77,77,.08);
-          border:1px solid rgba(255,77,77,.25); border-radius:12px; padding:10px 14px; }
+          border:1px solid rgba(255,77,77,.25); border-radius:12px; padding:10px 14px;
+          display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+        .neoRetry{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.12em;
+          text-transform:uppercase; color:#f5efdf; background:rgba(255,255,255,.06);
+          border:1px solid rgba(255,255,255,.2); border-radius:999px; padding:6px 13px; cursor:pointer;
+          transition:all .2s; white-space:nowrap; }
+        .neoRetry:hover{ background:rgba(255,255,255,.13); border-color:rgba(255,255,255,.35); }
+        .neoRetry:disabled{ opacity:.5; cursor:default; }
 
         /* ── Entrada ── */
         .neoBar{ padding:14px 0 16px; border-top:1px solid rgba(240,180,41,.1);
@@ -601,7 +653,14 @@ export default function NeoChat() {
                   {seg > 6 && <span className="neoTypingTxt" style={{ opacity: .55 }}>{seg}s</span>}
                 </div>
               )}
-              {erro && <div className="neoErr">{erro}</div>}
+              {erro && (
+                <div className="neoErr">
+                  {erro}
+                  {ultimoEnvioRef.current && (
+                    <button className="neoRetry" onClick={tentarNovamente} disabled={loading}>Tentar de novo</button>
+                  )}
+                </div>
+              )}
              </div>
             </div>
 
