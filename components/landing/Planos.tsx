@@ -41,6 +41,9 @@ const FOUNDER_FEATURES = [
   'Condição exclusiva de lançamento — não volta depois',
 ]
 
+/* Parcelamento real de cada oferta na Greenn (o mensal é assinatura
+   recorrente, então não parcela). Sem valor por parcela na copy: o cartão
+   tem tarifa de 3,39% a.m, e prometer "12x de R$ X" seria impreciso. */
 const PLANS = [
   {
     name: 'Mensal',
@@ -49,13 +52,14 @@ const PLANS = [
     desc: 'Para começar agora e enxergar sua operação com mais controle.',
     cta: 'Começar no mensal',
     href: LINKS.mensal,
-    features: ['Painel completo com DRE real', 'Gestão conectada à sua conta Amazon', 'Mineração + Calculadora', 'Extensão Chrome + Agente IA', 'Ideal para testar'],
+    features: ['Painel completo com DRE real', 'Gestão conectada à sua conta Amazon', 'Mineração + Calculadora', 'Extensão Chrome + Agente NEO', 'Ideal para testar'],
   },
   {
     name: 'Semestral',
     price: '597',
     per: '/6 meses',
     note: 'equivale a R$ 99,50/mês',
+    parcela: 'ou em até 6x no cartão',
     desc: 'Para usar com consistência e acompanhar sua evolução por mais tempo.',
     cta: 'Garantir semestral',
     href: LINKS.semestral,
@@ -66,6 +70,7 @@ const PLANS = [
     price: '997',
     per: '/ano',
     note: 'equivale a R$ 83,08/mês',
+    parcela: 'ou em até 12x no cartão',
     desc: 'Para manter a operação guiada por dados o ano inteiro.',
     cta: 'Garantir anual',
     href: LINKS.anual,
@@ -220,6 +225,7 @@ export default function Planos() {
                   <span style={{ fontSize: 13, color: 'var(--tx3)' }}>{p.per}</span>
                 </div>
                 {p.note && <div className="ora-num" style={{ fontSize: 11.5, color: 'var(--emerald)', marginTop: 5, fontWeight: 700 }}>{p.note}</div>}
+                {p.parcela && <div style={{ fontSize: 11.5, color: 'var(--tx3)', marginTop: 3 }}>{p.parcela}</div>}
                 <p style={{ fontSize: 12.5, color: 'var(--tx2)', lineHeight: 1.55, margin: '12px 0 16px' }}>{p.desc}</p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
                   {p.features.map((f) => (
