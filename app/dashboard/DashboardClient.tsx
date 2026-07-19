@@ -2430,7 +2430,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 vendedor e aponta a decisão. Absorveu o criador de anúncios (o
                 botão pro GPT de imagens vive dentro do chat). */}
             {nav==='agente'&&(
-              <div style={{maxWidth:760,margin:'0 auto',height:'calc(100dvh - 150px)',minHeight:420}}>
+              <div style={{maxWidth:880,margin:'0 auto',height:'calc(100dvh - 140px)',minHeight:460}}>
                 <NeoChat/>
               </div>
             )}
