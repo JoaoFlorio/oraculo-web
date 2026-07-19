@@ -5,11 +5,21 @@ type Img = { mediaType: string; data: string } // data = base64 sem prefixo
 type Msg = { role: 'user' | 'assistant'; text: string; images?: Img[] }
 
 const GPT_AGENT_URL = 'https://chatgpt.com/g/g-6a02736d422081918e58416c49426a3a-oraculo-ia-especialista-em-marketplace'
-const SUGESTOES = [
-  'Qual foi meu faturamento nos últimos 30 dias?',
-  'Por que meu lucro mudou vs o mês passado?',
-  'Quais produtos estão perto de rupturar?',
-  'Como funciona a Gestão do Oráculo?',
+
+// Dois agentes, um componente. O NEO (aba) analisa os números e ajuda a vender
+// mais; o Suporte (bolinha) só tira dúvida do Oráculo — por isso as sugestões e
+// o botão do criador de imagens mudam conforme o agente.
+const SUGESTOES_NEO = [
+  'Como está minha operação?',
+  'Qual produto está caindo?',
+  'Meu ACOS está saudável?',
+  'Onde estou perdendo margem?',
+]
+const SUGESTOES_SUPORTE = [
+  'Como conecto minha conta Amazon?',
+  'Por que o lucro não aparece na Gestão?',
+  'Como instalo o app no celular?',
+  'Onde pego a chave da extensão?',
 ]
 const MAX_IMGS = 3
 
@@ -37,7 +47,9 @@ function toApiContent(m: Msg): any {
   ]
 }
 
-export default function AssistenteChat({ embedded = false }: { embedded?: boolean }) {
+export default function AssistenteChat({ embedded = false, agent = 'neo' }: { embedded?: boolean; agent?: 'neo' | 'suporte' }) {
+  const ehNeo = agent === 'neo'
+  const SUGESTOES = ehNeo ? SUGESTOES_NEO : SUGESTOES_SUPORTE
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [pend, setPend] = useState<Img[]>([]) // imagens anexadas aguardando envio
@@ -75,7 +87,7 @@ export default function AssistenteChat({ embedded = false }: { embedded?: boolea
       const res = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })) }),
+        body: JSON.stringify({ agent, messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })) }),
       })
       const data = await res.json()
       if (!res.ok || data?.error) setErro(data?.error || 'Falha ao consultar o assistente.')
@@ -91,21 +103,13 @@ export default function AssistenteChat({ embedded = false }: { embedded?: boolea
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
-      {!embedded && (
-        <div style={{ padding: '4px 2px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 999, background: 'var(--gold)', display: 'grid', placeItems: 'center', color: '#1a1200', fontWeight: 800 }}>✦</div>
-          <div>
-            <h1 style={{ fontSize: 19, fontWeight: 700 }}>Assistente do Oráculo</h1>
-            <p style={{ color: 'var(--t3, #888)', fontSize: 12.5, opacity: 0.85 }}>Seus números, dúvidas do Oráculo e leitura de imagens — tudo aqui.</p>
-          </div>
-        </div>
+      {/* Só o NEO manda pro criador de imagens — o suporte não trata disso. */}
+      {ehNeo && (
+        <a href={GPT_AGENT_URL} target="_blank" rel="noreferrer"
+          style={{ alignSelf: 'flex-start', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#0a3', background: 'color-mix(in srgb, #22c55e 14%, var(--card))', border: '1px solid color-mix(in srgb, #22c55e 30%, var(--line))', borderRadius: 999, padding: '6px 12px', marginBottom: 8 }}>
+          🎨 Gerar as imagens no Agente GPT ↗
+        </a>
       )}
-
-      {/* Botão de acesso ao Agente GPT (criador de imagens/anúncios) */}
-      <a href={GPT_AGENT_URL} target="_blank" rel="noreferrer"
-        style={{ alignSelf: 'flex-start', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: '#0a3', background: 'color-mix(in srgb, #22c55e 14%, var(--card))', border: '1px solid color-mix(in srgb, #22c55e 30%, var(--line))', borderRadius: 999, padding: '6px 12px', marginBottom: 8 }}>
-        🎨 Criar imagens no Agente GPT ↗
-      </a>
 
       {/* Área de mensagens */}
       <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 2px' }}>
@@ -155,7 +159,7 @@ export default function AssistenteChat({ embedded = false }: { embedded?: boolea
         <button style={iconBtn} onClick={() => fileRef.current?.click()} disabled={loading || pend.length >= MAX_IMGS} title="Anexar imagem" aria-label="Anexar imagem">📎</button>
         <input
           value={input}
-          placeholder="Pergunte ou anexe uma imagem…"
+          placeholder={ehNeo ? 'Pergunte sobre sua operação…' : 'Qual sua dúvida sobre o Oráculo?'}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') enviar(input) }}
           disabled={loading}

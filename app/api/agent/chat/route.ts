@@ -13,17 +13,19 @@ export async function POST(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  // Demo: o agente puxa dados reais do backend, que a conta demo não tem.
-  if (await demoConfigFor(user)) {
-    return NextResponse.json({
-      reply: 'O assistente de IA responde com os seus dados reais da Amazon. Nesta conta de demonstração não há conexão real, então ele fica indisponível — teste numa conta com a Amazon conectada de verdade.',
-      demo: true, trace: [], usage: null,
-    })
-  }
-
   let body: any = {}
   try { body = await req.json() } catch { /* corpo vazio */ }
   const messages = Array.isArray(body?.messages) ? body.messages : []
+  const agent = body?.agent === 'suporte' ? 'suporte' : 'neo'
+
+  // Demo: o NEO analisa dados REAIS da Amazon, que a conta demo não tem. Já o
+  // suporte responde dúvida de produto — esse funciona normalmente na demo.
+  if (agent === 'neo' && (await demoConfigFor(user))) {
+    return NextResponse.json({
+      reply: 'O NEO analisa os seus números reais da Amazon. Nesta conta de demonstração não existe conexão real, então ele fica indisponível aqui — teste numa conta com a Amazon conectada. Para dúvidas sobre o Oráculo, use o assistente de suporte no canto da tela.',
+      demo: true, trace: [], usage: null,
+    })
+  }
   if (!messages.length) return NextResponse.json({ error: 'messages obrigatório' }, { status: 400 })
 
   try {
@@ -32,7 +34,7 @@ export async function POST(req: NextRequest) {
       cache: 'no-store',
       headers: { 'content-type': 'application/json', 'x-internal-key': process.env.INTERNAL_KEY || '' },
       // email vem da sessão (autoritativo) — o cliente não escolhe de quem são os dados.
-      body: JSON.stringify({ email: user.email, messages, model: body?.model }),
+      body: JSON.stringify({ email: user.email, messages, model: body?.model, agent }),
     })
     const data = await res.json().catch(() => ({ error: 'resposta inválida do agente' }))
     return NextResponse.json(data, { status: res.status })

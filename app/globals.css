@@ -202,6 +202,91 @@ body {
   .ora-contrast > div:nth-child(2){ transform:rotate(90deg); padding:6px 0 !important; }
 }
 
+/* ── hero v2: grid texto+laptop, cards flutuantes, trust bar ─────────── */
+@media (max-width: 1080px){
+  .ora-hero-grid{ grid-template-columns:1fr !important; text-align:left; }
+  .ora-hero-eye{ right:-40% !important; top:-2% !important; opacity:.7; }
+}
+@media (max-width: 1080px){
+  .ora-hero-cards{ grid-template-columns:repeat(6,1fr) !important; }
+  .ora-hero-cards .ora-hc{ grid-column:span 2 !important; }
+  .ora-hero-cards .ora-hc-wide{ grid-column:span 3 !important; }
+}
+@media (max-width: 680px){
+  .ora-hero-cards{ grid-template-columns:1fr 1fr !important; }
+  .ora-hero-cards .ora-hc{ grid-column:span 1 !important; }
+  .ora-hero-cards .ora-hc-wide{ grid-column:span 2 !important; }
+}
+@media (max-width: 1080px){
+  .ora-trustbar{ grid-template-columns:repeat(2,1fr) !important; }
+  .ora-trustbar .ora-trustcell{ border-left:none !important; border-top:1px solid rgba(255,255,255,0.05); }
+  .ora-trustbar .ora-trustcell:first-child{ border-top:none; }
+  .ora-trustbar .ora-trustcell:nth-child(2){ border-top:none; }
+}
+@media (max-width: 560px){
+  .ora-trustbar{ grid-template-columns:1fr !important; }
+  .ora-trustbar .ora-trustcell:nth-child(2){ border-top:1px solid rgba(255,255,255,0.05); }
+}
+
+/* seção com acento violeta (dobra Inteligência) */
+.ora-violet-scope{
+  --gold:#A99BFF; --gold-bright:#CFC6FF; --gold-deep:#6D5BD0;
+}
+
+/* como funciona: 3 passos empilham no mobile */
+@media (max-width: 980px){
+  .ora-steps{ grid-template-columns:1fr !important; }
+  .ora-steps-line{ display:none !important; }
+}
+
+/* gestão: laterais somem em telas médias */
+@media (max-width: 1150px){
+  .ora-gestao-grid{ grid-template-columns:1fr !important; }
+  .ora-gestao-side{ display:none !important; }
+}
+.ora-mini4{ }
+@media (max-width: 980px){ .ora-mini4{ grid-template-columns:repeat(2,1fr) !important; } }
+@media (max-width: 560px){ .ora-mini4{ grid-template-columns:1fr !important; } }
+
+/* mineração */
+@media (max-width: 1120px){
+  .ora-mine-grid{ grid-template-columns:1fr !important; }
+  .ora-mine-stats{ flex-direction:row !important; flex-wrap:wrap; }
+  .ora-mine-stats > *{ flex:1 1 160px; }
+}
+@media (max-width: 900px){
+  .ora-rival-grid{ grid-template-columns:1fr !important; }
+}
+
+/* inteligência */
+@media (max-width: 1080px){
+  .ora-intel-grid{ grid-template-columns:1fr !important; }
+}
+
+/* planos */
+@media (max-width: 980px){
+  .ora-planos-grid{ grid-template-columns:1fr !important; max-width:440px; margin-left:auto !important; margin-right:auto !important; }
+  .ora-plan-hot{ transform:none !important; }
+}
+
+/* faq (details/summary) */
+.ora-faq{
+  background:linear-gradient(180deg, rgba(16,16,34,0.6), rgba(8,8,20,0.7));
+  border:1px solid rgba(255,255,255,0.07); border-radius:14px; overflow:hidden;
+  transition:border-color .3s;
+}
+.ora-faq[open]{ border-color:rgba(240,194,98,0.35); }
+.ora-faq summary{
+  list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between;
+  gap:16px; padding:17px 20px; font-weight:700; font-size:15px; color:var(--tx1);
+}
+.ora-faq summary::-webkit-details-marker{ display:none; }
+.ora-faq summary:hover{ color:var(--gold); }
+.ora-faq summary:focus-visible{ outline:2px solid var(--gold); outline-offset:-2px; border-radius:14px; }
+.ora-faq-chev{ display:inline-flex; color:var(--tx3); transition:transform .3s; flex-shrink:0; }
+.ora-faq[open] .ora-faq-chev{ transform:rotate(180deg); color:var(--gold); }
+.ora-faq p{ margin:0; padding:0 20px 18px; font-size:13.5px; line-height:1.65; color:var(--tx2); max-width:64ch; }
+
 @media (prefers-reduced-motion: reduce){
   .ora-grid,.ora-scrollcue,.ora-dot{ animation:none !important; }
 }

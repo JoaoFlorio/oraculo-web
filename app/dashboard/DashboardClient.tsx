@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 const GestaoHub = dynamic(()=>import('./GestaoHub'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Gestão…</div>})
+const NeoChat = dynamic(()=>import('./neo/NeoChat'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Acordando o NEO…</div>})
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 const T = {
@@ -77,7 +78,7 @@ const NAV = [
   { id:'generics',    label:'Genéricos'         },
   { id:'saved',       label:'Salvos'            },
   { id:'competitor',  label:'Análise Rival'     },
-  { id:'agente',      label:'Agente IA'         },
+  { id:'agente',      label:'Agente NEO'        },
   { id:'extension',   label:'Extensão'          },
   { id:'perfil',      label:'Meu Perfil'        },
 ]
@@ -2425,88 +2426,12 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               )
             })()}
 
-            {/* Agente IA Panel */}
+            {/* Agente NEO — o agente do João Florio: lê os números reais do
+                vendedor e aponta a decisão. Absorveu o criador de anúncios (o
+                botão pro GPT de imagens vive dentro do chat). */}
             {nav==='agente'&&(
-              <div style={{maxWidth:600,margin:'0 auto',paddingTop:40}}>
-                {/* Header */}
-                <div style={{textAlign:'center' as const,marginBottom:40}}>
-                  <div style={{marginBottom:12,display:'flex',justifyContent:'center'}}><Ico n="robot" size={46} c={T.gold}/></div>
-                  <h2 style={{fontSize:24,fontWeight:900,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Agente IA — Criador de Anúncios</h2>
-                  <p style={{fontSize:13,color:T.t3,lineHeight:1.7,maxWidth:440,margin:'0 auto'}}>
-                    Nosso agente especialista em Amazon Brasil cria o anúncio completo pelo ChatGPT — título SEO, bullets, descrição, keywords e até <strong style={{color:T.t1}}>6 imagens profissionais</strong> do seu produto.
-                  </p>
-                </div>
-
-                {/* CTA principal */}
-                <a
-                  href="https://chatgpt.com/g/g-6a02736d422081918e58416c49426a3a-oraculo-ia-especialista-em-marketplace"
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{display:'flex',alignItems:'center',justifyContent:'center',gap:12,background:'linear-gradient(135deg,#10A37F 0%,#0D8C6D 100%)',color:'#fff',fontWeight:800,fontSize:14,padding:'18px 24px',borderRadius:14,textDecoration:'none',letterSpacing:'0.04em',boxShadow:'0 4px 32px rgba(16,163,127,0.35)',marginBottom:12,transition:'transform .15s',cursor:'pointer'}}
-                  onMouseEnter={e=>(e.currentTarget.style.transform='translateY(-2px)')}
-                  onMouseLeave={e=>(e.currentTarget.style.transform='translateY(0)')}
-                >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" fill="white" opacity="0.3"/>
-                    <circle cx="12" cy="12" r="10" stroke="white" strokeWidth="1.5"/>
-                    <path d="M8 12l3 3 5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  ABRIR AGENTE NO CHATGPT
-                </a>
-                <div style={{textAlign:'center' as const,fontSize:11,color:T.t3,marginBottom:16}}>
-                  Abre no ChatGPT — use sua conta existente, sem custos adicionais
-                </div>
-
-                {/* Assistente do Oráculo (IA que lê seus números + tira dúvidas) */}
-                <button
-                  onClick={()=>window.dispatchEvent(new Event('oraculo:abrir-assistente'))}
-                  style={{display:'flex',alignItems:'center',justifyContent:'center',gap:10,width:'100%',background:T.card,color:T.t1,fontWeight:700,fontSize:13.5,padding:'14px 20px',borderRadius:14,border:`1px solid ${T.line}`,cursor:'pointer',marginBottom:8,fontFamily:'inherit'}}
-                >
-                  <span style={{width:24,height:24,borderRadius:999,background:T.gold,display:'grid',placeItems:'center',color:'#1a1200',fontWeight:800,fontSize:13}}>✦</span>
-                  Falar com o Assistente do Oráculo
-                </button>
-                <div style={{textAlign:'center' as const,fontSize:11,color:T.t3,marginBottom:32}}>
-                  Pergunte sobre faturamento, lucro, estoque e Ads — ou tire dúvidas do Oráculo
-                </div>
-
-                {/* O que o agente faz */}
-                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:16,padding:'24px',marginBottom:16}}>
-                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:18}}>O que o agente entrega</div>
-                  {[
-                    { icon:'🔍', title:'Análise do Produto', desc:'Pesquisa o produto, identifica público, concorrência e ângulo de ataque antes de criar' },
-                    { icon:'📝', title:'Anúncio Completo',   desc:'Título SEO (3 variações), 5 bullets, descrição e palavras-chave backend otimizados' },
-                    { icon:'🖼️', title:'Pack de 6 Imagens',  desc:'Fundo branco, lifestyle ambientada e 4 imagens de benefícios — prontas para upload' },
-                    { icon:'📊', title:'Estratégia',         desc:'Gatilhos usados, alertas de mercado e sugestões para teste A/B' },
-                  ].map((item,i)=>(
-                    <div key={i} style={{display:'flex',gap:14,marginBottom:i<3?16:0,alignItems:'flex-start'}}>
-                      <div style={{width:38,height:38,borderRadius:10,background:'rgba(16,163,127,0.1)',border:'1px solid rgba(16,163,127,0.2)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,color:T.g}}><EmojiIco e={item.icon} size={18} c={T.g}/></div>
-                      <div>
-                        <div style={{fontSize:13,fontWeight:700,color:T.t1,marginBottom:3}}>{item.title}</div>
-                        <div style={{fontSize:12,color:T.t3,lineHeight:1.6}}>{item.desc}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Como usar */}
-                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:16,padding:'24px'}}>
-                  <div style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const,marginBottom:16}}>Como usar</div>
-                  {[
-                    'Clique em "Abrir Agente no ChatGPT" acima',
-                    'Envie o nome do produto ou ASIN que deseja anunciar',
-                    'Envie uma foto do produto quando solicitado',
-                    'Aguarde — o agente entrega análise, copy e 6 imagens',
-                  ].map((s,i)=>(
-                    <div key={i} style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:i<3?10:0}}>
-                      <div style={{width:22,height:22,borderRadius:'50%',background:'rgba(16,163,127,0.1)',border:'1px solid rgba(16,163,127,0.25)',color:'#10A37F',fontSize:10,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{i+1}</div>
-                      <span style={{fontSize:12,color:T.t3,lineHeight:1.6,paddingTop:2}}>{s}</span>
-                    </div>
-                  ))}
-                  <div style={{marginTop:16,padding:'12px 14px',background:'rgba(16,163,127,0.06)',border:'1px solid rgba(16,163,127,0.15)',borderRadius:10,fontSize:11,color:T.t3,lineHeight:1.6,display:'flex',gap:8,alignItems:'flex-start'}}>
-                    <span style={{flexShrink:0,color:T.g,marginTop:1}}><Ico n="bulb" size={13} c={T.g}/></span>
-                    <span><strong style={{color:T.t1}}>Dica:</strong> Você precisa de uma conta no ChatGPT (gratuita ou Plus). O agente usa seus próprios créditos do ChatGPT — sem cobranças extras do Oráculo.</span>
-                  </div>
-                </div>
+              <div style={{maxWidth:760,margin:'0 auto',height:'calc(100dvh - 150px)',minHeight:420}}>
+                <NeoChat/>
               </div>
             )}
 
