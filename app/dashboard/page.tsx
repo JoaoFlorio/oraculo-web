@@ -6,6 +6,7 @@ import DashboardClient from './DashboardClient'
 import TermsGate from './TermsGate'
 import AppInstall from './AppInstall'
 import AppSplash from './AppSplash'
+import VersionGuard from './VersionGuard'
 import AssistenteFab from './AssistenteFab'
 
 export default async function DashboardPage() {
@@ -34,6 +35,8 @@ export default async function DashboardPage() {
     <>
       {/* Abertura animada — só no app instalado, 1x por sessão */}
       <AppSplash />
+      {/* Recarrega sozinho quando há build novo (PWA guarda HTML em cache) */}
+      <VersionGuard v={process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'dev'} />
       <DashboardClient user={user} gestaoEnabled={gestaoEnabled} />
       {/* isAdmin libera o simulador de venda no guia do app (o servidor também
           exige admin — o cliente nunca deve receber um "💰 Nova venda!" falso). */}
