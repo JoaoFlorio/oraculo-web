@@ -290,3 +290,92 @@ body {
 @media (prefers-reduced-motion: reduce){
   .ora-grid,.ora-scrollcue,.ora-dot{ animation:none !important; }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   PAINEL — linguagem visual do Agente NEO aplicada ao app inteiro
+   Escopo .ora-app (o shell do dashboard). A ideia: o painel deixa de ser um
+   fundo chapado com caixas e passa a ser um AMBIENTE — obsidiana com aura
+   dourada, grade fina, superfícies em camadas e tipografia com caráter.
+   Tudo aqui é CSS de shell: propaga pra todas as abas sem reescrever tela.
+   ════════════════════════════════════════════════════════════════════════ */
+
+.ora-app{
+  position:relative;
+  background:#050509;
+}
+/* Atmosfera: aura dourada no topo + grade fina + vinheta. Fica atrás de tudo. */
+.ora-app::before{
+  content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(75% 50% at 64% -10%, rgba(240,180,41,.15), transparent 64%),
+    radial-gradient(55% 45% at 6% 6%, rgba(240,180,41,.06), transparent 62%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.014) 0 1px, transparent 1px 46px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.014) 0 1px, transparent 1px 46px);
+}
+.ora-app::after{
+  content:''; position:absolute; inset:0; pointer-events:none; z-index:0;
+  background:radial-gradient(125% 95% at 50% 45%, transparent 58%, rgba(0,0,0,.55) 100%);
+}
+.ora-app > *{ position:relative; z-index:1; }
+
+/* No tema claro a atmosfera some — ela é feita de luz sobre preto. */
+[data-theme="light"] .ora-app{ background:var(--bg); }
+[data-theme="light"] .ora-app::before,
+[data-theme="light"] .ora-app::after{ display:none; }
+
+/* ── Sidebar: vidro escuro em vez de bloco chapado ── */
+.ora-app .ora-side{
+  background:linear-gradient(180deg, rgba(12,13,20,.92), rgba(7,8,13,.96)) !important;
+  backdrop-filter:blur(12px);
+  border-right:1px solid rgba(240,180,41,.09) !important;
+}
+[data-theme="light"] .ora-app .ora-side{
+  background:var(--sidebar) !important; backdrop-filter:none;
+  border-right:1px solid var(--line) !important;
+}
+
+/* Títulos: sem fonte display aqui de propósito — numa tela densa de dados ela
+   briga com a leitura. O caráter vem da atmosfera e do espaçamento. */
+.ora-app h1, .ora-app h2{ letter-spacing:-.015em; }
+
+/* ── Superfícies em camadas: card deixa de ser um retângulo plano ──
+   Alvo amplo de propósito — pega os cards das abas sem tocar no JSX delas.
+   O card já tinha hover com borda dourada; o que faltava era profundidade. */
+.ora-app [style*="var(--card)"]{
+  background-image:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,0) 55%);
+}
+[data-theme="light"] .ora-app [style*="var(--card)"]{ background-image:none; }
+
+/* ── Topo: vidro escuro com fio dourado, em vez de barra chapada ── */
+.ora-app .ora-topbar{
+  background:linear-gradient(180deg, rgba(10,11,18,.86), rgba(7,8,13,.72)) !important;
+  backdrop-filter:blur(14px) saturate(1.15);
+  border-bottom:1px solid rgba(240,180,41,.12) !important;
+}
+[data-theme="light"] .ora-app .ora-topbar{
+  background:var(--sidebar) !important; backdrop-filter:none;
+  border-bottom:1px solid var(--line) !important;
+}
+
+/* ── Imagem de produto: scrim quente por baixo ──
+   Foto de fundo branco sobre obsidiana grita. O scrim costura as duas. */
+.ora-app .ora-card-in img{ mix-blend-mode:normal; }
+.ora-app .ora-card-in > div::after{
+  content:''; position:absolute; left:0; right:0; top:0; height:1px;
+  background:linear-gradient(90deg, transparent, rgba(255,255,255,.09), transparent);
+  pointer-events:none;
+}
+
+/* ── Entrada da aba: sobe e revela, em vez de aparecer seco ── */
+.ora-app .ora-tab-in{ animation:oraTabIn .42s cubic-bezier(.22,.61,.36,1) both; }
+@keyframes oraTabIn{ from{ opacity:0; transform:translateY(12px);} to{ opacity:1; transform:none;} }
+
+/* ── Rolagem discreta, com o ouro da marca ── */
+.ora-app *::-webkit-scrollbar{ width:6px; height:6px; }
+.ora-app *::-webkit-scrollbar-track{ background:transparent; }
+.ora-app *::-webkit-scrollbar-thumb{ background:rgba(240,180,41,.22); border-radius:99px; }
+.ora-app *::-webkit-scrollbar-thumb:hover{ background:rgba(240,180,41,.4); }
+
+@media (prefers-reduced-motion: reduce){
+  .ora-app .ora-tab-in{ animation:none; }
+}

@@ -1877,7 +1877,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
         }
       `}</style>
 
-      <div style={{display:'flex',height:'100vh',background:T.bg,color:T.t1,overflow:'hidden'}}>
+      <div className="ora-app" style={{display:'flex',height:'100vh',background:T.bg,color:T.t1,overflow:'hidden'}}>
 
         {/* SIDEBAR */}
         <aside className={`ora-side${mobileNav?' mopen':''}`} style={{width:sideOpen?248:64,background:T.sidebar,borderRight:`1px solid ${T.line}`,display:'flex',flexDirection:'column',transition:'width .22s cubic-bezier(.4,0,.2,1)',overflow:'hidden',flexShrink:0,zIndex:20,position:'relative' as const}}>
@@ -2111,7 +2111,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           )}
 
           {/* Topbar */}
-          <header style={{height:60,background:T.sidebar,borderBottom:`1px solid ${T.line}`,display:'flex',alignItems:'center',gap:12,padding:'0 24px',flexShrink:0}}>
+          <header className="ora-topbar" style={{height:60,background:T.sidebar,borderBottom:`1px solid ${T.line}`,display:'flex',alignItems:'center',gap:12,padding:'0 24px',flexShrink:0}}>
             {/* Hambúrguer — só aparece no mobile (≤920px, via CSS) e abre a sidebar off-canvas */}
             <button className="ora-burger" onClick={()=>{setSideOpen(true);setMobileNav(true)}} aria-label="Abrir menu"
               style={{background:'transparent',border:`1px solid ${T.line}`,color:T.t2,borderRadius:9,width:36,height:36,cursor:'pointer',flexShrink:0,alignItems:'center',justifyContent:'center'}}>
