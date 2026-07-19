@@ -55,6 +55,26 @@ function toApiContent(m: Msg): any {
   ]
 }
 
+// Vozes masculinas de pt-BR que existem por aí, por plataforma. A lista é
+// necessária porque a Web Speech API NÃO expõe gênero — só nome e idioma.
+// Apple usa Felipe, Windows usa Daniel, Android marca no voiceURI (#male).
+// Ordem = preferência. Felipe (Apple) e Daniel (Windows) são vozes de leitura
+// de verdade; Eddy/Rocko/Reed/Grandpa são as "novelty" da Apple — servem, mas
+// só depois. Percorrer NESTA ordem, não a ordem do aparelho: no Mac de teste a
+// primeira voz da lista é a Luciana, e sair pegando a primeira que casa
+// entregava uma novelty quando havia opção melhor instalada.
+const MASCULINAS = ['felipe', 'daniel', 'ricardo', 'eddy', 'rocko', 'reed', 'grandpa']
+
+function escolherMasculina(vozes: SpeechSynthesisVoice[]): string {
+  for (const m of MASCULINAS) {
+    const v = vozes.find((x) => x.name.toLowerCase().includes(m))
+    if (v) return v.name
+  }
+  const marcada = vozes.find((v) => /male|masculin/i.test(v.voiceURI || '') && !/female/i.test(v.voiceURI || ''))
+  if (marcada) return marcada.name
+  return vozes[0]?.name || ''   // sem voz masculina no aparelho: usa a que tem
+}
+
 // Markdown mínimo e seguro: só **negrito** — o resto é texto puro do React.
 function rico(texto: string) {
   const partes = texto.split(/\*\*(.+?)\*\*/g)
@@ -79,6 +99,8 @@ export default function NeoChat() {
   const [gravando, setGravando] = useState(false)
   const [vozAtiva, setVozAtiva] = useState(false)
   const [falando, setFalando] = useState(false)
+  const [vozes, setVozes] = useState<SpeechSynthesisVoice[]>([])
+  const [vozNome, setVozNome] = useState('')
   const recRef = useRef<any>(null)
 
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -98,6 +120,22 @@ export default function NeoChat() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     setSuportaMic(!!SR)
     return () => { try { recRef.current?.stop() } catch {} ; try { window.speechSynthesis?.cancel() } catch {} }
+  }, [])
+
+  // Catálogo de vozes pt-BR do dispositivo. No Chrome, getVoices() volta VAZIO
+  // na primeira chamada — sem escutar 'voiceschanged' a gente acabava falando
+  // com a voz padrão do sistema (que nem sempre é português).
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) return
+    const carregar = () => {
+      const pt = window.speechSynthesis.getVoices().filter((v) => /^pt[-_]?br/i.test(v.lang || ''))
+      if (!pt.length) return
+      setVozes(pt)
+      setVozNome((atual) => atual || localStorage.getItem('neo_voz') || escolherMasculina(pt))
+    }
+    carregar()
+    window.speechSynthesis.addEventListener('voiceschanged', carregar)
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', carregar)
   }, [])
 
   useEffect(() => {
@@ -122,7 +160,8 @@ export default function NeoChat() {
     const u = new SpeechSynthesisUtterance(limpo)
     u.lang = 'pt-BR'
     u.rate = 1.06
-    const voz = window.speechSynthesis.getVoices().find((v) => v.lang?.toLowerCase().startsWith('pt-br') || v.lang?.toLowerCase().startsWith('pt_br'))
+    u.pitch = 0.92   // um pouco mais grave — o NEO é operador, não locutor
+    const voz = vozes.find((v) => v.name === vozNome) || vozes[0]
     if (voz) u.voice = voz
     u.onstart = () => setFalando(true)
     u.onend = () => setFalando(false)
@@ -250,6 +289,11 @@ export default function NeoChat() {
           color:rgba(245,239,223,.55); background:transparent; border:1px solid rgba(240,180,41,.22);
           border-radius:999px; padding:8px 14px; cursor:pointer; transition:all .25s; }
         .neoVoice:hover{ border-color:rgba(240,180,41,.5); color:#f5efdf; }
+        .neoVozSel{ background:rgba(255,255,255,.04); border:1px solid rgba(240,180,41,.22); border-radius:999px;
+          color:rgba(245,239,223,.8); font-family:'IBM Plex Mono', monospace; font-size:10.5px;
+          padding:7px 10px; cursor:pointer; outline:none; max-width:150px; }
+        .neoVozSel:hover{ border-color:rgba(240,180,41,.5); }
+        .neoVozSel option{ background:#12121a; color:#f5efdf; }
         .neoVoice.on{ color:#0d0a02; background:#f0b429; border-color:#f0b429; font-weight:600;
           box-shadow:0 0 24px rgba(240,180,41,.35); }
 
@@ -346,6 +390,7 @@ export default function NeoChat() {
           .neoSub{ font-size:8.5px; letter-spacing:.2em; }
           .neoVoice span.lbl{ display:none; }
           .neoVoice{ padding:8px 11px; }
+          .neoVozSel{ max-width:96px; font-size:10px; padding:7px 8px; }
           .neoHead{ padding:14px 14px 12px; gap:11px; }
           .neoOrb{ width:40px; height:40px; }
           .neoInsight{ margin:12px 14px 0; padding:13px 14px 13px 18px; }
@@ -381,6 +426,26 @@ export default function NeoChat() {
             >
               <span style={{ fontSize: 13, lineHeight: 1 }}>{vozAtiva ? '◉' : '○'}</span> <span className="lbl">{vozAtiva ? 'Voz ativa' : 'Voz'}</span>
             </button>
+          )}
+
+          {/* Seletor de voz — aparece com a voz ligada e mais de uma opção pt-BR.
+              Cada aparelho traz um conjunto diferente de vozes instaladas, então
+              a escolha final é do vendedor; a gente só chuta a masculina. */}
+          {vozAtiva && vozes.length > 1 && (
+            <select className="neoVozSel" value={vozNome} title="Trocar a voz do NEO"
+              onChange={(e) => {
+                const nome = e.target.value
+                setVozNome(nome)
+                try { localStorage.setItem('neo_voz', nome) } catch {}
+                const v = vozes.find((x) => x.name === nome)
+                if (v) {   // prova na hora, pra não precisar mandar mensagem só pra ouvir
+                  const u = new SpeechSynthesisUtterance('Bora. Sem rodeio, olha o número.')
+                  u.voice = v; u.lang = 'pt-BR'; u.rate = 1.06; u.pitch = 0.92
+                  window.speechSynthesis.cancel(); window.speechSynthesis.speak(u)
+                }
+              }}>
+              {vozes.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+            </select>
           )}
         </div>
 
