@@ -28,17 +28,26 @@ export async function POST(req: NextRequest) {
   }
   if (!messages.length) return NextResponse.json({ error: 'messages obrigatório' }, { status: 400 })
 
+  // O NEO pode encadear várias ferramentas antes de responder. Timeout explícito
+  // e generoso — sem ele, o default do runtime cortava a conexão e o cliente via
+  // um "erro de rede" que não explicava nada.
   try {
     const res = await fetch(`${BACKEND}/api/agent/chat`, {
       method: 'POST',
       cache: 'no-store',
+      signal: AbortSignal.timeout(170_000),
       headers: { 'content-type': 'application/json', 'x-internal-key': process.env.INTERNAL_KEY || '' },
       // email vem da sessão (autoritativo) — o cliente não escolhe de quem são os dados.
       body: JSON.stringify({ email: user.email, messages, model: body?.model, agent }),
     })
     const data = await res.json().catch(() => ({ error: 'resposta inválida do agente' }))
     return NextResponse.json(data, { status: res.status })
-  } catch {
-    return NextResponse.json({ error: 'Erro ao falar com o assistente' }, { status: 500 })
+  } catch (e: any) {
+    const timeout = e?.name === 'TimeoutError' || e?.name === 'AbortError'
+    console.error('[agent/chat proxy]', timeout ? 'timeout' : e?.message || e)
+    return NextResponse.json(
+      { error: timeout ? 'A consulta demorou demais e foi interrompida. Tente uma pergunta mais específica (ex.: só o faturamento de hoje).' : 'Erro ao falar com o agente.' },
+      { status: timeout ? 504 : 500 },
+    )
   }
 }

@@ -71,6 +71,7 @@ export default function NeoChat() {
   const [input, setInput] = useState('')
   const [pend, setPend] = useState<Img[]>([])
   const [loading, setLoading] = useState(false)
+  const [seg, setSeg] = useState(0)          // segundos decorridos na consulta
   const [erro, setErro] = useState<string | null>(null)
 
   // Voz
@@ -84,6 +85,14 @@ export default function NeoChat() {
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }) }, [msgs, loading, pend])
+
+  // Consulta que puxa muita coisa demora — mostrar o tempo correndo é o que
+  // diferencia "está trabalhando" de "travou".
+  useEffect(() => {
+    if (!loading) { setSeg(0); return }
+    const t = setInterval(() => setSeg((s) => s + 1), 1000)
+    return () => clearInterval(t)
+  }, [loading])
 
   useEffect(() => {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -172,16 +181,21 @@ export default function NeoChat() {
       const res = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        signal: AbortSignal.timeout(180_000),
         body: JSON.stringify({ agent: 'neo', messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })) }),
       })
-      const data = await res.json()
-      if (!res.ok || data?.error) setErro(data?.error || 'Falha ao consultar o NEO.')
+      const data = await res.json().catch(() => null)
+      if (!res.ok || !data || data?.error) setErro(data?.error || 'O NEO não conseguiu responder agora. Tente de novo em instantes.')
       else {
         setMsgs([...historico, { role: 'assistant', text: data.reply || '(sem resposta)' }])
         if (vozAtiva && data.reply) falar(data.reply)
       }
-    } catch {
-      setErro('Erro de rede ao falar com o NEO.')
+    } catch (e: any) {
+      // Distingue "demorou demais" de "caiu a conexão" — dizer "erro de rede"
+      // pra um timeout mandava o vendedor procurar problema no wi-fi dele.
+      setErro(e?.name === 'TimeoutError' || e?.name === 'AbortError'
+        ? 'A consulta passou de 3 minutos e foi interrompida. Tente algo mais específico — por exemplo, só o faturamento de hoje.'
+        : 'Perdi a conexão no meio da consulta. Tente de novo.')
     } finally {
       setLoading(false)
     }
@@ -438,8 +452,9 @@ export default function NeoChat() {
 
               {loading && (
                 <div className="neoTyping">
-                  <span className="neoTypingTxt">Lendo seus números</span>
+                  <span className="neoTypingTxt">{seg > 25 ? 'Cruzando os dados' : 'Lendo seus números'}</span>
                   <span className="neoScan" />
+                  {seg > 6 && <span className="neoTypingTxt" style={{ opacity: .55 }}>{seg}s</span>}
                 </div>
               )}
               {erro && <div className="neoErr">{erro}</div>}
