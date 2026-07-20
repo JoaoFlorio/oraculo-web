@@ -31,7 +31,10 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const params = new URLSearchParams({ type, category, q })
+    // O e-mail vai da SESSÃO (nunca do cliente): é o que permite ao backend
+    // saber o que ESTE usuário já viu e servir do catálogo persistido em vez de
+    // pedir produto novo pra Amazon.
+    const params = new URLSearchParams({ type, category, q, email: user.email })
     if (bust === '1') params.set('bust', '1')
     if (exclude)     params.set('exclude', exclude)
 
