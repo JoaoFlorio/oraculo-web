@@ -19,7 +19,8 @@ type Img = { mediaType: string; data: string }
 // `envio` (opcional) é o que REALMENTE vai pro modelo quando o texto exibido
 // na bolha é um resumo — usado pelo botão "Bora resolver" do insight, que
 // mostra uma frase curta mas manda o diagnóstico inteiro como contexto.
-type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[] }
+type Ficha = { provider?: string; model?: string; ms?: number; tokensSaida?: number }
+type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[]; ficha?: Ficha }
 type Insight = { texto: string; severidade: 'critico' | 'atencao' | 'ok'; geradoEm: string } | null
 
 const GPT_AGENT_URL = 'https://chatgpt.com/g/g-6a02736d422081918e58416c49426a3a-oraculo-ia-especialista-em-marketplace'
@@ -147,7 +148,10 @@ function NeoMark({ size = 46, on = false }: { size?: number; on?: boolean }) {
   )
 }
 
-export default function NeoChat() {
+export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
+  // Comparação de motores: SÓ admin. O cliente sempre recebe o motor padrão do
+  // servidor — ninguém deve cair num motor ainda em avaliação.
+  const [motor, setMotor] = useState<'claude' | 'gemini'>('claude')
   const [ins, setIns] = useState<Insight>(null)
   const [carregandoIns, setCarregandoIns] = useState(true)
   const [semConexao, setSemConexao] = useState(false)
@@ -294,7 +298,11 @@ export default function NeoChat() {
     setLoading(true)
     ultimoEnvioRef.current = historico
     try {
-      const corpo = JSON.stringify({ agent: 'neo', messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })) })
+      const corpo = JSON.stringify({
+        agent: 'neo',
+        ...(isAdmin ? { provider: motor } : {}),
+        messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })),
+      })
 
       // Tenta até 3 vezes. O caso clássico: deploy do backend derruba as
       // requisições por ~40s e devolve uma página de erro (nem JSON é). Sem
@@ -323,7 +331,10 @@ export default function NeoChat() {
         console.error('[NEO] falhou:', ultimoStatus, data)
         setErro(data?.error || 'O NEO não conseguiu responder agora. Tente de novo em instantes.')
       } else {
-        setMsgs([...historico, { role: 'assistant', text: data.reply || '(sem resposta)' }])
+        setMsgs([...historico, {
+          role: 'assistant', text: data.reply || '(sem resposta)',
+          ficha: { provider: data.provider, model: data.model, ms: data.ms, tokensSaida: data.usage?.output_tokens },
+        }])
         if (VOZ_SAIDA && vozAtiva && data.reply) falar(data.reply)
       }
     } catch (e: any) {
@@ -427,6 +438,15 @@ export default function NeoChat() {
           color:rgba(245,239,223,.55); background:transparent; border:1px solid rgba(240,180,41,.22);
           border-radius:999px; padding:8px 14px; cursor:pointer; transition:all .25s; }
         .neoVoice:hover{ border-color:rgba(240,180,41,.5); color:#f5efdf; }
+        .neoMotor{ margin-left:auto; display:flex; gap:2px; padding:3px; border-radius:999px;
+          background:rgba(255,255,255,.04); border:1px solid rgba(240,180,41,.2); }
+        .neoMotor button{ font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:.14em;
+          text-transform:uppercase; color:rgba(245,239,223,.5); background:transparent; border:none;
+          border-radius:999px; padding:6px 12px; cursor:pointer; transition:all .2s; }
+        .neoMotor button.on{ color:#0d0a02; background:#f0b429; font-weight:600; }
+        .neoMotor button:disabled{ opacity:.5; cursor:default; }
+        .neoFicha{ font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:.1em;
+          color:rgba(240,180,41,.45); margin-top:9px; }
         .neoVozSel{ background:rgba(255,255,255,.04); border:1px solid rgba(240,180,41,.22); border-radius:999px;
           color:rgba(245,239,223,.8); font-family:'IBM Plex Mono', monospace; font-size:10.5px;
           padding:7px 10px; cursor:pointer; outline:none; max-width:150px; }
@@ -568,6 +588,7 @@ export default function NeoChat() {
           .neoVoice span.lbl{ display:none; }
           .neoVoice{ padding:8px 11px; }
           .neoVozSel{ max-width:96px; font-size:10px; padding:7px 8px; }
+          .neoMotor button{ padding:6px 9px; font-size:9px; }
           .neoHead{ padding:12px 0 11px; }
           .neoHeadIn{ gap:11px; }
           .neoHeadIn .neoMark{ width:38px !important; height:38px !important; }
@@ -602,6 +623,19 @@ export default function NeoChat() {
             <div className="neoTitle">AGENTE <b>NEO</b></div>
             <div className="neoSub">Inteligência · João Flório</div>
           </div>
+          {/* Comparador de motores — só admin. Manda a MESMA pergunta pros dois
+              e a ficha técnica embaixo de cada resposta mostra quem foi, quanto
+              demorou e quantos tokens saíram. */}
+          {isAdmin && (
+            <div className="neoMotor" title="Motor de IA usado nas próximas perguntas (só você vê)">
+              {(['claude', 'gemini'] as const).map((m) => (
+                <button key={m} className={motor === m ? 'on' : ''} onClick={() => setMotor(m)} disabled={loading}>
+                  {m === 'claude' ? 'Claude' : 'Gemini'}
+                </button>
+              ))}
+            </div>
+          )}
+
           {VOZ_SAIDA && 'speechSynthesis' in (typeof window !== 'undefined' ? window : {} as any) && (
             <button
               className={`neoVoice${vozAtiva ? ' on' : ''}`}
@@ -719,8 +753,15 @@ export default function NeoChat() {
                   </div>
                 ) : (
                   <div key={i} className="neoMsgN">
-                    <div className="neoMsgTag">NEO</div>
+                      <div className="neoMsgTag">NEO</div>
                     <div className="neoMsgTxt">{rico(m.text)}</div>
+                    {isAdmin && m.ficha?.provider && (
+                      <div className="neoFicha">
+                        {m.ficha.provider === 'gemini' ? 'Gemini' : 'Claude'} · {m.ficha.model}
+                        {m.ficha.ms ? ` · ${(m.ficha.ms / 1000).toFixed(1)}s` : ''}
+                        {m.ficha.tokensSaida ? ` · ${m.ficha.tokensSaida} tokens` : ''}
+                      </div>
+                    )}
                   </div>
                 )
               )}
