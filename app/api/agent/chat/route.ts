@@ -38,7 +38,14 @@ export async function POST(req: NextRequest) {
       signal: AbortSignal.timeout(170_000),
       headers: { 'content-type': 'application/json', 'x-internal-key': process.env.INTERNAL_KEY || '' },
       // email vem da sessão (autoritativo) — o cliente não escolhe de quem são os dados.
-      body: JSON.stringify({ email: user.email, messages, model: body?.model, agent }),
+      // `provider` só é repassado para ADMIN: é a chave da comparação entre
+      // motores (claude × gemini) e não pode cair na mão de cliente, que
+      // receberia um motor ainda não validado. Cliente sempre usa o default do
+      // servidor (AGENT_PROVIDER).
+      body: JSON.stringify({
+        email: user.email, messages, model: body?.model, agent,
+        ...(user.role === 'admin' && body?.provider ? { provider: body.provider } : {}),
+      }),
     })
     const data = await res.json().catch(() => ({ error: 'resposta inválida do agente' }))
     return NextResponse.json(data, { status: res.status })
