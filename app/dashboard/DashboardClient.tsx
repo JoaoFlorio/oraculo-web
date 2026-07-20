@@ -1330,7 +1330,15 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
 export default function DashboardClient({user,gestaoEnabled=false}:{user:any;gestaoEnabled?:boolean}){
   const router = useRouter()
-  const [nav,      setNav]      = useState('bestsellers')
+  // Aba de entrada. Gestão primeiro pra quem tem acesso: é a tela de trabalho
+  // do dia (os números da operação), e assim o painel abre SEM disparar a
+  // mineração — que puxava a API de produtos a cada login e era a fonte da
+  // lentidão na abertura.
+  // Não checa plano: o Oráculo não tem plano grátis, e quem não pagou nem chega
+  // aqui (accessDenied bloqueia plan 'free'/vazio antes do painel). Todo mundo
+  // que abre o dashboard tem plano pago e, portanto, Gestão.
+  const podeGestao = gestaoEnabled
+  const [nav,      setNav]      = useState(podeGestao ? 'financeiro' : 'bestsellers')
   // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
   const navGroups = NAV_GROUPS
     .map(g=>({...g, ids: g.ids.filter(id=> id!=='financeiro' || gestaoEnabled)}))
@@ -1639,8 +1647,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // Grid ref (mantido p/ ancoragem; scroll infinito dispensa navegação por páginas).
   const gridRef = useRef<HTMLDivElement>(null)
 
-  // Carregamento inicial usa cache se disponível → não sobrecarrega a API
-  useEffect(()=>{ load('bestsellers','all','',false) },[]) // eslint-disable-line
+  // Carga inicial da mineração SÓ se o painel abriu numa aba de mineração.
+  // Antes rodava sempre, mesmo pra quem ia direto pra Gestão — puxava a API de
+  // produtos à toa em todo login. Trocar de aba continua carregando sob demanda
+  // (ver goNav, que restaura o pool em cache ou chama load()).
+  useEffect(()=>{ if(!podeGestao) load('bestsellers','all','',false) },[]) // eslint-disable-line
 
   // Renovação DESLIZANTE da sessão: cada visita ao painel/app estende a validade
   // (sessão >7d é re-emitida por +30d). O app PWA em uso nunca expira.

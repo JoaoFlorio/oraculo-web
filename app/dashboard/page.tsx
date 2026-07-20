@@ -12,10 +12,14 @@ import AssistenteFab from './AssistenteFab'
 export default async function DashboardPage() {
   const user = await getSession()
   if (!user) redirect('/login')
-  // Gate da Gestão: visível só p/ a allowlist enquanto o app SP-API não está em Production.
-  // Default: João + testers convidados. Liberar geral = setar GESTAO_ALLOWLIST=* (ou remover o gate).
-  // ⚠️ Se GESTAO_ALLOWLIST estiver setado no Railway, ele VENCE este default (env > código).
-  const DEFAULT_ALLOW = 'joaoflorio1023@gmail.com,theethereashop@gmail.com' // theethereashop = aluna em teste da Gestão
+  // Gate da Gestão: LIBERADO PARA TODOS (19/07/2026). O gate existia enquanto o
+  // app SP-API estava em Draft; com as aprovações da Amazon saídas e sem plano
+  // grátis no produto (quem não pagou nem chega aqui — ver accessDenied), todo
+  // cliente tem direito à Gestão. O mecanismo fica no lugar caso precise
+  // restringir de novo: basta trocar o '*' por uma lista de e-mails.
+  // ⚠️ Se GESTAO_ALLOWLIST estiver setado no Railway, ele VENCE este default
+  // (env > código) — pra liberar geral, ela precisa estar ausente ou valer '*'.
+  const DEFAULT_ALLOW = '*'
   const allow = (process.env.GESTAO_ALLOWLIST || DEFAULT_ALLOW)
     .split(',').map(s => s.trim().toLowerCase()).filter(Boolean)
   // Conta demo sempre vê a Gestão (é o ponto dela — apresentar a Gestão fake).
