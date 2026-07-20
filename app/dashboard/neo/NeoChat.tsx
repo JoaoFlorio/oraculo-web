@@ -16,7 +16,10 @@ import { useEffect, useRef, useState } from 'react'
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 type Img = { mediaType: string; data: string }
-type Msg = { role: 'user' | 'assistant'; text: string; images?: Img[] }
+// `envio` (opcional) é o que REALMENTE vai pro modelo quando o texto exibido
+// na bolha é um resumo — usado pelo botão "Bora resolver" do insight, que
+// mostra uma frase curta mas manda o diagnóstico inteiro como contexto.
+type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[] }
 type Insight = { texto: string; severidade: 'critico' | 'atencao' | 'ok'; geradoEm: string } | null
 
 const GPT_AGENT_URL = 'https://chatgpt.com/g/g-6a02736d422081918e58416c49426a3a-oraculo-ia-especialista-em-marketplace'
@@ -65,10 +68,11 @@ function lerImagem(file: File): Promise<Img> {
 }
 
 function toApiContent(m: Msg): any {
-  if (!m.images?.length) return m.text
+  const texto = m.envio ?? m.text
+  if (!m.images?.length) return texto
   return [
     ...m.images.map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.mediaType, data: im.data } })),
-    ...(m.text ? [{ type: 'text', text: m.text }] : []),
+    ...(texto ? [{ type: 'text', text: texto }] : []),
   ]
 }
 
@@ -90,6 +94,14 @@ function escolherMasculina(vozes: SpeechSynthesisVoice[]): string {
   const marcada = vozes.find((v) => /male|masculin/i.test(v.voiceURI || '') && !/female/i.test(v.voiceURI || ''))
   if (marcada) return marcada.name
   return vozes[0]?.name || ''   // sem voz masculina no aparelho: usa a que tem
+}
+
+// Prévia da tarja recolhida: a primeira frase, sem os ** do negrito.
+function primeiraFrase(t: string): string {
+  const limpo = t.replace(/\*\*/g, '').trim()
+  const fim = limpo.search(/[.!?](\s|$)/)
+  const f = fim > 0 ? limpo.slice(0, fim + 1) : limpo
+  return f.length > 96 ? f.slice(0, 95).trimEnd() + '…' : f
 }
 
 // Markdown mínimo e seguro: só **negrito** — o resto é texto puro do React.
@@ -140,6 +152,10 @@ export default function NeoChat() {
   const [carregandoIns, setCarregandoIns] = useState(true)
   const [semConexao, setSemConexao] = useState(false)
   const [demo, setDemo] = useState(false)
+  // O insight nasce RECOLHIDO: aberto toda vez ele vira ruído e a pessoa para
+  // de ler justamente o que é urgente. Quem quiser o detalhe, clica.
+  const [insAberto, setInsAberto] = useState(false)
+  const [insOculto, setInsOculto] = useState(false)
 
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
@@ -201,7 +217,12 @@ export default function NeoChat() {
         if (!vivo) return
         if (d?.connected === false) setSemConexao(true)
         else if (d?.demo) setDemo(true)
-        else if (d?.texto) setIns(d)
+        else if (d?.texto) {
+          setIns(d)
+          // Dispensa é POR INSIGHT (chave = quando foi gerado), não global —
+          // insight novo volta a aparecer.
+          try { if (localStorage.getItem('neo_insight_visto') === d.geradoEm) setInsOculto(true) } catch {}
+        }
       })
       .catch(() => {})
       .finally(() => { if (vivo) setCarregandoIns(false) })
@@ -260,12 +281,12 @@ export default function NeoChat() {
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  async function enviar(texto: string) {
+  async function enviar(texto: string, contexto?: string) {
     const q = texto.trim()
     if ((!q && pend.length === 0) || loading) return
     if (gravando) { try { recRef.current?.stop() } catch {} ; setGravando(false) }
     setErro(null)
-    const userMsg: Msg = { role: 'user', text: q, images: pend.length ? pend : undefined }
+    const userMsg: Msg = { role: 'user', text: q, envio: contexto, images: pend.length ? pend : undefined }
     const historico = [...msgs, userMsg]
     setMsgs(historico)
     setInput('')
@@ -314,6 +335,22 @@ export default function NeoChat() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // "Bora resolver": some com o card e joga o NEO direto no problema. A bolha
+  // mostra uma frase curta; o diagnóstico inteiro vai como contexto pro modelo
+  // (via `envio`), pra ele não precisar redescobrir o que já foi apurado.
+  function resolverInsight() {
+    if (!ins || loading) return
+    setInsOculto(true)
+    try { localStorage.setItem('neo_insight_visto', ins.geradoEm) } catch {}
+    enviar('Bora resolver isso.', `Você abriu o dia com este diagnóstico da minha operação:\n\n"${ins.texto}"\n\nQuero resolver agora. Confirme os números com as ferramentas, me diga por onde começar e o passo a passo do que eu faço hoje.`)
+  }
+
+  function dispensarInsight() {
+    if (!ins) return
+    setInsOculto(true)
+    try { localStorage.setItem('neo_insight_visto', ins.geradoEm) } catch {}
   }
 
   // Reenvia a última pergunta sem o vendedor precisar redigitar — em cima de
@@ -404,8 +441,31 @@ export default function NeoChat() {
           border:1px solid rgba(255,255,255,.07); padding:15px 18px 15px 22px; animation:neoUp .55s .08s ease both; }
         .neoInsight::before{ content:''; position:absolute; left:0; top:0; bottom:0; width:3px;
           background:var(--sev); box-shadow:0 0 18px var(--sev); }
-        .neoInsTag{ display:flex; align-items:center; gap:8px; font-family:'IBM Plex Mono', monospace;
-          font-size:9.5px; font-weight:600; letter-spacing:.26em; text-transform:uppercase; color:var(--sev); margin-bottom:8px; }
+        .neoInsight{ transition:border-color .25s; }
+        .neoInsight.aberto{ border-color:color-mix(in srgb, var(--sev) 30%, rgba(255,255,255,.07)); }
+
+        /* Tarja: a linha discreta que fica visível o tempo todo */
+        .neoInsBar{ width:100%; display:flex; align-items:center; gap:10px; padding:0; cursor:pointer;
+          background:transparent; border:none; text-align:left; font-family:inherit; color:inherit; }
+        .neoInsRot{ font-family:'IBM Plex Mono', monospace; font-size:9.5px; font-weight:600;
+          letter-spacing:.26em; text-transform:uppercase; color:var(--sev); white-space:nowrap; flex-shrink:0; }
+        .neoInsPrev{ font-size:13px; color:rgba(233,228,212,.5); overflow:hidden; text-overflow:ellipsis;
+          white-space:nowrap; min-width:0; flex:1; }
+        .neoInsSeta{ margin-left:auto; font-size:11px; color:rgba(233,228,212,.4); flex-shrink:0; padding-left:6px; }
+        .neoInsBar:hover .neoInsPrev{ color:rgba(233,228,212,.75); }
+        .neoInsBar:hover .neoInsSeta{ color:var(--sev); }
+
+        .neoInsCorpo{ animation:neoUp .3s ease both; margin-top:12px; }
+        .neoInsAcoes{ display:flex; gap:9px; margin-top:14px; flex-wrap:wrap; }
+        .neoInsCta{ font-family:'Unbounded', sans-serif; font-weight:700; font-size:11px; letter-spacing:.08em;
+          color:#0d0a02; background:linear-gradient(135deg,#ffd763,#f0b429); border:none; border-radius:999px;
+          padding:9px 18px; cursor:pointer; transition:all .22s; box-shadow:0 4px 16px rgba(240,180,41,.25); }
+        .neoInsCta:hover{ transform:translateY(-1px); box-shadow:0 8px 22px rgba(240,180,41,.38); }
+        .neoInsCta:disabled{ opacity:.55; transform:none; cursor:default; }
+        .neoInsGhost{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; letter-spacing:.12em;
+          text-transform:uppercase; color:rgba(233,228,212,.5); background:transparent;
+          border:1px solid rgba(255,255,255,.14); border-radius:999px; padding:9px 16px; cursor:pointer; transition:all .22s; }
+        .neoInsGhost:hover{ color:#f5efdf; border-color:rgba(255,255,255,.3); }
         .neoDot{ width:6px; height:6px; border-radius:50%; background:var(--sev); box-shadow:0 0 10px var(--sev);
           animation:neoBreathe 2s ease-in-out infinite; }
         .neoInsTxt{ font-size:14.5px; line-height:1.65; color:#e9e4d4; white-space:pre-wrap; }
@@ -512,6 +572,8 @@ export default function NeoChat() {
           .neoHeadIn{ gap:11px; }
           .neoHeadIn .neoMark{ width:38px !important; height:38px !important; }
           .neoInsight{ padding:13px 14px 13px 18px; }
+          .neoInsPrev{ display:none; }
+          .neoInsCta,.neoInsGhost{ flex:1; text-align:center; }
           .neoInsTxt{ font-size:13.5px; }
           .neoScroll{ padding:14px 0 6px; }
           .neoEmptyMark .neoMark{ width:72px !important; height:72px !important; }
@@ -595,16 +657,33 @@ export default function NeoChat() {
 
         {!semConexao && !demo && (
           <>
-            {/* Insight do dia */}
-            {(carregandoIns || ins) && (
+            {/* Insight do dia — recolhido por padrão. Aberto o tempo todo ele
+                vira paisagem e a pessoa para de ler justamente o que é urgente.
+                Fica só a tarja: severidade + a primeira frase. Clicou, abre. */}
+            {(carregandoIns || (ins && !insOculto)) && (
               <div className="neoCol" style={{ marginTop: 16 }}>
-               <div className="neoInsight" style={{ ['--sev' as any]: sev?.cor || 'rgba(240,180,41,.5)' }}>
+               <div className={`neoInsight${insAberto ? ' aberto' : ''}`} style={{ ['--sev' as any]: sev?.cor || 'rgba(240,180,41,.5)' }}>
                 {carregandoIns ? (
-                  <div className="neoInsTag" style={{ marginBottom: 0 }}><span className="neoDot" />Lendo sua operação…</div>
+                  <div className="neoInsBar"><span className="neoDot" /><span className="neoInsRot">Lendo sua operação…</span></div>
                 ) : ins && sev ? (
                   <>
-                    <div className="neoInsTag"><span className="neoDot" />{sev.rotulo}</div>
-                    <div className="neoInsTxt">{rico(ins.texto)}</div>
+                    <button className="neoInsBar" onClick={() => setInsAberto((v) => !v)}
+                      aria-expanded={insAberto} title={insAberto ? 'Recolher' : 'Ver o diagnóstico'}>
+                      <span className="neoDot" />
+                      <span className="neoInsRot">{sev.rotulo}</span>
+                      {!insAberto && <span className="neoInsPrev">{primeiraFrase(ins.texto)}</span>}
+                      <span className="neoInsSeta">{insAberto ? '▴' : '▾'}</span>
+                    </button>
+
+                    {insAberto && (
+                      <div className="neoInsCorpo">
+                        <div className="neoInsTxt">{rico(ins.texto)}</div>
+                        <div className="neoInsAcoes">
+                          <button className="neoInsCta" onClick={resolverInsight} disabled={loading}>Bora resolver</button>
+                          <button className="neoInsGhost" onClick={dispensarInsight}>Depois</button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 ) : null}
                </div>
