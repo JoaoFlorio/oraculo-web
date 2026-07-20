@@ -33,10 +33,10 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
   free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','extension','agente','perfil'],                                                                 modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','new','trending','generics','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 const GREENN: Record<string,string> = {
@@ -73,18 +73,20 @@ const CATS = [
 const NAV = [
   { id:'financeiro',  label:'Gestão'            },
   { id:'bestsellers', label:'Mais Vendidos'     },
-  { id:'new',         label:'Recém Adicionados' },
-  { id:'trending',    label:'Em Alta'           },
-  { id:'generics',    label:'Genéricos'         },
   { id:'saved',       label:'Salvos'            },
   { id:'competitor',  label:'Análise Rival'     },
   { id:'agente',      label:'Agente NEO'        },
   { id:'extension',   label:'Extensão'          },
   { id:'perfil',      label:'Meu Perfil'        },
 ]
+// Abas 'new' (Recém Adicionados), 'trending' (Em Alta) e 'generics' (Genéricos)
+// foram REMOVIDAS em 19/07/2026: cada uma era uma consulta separada à API da
+// Amazon, e o custo não se pagava. A mineração ficou em Mais Vendidos + o
+// seletor de categoria, que cobre o mesmo trabalho com uma chamada só.
+// (As rotas do backend seguem existindo — só não há mais UI chamando.)
 const NAV_GROUPS = [
   { group:'Gestão',      ids:['financeiro'] },
-  { group:'Mineração',   ids:['bestsellers','new','trending','generics','saved','competitor'] },
+  { group:'Mineração',   ids:['bestsellers','saved','competitor'] },
   { group:'Ferramentas', ids:['agente','extension'] },
   { group:'Conta',       ids:['perfil'] },
 ]
