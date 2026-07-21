@@ -70,6 +70,10 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         email: user.email, messages, model: body?.model, agent,
         ...(user.role === 'admin' && body?.provider ? { provider: body.provider } : {}),
+        // Admin (o João) não tem teto no criador de anúncio — precisa gerar à
+        // vontade pra testar. Vem do role REAL do banco (não do cliente), igual
+        // ao `provider` acima. Cliente comum nunca manda isAdmin=true.
+        ...(user.role === 'admin' ? { isAdmin: true } : {}),
         // O CMV (custo por SKU) e a alíquota de imposto vivem no metadata do
         // usuário AQUI no web — a Amazon não conhece o que o seller pagou. O
         // NEO roda no backend e não alcança este banco, então o proxy carrega
