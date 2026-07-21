@@ -21,7 +21,8 @@ type Img = { mediaType: string; data: string }
 // na bolha é um resumo — usado pelo botão "Bora resolver" do insight, que
 // mostra uma frase curta mas manda o diagnóstico inteiro como contexto.
 type Ficha = { provider?: string; model?: string; ms?: number; tokensSaida?: number }
-type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[]; ficha?: Ficha }
+type ImgGerada = { rotulo: string; mediaType: string; data: string }
+type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[]; ficha?: Ficha; geradas?: ImgGerada[] }
 type Insight = { texto: string; severidade: 'critico' | 'atencao' | 'ok'; geradoEm: string } | null
 
 const GPT_AGENT_URL = 'https://chatgpt.com/g/g-6a02736d422081918e58416c49426a3a-oraculo-ia-especialista-em-marketplace'
@@ -336,6 +337,7 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
         setMsgs([...historico, {
           role: 'assistant', text: data.reply || '(sem resposta)',
           ficha: { provider: data.provider, model: data.model, ms: data.ms, tokensSaida: data.usage?.output_tokens },
+          geradas: Array.isArray(data.imagens) ? data.imagens : undefined,
         }])
         if (VOZ_SAIDA && vozAtiva && data.reply) falar(data.reply)
       }
@@ -449,6 +451,14 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
         .neoMotor button:disabled{ opacity:.5; cursor:default; }
         .neoFicha{ font-family:'IBM Plex Mono', monospace; font-size:9.5px; letter-spacing:.1em;
           color:rgba(240,180,41,.45); margin-top:9px; }
+        .neoGerGrid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:4px 0 12px; }
+        @media (max-width:560px){ .neoGerGrid{ grid-template-columns:repeat(2,1fr); } }
+        .neoGerCard{ display:block; border-radius:11px; overflow:hidden; border:1px solid rgba(240,180,41,.2);
+          background:#000; text-decoration:none; transition:transform .2s, border-color .2s; }
+        .neoGerCard:hover{ transform:translateY(-2px); border-color:rgba(240,180,41,.55); }
+        .neoGerCard img{ width:100%; aspect-ratio:1; object-fit:cover; display:block; }
+        .neoGerCard span{ display:block; font-size:9.5px; color:rgba(233,228,212,.7); padding:5px 7px; text-align:center; }
+        .neoGerCard:hover span{ color:#f0b429; }
         .neoVozSel{ background:rgba(255,255,255,.04); border:1px solid rgba(240,180,41,.22); border-radius:999px;
           color:rgba(245,239,223,.8); font-family:'IBM Plex Mono', monospace; font-size:10.5px;
           padding:7px 10px; cursor:pointer; outline:none; max-width:150px; }
@@ -765,6 +775,19 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
                 ) : (
                   <div key={i} className="neoMsgN">
                       <div className="neoMsgTag">NEO</div>
+                    {/* Imagens que o NEO gerou (Criador de Anúncio pelo chat) —
+                        cada uma clicável pra baixar. */}
+                    {m.geradas?.length ? (
+                      <div className="neoGerGrid">
+                        {m.geradas.map((g, k) => (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <a key={k} className="neoGerCard" href={`data:${g.mediaType};base64,${g.data}`} download={`anuncio-${k + 1}.png`} title={`${g.rotulo} — baixar`}>
+                            <img src={`data:${g.mediaType};base64,${g.data}`} alt={g.rotulo} />
+                            <span>{g.rotulo} ⬇</span>
+                          </a>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className="neoMsgTxt">{rico(m.text)}</div>
                     {isAdmin && m.ficha?.provider && (
                       <div className="neoFicha">
