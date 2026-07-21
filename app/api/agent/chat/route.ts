@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
 import { demoConfigFor } from '@/lib/demo'
+import { prisma } from '@/lib/db'
+
+// Lê o CMV por SKU (gestao_cmv) e a alíquota (gestao_imposto) que o seller
+// cadastrou na aba Gerenciamento. Falha vira {} — o NEO ainda funciona sem, só
+// não calcula lucro/margem, e é instruído a pedir o custo nesse caso.
+async function custosDoSeller(userId: string): Promise<{ cmv?: Record<string, number>; aliquota?: number }> {
+  try {
+    const u = await prisma.user.findUnique({ where: { id: userId }, select: { metadata: true } })
+    const m = (u?.metadata ?? {}) as Record<string, any>
+    const cmv = m.gestao_cmv && typeof m.gestao_cmv === 'object' ? m.gestao_cmv : undefined
+    const aliquota = Number(m.gestao_imposto) || undefined
+    return { ...(cmv ? { cmv } : {}), ...(aliquota ? { aliquota } : {}) }
+  } catch { return {} }
+}
 
 // Proxy do AGENTE de IA. Reaproveita o MESMO encanamento das outras rotas:
 // sessão → user.email, BACKEND_URL e INTERNAL_KEY do web. O front manda só
@@ -45,6 +59,12 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         email: user.email, messages, model: body?.model, agent,
         ...(user.role === 'admin' && body?.provider ? { provider: body.provider } : {}),
+        // O CMV (custo por SKU) e a alíquota de imposto vivem no metadata do
+        // usuário AQUI no web — a Amazon não conhece o que o seller pagou. O
+        // NEO roda no backend e não alcança este banco, então o proxy carrega
+        // esses dados e repassa. Sem isso, o NEO só via faturamento e ads, e
+        // dava "análise completa" sem lucro nem margem reais.
+        ...(agent === 'neo' ? await custosDoSeller(user.id) : {}),
       }),
     })
     const data = await res.json().catch(() => ({ error: 'resposta inválida do agente' }))
