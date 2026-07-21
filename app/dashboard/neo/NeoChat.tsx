@@ -735,7 +735,7 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
             )}
 
             <div className="neoCol" style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <button className="neoImgBtn" onClick={() => setImgAberto(true)}>🎨 Criar imagem do anúncio</button>
+              <button className="neoImgBtn" onClick={() => setImgAberto(true)}>🎨 Criar anúncio completo</button>
               <a className="neoGptAlt" href={GPT_AGENT_URL} target="_blank" rel="noreferrer">ou usar o Agente GPT ↗</a>
             </div>
 
