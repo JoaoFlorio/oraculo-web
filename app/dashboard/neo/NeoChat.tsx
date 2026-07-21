@@ -1,6 +1,5 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import NeoImagem from './NeoImagem'
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * AGENTE NEO — ambiente premium
@@ -162,7 +161,6 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
   // de ler justamente o que é urgente. Quem quiser o detalhe, clica.
   const [insAberto, setInsAberto] = useState(false)
   const [insOculto, setInsOculto] = useState(false)
-  const [imgAberto, setImgAberto] = useState(false)   // modal do gerador de imagem
 
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
@@ -183,6 +181,7 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)   // pro atalho de anúncio focar o campo
 
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }) }, [msgs, loading, pend])
 
@@ -745,7 +744,12 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
             )}
 
             <div className="neoCol" style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-              <button className="neoImgBtn" onClick={() => setImgAberto(true)}>🎨 Criar anúncio completo</button>
+              <button className="neoImgBtn" onClick={() => {
+                // Atalho: em vez de abrir modal, escreve a frase pronta no chat e
+                // foca o campo — um caminho só (a conversa), o botão só ensina.
+                setInput('Cria o anúncio completo desse produto: ')
+                setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) } }, 30)
+              }}>🎨 Criar anúncio completo</button>
               <a className="neoGptAlt" href={GPT_AGENT_URL} target="_blank" rel="noreferrer">ou usar o Agente GPT ↗</a>
             </div>
 
@@ -846,6 +850,7 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
                 </button>
               )}
               <input
+                ref={inputRef}
                 className="neoInput"
                 value={input}
                 placeholder={gravando ? 'Ouvindo você…' : 'Pergunte sobre sua operação…'}
@@ -861,7 +866,6 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
           </>
         )}
       </div>
-      {imgAberto && <NeoImagem onClose={() => setImgAberto(false)} />}
     </div>
   )
 }
