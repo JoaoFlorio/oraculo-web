@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import NeoImagem from './NeoImagem'
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * AGENTE NEO — ambiente premium
@@ -160,6 +161,7 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
   // de ler justamente o que é urgente. Quem quiser o detalhe, clica.
   const [insAberto, setInsAberto] = useState(false)
   const [insOculto, setInsOculto] = useState(false)
+  const [imgAberto, setImgAberto] = useState(false)   // modal do gerador de imagem
 
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
@@ -560,6 +562,14 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
         .neoSend:hover{ transform:translateY(-1px); box-shadow:0 10px 30px rgba(240,180,41,.42); }
         .neoSend:disabled{ opacity:.55; transform:none; cursor:default; }
 
+        .neoImgBtn{ display:inline-flex; align-items:center; gap:7px; font-family:'IBM Plex Mono', monospace;
+          font-size:11px; letter-spacing:.06em; font-weight:600; cursor:pointer;
+          color:#0d0a02; background:linear-gradient(135deg,#ffd763,#f0b429); border:none; border-radius:999px;
+          padding:9px 15px; box-shadow:0 4px 16px rgba(240,180,41,.25); transition:transform .2s; }
+        .neoImgBtn:hover{ transform:translateY(-1px); }
+        .neoGptAlt{ font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.08em;
+          color:rgba(233,228,212,.4); text-decoration:none; }
+        .neoGptAlt:hover{ color:rgba(240,180,41,.7); }
         .neoGpt{ align-self:flex-start; display:inline-flex; align-items:center; gap:7px;
           font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.14em; text-transform:uppercase;
           color:rgba(49,209,131,.85); background:rgba(49,209,131,.06); border:1px solid rgba(49,209,131,.25);
@@ -724,8 +734,9 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
               </div>
             )}
 
-            <div className="neoCol" style={{ marginTop: 14 }}>
-              <a className="neoGpt" href={GPT_AGENT_URL} target="_blank" rel="noreferrer">◈ Gerar imagens no Agente GPT ↗</a>
+            <div className="neoCol" style={{ marginTop: 14, display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button className="neoImgBtn" onClick={() => setImgAberto(true)}>🎨 Criar imagem do anúncio</button>
+              <a className="neoGptAlt" href={GPT_AGENT_URL} target="_blank" rel="noreferrer">ou usar o Agente GPT ↗</a>
             </div>
 
             {/* Conversa */}
@@ -827,6 +838,7 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
           </>
         )}
       </div>
+      {imgAberto && <NeoImagem onClose={() => setImgAberto(false)} />}
     </div>
   )
 }
