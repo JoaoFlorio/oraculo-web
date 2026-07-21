@@ -219,7 +219,12 @@ export function demoInventory(cfg: DemoConfig): any {
     const fulfillable = 40 + ((i * 37) % 220)
     return { sku: p.sku, asin: `B0DEMO${p.sku.slice(-2)}`, name: p.name, image: '', fulfillable, inbound: (i * 13) % 60, reserved: (i * 7) % 20, unfulfillable: 0 }
   })
-  return { connected: true, itens, demo: true }
+  // ⚠️ A chave é `inventario`, não `itens`: é o nome que o backend real devolve
+  // e o único que o painel lê (`GestaoHub` linha ~1091 exige
+  // Array.isArray(d.inventario), senão marca 'indisponível'). Com `itens` a
+  // conta DEMO mostrava Estoque FBA vazio e Curva Z morta — bem na conta usada
+  // pra apresentar. Corrigido 21/07.
+  return { connected: true, inventario: itens, demo: true }
 }
 
 // Faixa de datas equivalente à janela de ads (espelha o backend).

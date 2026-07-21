@@ -4,16 +4,27 @@ import { getSession } from '@/lib/auth'
 import { demoConfigFor } from '@/lib/demo'
 import { prisma } from '@/lib/db'
 
-// Lê o CMV por SKU (gestao_cmv) e a alíquota (gestao_imposto) que o seller
-// cadastrou na aba Gerenciamento. Falha vira {} — o NEO ainda funciona sem, só
-// não calcula lucro/margem, e é instruído a pedir o custo nesse caso.
+// Lê o custo por SKU e a alíquota (gestao_imposto) que o seller cadastrou na
+// aba Gerenciamento. Falha vira {} — o NEO ainda funciona sem, só não calcula
+// lucro/margem, e é instruído a pedir o custo nesse caso.
+//
+// ⚠️ O custo do seller mora em DUAS chaves: `gestao_cmv` (o produto) e
+// `gestao_extras` (prep center, etiqueta, embalagem, frete de entrada). O
+// painel soma as duas antes de calcular qualquer coisa — o NEO tem que receber
+// a MESMA soma, senão ele responde uma margem e a tela mostra outra.
 async function custosDoSeller(userId: string): Promise<{ cmv?: Record<string, number>; aliquota?: number }> {
   try {
     const u = await prisma.user.findUnique({ where: { id: userId }, select: { metadata: true } })
     const m = (u?.metadata ?? {}) as Record<string, any>
-    const cmv = m.gestao_cmv && typeof m.gestao_cmv === 'object' ? m.gestao_cmv : undefined
+    const base = m.gestao_cmv && typeof m.gestao_cmv === 'object' ? m.gestao_cmv as Record<string, any> : {}
+    const extras = m.gestao_extras && typeof m.gestao_extras === 'object' ? m.gestao_extras as Record<string, any> : {}
+    const cmv: Record<string, number> = {}
+    for (const sku of new Set([...Object.keys(base), ...Object.keys(extras)])) {
+      const soma = (Number(base[sku]) || 0) + (Number(extras[sku]) || 0)
+      if (soma > 0) cmv[sku] = soma
+    }
     const aliquota = Number(m.gestao_imposto) || undefined
-    return { ...(cmv ? { cmv } : {}), ...(aliquota ? { aliquota } : {}) }
+    return { ...(Object.keys(cmv).length ? { cmv } : {}), ...(aliquota ? { aliquota } : {}) }
   } catch { return {} }
 }
 

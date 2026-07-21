@@ -837,17 +837,36 @@ function Analitico({realDre,hide,connected,mockM,costs={},imposto=0}:{realDre?:a
   void mockM
   return <ConnectEmpty/>   // não conectado → vazio (sem mock)
 }
-function Gerenciamento({realDre,costs,onCost,mockM,hide,connected,imposto=0,onImposto}:{realDre?:any;costs:Record<string,number>;onCost:(sku:string,v:number)=>void;mockM:ProductMetrics[];hide:boolean;connected?:boolean|null;imposto?:number;onImposto?:(v:number)=>void}){
+function Gerenciamento({realDre,inv,costs,extras,onCost,onExtra,mockM,hide,connected,imposto=0,onImposto}:{realDre?:any;inv?:any;costs:Record<string,number>;extras:Record<string,number>;onCost:(sku:string,v:number)=>void;onExtra:(sku:string,v:number)=>void;mockM:ProductMetrics[];hide:boolean;connected?:boolean|null;imposto?:number;onImposto?:(v:number)=>void}){
   const t=useT()
   void mockM
-  if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon para informar o custo (CMV) dos seus produtos."/>
+  if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon para informar o custo dos seus produtos."/>
   if(!realDre) return <LoadingBox/>
-  if(!realDre.produtos?.length) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhum produto vendido no período selecionado.</div>
-  const prods=realDre.produtos as any[]
-  const cmvTotal=prods.reduce((sum,p)=>sum+p.units*(costs[p.sku]||0),0)
+
+  // ── A LISTA = quem VENDEU no período ∪ quem tem ESTOQUE FBA ──────────────
+  // Antes só listava quem vendeu no período. Efeito colateral (reportado pelo
+  // João): produto novo, ou parado sem venda no dia, não tinha ONDE cadastrar o
+  // custo — e o "Capital em estoque" do Estoque FBA saía subestimado, avisando
+  // "N SKUs sem custo não somados" sem dar como resolver. Agora o seller
+  // cadastra o custo assim que o produto entra no estoque.
+  const vendidos = (realDre.produtos||[]) as any[]
+  const estoque = (inv?.inventario||[]) as any[]
+  const porSku = new Map<string,any>()
+  for(const p of vendidos) porSku.set(p.sku,{sku:p.sku,name:p.name,image:p.image,units:p.units||0,receita:p.receita||0,emEstoque:0})
+  for(const it of estoque){
+    const emEstoque=(it.fulfillable||0)+(it.inbound||0)+(it.reserved||0)
+    const atual=porSku.get(it.sku)
+    if(atual) atual.emEstoque=emEstoque
+    else porSku.set(it.sku,{sku:it.sku,name:it.name,image:it.image,units:0,receita:0,emEstoque})
+  }
+  // Quem vendeu primeiro (maior receita), depois quem só tem estoque parado.
+  const prods=[...porSku.values()].sort((a,b)=> (b.units-a.units) || (b.receita-a.receita) || (b.emEstoque-a.emEstoque))
+  if(!prods.length) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhum produto vendido no período nem em estoque FBA.</div>
+  const cmvTotal=prods.reduce((sum,p)=>sum+p.units*((costs[p.sku]||0)+(extras[p.sku]||0)),0)
+  const semCustoQtd=prods.filter(p=>((p.units||0)>0||(p.emEstoque||0)>0) && !((costs[p.sku]||0)>0)).length
   const inp:React.CSSProperties={width:84,background:t.dark?'rgba(255,255,255,0.05)':'#FFFFFF',border:`1px solid ${t.line2}`,borderRadius:7,color:t.t1,fontSize:12.5,fontWeight:600,padding:'6px 8px',fontFamily:'inherit',outline:'none',textAlign:'right'}
   return(<>
-    <Hint>Informe o custo unitário de cada produto vendido. É o que falta pro Oráculo calcular o seu <b>lucro real</b> — a Amazon não sabe quanto você paga. Os que ainda faltam estão marcados em <b style={{color:t.gold}}>dourado</b>.</Hint>
+    <Hint>Informe o custo unitário de cada produto — <b>os que você vendeu e os que estão em estoque</b>. É o que falta pro Oráculo calcular o seu <b>lucro real</b>: a Amazon não sabe quanto você paga. Em <b>Custos extras</b> vai o que você gasta por unidade além do produto (prep center, etiqueta, embalagem, frete de entrada). Os que ainda faltam estão marcados em <b style={{color:t.gold}}>dourado</b>.{semCustoQtd>0 && <> Faltam <b style={{color:t.gold}}>{semCustoQtd}</b>.</>}</Hint>
     {/* Alíquota de imposto — dedução % sobre a receita em todas as abas (Simples/DAS, etc.) */}
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'12px 16px',marginBottom:14,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const}}>
       <div style={{minWidth:0}}>
@@ -856,11 +875,15 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide,connected,imposto=0,onIm
       </div>
       <input type="number" min={0} max={100} step={0.1} value={imposto||''} placeholder="0" onChange={e=>onImposto?.(Math.max(0,Math.min(100,parseFloat(e.target.value)||0)))} style={{...inp,width:96}}/>
     </div>
-    <Table head={[{label:'Produto',w:'42%'},{label:'Un. vendidas',right:true},{label:'Receita',right:true},{label:'Custo unit.',right:true},{label:'CMV',right:true}]}>
+    <Table head={[{label:'Produto',w:'34%'},{label:'Un. vendidas',right:true},{label:'Em estoque',right:true},{label:'Receita',right:true},{label:'Custo unit.',right:true},{label:'Custos extras',right:true},{label:'CMV',right:true}]}>
       {prods.map((p)=>{
         const cost=costs[p.sku]||0
-        const cmv=p.units*cost
-        const falta=(p.units||0)>0 && cost<=0   // vendeu mas não tem custo → destaca
+        const extra=extras[p.sku]||0
+        const cmv=p.units*(cost+extra)
+        // Destaca quem PRECISA de custo: vendeu OU tem estoque parado. Antes só
+        // olhava venda — e produto em estoque sem custo é justamente o que
+        // desanda o "Capital em estoque".
+        const falta=((p.units||0)>0||(p.emEstoque||0)>0) && cost<=0
         return(
           <tr key={p.sku} style={falta?{background:t.dark?'rgba(240,180,41,0.055)':'#FFFDF5'}:undefined}>
             <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`}}>
@@ -872,20 +895,22 @@ function Gerenciamento({realDre,costs,onCost,mockM,hide,connected,imposto=0,onIm
                 </div>
               </div>
             </td>
-            <NumTd>{p.units}</NumTd>
-            <NumTd hide={hide}>{brl2(p.receita)}</NumTd>
+            <NumTd>{p.units||'—'}</NumTd>
+            <NumTd>{p.emEstoque||'—'}</NumTd>
+            <NumTd hide={hide}>{p.receita>0?brl2(p.receita):'—'}</NumTd>
             <PillTd><input type="number" min={0} step={0.5} value={cost||''} placeholder={falta?'informe':'0,00'} onChange={e=>onCost(p.sku,parseFloat(e.target.value)||0)}
               style={falta?{...inp,border:`1px solid ${t.gold}`,boxShadow:`0 0 0 3px ${t.dark?'rgba(240,180,41,0.10)':'rgba(240,180,41,0.14)'}`}:inp}/></PillTd>
+            <PillTd><input type="number" min={0} step={0.5} value={extra||''} placeholder="0,00" onChange={e=>onExtra(p.sku,parseFloat(e.target.value)||0)} style={inp}/></PillTd>
             <NumTd color={t.gold} hide={hide}>{cmv>0?brl2(cmv):'—'}</NumTd>
           </tr>
         )
       })}
     </Table>
     <div style={{display:'flex',justifyContent:'flex-end',alignItems:'baseline',gap:8,marginTop:12,fontSize:13}}>
-      <span style={{color:t.t2,fontWeight:500}}>CMV Total do período</span>
+      <span style={{color:t.t2,fontWeight:500}}>Custo total do período (produto + extras)</span>
       <span style={{color:t.gold,fontWeight:700,fontFamily:FG,filter:hide?'blur(6px)':'none'}}>{brl2(cmvTotal)}</span>
     </div>
-    <div style={{fontSize:11,color:t.t3,marginTop:8}}>Salvo automaticamente · volte ao Resumo pra ver Lucro Bruto, Margem, ROI e MPA reais.</div>
+    <div style={{fontSize:11,color:t.t3,marginTop:8}}>Salvo automaticamente · <b>Custo unit. + Custos extras</b> entram juntos no lucro, margem, ROI, MPA, Curva ABC e no capital em estoque · volte ao Resumo pra ver os números reais.</div>
   </>)
 }
 function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realDre?:any;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;hide:boolean}){
@@ -976,7 +1001,7 @@ function Relatorio({realDre,inv,costs={}}:{realDre?:any;inv?:any;costs?:Record<s
   const L=realDre?.linhas||{}
   const reps:{label:string;icon:string;off:boolean;gen:()=>string;file:string}[]=[
     {label:'Produtos / Vendas',icon:'ti-list',off:!produtos.length,file:'produtos-vendas',
-      gen:()=>toCSV(['Produto','SKU','ASIN','Unidades','Faturado','Preço médio','Custo un.'],produtos.map(p=>[p.name||p.sku,p.sku,p.asin||'',p.units,p.receita,p.units>0?(p.receita/p.units).toFixed(2):'0',costs[p.sku]||0]))},
+      gen:()=>toCSV(['Produto','SKU','ASIN','Unidades','Faturado','Preço médio','Custo un. (produto + extras)'],produtos.map(p=>[p.name||p.sku,p.sku,p.asin||'',p.units,p.receita,p.units>0?(p.receita/p.units).toFixed(2):'0',costs[p.sku]||0]))},
     {label:'Reembolsos',icon:'ti-arrow-back-up',off:!reembolsos.length,file:'reembolsos',
       gen:()=>toCSV(['Produto','SKU','Unidades devolvidas','R$ devolvido'],reembolsos.map(r=>[r.name||r.sku,r.sku,r.units,r.valor]))},
     {label:'Estoque FBA',icon:'ti-package',off:!inventario.length,file:'estoque-fba',
@@ -1116,6 +1141,33 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
       return next
     })
   }
+  // CUSTOS EXTRAS por unidade — prep center, etiquetagem, embalagem, frete de
+  // entrada. Fica separado do CMV na tela (o seller precisa enxergar quanto do
+  // custo é o produto e quanto é a operação), mas soma junto em TODO cálculo:
+  // é custo por unidade vendida igual ao CMV.
+  const [extras,setExtras]=useState<Record<string,number>>({})
+  const extraTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
+  useEffect(()=>{ fetch('/api/user/metadata?key=gestao_extras').then(r=>r.json()).then(d=>{ if(d&&d.value&&typeof d.value==='object') setExtras(d.value) }).catch(()=>{}) },[])
+  const setExtra=(sku:string,val:number)=>{
+    setExtras(prev=>{
+      const next={...prev,[sku]:val}
+      if(extraTimer.current) clearTimeout(extraTimer.current)
+      extraTimer.current=setTimeout(()=>{ fetch('/api/user/metadata',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'gestao_extras',value:next})}).catch(()=>{}) },1200)
+      return next
+    })
+  }
+  // ⚠️ FONTE ÚNICA do custo unitário pro resto do painel. Todas as abas recebem
+  // ESTE mapa no lugar do `costs` cru — assim custo extra entra em lucro,
+  // margem, ROI, MPA, Curva ABC e capital em estoque sem tocar em cada cálculo.
+  // Só a aba Gerenciamento recebe os dois mapas separados, pra editar cada um.
+  const custoUnit = useMemo(()=>{
+    const out:Record<string,number>={}
+    for(const sku of new Set([...Object.keys(costs),...Object.keys(extras)])){
+      const soma=(costs[sku]||0)+(extras[sku]||0)
+      if(soma>0) out[sku]=soma
+    }
+    return out
+  },[costs,extras])
   // Alíquota de imposto (%) — informada pelo seller (default 0 → não deduz nada).
   const [imposto,setImposto]=useState<number>(0)
   const impTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
@@ -1127,12 +1179,12 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
   }
   // Produto selecionado para o modal de detalhamento (lupinha).
   const [detail,setDetail]=useState<{sku:string;name:string;image?:string;asin?:string}|null>(null)
-  const cmv = realDre?.produtos ? realDre.produtos.reduce((sum:number,p:any)=>sum+p.units*(costs[p.sku]||0),0) : 0
-  const realM = realDre?.produtos ? realProductMetrics(realDre,costs,imposto) : null
-  // Produtos que VENDERAM no período mas estão sem custo (CMV) informado — sem
-  // isso o Oráculo não tem como calcular lucro/margem/ROI/MPA (mostra "—").
+  const cmv = realDre?.produtos ? realDre.produtos.reduce((sum:number,p:any)=>sum+p.units*(custoUnit[p.sku]||0),0) : 0
+  const realM = realDre?.produtos ? realProductMetrics(realDre,custoUnit,imposto) : null
+  // Produtos que VENDERAM no período mas estão sem custo informado — sem isso o
+  // Oráculo não tem como calcular lucro/margem/ROI/MPA (mostra "—").
   const prodsComVenda = (realDre?.produtos||[]).filter((p:any)=>(p.units||0)>0).length
-  const semCusto = (realDre?.produtos||[]).filter((p:any)=>(p.units||0)>0 && !((costs[p.sku]||0)>0))
+  const semCusto = (realDre?.produtos||[]).filter((p:any)=>(p.units||0)>0 && !((custoUnit[p.sku]||0)>0))
   const realAbcData = realM ? realAbc(realM) : null
   useEffect(()=>{
     let s = (typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')) || ''
@@ -1244,18 +1296,18 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
         )}
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={costs} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide} onDetail={setDetail}/>}
-        {tab==='abc'    && <CurvaABC realDre={realDre} costs={costs} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
+        {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
-        {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={costs} imposto={imposto}/>}
-        {tab==='gerenc' && <Gerenciamento realDre={realDre} costs={costs} onCost={setCost} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto}/>}
-        {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={costs} hide={hide}/>}
-        {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={costs}/>}
+        {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto}/>}
+        {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto}/>}
+        {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
+        {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={custoUnit}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
 
         {/* Modal de detalhamento (lupinha) — sobre qualquer aba */}
-        {detail && realDre && <ProdutoDetalhe produto={detail} realDre={realDre} adsReal={adsData} costs={costs} imposto={imposto} hide={hide} onClose={()=>setDetail(null)}/>}
+        {detail && realDre && <ProdutoDetalhe produto={detail} realDre={realDre} adsReal={adsData} costs={custoUnit} imposto={imposto} hide={hide} onClose={()=>setDetail(null)}/>}
       </div>
     </ThemeCtx.Provider>
   )
