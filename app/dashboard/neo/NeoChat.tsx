@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import Carteira from './Carteira'
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * AGENTE NEO — ambiente premium
@@ -689,6 +690,9 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
           )}
          </div>
         </div>
+
+        {/* Saldo de créditos — some sozinho enquanto a carteira está desligada */}
+        <Carteira />
 
         {/* Sem Amazon conectada */}
         {semConexao && (
