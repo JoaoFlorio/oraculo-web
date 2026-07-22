@@ -74,6 +74,9 @@ export async function POST(req: NextRequest) {
         // vontade pra testar. Vem do role REAL do banco (não do cliente), igual
         // ao `provider` acima. Cliente comum nunca manda isAdmin=true.
         ...(user.role === 'admin' ? { isAdmin: true } : {}),
+        // Plano do aluno — define a COTA mensal inclusa de anúncios. Vem da
+        // sessão (o cliente não escolhe o próprio plano), igual ao isAdmin.
+        planoSeller: user.plan,
         // O CMV (custo por SKU) e a alíquota de imposto vivem no metadata do
         // usuário AQUI no web — a Amazon não conhece o que o seller pagou. O
         // NEO roda no backend e não alcança este banco, então o proxy carrega
