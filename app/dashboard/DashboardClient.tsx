@@ -2132,11 +2132,14 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               style={{background:'transparent',border:`1px solid ${T.line}`,color:T.t2,borderRadius:9,width:36,height:36,cursor:'pointer',flexShrink:0,alignItems:'center',justifyContent:'center'}}>
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M4 6.5h16M4 12h16M4 17.5h16" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
             </button>
-            {/* Saudação real por hora local */}
-            <div style={{minWidth:0}}>
-              <div style={{fontSize:14,fontWeight:700,color:T.t1,letterSpacing:'-0.02em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{greet}, {firstName}</div>
-              <div style={{fontSize:10,color:T.t3,marginTop:1}}>O que vamos garimpar hoje?</div>
-            </div>
+            {/* Saudação real por hora local — escondida na aba do NEO, que tem
+                cabeçalho próprio e vira "outro ambiente". */}
+            {nav!=='agente'&&(
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:700,color:T.t1,letterSpacing:'-0.02em',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{greet}, {firstName}</div>
+                <div style={{fontSize:10,color:T.t3,marginTop:1}}>O que vamos garimpar hoje?</div>
+              </div>
+            )}
             <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:14}}>
               <button onClick={toggleTheme} title={theme==='dark'?'Tema claro':'Tema escuro'} aria-label="Alternar tema"
                 style={{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:9,background:T.card,border:`1px solid ${T.line}`,color:T.t2,cursor:'pointer',transition:'all .15s'}}
@@ -2153,8 +2156,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             </div>
           </header>
 
-          {/* Promo banner */}
-          {promo.active?(
+          {/* Promo banner — fora do NEO. Lá dentro é ruído: trata de tarifa da
+              Amazon, não da conversa, e rouba a atenção do que importa. */}
+          {nav==='agente'?null:promo.active?(
             <div style={{background:'rgba(34,197,94,0.07)',borderBottom:'1px solid rgba(34,197,94,0.2)',padding:'7px 24px',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
               <Ico n="gift" size={14} c={T.g}/>
               <span style={{fontSize:11,color:T.g,flex:1}}>

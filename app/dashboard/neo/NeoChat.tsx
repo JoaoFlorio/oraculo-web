@@ -159,6 +159,15 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
   // Motor que o SERVIDOR usou na última resposta — é o que o seletor mostra
   // quando o admin não forçou nada.
   const [motorAtivo, setMotorAtivo] = useState<'claude' | 'gemini' | null>(null)
+
+  // Busca o motor padrão do servidor no carregamento — assim o seletor já
+  // nasce marcado no motor certo, sem esperar a primeira resposta.
+  useEffect(() => {
+    fetch('/api/agent/config')
+      .then(r => r.json())
+      .then(d => { if (d?.provider === 'claude' || d?.provider === 'gemini') setMotorAtivo(d.provider) })
+      .catch(() => {})
+  }, [])
   const [ins, setIns] = useState<Insight>(null)
   const [carregandoIns, setCarregandoIns] = useState(true)
   const [semConexao, setSemConexao] = useState(false)

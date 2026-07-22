@@ -41,32 +41,33 @@ export default function Carteira() {
 
   const quantosAnuncios = Math.floor(st.saldo / (st.custos.anuncio || 1))
 
+  // Discreto de propósito: uma linha fina alinhada à direita, sem caixa e sem
+  // botão gritando. O saldo é informação de apoio — quem manda na tela é a
+  // conversa. Só chama atenção (fica dourado) quando o saldo não dá mais pra
+  // um anúncio, que é quando ele de fato importa.
+  const acabando = st.saldo < st.custos.anuncio
+
   return (
     <>
       <div style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        flexWrap: 'wrap', padding: '10px 14px', marginBottom: 14,
-        background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(240,180,41,0.22)',
-        borderRadius: 12,
+        display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+        gap: 8, marginBottom: 10, fontSize: 12,
       }}>
-        <div style={{ minWidth: 0 }}>
-          <span style={{ fontSize: 11, letterSpacing: '.08em', textTransform: 'uppercase', opacity: .6 }}>
-            Créditos do NEO
-          </span>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 2 }}>
-            <strong style={{ fontSize: 22, color: OURO, fontFamily: 'IBM Plex Mono, monospace' }}>{st.saldo}</strong>
-            <span style={{ fontSize: 11.5, opacity: .65 }}>
-              {quantosAnuncios > 0
-                ? `dá pra ${quantosAnuncios} anúncio${quantosAnuncios > 1 ? 's' : ''}`
-                : `um anúncio custa ${st.custos.anuncio}`}
-            </span>
-          </div>
-        </div>
+        <span style={{ opacity: .45 }}>Créditos</span>
+        <strong style={{
+          fontFamily: 'IBM Plex Mono, monospace',
+          color: acabando ? OURO : 'inherit',
+          opacity: acabando ? 1 : .8,
+        }}>{st.saldo}</strong>
+        {quantosAnuncios > 0 && (
+          <span style={{ opacity: .35 }}>· {quantosAnuncios} anúncio{quantosAnuncios > 1 ? 's' : ''}</span>
+        )}
         <button onClick={() => setAberto(true)} style={{
-          background: OURO, color: '#1a1204', border: 'none', borderRadius: 9,
-          padding: '9px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-          minHeight: 40,
-        }}>Recarregar</button>
+          background: 'transparent', border: 'none', color: OURO,
+          fontSize: 12, cursor: 'pointer', padding: '2px 0', marginLeft: 2,
+          fontFamily: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3,
+          opacity: acabando ? 1 : .7,
+        }}>recarregar</button>
       </div>
 
       {aberto && (
