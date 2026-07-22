@@ -153,7 +153,12 @@ function NeoMark({ size = 46, on = false }: { size?: number; on?: boolean }) {
 export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
   // Comparação de motores: SÓ admin. O cliente sempre recebe o motor padrão do
   // servidor — ninguém deve cair num motor ainda em avaliação.
-  const [motor, setMotor] = useState<'claude' | 'gemini'>('claude')
+  // null = deixa o servidor decidir (AGENT_PROVIDER). Só vira 'claude'/'gemini'
+  // quando o admin escolhe DE PROPÓSITO no seletor.
+  const [motor, setMotor] = useState<'claude' | 'gemini' | null>(null)
+  // Motor que o SERVIDOR usou na última resposta — é o que o seletor mostra
+  // quando o admin não forçou nada.
+  const [motorAtivo, setMotorAtivo] = useState<'claude' | 'gemini' | null>(null)
   const [ins, setIns] = useState<Insight>(null)
   const [carregandoIns, setCarregandoIns] = useState(true)
   const [semConexao, setSemConexao] = useState(false)
@@ -303,7 +308,7 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
     try {
       const corpo = JSON.stringify({
         agent: 'neo',
-        ...(isAdmin ? { provider: motor } : {}),
+        ...(isAdmin && motor ? { provider: motor } : {}),
         messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })),
       })
 
@@ -334,6 +339,9 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
         console.error('[NEO] falhou:', ultimoStatus, data)
         setErro(data?.error || 'O NEO não conseguiu responder agora. Tente de novo em instantes.')
       } else {
+        // Guarda qual motor o servidor usou de verdade — é o que o seletor
+        // mostra enquanto o admin não força nenhum.
+        if (data.provider === 'claude' || data.provider === 'gemini') setMotorAtivo(data.provider)
         setMsgs([...historico, {
           role: 'assistant', text: data.reply || '(sem resposta)',
           ficha: { provider: data.provider, model: data.model, ms: data.ms, tokensSaida: data.usage?.output_tokens },
@@ -647,9 +655,15 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
               e a ficha técnica embaixo de cada resposta mostra quem foi, quanto
               demorou e quantos tokens saíram. */}
           {isAdmin && (
-            <div className="neoMotor" title="Motor de IA usado nas próximas perguntas (só você vê)">
+            <div className="neoMotor" title={motor
+              ? 'Motor escolhido por você para as próximas perguntas (só você vê)'
+              : 'Usando o motor padrão do servidor. Clique para forçar um específico e comparar.'}>
               {(['claude', 'gemini'] as const).map((m) => (
-                <button key={m} className={motor === m ? 'on' : ''} onClick={() => setMotor(m)} disabled={loading}>
+                // Sem escolha explícita, marca o motor que o servidor REALMENTE
+                // usou na última resposta — antes o botão "Claude" nascia aceso
+                // e mentia sobre qual motor estava rodando.
+                <button key={m} className={(motor ?? motorAtivo) === m ? 'on' : ''}
+                  onClick={() => setMotor(motor === m ? null : m)} disabled={loading}>
                   {m === 'claude' ? 'Claude' : 'Gemini'}
                 </button>
               ))}
