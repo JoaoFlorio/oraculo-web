@@ -20,7 +20,16 @@ type Img = { mediaType: string; data: string }
 // `envio` (opcional) é o que REALMENTE vai pro modelo quando o texto exibido
 // na bolha é um resumo — usado pelo botão "Bora resolver" do insight, que
 // mostra uma frase curta mas manda o diagnóstico inteiro como contexto.
-type Ficha = { provider?: string; model?: string; ms?: number; tokensSaida?: number }
+// A ficha mostrava só `tokensSaida`, e isso enganava: a SAÍDA é a menor parte
+// da conta. A persona + as ferramentas + o resultado da DRE reentram no
+// contexto a cada rodada, então a ENTRADA costuma ser várias vezes maior — e
+// era justamente ela que não aparecia em lugar nenhum. Agora vem entrada,
+// quanto dela veio do cache (que é o que segura o preço) e o custo em real.
+type Ficha = {
+  provider?: string; model?: string; ms?: number
+  tokensEntrada?: number; tokensCache?: number; tokensSaida?: number
+  custoBrl?: number
+}
 type ImgGerada = { rotulo: string; mediaType: string; data: string }
 type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[]; ficha?: Ficha; geradas?: ImgGerada[] }
 type Insight = { texto: string; severidade: 'critico' | 'atencao' | 'ok'; geradoEm: string } | null
@@ -33,6 +42,9 @@ const SUGESTOES = [
   'Onde estou perdendo margem?',
 ]
 const MAX_IMGS = 3
+
+/** 16234 → "16,2k". A ficha do admin é uma linha; ordem de grandeza basta. */
+const milhar = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1).replace('.', ',')}k` : String(n)
 
 /**
  * Voz de saída (o NEO falando a resposta em voz alta) — DESLIGADA por decisão
@@ -353,7 +365,13 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
         if (data.provider === 'claude' || data.provider === 'gemini') setMotorAtivo(data.provider)
         setMsgs([...historico, {
           role: 'assistant', text: data.reply || '(sem resposta)',
-          ficha: { provider: data.provider, model: data.model, ms: data.ms, tokensSaida: data.usage?.output_tokens },
+          ficha: {
+            provider: data.provider, model: data.model, ms: data.ms,
+            tokensEntrada: data.usage?.input_tokens,
+            tokensCache: data.usage?.cache_read_input_tokens,
+            tokensSaida: data.usage?.output_tokens,
+            custoBrl: data.custo?.brl,
+          },
           geradas: Array.isArray(data.imagens) ? data.imagens : undefined,
         }])
         if (VOZ_SAIDA && vozAtiva && data.reply) falar(data.reply)
@@ -824,7 +842,16 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
                       <div className="neoFicha">
                         {m.ficha.provider === 'gemini' ? 'Gemini' : 'Claude'} · {m.ficha.model}
                         {m.ficha.ms ? ` · ${(m.ficha.ms / 1000).toFixed(1)}s` : ''}
-                        {m.ficha.tokensSaida ? ` · ${m.ficha.tokensSaida} tokens` : ''}
+                        {m.ficha.tokensEntrada ? ` · ${milhar(m.ficha.tokensEntrada)} entrada${
+                          m.ficha.tokensCache ? ` (${Math.round(m.ficha.tokensCache / m.ficha.tokensEntrada * 100)}% cache)` : ''
+                        }` : ''}
+                        {m.ficha.tokensSaida ? ` · ${milhar(m.ficha.tokensSaida)} saída` : ''}
+                        {/* O custo fecha a conta: sem ele os tokens são número solto.
+                            Some quando o modelo não está na tabela de preços do
+                            backend — melhor faltar que exibir um valor inventado. */}
+                        {typeof m.ficha.custoBrl === 'number'
+                          ? ` · R$ ${m.ficha.custoBrl.toFixed(m.ficha.custoBrl < 0.1 ? 3 : 2).replace('.', ',')}`
+                          : ''}
                       </div>
                     )}
                   </div>
