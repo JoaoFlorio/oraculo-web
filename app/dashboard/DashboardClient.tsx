@@ -2450,7 +2450,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 botão pro GPT de imagens vive dentro do chat). */}
             {nav==='agente'&&(
               <div style={{flex:1,minHeight:0,display:'flex',flexDirection:'column'}}>
-                <NeoChat isAdmin={user.role==='admin'}/>
+                <NeoChat isAdmin={user.role==='admin'} userEmail={user.email}/>
               </div>
             )}
 

@@ -162,7 +162,7 @@ function NeoMark({ size = 46, on = false }: { size?: number; on?: boolean }) {
   )
 }
 
-export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
+export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?: boolean; userEmail?: string }) {
   // Comparação de motores: SÓ admin. O cliente sempre recebe o motor padrão do
   // servidor — ninguém deve cair num motor ainda em avaliação.
   // null = deixa o servidor decidir (AGENT_PROVIDER). Só vira 'claude'/'gemini'
@@ -195,6 +195,46 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
 
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
+
+  // ── Persistência da conversa ──────────────────────────────────────────────
+  // O componente do NEO desmonta ao trocar de aba (Gestão etc.), e antes a
+  // conversa vivia só no estado — sumia toda vez. Agora ela fica no localStorage,
+  // amarrada ao e-mail do usuário (pra não vazar entre contas num device
+  // compartilhado), e volta quando ele reabre a aba.
+  //
+  // ⚠️ NÃO guardamos base64 de imagem (anexos do vendedor nem imagens geradas):
+  // são enormes e estouram a cota de ~5MB do localStorage. Salvamos o TEXTO — a
+  // análise, a copy, o raciocínio, que é o que ele não quer refazer. Ao recarregar
+  // o texto continua; as imagens geradas ele rebaixa/regenera.
+  const chaveConversa = `oraculo_neo_chat_v1:${userEmail || 'anon'}`
+  const hidratadoRef = useRef(false)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(chaveConversa)
+      if (raw) {
+        const salvo = JSON.parse(raw) as Msg[]
+        if (Array.isArray(salvo) && salvo.length) setMsgs(salvo)
+      }
+    } catch {}
+    hidratadoRef.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveConversa])
+  useEffect(() => {
+    if (!hidratadoRef.current) return
+    // Nunca sobrescreve com vazio: no 1º render pós-hidratação o estado ainda é
+    // [] antes do setMsgs do load aplicar — salvar aqui apagaria a conversa
+    // recém-carregada. Limpar de propósito é a função limparConversa (remove a chave).
+    if (!msgs.length) return
+    try {
+      const leve = msgs.slice(-40).map(({ images, geradas, ...resto }) => resto)
+      localStorage.setItem(chaveConversa, JSON.stringify(leve))
+    } catch {}
+  }, [msgs, chaveConversa])
+  const limparConversa = () => {
+    setMsgs([])
+    ultimoEnvioRef.current = null
+    try { localStorage.removeItem(chaveConversa) } catch {}
+  }
   const [pend, setPend] = useState<Img[]>([])
   const [loading, setLoading] = useState(false)
   const [seg, setSeg] = useState(0)          // segundos decorridos na consulta
@@ -509,6 +549,12 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
         .neoVozSel option{ background:#12121a; color:#f5efdf; }
         .neoVoice.on{ color:#0d0a02; background:#f0b429; border-color:#f0b429; font-weight:600;
           box-shadow:0 0 24px rgba(240,180,41,.35); }
+        .neoLimpar{ display:flex; align-items:center; gap:7px;
+          font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+          color:rgba(245,239,223,.5); background:transparent; border:1px solid rgba(240,180,41,.2);
+          border-radius:999px; padding:8px 13px; cursor:pointer; transition:all .25s; }
+        .neoLimpar:hover{ border-color:rgba(240,180,41,.5); color:#f5efdf; }
+        .neoLimpar:disabled{ opacity:.4; cursor:default; }
 
         /* ── Insight ── */
         .neoInsight{ position:relative; border-radius:14px; overflow:hidden;
@@ -756,6 +802,15 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
               }}>
               {vozes.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
             </select>
+          )}
+
+          {/* Limpar conversa — aparece só quando há histórico. Como a conversa
+              agora persiste, é o único jeito de começar do zero. */}
+          {msgs.length > 0 && (
+            <button className="neoLimpar" onClick={limparConversa} disabled={loading}
+              title="Começar uma conversa nova (apaga o histórico salvo)">
+              <span style={{ fontSize: 13, lineHeight: 1 }}>↺</span> <span className="lbl">Nova</span>
+            </button>
           )}
          </div>
         </div>
