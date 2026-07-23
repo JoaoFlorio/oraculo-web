@@ -710,10 +710,12 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
               preview 1/3 do preço NA MESMA pergunta; a ficha embaixo da resposta
               diz qual respondeu e o custo. null = deixa o servidor decidir. */}
           {isAdmin && (motor ?? motorAtivo) === 'gemini' && (
-            <div className="neoMotor" title="Modelo do Gemini (só você vê). Preview custa ~1/3 — compare a qualidade na mesma pergunta.">
+            <div className="neoMotor" title="Modelo do Gemini (só você vê). Compare qualidade × custo na MESMA pergunta — a ficha mostra qual respondeu e o R$. 3.6 = estável e mais barato; LITE = o mais barato (confira se ele chama as ferramentas); PREV = preview.">
               {([
                 { id: null,                       lbl: '3.5' },
-                { id: 'gemini-3-flash-preview',   lbl: 'PREVIEW' },
+                { id: 'gemini-3.6-flash',         lbl: '3.6' },
+                { id: 'gemini-3.5-flash-lite',    lbl: 'LITE' },
+                { id: 'gemini-3-flash-preview',   lbl: 'PREV' },
               ] as const).map(({ id, lbl }) => (
                 <button key={lbl} className={modeloGemini === id ? 'on' : ''}
                   onClick={() => setModeloGemini(id)} disabled={loading}>
