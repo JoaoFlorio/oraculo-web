@@ -552,7 +552,7 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
         {/* Header */}
         <div style={{display:'flex',gap:20,alignItems:'flex-start',padding:'24px 28px',borderBottom:`1px solid ${T.line}`,background:`linear-gradient(180deg,rgba(240,180,41,0.04) 0%,transparent 100%)`}}>
           <div style={{width:84,height:84,background:'#F8F8F8',borderRadius:12,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-            {product.images?.[0]?<img src={product.images[0]} alt="" style={{maxWidth:70,maxHeight:70,objectFit:'contain'}}/>:<div style={{width:32,height:32,background:'#e0e0e0',borderRadius:6}}/>}
+            {product.images?.[0]?<img src={product.images[0]} alt="" loading="lazy" decoding="async" style={{maxWidth:70,maxHeight:70,objectFit:'contain'}}/>:<div style={{width:32,height:32,background:'#e0e0e0',borderRadius:6}}/>}
           </div>
           <div style={{flex:1,minWidth:0}}>
             <p style={{fontSize:15,fontWeight:600,color:T.t1,lineHeight:1.55,marginBottom:12,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any,overflow:'hidden'}}>{product.title}</p>
@@ -988,7 +988,7 @@ function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:(
       {isGeneric&&!locked&&<div style={{position:'absolute',top:10,left:10,zIndex:2,background:'rgba(3,3,10,0.8)',backdropFilter:'blur(4px)',border:`1px solid ${tint(T.pur,21)}`,borderRadius:4,padding:'2px 7px',fontSize:8,fontWeight:700,color:T.pur,letterSpacing:'0.1em'}}>GENÉRICO</div>}
       {/* Image */}
       <div style={{background:'#F8F8FC',height:162,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
-        {product.images?.[0]?<img src={product.images[0]} alt="" style={{maxHeight:138,maxWidth:'88%',objectFit:'contain',transition:'transform .3s cubic-bezier(.34,1.56,.64,1)',transform:hov?'scale(1.08)':'scale(1)'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>:<div style={{width:44,height:44,background:'#e8e8f0',borderRadius:8}}/>}
+        {product.images?.[0]?<img src={product.images[0]} alt="" loading="lazy" decoding="async" style={{maxHeight:138,maxWidth:'88%',objectFit:'contain',transition:'transform .3s cubic-bezier(.34,1.56,.64,1)',transform:hov?'scale(1.08)':'scale(1)'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>:<div style={{width:44,height:44,background:'#e8e8f0',borderRadius:8}}/>}
       </div>
       <div style={{padding:'14px 14px 16px',flex:1,display:'flex',flexDirection:'column',gap:0}}>
         {sales>0&&bsr>0&&<div style={{display:'flex',alignItems:'center',gap:7,marginBottom:8,flexWrap:'wrap' as const}}>
@@ -1504,7 +1504,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   async function changePassword(){
     setPwMsg(null)
     if(!pwCur||!pwNew||!pwConf){setPwMsg({ok:false,text:'Preencha todos os campos'});return}
-    if(pwNew.length<6){setPwMsg({ok:false,text:'A nova senha deve ter pelo menos 6 caracteres'});return}
+    if(pwNew.length<8){setPwMsg({ok:false,text:'A nova senha deve ter pelo menos 8 caracteres'});return}
     if(pwNew!==pwConf){setPwMsg({ok:false,text:'A confirmação não confere com a nova senha'});return}
     setPwBusy(true)
     try{

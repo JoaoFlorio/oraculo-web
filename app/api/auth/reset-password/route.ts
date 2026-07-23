@@ -10,8 +10,8 @@ export async function POST(req: NextRequest) {
     if (!token || !password)
       return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
 
-    if (password.length < 6)
-      return NextResponse.json({ error: 'A senha deve ter pelo menos 6 caracteres' }, { status: 400 })
+    if (password.length < 8)
+      return NextResponse.json({ error: 'A senha deve ter pelo menos 8 caracteres' }, { status: 400 })
 
     const user = await prisma.user.findUnique({ where: { resetToken: token } })
 

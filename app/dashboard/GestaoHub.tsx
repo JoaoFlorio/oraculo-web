@@ -1112,6 +1112,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
   useEffect(()=>{
     if(!adsConnected) return
     let alive=true, tries=0
+    let timer:ReturnType<typeof setTimeout>|null=null   // captura pra limpar no cleanup (evita timer órfão)
     const win=adsWindow(period)
     // Manda também o from/to exato do período: a conta demo usa isso p/ o Ads bater com
     // o dia/intervalo escolhido (inclusive "custom"/calendário). Backend real usa a janela.
@@ -1121,12 +1122,14 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
       fetch(`/api/ads/report?${qs}`).then(r=>r.json()).then(d=>{
         if(!alive) return
         if(d && d.ready){ setAdsData(d); setAdsLoading(false) }
-        else if(d && d.generating && tries++<70){ setTimeout(tick,12000) }  // 1ª geração leva ~10min: insiste ~14min
+        // Jitter (12-15s) pra 100 clientes não baterem no MESMO tick e virarem
+        // rajada sincronizada no backend/Ads API. 1ª geração leva ~10min.
+        else if(d && d.generating && tries++<70){ timer=setTimeout(tick,12000+Math.floor(Math.random()*3000)) }
         else setAdsLoading(false)
       }).catch(()=>{ if(alive) setAdsLoading(false) })
     }
     tick()
-    return ()=>{ alive=false }
+    return ()=>{ alive=false; if(timer) clearTimeout(timer) }
   },[adsConnected,period,range.from,range.to])
   const adsSpend = adsData?.ready ? Number(adsData.spend)||0 : null
   // Custo (CMV) por SKU — informado pelo seller, salvo no metadata do usuário
