@@ -385,6 +385,17 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
     return {p,receita,units,preco,custoU,repres,lucro,margem,custoAds,lucroPos,mpa}
   }) : []
   return(<>
+    {/* 0) Pendentes — pedidos ainda não confirmados (a Amazon/Gestor só contam
+        confirmado; aqui aparece à parte pra o número principal bater com eles). */}
+    {realDre?.pendentes?.vendas>0 && (
+      <div style={{display:'flex',alignItems:'center',gap:9,background:t.card,border:`1px solid ${t.line}`,borderRadius:11,padding:'10px 14px',marginBottom:13,fontSize:12.5,fontFamily:FG,color:t.t3}}>
+        <span style={{fontSize:14}} aria-hidden>⏳</span>
+        <span>
+          <b style={{color:t.t1}}>{realDre.pendentes.vendas} pedido{realDre.pendentes.vendas>1?'s':''} aguardando confirmação de pagamento</b>
+          {' '}· {hide?'•••':brl2(realDre.pendentes.faturamento)} estimado — <b>não</b> entram nos números acima. A Amazon só conta venda confirmada; assim que o pagamento cair, elas entram sozinhas.
+        </span>
+      </div>
+    )}
     {/* 1) KPIs — cards estilo Gestor, 4 por linha */}
     <div className="ora-kpis" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:13,marginBottom:16}}>
       {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
