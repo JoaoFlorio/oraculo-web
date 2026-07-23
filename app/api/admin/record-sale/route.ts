@@ -20,10 +20,19 @@ export async function POST(req: NextRequest) {
   const name = b.name ? String(b.name).trim() : null
   const status = ['paid', 'refunded', 'canceled'].includes(b.status) ? b.status : 'paid'
   const expiresAt = b.expiresAt ? new Date(b.expiresAt) : null
+  const greennId = b.greennId ? String(b.greennId) : null
+
+  // Idempotência: se a Greenn reenviar o MESMO evento (retry por 500/timeout), a
+  // venda não pode ser contada duas vezes. Deduplica por (greennId, status) —
+  // status no filtro pra um refund do mesmo pedido ainda registrar.
+  if (greennId) {
+    const existing = await prisma.sale.findFirst({ where: { greennId, status } })
+    if (existing) return NextResponse.json({ ok: true, saleId: existing.id, deduped: true })
+  }
 
   // 1) Registra a venda (fonte de verdade do faturamento)
   const sale = await prisma.sale.create({
-    data: { email, name, phone, plan, amount, status, greennId: b.greennId ? String(b.greennId) : null, expiresAt },
+    data: { email, name, phone, plan, amount, status, greennId, expiresAt },
   })
 
   // 2) Denormaliza o telefone no cliente (pra contato no admin), se veio
