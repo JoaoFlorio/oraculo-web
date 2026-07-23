@@ -171,10 +171,6 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
   // Motor que o SERVIDOR usou na última resposta — é o que o seletor mostra
   // quando o admin não forçou nada.
   const [motorAtivo, setMotorAtivo] = useState<'claude' | 'gemini' | null>(null)
-  // Modelo específico do Gemini (só admin). null = default do servidor
-  // (gemini-3.5-flash). Existe pra comparar o padrão × o preview mais barato NA
-  // MESMA pergunta: a ficha mostra qual respondeu e quanto custou.
-  const [modeloGemini, setModeloGemini] = useState<string | null>(null)
 
   // Busca o motor padrão do servidor no carregamento — assim o seletor já
   // nasce marcado no motor certo, sem esperar a primeira resposta.
@@ -371,13 +367,9 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
     setLoading(true)
     ultimoEnvioRef.current = historico
     try {
-      // Modelo específico só vale quando o motor é Gemini (o único com variantes
-      // aqui). Se o admin forçou Claude, não manda modelo Gemini junto.
-      const gemAtivo = (motor ?? motorAtivo) === 'gemini'
       const corpo = JSON.stringify({
         agent: 'neo',
         ...(isAdmin && motor ? { provider: motor } : {}),
-        ...(isAdmin && gemAtivo && modeloGemini ? { model: modeloGemini } : {}),
         messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })),
       })
 
@@ -549,12 +541,6 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         .neoVozSel option{ background:#12121a; color:#f5efdf; }
         .neoVoice.on{ color:#0d0a02; background:#f0b429; border-color:#f0b429; font-weight:600;
           box-shadow:0 0 24px rgba(240,180,41,.35); }
-        .neoLimpar{ display:flex; align-items:center; gap:7px;
-          font-family:'IBM Plex Mono', monospace; font-size:10px; letter-spacing:.18em; text-transform:uppercase;
-          color:rgba(245,239,223,.5); background:transparent; border:1px solid rgba(240,180,41,.2);
-          border-radius:999px; padding:8px 13px; cursor:pointer; transition:all .25s; }
-        .neoLimpar:hover{ border-color:rgba(240,180,41,.5); color:#f5efdf; }
-        .neoLimpar:disabled{ opacity:.4; cursor:default; }
 
         /* ── Insight ── */
         .neoInsight{ position:relative; border-radius:14px; overflow:hidden;
@@ -751,25 +737,6 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
             </div>
           )}
 
-          {/* Seletor de MODELO do Gemini — só admin, e só aparece quando o motor
-              ativo é o Gemini. Serve pra comparar o padrão (3.5-flash) com o
-              preview 1/3 do preço NA MESMA pergunta; a ficha embaixo da resposta
-              diz qual respondeu e o custo. null = deixa o servidor decidir. */}
-          {isAdmin && (motor ?? motorAtivo) === 'gemini' && (
-            <div className="neoMotor" title="Modelo do Gemini (só você vê). Compare qualidade × custo na MESMA pergunta — a ficha mostra qual respondeu e o R$. 3.6 = estável e mais barato; LITE = o mais barato (confira se ele chama as ferramentas); PREV = preview.">
-              {([
-                { id: null,                       lbl: '3.5' },
-                { id: 'gemini-3.6-flash',         lbl: '3.6' },
-                { id: 'gemini-3.5-flash-lite',    lbl: 'LITE' },
-                { id: 'gemini-3-flash-preview',   lbl: 'PREV' },
-              ] as const).map(({ id, lbl }) => (
-                <button key={lbl} className={modeloGemini === id ? 'on' : ''}
-                  onClick={() => setModeloGemini(id)} disabled={loading}>
-                  {lbl}
-                </button>
-              ))}
-            </div>
-          )}
 
           {VOZ_SAIDA && 'speechSynthesis' in (typeof window !== 'undefined' ? window : {} as any) && (
             <button
@@ -804,14 +771,6 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
             </select>
           )}
 
-          {/* Limpar conversa — aparece só quando há histórico. Como a conversa
-              agora persiste, é o único jeito de começar do zero. */}
-          {msgs.length > 0 && (
-            <button className="neoLimpar" onClick={limparConversa} disabled={loading}
-              title="Começar uma conversa nova (apaga o histórico salvo)">
-              <span style={{ fontSize: 13, lineHeight: 1 }}>↺</span> <span className="lbl">Nova</span>
-            </button>
-          )}
          </div>
         </div>
 
@@ -976,6 +935,14 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
             {/* Barra de entrada */}
             <div className="neoBar">
              <div className="neoCol neoBarIn">
+              {/* Nova conversa — fica na barra de digitar (à mão, não escondido
+                  no topo). Só aparece com histórico, já que a conversa persiste. */}
+              {msgs.length > 0 && (
+                <button className="neoIconBtn" onClick={limparConversa} disabled={loading}
+                  title="Nova conversa (apaga o histórico salvo)" aria-label="Nova conversa">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7m0 5h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                </button>
+              )}
               <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => anexar(e.target.files)} />
               <button className="neoIconBtn" onClick={() => fileRef.current?.click()} disabled={loading || pend.length >= MAX_IMGS} title="Anexar imagem" aria-label="Anexar imagem">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 11.5 12.6 19a5.1 5.1 0 0 1-7.2-7.2l8-8a3.4 3.4 0 0 1 4.8 4.8l-7.8 7.8a1.7 1.7 0 0 1-2.4-2.4l7-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
