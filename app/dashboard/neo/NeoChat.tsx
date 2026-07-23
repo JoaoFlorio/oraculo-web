@@ -171,6 +171,10 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
   // Motor que o SERVIDOR usou na última resposta — é o que o seletor mostra
   // quando o admin não forçou nada.
   const [motorAtivo, setMotorAtivo] = useState<'claude' | 'gemini' | null>(null)
+  // Modelo específico do Gemini (só admin). null = default do servidor
+  // (gemini-3.5-flash). Existe pra comparar o padrão × o preview mais barato NA
+  // MESMA pergunta: a ficha mostra qual respondeu e quanto custou.
+  const [modeloGemini, setModeloGemini] = useState<string | null>(null)
 
   // Busca o motor padrão do servidor no carregamento — assim o seletor já
   // nasce marcado no motor certo, sem esperar a primeira resposta.
@@ -327,9 +331,13 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
     setLoading(true)
     ultimoEnvioRef.current = historico
     try {
+      // Modelo específico só vale quando o motor é Gemini (o único com variantes
+      // aqui). Se o admin forçou Claude, não manda modelo Gemini junto.
+      const gemAtivo = (motor ?? motorAtivo) === 'gemini'
       const corpo = JSON.stringify({
         agent: 'neo',
         ...(isAdmin && motor ? { provider: motor } : {}),
+        ...(isAdmin && gemAtivo && modeloGemini ? { model: modeloGemini } : {}),
         messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })),
       })
 
@@ -692,6 +700,24 @@ export default function NeoChat({ isAdmin = false }: { isAdmin?: boolean }) {
                 <button key={m} className={(motor ?? motorAtivo) === m ? 'on' : ''}
                   onClick={() => setMotor(motor === m ? null : m)} disabled={loading}>
                   {m === 'claude' ? 'Claude' : 'Gemini'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Seletor de MODELO do Gemini — só admin, e só aparece quando o motor
+              ativo é o Gemini. Serve pra comparar o padrão (3.5-flash) com o
+              preview 1/3 do preço NA MESMA pergunta; a ficha embaixo da resposta
+              diz qual respondeu e o custo. null = deixa o servidor decidir. */}
+          {isAdmin && (motor ?? motorAtivo) === 'gemini' && (
+            <div className="neoMotor" title="Modelo do Gemini (só você vê). Preview custa ~1/3 — compare a qualidade na mesma pergunta.">
+              {([
+                { id: null,                       lbl: '3.5' },
+                { id: 'gemini-3-flash-preview',   lbl: 'PREVIEW' },
+              ] as const).map(({ id, lbl }) => (
+                <button key={lbl} className={modeloGemini === id ? 'on' : ''}
+                  onClick={() => setModeloGemini(id)} disabled={loading}>
+                  {lbl}
                 </button>
               ))}
             </div>

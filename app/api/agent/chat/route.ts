@@ -68,8 +68,12 @@ export async function POST(req: NextRequest) {
       // receberia um motor ainda não validado. Cliente sempre usa o default do
       // servidor (AGENT_PROVIDER).
       body: JSON.stringify({
-        email: user.email, messages, model: body?.model, agent,
+        email: user.email, messages, agent,
         ...(user.role === 'admin' && body?.provider ? { provider: body.provider } : {}),
+        // `model` (variante específica do motor) segue a MESMA regra do provider:
+        // só ADMIN, nunca cliente. Cliente comum ficaria exposto a um modelo
+        // caro ou não validado se pudesse escolher — e o front dele nem manda.
+        ...(user.role === 'admin' && body?.model ? { model: body.model } : {}),
         // Admin (o João) não tem teto no criador de anúncio — precisa gerar à
         // vontade pra testar. Vem do role REAL do banco (não do cliente), igual
         // ao `provider` acima. Cliente comum nunca manda isAdmin=true.
