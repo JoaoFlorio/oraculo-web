@@ -70,6 +70,9 @@ function computeRange(key:string, custom:{from:Date;to:Date}|null):{from:string;
     default:        return {from:startOf(now),to}
   }
 }
+// Períodos cujo fim é AGORA — os únicos que ganham dado novo com o tempo e
+// portanto os únicos que se auto-atualizam. 'ontem'/'mespass' estão fechados.
+const PERIODOS_ABERTOS=new Set(['hoje','7d','15d','30d','mes','ano'])
 function periodLabel(key:string, custom:{from:Date;to:Date}|null):string{
   const p=PRESETS.find(x=>x[0]===key); if(p) return p[1]
   if(key==='custom'&&custom) return `${custom.from.toLocaleDateString('pt-BR')} a ${custom.to.toLocaleDateString('pt-BR')}`
@@ -1100,6 +1103,29 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
     load()
     return ()=>{ alive=false }
   },[amazonConnected,range.from,range.to])
+  // ── AUTO-REFRESH da DRE (fim do "só atualiza no F5") ───────────────────────
+  // Só em período ABERTO (que inclui agora); Ontem/mês passado não mudam mais.
+  // ⚠️ Recalcula o range a cada tick: em 'hoje' o `to` é o instante em que a tela
+  // abriu — repetir a MESMA janela deixaria a venda nova FORA dela pra sempre.
+  // Não zera o estado: a tela nunca pisca, o número só troca quando o novo chega.
+  useEffect(()=>{
+    if(!amazonConnected) return
+    const aberto=PERIODOS_ABERTOS.has(period)||(period==='custom'&&!!customRange&&sameDay(customRange.to,new Date()))
+    if(!aberto) return
+    let alive=true
+    const silentLoad=()=>{
+      if(typeof document!=='undefined'&&document.visibilityState==='hidden') return  // aba escondida não gasta chamada
+      const r=computeRange(period,customRange)
+      fetch(`/api/amazon/finance?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`)
+        .then(x=>x.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
+    }
+    const timer=setInterval(silentLoad,60000)
+    // Voltar pro app recarrega na hora — é o caminho de quem tocou no push da venda.
+    const onVis=()=>{ if(document.visibilityState==='visible') silentLoad() }
+    document.addEventListener('visibilitychange',onVis)
+    window.addEventListener('focus',onVis)
+    return ()=>{ alive=false; clearInterval(timer); document.removeEventListener('visibilitychange',onVis); window.removeEventListener('focus',onVis) }
+  },[amazonConnected,period,customRange])
   // Estoque FBA (Inventory API) — carrega uma vez ao conectar (cache 30min no backend)
   const [inventory,setInventory]=useState<any>(null)
   useEffect(()=>{
