@@ -34,7 +34,7 @@ model Sale {
   phone     String?
   plan      String
   amount    Float                              // valor pago em reais (preço do plano)
-  status    String    @default("paid")         // paid | refunded | canceled
+  status    String    @default("paid")         // paid | refunded | canceled | test (só 'paid' vira faturamento)
   greennId  String?   @map("greenn_id")
   paidAt    DateTime  @default(now()) @map("paid_at")
   expiresAt DateTime? @map("expires_at")

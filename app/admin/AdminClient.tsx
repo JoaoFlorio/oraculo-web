@@ -286,6 +286,32 @@ export default function AdminClient({ role, name, previewData }: { role: string;
     const r = await fetch('/api/admin/team', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, active }) })
     if (r.ok) await load()
   }
+  async function toggleClient(email: string, active: boolean) {
+    if (!active && !confirm(`Desativar ${email}?\n\nBloqueia o painel E a extensão. Dá pra reativar depois.`)) return
+    setMsg(null); setCreated(null)
+    const r = await fetch('/api/admin/users', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, active }) })
+    const d = await r.json()
+    if (!r.ok) { setMsg({ text: d.error || 'Erro', ok: false }); return }
+    // licencaDesativada === false → a conta caiu, mas a chave da extensão não foi
+    // achada/derrubada. Avisa em vez de dar "tudo certo" e deixar a extensão viva.
+    setMsg({
+      text: active
+        ? `${email} reativado`
+        : d.licencaDesativada === false
+          ? `${email} desativado — mas a licença da extensão NÃO caiu, confira na aba Licenças`
+          : `${email} desativado (painel + extensão)`,
+      ok: active || d.licencaDesativada !== false,
+    })
+    await load()
+  }
+  async function markSaleTest(id: string, email: string, amount: number) {
+    if (!confirm(`Marcar a venda de ${email} (${brl(amount)}) como TESTE?\n\nSai do faturamento, MRR e ticket médio. A linha continua no histórico.`)) return
+    setMsg(null); setCreated(null)
+    const r = await fetch('/api/admin/sales', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: 'test' }) })
+    const d = await r.json()
+    if (r.ok) { setMsg({ text: `Venda de ${email} marcada como teste — fora do faturamento`, ok: true }); await load() }
+    else setMsg({ text: d.error || 'Erro', ok: false })
+  }
   async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login' }
 
   const k = data?.kpis
@@ -542,13 +568,19 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                 {(data?.recentSales || []).length === 0
                   ? <Empty>As vendas da Greenn aparecem aqui em tempo real.</Empty>
                   : (data?.recentSales || []).map((s: any) => {
-                    const dead = s.status === 'refunded' || s.status === 'canceled'
+                    const dead = s.status === 'refunded' || s.status === 'canceled' || s.status === 'test'
                     return (
                       <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', ...cellB }}>
                         <span style={{ ...num, fontSize: 11, color: C.t3, flexShrink: 0 }}>{fmtDM(s.paidAt)}</span>
                         <span style={{ fontWeight: 600, fontSize: 12.5, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: dead ? C.t3 : C.t1 }}>{s.name || s.email}</span>
+                        {s.status === 'test' && <span style={{ ...upLabel, fontSize: 9, color: C.t3, flexShrink: 0 }}>teste</span>}
                         <PlanBadge plan={s.plan} />
                         <span style={{ ...num, fontSize: 12.5, fontWeight: 700, flexShrink: 0, color: dead ? C.red : C.t1, textDecoration: dead ? 'line-through' : 'none' }}>{brl(s.amount)}</span>
+                        {/* Só na venda ainda contada: marcar como teste é o que tira do faturamento */}
+                        {!dead && (
+                          <button onClick={() => markSaleTest(s.id, s.email, s.amount)} className="orc-mini" title="Não é receita de verdade (teste de webhook)"
+                            style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.t3, fontSize: 9.5, padding: '2px 7px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0 }}>teste</button>
+                        )}
                       </div>
                     )
                   })}
@@ -600,6 +632,9 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                               <option value="" disabled>Plano…</option>
                               {PLANS.map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
                             </select>
+                            {c.active === false
+                              ? <button onClick={() => toggleClient(c.email, true)} className="orc-mini" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.3)', color: C.green, fontSize: 10, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Reativar</button>
+                              : <button onClick={() => toggleClient(c.email, false)} className="orc-mini" style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)', color: C.red, fontSize: 10, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Desativar</button>}
                             {lic && lic.active && <span style={{ ...num, fontSize: 10, color: C.t3, alignSelf: 'center' }}>{lic.deviceIds?.length || 0}/{lic.maxDevices || 1} disp.</span>}
                           </div>
                         </td>

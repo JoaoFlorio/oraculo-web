@@ -184,17 +184,56 @@ export async function POST(req: NextRequest) {
   })
 }
 
-// PATCH /api/admin/users → muda plano
+// PATCH /api/admin/users → muda plano e/ou ativa/desativa a conta
 export async function PATCH(req: NextRequest) {
   if (!(await checkAdmin(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  const { email, plan } = await req.json()
-  if (!email || !plan) return NextResponse.json({ error: 'email e plan obrigatórios' }, { status: 400 })
-  const expiry = calcExpiry(plan)
-  const user   = await prisma.user.update({
-    where: { email: email.toLowerCase() },
-    data:  { plan, expiresAt: expiry },
+  const { email, plan, active } = await req.json()
+  if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
+  if (!plan && typeof active !== 'boolean')
+    return NextResponse.json({ error: 'informe plan ou active' }, { status: 400 })
+
+  const target = await prisma.user.findUnique({ where: { email: String(email).toLowerCase() } })
+  if (!target) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+
+  // Trava anti-tiro-no-pé: desativar um admin fecha a porta do próprio painel, e
+  // aí não sobra caminho de volta a não ser mexer no banco na mão.
+  if (active === false && target.role === 'admin')
+    return NextResponse.json({ error: 'Conta admin não pode ser desativada por aqui' }, { status: 400 })
+
+  const data: { plan?: string; expiresAt?: Date | null; active?: boolean } = {}
+  if (plan) { data.plan = plan; data.expiresAt = calcExpiry(plan) }
+  if (typeof active === 'boolean') data.active = active
+
+  const user = await prisma.user.update({ where: { email: target.email }, data })
+
+  // Bloquear só a conta deixaria a EXTENSÃO funcionando (licença é outra chave).
+  // Derruba as duas juntas. Best-effort: falha aqui não desfaz o bloqueio.
+  let licencaDesativada: boolean | null = null
+  if (active === false) {
+    licencaDesativada = false
+    try {
+      const r = await fetch(`${BACKEND_URL}/api/license/by-email?email=${encodeURIComponent(user.email)}`, {
+        headers: { 'x-admin-secret': ADMIN_SECRET },
+      })
+      if (r.ok) {
+        const d = await r.json()
+        const key = d.key || d.license?.key
+        if (key) {
+          const dr = await fetch(`${BACKEND_URL}/api/license/deactivate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+            body: JSON.stringify({ key }),
+          })
+          licencaDesativada = dr.ok
+        }
+      }
+    } catch { /* conta já bloqueada; licença fica pro operador ver na lista */ }
+  }
+
+  return NextResponse.json({
+    ok: true, licencaDesativada,
+    user: { email: user.email, plan: user.plan, active: user.active },
   })
-  return NextResponse.json({ ok: true, user: { email: user.email, plan: user.plan } })
 }
 
 // PUT /api/admin/users → reseta senha + reenvia email de acesso

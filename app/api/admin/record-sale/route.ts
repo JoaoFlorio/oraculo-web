@@ -18,7 +18,9 @@ export async function POST(req: NextRequest) {
   const plan = String(b.plan || 'monthly')
   const phone = b.phone ? String(b.phone).trim() : null
   const name = b.name ? String(b.name).trim() : null
-  const status = ['paid', 'refunded', 'canceled'].includes(b.status) ? b.status : 'paid'
+  // 'test' = lançamento que não é receita (evento de teste da Greenn). Mesmo
+  // vocabulário do PATCH /api/admin/sales; o dashboard só conta 'paid'.
+  const status = ['paid', 'refunded', 'canceled', 'test'].includes(b.status) ? b.status : 'paid'
   const expiresAt = b.expiresAt ? new Date(b.expiresAt) : null
   const greennId = b.greennId ? String(b.greennId) : null
 
