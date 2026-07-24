@@ -262,6 +262,22 @@ function KPI({label,value,color,hide}:{label:string;value:string;delta?:string;u
 }
 
 /* ── DRE Real (dados ao vivo da conta Amazon) ────────────────────────────── */
+// De onde veio o número de Comissão/FBA: valor REAL que a Amazon debitou (só existe
+// pra pedido já faturado) ou estimativa por ASIN. Sem isso o seller não sabe se o
+// líquido é o que a Amazon cobrou ou uma aproximação — e nós não conseguimos validar
+// o híbrido, porque "flag desligada" e "período sem pedido faturado" davam a mesma tela.
+function FeesOrigem({fees}:{fees?:any}){
+  const t=useT()
+  if(!fees)return null
+  const {pedidosReais:reais=0,pedidosEstimados:est=0,flagLigada}=fees
+  const txt=reais>0
+    ?`Comissão/FBA: valores reais do repasse em ${reais} pedido${reais>1?'s':''}${est>0?` · estimados em ${est} (ainda não faturados)`:''}`
+    :flagLigada
+      ?'Comissão/FBA: estimados — nenhum pedido deste período foi faturado pela Amazon ainda'
+      :'Comissão/FBA: estimados por ASIN'
+  return <div style={{fontSize:10.5,color:reais>0?t.grn:t.t3,marginTop:8}}>{txt}</div>
+}
+
 function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
   const t=useT()
   const L=data.linhas||{}
@@ -288,6 +304,7 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
       <Row label="Assinatura" val={L.assinatura} sign="-" color={t.red}/>
       <Row label="Líq. do Marketplace" val={data.liqMarketplace} sign="=" strong color={t.grn}/>
       <Row label={adsReal?.ready?'Ads (Advertising API)':'Ads (parcial)'} val={adsReal?.ready?(Number(adsReal.spend)||0):L.ads} sign="-" color={t.red}/>
+      <FeesOrigem fees={data.fees}/>
       <div style={{fontSize:10.5,color:t.t3,marginTop:10}}>{adsReal?.ready?'Ads real da Advertising API · CMV e despesas você informa em Gerenciamento.':'Ads completo virá da Advertising API · CMV e despesas você informa em Gerenciamento.'}</div>
     </div>
   )
