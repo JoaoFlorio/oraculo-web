@@ -2,20 +2,22 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ORÁCULO — Amazon Intelligence",
-  description: "Mineração de produtos, mais vendidos e análise de oportunidades para vendedores Amazon.com.br",
+  // Copy sem marketplace fixo no nome: o Oráculo vai atender Mercado Livre além
+  // da Amazon, e imagem/título de link são o que mais circula fora do site.
+  title: "ORÁCULO — O lucro real da sua operação",
+  description: "DRE automática, mineração de produtos, calculadora de precisão e agente de IA — o lucro real por produto, sem planilha.",
   metadataBase: new URL("https://app.oraculojf.com.br"),
   openGraph: {
-    title: "ORÁCULO — Amazon Intelligence",
-    description: "Mineração de produtos, mais vendidos e análise de oportunidades para vendedores Amazon.com.br",
+    title: "ORÁCULO — O lucro real da sua operação",
+    description: "DRE automática, mineração de produtos, calculadora de precisão e agente de IA — o lucro real por produto, sem planilha.",
     url: "https://app.oraculojf.com.br",
     siteName: "Oráculo",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-image.jpg",
         width: 1200,
         height: 630,
-        alt: "ORÁCULO — Amazon Intelligence",
+        alt: "ORÁCULO",
       },
     ],
     locale: "pt_BR",
@@ -23,9 +25,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "ORÁCULO — Amazon Intelligence",
-    description: "Mineração de produtos, mais vendidos e análise de oportunidades para vendedores Amazon.com.br",
-    images: ["/og-image.png"],
+    title: "ORÁCULO — O lucro real da sua operação",
+    description: "DRE automática, mineração de produtos, calculadora de precisão e agente de IA — o lucro real por produto, sem planilha.",
+    images: ["/og-image.jpg"],
   },
   icons: {
     icon: "/icon.png",

@@ -16,13 +16,13 @@ const body = DM_Sans({ subsets: ['latin'], variable: '--font-body', display: 'sw
 const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono-o', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: 'ORÁCULO — A Amazon mostra quanto você vende. O Oráculo mostra quanto sobra.',
+  title: 'ORÁCULO — O marketplace mostra quanto você vende. O Oráculo mostra quanto sobra.',
   description:
-    'DRE completa e automática da sua operação Amazon: lucro real, margem, taxas, FBA, Ads, estoque e Curva ABC. Mineração, calculadora oficial, extensão Chrome e Agente IA — sem planilha.',
+    'DRE completa e automática da sua operação: lucro real, margem, taxas, FBA, Ads, estoque e Curva ABC. Mineração, calculadora oficial, extensão Chrome e Agente IA — sem planilha.',
   openGraph: {
-    title: 'ORÁCULO — O lucro real da sua operação Amazon',
-    description: 'DRE automática, mineração, calculadora de precisão e IA — direto da sua conta Amazon, sem planilha.',
-    images: ['/og-image.png'],
+    title: 'ORÁCULO — O lucro real da sua operação',
+    description: 'DRE automática, mineração, calculadora de precisão e IA — o lucro real por produto, sem planilha.',
+    images: ['/og-image.jpg'],
   },
 }
 
