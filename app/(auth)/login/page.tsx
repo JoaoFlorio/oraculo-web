@@ -238,7 +238,10 @@ export default function LoginPage() {
         @media (max-width:920px){
           .og-shell{grid-template-columns:1fr}
           .og-brand{display:none}
-          .og-brand-mobile{display:flex;justify-content:center;margin-bottom:28px}
+          /* width:100% é o que centraliza: o form-col é align-items:flex-start no
+             mobile, então sem largura cheia este bloco encolhe e gruda na esquerda
+             (a logo saía torta). Com 100%, o justify-content:center faz efeito. */
+          .og-brand-mobile{display:flex;justify-content:center;width:100%;margin-bottom:28px}
           .og-form-col{padding:36px 20px 44px !important;align-items:flex-start !important}
           .og-card{padding:28px 22px !important}
         }
