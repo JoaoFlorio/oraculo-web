@@ -2449,7 +2449,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {/* Gestão (hub financeiro) — gated p/ allowlist enquanto SP-API em Draft */}
             {nav==='financeiro'&&gestaoEnabled&&(
               <div style={{padding:'0 4px'}}>
-                <GestaoHub promoActive={promo.active} promoType={promo.type} theme={theme}/>
+                <GestaoHub promoActive={promo.active} promoType={promo.type} theme={theme} isAdmin={user.role==='admin'}/>
               </div>
             )}
 

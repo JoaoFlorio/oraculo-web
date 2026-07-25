@@ -705,7 +705,60 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
   void mockD
   return <ConnectEmpty/>
 }
-function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean}){
+/* Sonda de campaign management — SÓ ADMIN, enquanto é experimento.
+   Responde duas coisas que decidem se dá pra editar Ads pelo Oráculo:
+   a conta alcança a API de gestão (≠ a de relatório) e quais são os campaignId.
+   NÃO altera nada na conta — só lista. */
+function AdsSonda(){
+  const t=useT()
+  const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
+  async function rodar(){
+    setSt({loading:true,data:null})
+    try{
+      const r=await fetch('/api/admin/ads-campaigns')
+      setSt({loading:false,data:await r.json()})
+    }catch{ setSt({loading:false,data:{ok:false,erro:'sem resposta do servidor'}}) }
+  }
+  const d=st?.data
+  return(
+    <div style={{marginTop:18,padding:'14px 16px',borderRadius:12,border:`1px dashed ${t.line}`,background:'rgba(255,255,255,0.02)'}}>
+      <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const}}>
+        <span style={{fontSize:10,fontWeight:700,letterSpacing:'0.1em',color:t.t3,textTransform:'uppercase' as const}}>Admin · teste de edição de Ads</span>
+        <button onClick={rodar} disabled={st?.loading}
+          style={{marginLeft:'auto',padding:'6px 12px',borderRadius:8,cursor:st?.loading?'default':'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}}>
+          {st?.loading?'Consultando…':'Testar acesso'}
+        </button>
+      </div>
+      <p style={{fontSize:11,color:t.t3,margin:'8px 0 0',lineHeight:1.5}}>
+        Lista as campanhas pela API de <b>gestão</b> (a de hoje é só de relatório). Só leitura — não altera nada na conta.
+      </p>
+      {d && (
+        <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${t.line}`}}>
+          {d.ok
+            ? <>
+                <div style={{fontSize:12.5,color:t.grn,fontWeight:600,marginBottom:8}}>✓ Acesso liberado — {d.total} campanha(s). Editar é viável.</div>
+                {(d.campanhas||[]).slice(0,8).map((c:any)=>(
+                  <div key={c.campaignId} style={{display:'flex',gap:8,alignItems:'center',fontSize:11.5,color:t.t3,padding:'3px 0'}}>
+                    <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,color:t.t2}}>{c.nome}</span>
+                    <span style={{color:c.estado==='ENABLED'?t.grn:t.t3}}>{c.estado}</span>
+                    <span style={{fontFamily:FG}}>{c.orcamento!=null?brl2(c.orcamento):'—'}</span>
+                    <span style={{fontFamily:FG,fontSize:10,opacity:.6}}>#{c.campaignId}</span>
+                  </div>
+                ))}
+              </>
+            : <>
+                <div style={{fontSize:12.5,color:t.red,fontWeight:600,marginBottom:6}}>
+                  ✗ Não passou{d.status?` (HTTP ${d.status})`:''}
+                </div>
+                {d.dica && <div style={{fontSize:11.5,color:t.t2,marginBottom:8,lineHeight:1.5}}>{d.dica}</div>}
+                <pre style={{fontFamily:FG,fontSize:10,color:t.t3,whiteSpace:'pre-wrap' as const,wordBreak:'break-all' as const,margin:0}}>{JSON.stringify(d.erro??d,null,2).slice(0,900)}</pre>
+              </>}
+        </div>
+      )}
+    </div>
+  )
+}
+function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean;isAdmin?:boolean}){
   const t=useT()
   // Não conectou a conta de Ads ainda
   if(adsConnected===false) return(
@@ -750,6 +803,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading}:{m:ProductMetrics[];hide:b
     {upd && <div style={{fontSize:10.5,color:t.t3,marginTop:10,display:'flex',gap:6,alignItems:'center'}}>
       <i className="ti ti-refresh" style={{fontSize:12}} aria-hidden="true"/>Atualizado {upd.toLocaleString('pt-BR')} · dado real da Advertising API{adsReal.stale?' · revalidando no fundo':''}
     </div>}
+    {isAdmin && <AdsSonda/>}
   </>)
 }
 function Analitico({realDre,hide,connected,mockM,costs={},imposto=0}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;imposto?:number}){
@@ -1058,7 +1112,7 @@ const TABS = [
 ]
 const THEME_KEY='oraculo_theme'
 
-export default function GestaoHub({promoActive=false,promoType=null,theme}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null;userEmail?:string;theme?:'dark'|'light'}){
+export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmin=false}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null;userEmail?:string;theme?:'dark'|'light';isAdmin?:boolean}){
   const [tab,setTab]=useState('resumo')
   const [hide,setHide]=useState(false)
   const [themeKey,setThemeKey]=useState('dark')
@@ -1345,7 +1399,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme}:{prom
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide} onDetail={setDetail}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
-        {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading}/>}
+        {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
