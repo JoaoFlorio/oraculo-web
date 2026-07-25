@@ -6,7 +6,15 @@ import crypto from 'crypto'
 
 export async function POST(req: NextRequest) {
   const resend   = new Resend(process.env.RESEND_API_KEY)
-  const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://oraculo-web-production.up.railway.app'
+  // ⚠️ Era `NEXT_PUBLIC_BASE_URL || <domínio .up.railway.app>` e o link do e-mail
+  // caía na tela "domínio não provisionado" do Railway — cliente sem conseguir
+  // trocar a senha. Agora usa a MESMA variável (e o mesmo fallback correto) do
+  // e-mail de credenciais em /api/admin/users, que sempre funcionou.
+  //
+  // NÃO derivar do Host da requisição: em recuperação de senha isso é vetor
+  // clássico de host-header injection — o atacante forja o Host, a vítima recebe
+  // um link pro domínio dele e entrega o token ao clicar.
+  const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.oraculojf.com.br'
   try {
     const { email } = await req.json()
     if (!email) return NextResponse.json({ error: 'E-mail obrigatório' }, { status: 400 })
