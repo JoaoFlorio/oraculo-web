@@ -709,7 +709,33 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
    ⚠️ ALTERA GASTO REAL DE ANÚNCIO. Toda alteração passa por confirmação e vai
    pra tabela de auditoria no backend. Mostra TODAS as campanhas (a aba Ads
    mostra só quem teve gasto na janela; aqui vêm as pausadas também). */
-function AdsAdmin(){
+// Régua do NEO (backend `neoSignals.ts`): >30% crítico, 20–30% atenção.
+const ACOS_CRITICO=30, ACOS_ATENCAO=20
+// Piso de gasto pra opinar. Recomendar "pause" numa campanha que gastou R$1,77
+// é conselho ruim — ela mal foi testada. Abaixo disto o NEO fica calado, que é
+// mais honesto que palpitar com dado insuficiente.
+const GASTO_MINIMO_P_OPINAR=20
+
+/** Cruza desempenho (relatório: nome+gasto+vendas) com gestão (id+estado) e devolve
+ *  o que merece decisão. Só campanha ATIVA — sugerir pausar o que já está pausado é ruído. */
+function recomendacoes(byCampaign:any[], campanhas:any[]){
+  const porNome=new Map(campanhas.map((c:any)=>[String(c.nome||'').trim().toLowerCase(),c]))
+  const out:any[]=[]
+  for(const r of (byCampaign||[])){
+    const g=Number(r.spend)||0, v=Number(r.sales)||0
+    if(g<GASTO_MINIMO_P_OPINAR) continue
+    const c=porNome.get(String(r.campaign||'').trim().toLowerCase())
+    if(!c||c.estado!=='ENABLED') continue
+    const acos=v>0?(g/v)*100:null
+    if(v<=0) out.push({c,g,v,acos,sev:'critico',txt:`gastou ${brl2(g)} e não vendeu nada no período`})
+    else if(acos!==null&&acos>ACOS_CRITICO) out.push({c,g,v,acos,sev:'critico',txt:`ACOS de ${acos.toFixed(0)}% — ${brl2(g)} investidos pra ${brl2(v)} em vendas`})
+    else if(acos!==null&&acos>=ACOS_ATENCAO) out.push({c,g,v,acos,sev:'atencao',txt:`ACOS de ${acos.toFixed(0)}%, acima da faixa saudável`})
+  }
+  // Quem queima mais dinheiro primeiro — é a ordem em que vale decidir.
+  return out.sort((a,b)=>(a.sev===b.sev?b.g-a.g:a.sev==='critico'?-1:1))
+}
+
+function AdsAdmin({byCampaign}:{byCampaign?:any[]}){
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
   const [busca,setBusca]=useState('')
@@ -743,8 +769,13 @@ function AdsAdmin(){
     setSalvando(null)
   }
 
+  // Carrega sozinho ao abrir a aba: as recomendações precisam do estado/ID que só
+  // a API de gestão dá, e obrigar um clique antes esconderia justo o que importa.
+  useEffect(()=>{ carregar() },[])   // eslint-disable-line react-hooks/exhaustive-deps
+
   const d=st?.data
   const todas:any[]=d?.campanhas||[]
+  const recs=d?.ok?recomendacoes(byCampaign||[],todas):[]
   const vis=todas.filter(c=>!busca||String(c.nome||'').toLowerCase().includes(busca.toLowerCase()))
   const btn={padding:'7px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}
 
@@ -766,6 +797,40 @@ function AdsAdmin(){
           <div style={{fontSize:12.5,color:t.red,fontWeight:600,marginBottom:6}}>✗ Não passou{d.status?` (HTTP ${d.status})`:''}</div>
           {d.dica && <div style={{fontSize:11.5,color:t.t2,marginBottom:8,lineHeight:1.5}}>{d.dica}</div>}
           <pre style={{fontFamily:FG,fontSize:10,color:t.t3,whiteSpace:'pre-wrap' as const,wordBreak:'break-all' as const,margin:0}}>{JSON.stringify(d.erro??d,null,2).slice(0,900)}</pre>
+        </div>
+      )}
+
+      {/* ⭐ O NEO RECOMENDA — o que transforma o botão em conselho.
+          Recomenda, o humano aprova: nunca aplica sozinho (é dinheiro real e a
+          Amazon não tem "desfazer"). */}
+      {d?.ok && recs.length>0 && (
+        <div style={{marginTop:14,padding:'12px 14px',borderRadius:10,border:`1px solid rgba(240,180,41,0.28)`,background:'rgba(240,180,41,0.05)'}}>
+          <div style={{fontSize:11.5,fontWeight:700,color:t.gold,marginBottom:2}}>O NEO olhou suas campanhas</div>
+          <div style={{fontSize:10.5,color:t.t3,marginBottom:10}}>{recs.length} pedem decisão. Nada é aplicado sem você clicar.</div>
+          {recs.slice(0,6).map((r:any)=>(
+            <div key={r.c.campaignId} style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,padding:'7px 0',borderTop:`1px solid ${t.line}`}}>
+              <span style={{fontSize:13,lineHeight:1,color:r.sev==='critico'?t.red:t.gold}}>{r.sev==='critico'?'▲':'●'}</span>
+              <span style={{flex:'1 1 210px',minWidth:0,fontSize:11.5,color:t.t2,lineHeight:1.45}}>
+                <b style={{color:t.t1}}>{r.c.nome}</b> — {r.txt}
+              </span>
+              {r.sev==='critico' && (
+                <button disabled={salvando===r.c.campaignId}
+                  onClick={()=>aplicar(r.c,{state:'PAUSED'},`PAUSAR "${r.c.nome}"?\n\n${r.txt}.\n\nIsso altera de verdade na Amazon.`)}
+                  style={{padding:'5px 12px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',fontSize:11,fontWeight:700,border:`1px solid rgba(248,113,113,0.4)`,background:'transparent',color:t.red}}>
+                  {salvando===r.c.campaignId?'…':'pausar'}
+                </button>
+              )}
+            </div>
+          ))}
+          <div style={{fontSize:10,color:t.t3,marginTop:9,lineHeight:1.5}}>
+            Régua: ACOS acima de {ACOS_CRITICO}% é prejuízo, {ACOS_ATENCAO}–{ACOS_CRITICO}% é atenção. Campanha com menos de {brl2(GASTO_MINIMO_P_OPINAR)} gastos fica de fora — ainda não deu pra saber. Reduzir o orçamento é alternativa mais branda que pausar.
+          </div>
+        </div>
+      )}
+      {d?.ok && recs.length===0 && byCampaign && byCampaign.length>0 && (
+        <div style={{marginTop:12,fontSize:11.5,color:t.grn,lineHeight:1.5}}>
+          ✓ Nenhuma campanha ativa queimando dinheiro <b>neste período</b>.
+          <span style={{color:t.t3}}> Em janelas curtas (Hoje/Ontem) o gasto raramente chega aos {brl2(GASTO_MINIMO_P_OPINAR)} necessários pra opinar — experimente 30 dias.</span>
         </div>
       )}
 
@@ -853,7 +918,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin}:{m:ProductMetrics[
     {upd && <div style={{fontSize:10.5,color:t.t3,marginTop:10,display:'flex',gap:6,alignItems:'center'}}>
       <i className="ti ti-refresh" style={{fontSize:12}} aria-hidden="true"/>Atualizado {upd.toLocaleString('pt-BR')} · dado real da Advertising API{adsReal.stale?' · revalidando no fundo':''}
     </div>}
-    {isAdmin && <AdsAdmin/>}
+    {isAdmin && <AdsAdmin byCampaign={camps}/>}
   </>)
 }
 function Analitico({realDre,hide,connected,mockM,costs={},imposto=0}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;imposto?:number}){
