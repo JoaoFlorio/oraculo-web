@@ -722,16 +722,16 @@ function AdsSonda(){
   const d=st?.data
   return(
     <div style={{marginTop:18,padding:'14px 16px',borderRadius:12,border:`1px dashed ${t.line}`,background:'rgba(255,255,255,0.02)'}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const}}>
-        <span style={{fontSize:10,fontWeight:700,letterSpacing:'0.1em',color:t.t3,textTransform:'uppercase' as const}}>Admin · teste de edição de Ads</span>
-        <button onClick={rodar} disabled={st?.loading}
-          style={{marginLeft:'auto',padding:'6px 12px',borderRadius:8,cursor:st?.loading?'default':'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}}>
-          {st?.loading?'Consultando…':'Testar acesso'}
-        </button>
-      </div>
+      <span style={{fontSize:10,fontWeight:700,letterSpacing:'0.1em',color:t.t3,textTransform:'uppercase' as const}}>Admin · teste de edição de Ads</span>
       <p style={{fontSize:11,color:t.t3,margin:'8px 0 0',lineHeight:1.5}}>
         Lista as campanhas pela API de <b>gestão</b> (a de hoje é só de relatório). Só leitura — não altera nada na conta.
       </p>
+      {/* Botão à ESQUERDA: no canto inferior direito ele ficava embaixo da
+          bolinha flutuante do Suporte, que é fixed e cobre essa área. */}
+      <button onClick={rodar} disabled={st?.loading}
+        style={{marginTop:10,padding:'7px 14px',borderRadius:8,cursor:st?.loading?'default':'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}}>
+        {st?.loading?'Consultando…':'Testar acesso'}
+      </button>
       {d && (
         <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${t.line}`}}>
           {d.ok
@@ -1303,7 +1303,10 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
 
   return(
     <ThemeCtx.Provider value={t}>
-      <div style={{background:t.dark?'transparent':t.pageBg,borderRadius:t.dark?0:16,border:t.dark?'none':`1px solid ${t.line}`,padding:t.dark?'2px 0 28px':'18px 20px 28px',minHeight:'calc(100vh - 80px)'}}>
+      {/* Rodapé com 92px: a bolinha do Suporte é fixed no canto inferior direito e
+          ocupa ~80px — com os 28px de antes ela cobria a última linha de conteúdo
+          de qualquer aba (foi o que escondeu o botão da sonda de Ads). */}
+      <div style={{background:t.dark?'transparent':t.pageBg,borderRadius:t.dark?0:16,border:t.dark?'none':`1px solid ${t.line}`,padding:t.dark?'2px 0 92px':'18px 20px 92px',minHeight:'calc(100vh - 80px)'}}>
         <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"/>
         <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap"/>
         <link rel="stylesheet" precedence="default" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.24.0/dist/tabler-icons.min.css"/>
