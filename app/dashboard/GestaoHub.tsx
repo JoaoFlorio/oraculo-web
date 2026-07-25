@@ -705,54 +705,104 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
   void mockD
   return <ConnectEmpty/>
 }
-/* Sonda de campaign management — SÓ ADMIN, enquanto é experimento.
-   Responde duas coisas que decidem se dá pra editar Ads pelo Oráculo:
-   a conta alcança a API de gestão (≠ a de relatório) e quais são os campaignId.
-   NÃO altera nada na conta — só lista. */
-function AdsSonda(){
+/* Gerenciador de campanhas — SÓ ADMIN, em teste.
+   ⚠️ ALTERA GASTO REAL DE ANÚNCIO. Toda alteração passa por confirmação e vai
+   pra tabela de auditoria no backend. Mostra TODAS as campanhas (a aba Ads
+   mostra só quem teve gasto na janela; aqui vêm as pausadas também). */
+function AdsAdmin(){
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
-  async function rodar(){
-    setSt({loading:true,data:null})
+  const [busca,setBusca]=useState('')
+  const [salvando,setSalvando]=useState<string|null>(null)
+  const [aviso,setAviso]=useState<{ok:boolean;txt:string}|null>(null)
+  const [rascunho,setRascunho]=useState<Record<string,string>>({})   // orçamento sendo digitado
+
+  async function carregar(){
+    setSt({loading:true,data:null}); setAviso(null)
     try{
       const r=await fetch('/api/admin/ads-campaigns')
       setSt({loading:false,data:await r.json()})
     }catch{ setSt({loading:false,data:{ok:false,erro:'sem resposta do servidor'}}) }
   }
+
+  // Aplica no servidor e atualiza a linha na tela sem recarregar as 93.
+  async function aplicar(c:any, patch:{state?:string;budget?:number}, confirmacao:string){
+    if(!confirm(confirmacao)) return
+    setSalvando(c.campaignId); setAviso(null)
+    try{
+      const r=await fetch('/api/admin/ads-campaign',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({campaignId:c.campaignId,...patch})})
+      const d=await r.json()
+      if(d.ok){
+        setAviso({ok:true,txt:`${c.nome}: ${patch.state?`agora ${patch.state==='ENABLED'?'ativa':'pausada'}`:`orçamento ${brl2(patch.budget||0)}`}`})
+        setSt(s=>s?{...s,data:{...s.data,campanhas:(s.data.campanhas||[]).map((x:any)=>x.campaignId===c.campaignId
+          ?{...x,...(patch.state?{estado:patch.state}:{}),...(patch.budget!=null?{orcamento:patch.budget}:{})}:x)}}:s)
+        setRascunho(v=>{ const n={...v}; delete n[c.campaignId]; return n })
+      } else setAviso({ok:false,txt:d.erro||d.error||'não foi aplicado'})
+    }catch{ setAviso({ok:false,txt:'sem resposta do servidor'}) }
+    setSalvando(null)
+  }
+
   const d=st?.data
+  const todas:any[]=d?.campanhas||[]
+  const vis=todas.filter(c=>!busca||String(c.nome||'').toLowerCase().includes(busca.toLowerCase()))
+  const btn={padding:'7px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}
+
   return(
     <div style={{marginTop:18,padding:'14px 16px',borderRadius:12,border:`1px dashed ${t.line}`,background:'rgba(255,255,255,0.02)'}}>
-      <span style={{fontSize:10,fontWeight:700,letterSpacing:'0.1em',color:t.t3,textTransform:'uppercase' as const}}>Admin · teste de edição de Ads</span>
+      <span style={{fontSize:10,fontWeight:700,letterSpacing:'0.1em',color:t.t3,textTransform:'uppercase' as const}}>Admin · gerenciar campanhas</span>
       <p style={{fontSize:11,color:t.t3,margin:'8px 0 0',lineHeight:1.5}}>
-        Lista as campanhas pela API de <b>gestão</b> (a de hoje é só de relatório). Só leitura — não altera nada na conta.
+        Pausar/reativar e mudar orçamento diário — <b style={{color:t.gold}}>altera de verdade na Amazon</b>. Toda alteração é confirmada e registrada. Aqui aparecem <b>todas</b> as campanhas, inclusive as pausadas.
       </p>
-      {/* Botão à ESQUERDA: no canto inferior direito ele ficava embaixo da
-          bolinha flutuante do Suporte, que é fixed e cobre essa área. */}
-      <button onClick={rodar} disabled={st?.loading}
-        style={{marginTop:10,padding:'7px 14px',borderRadius:8,cursor:st?.loading?'default':'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}}>
-        {st?.loading?'Consultando…':'Testar acesso'}
+      <button onClick={carregar} disabled={st?.loading} style={{...btn,marginTop:10,cursor:st?.loading?'default':'pointer'}}>
+        {st?.loading?'Carregando…':todas.length?'Recarregar':'Carregar campanhas'}
       </button>
-      {d && (
+
+      {aviso && <div style={{marginTop:10,padding:'8px 11px',borderRadius:8,fontSize:11.5,lineHeight:1.5,
+        background:aviso.ok?'rgba(52,211,153,0.10)':'rgba(248,113,113,0.10)',color:aviso.ok?t.grn:t.red}}>{aviso.txt}</div>}
+
+      {d && !d.ok && (
         <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${t.line}`}}>
-          {d.ok
-            ? <>
-                <div style={{fontSize:12.5,color:t.grn,fontWeight:600,marginBottom:8}}>✓ Acesso liberado — {d.total} campanha(s). Editar é viável.</div>
-                {(d.campanhas||[]).slice(0,8).map((c:any)=>(
-                  <div key={c.campaignId} style={{display:'flex',gap:8,alignItems:'center',fontSize:11.5,color:t.t3,padding:'3px 0'}}>
-                    <span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,color:t.t2}}>{c.nome}</span>
-                    <span style={{color:c.estado==='ENABLED'?t.grn:t.t3}}>{c.estado}</span>
-                    <span style={{fontFamily:FG}}>{c.orcamento!=null?brl2(c.orcamento):'—'}</span>
-                    <span style={{fontFamily:FG,fontSize:10,opacity:.6}}>#{c.campaignId}</span>
-                  </div>
-                ))}
-              </>
-            : <>
-                <div style={{fontSize:12.5,color:t.red,fontWeight:600,marginBottom:6}}>
-                  ✗ Não passou{d.status?` (HTTP ${d.status})`:''}
+          <div style={{fontSize:12.5,color:t.red,fontWeight:600,marginBottom:6}}>✗ Não passou{d.status?` (HTTP ${d.status})`:''}</div>
+          {d.dica && <div style={{fontSize:11.5,color:t.t2,marginBottom:8,lineHeight:1.5}}>{d.dica}</div>}
+          <pre style={{fontFamily:FG,fontSize:10,color:t.t3,whiteSpace:'pre-wrap' as const,wordBreak:'break-all' as const,margin:0}}>{JSON.stringify(d.erro??d,null,2).slice(0,900)}</pre>
+        </div>
+      )}
+
+      {d?.ok && (
+        <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${t.line}`}}>
+          <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,marginBottom:10}}>
+            <span style={{fontSize:11.5,color:t.t2}}>{todas.length} campanha(s){vis.length!==todas.length?` · ${vis.length} no filtro`:''}</span>
+            <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="filtrar por nome…"
+              style={{marginLeft:'auto',padding:'6px 10px',borderRadius:8,border:`1px solid ${t.line}`,background:'transparent',color:t.t1,fontSize:11.5,fontFamily:'inherit',outline:'none',minWidth:170}}/>
+          </div>
+          {vis.slice(0,40).map((c:any)=>{
+            const ativa=c.estado==='ENABLED'
+            const val=rascunho[c.campaignId]
+            const mudou=val!=null&&val!==''&&Number(val)!==Number(c.orcamento)
+            return(
+              <div key={c.campaignId} style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,padding:'7px 0',borderTop:`1px solid ${t.line}`}}>
+                <span style={{flex:'1 1 190px',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,fontSize:12,color:t.t1}}>{c.nome}</span>
+                <span style={{fontSize:10,fontWeight:700,color:ativa?t.grn:t.t3,minWidth:56}}>{ativa?'ATIVA':'PAUSADA'}</span>
+                <div style={{display:'flex',alignItems:'center',gap:4}}>
+                  <span style={{fontSize:10.5,color:t.t3}}>R$</span>
+                  <input value={val??String(c.orcamento??'')} onChange={e=>setRascunho(v=>({...v,[c.campaignId]:e.target.value}))}
+                    inputMode="decimal" style={{width:62,padding:'4px 6px',borderRadius:6,border:`1px solid ${mudou?t.gold:t.line}`,background:'transparent',color:t.t1,fontSize:11.5,fontFamily:FG,outline:'none'}}/>
+                  {mudou && <button disabled={salvando===c.campaignId}
+                    onClick={()=>aplicar(c,{budget:Number(val)},`Mudar o orçamento diário de "${c.nome}"\n\nDe R$ ${c.orcamento} para R$ ${Number(val)}?\n\nIsso altera de verdade na Amazon.`)}
+                    style={{padding:'4px 9px',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:10.5,fontWeight:700,border:`1px solid ${t.gold}`,background:'transparent',color:t.gold}}>salvar</button>}
                 </div>
-                {d.dica && <div style={{fontSize:11.5,color:t.t2,marginBottom:8,lineHeight:1.5}}>{d.dica}</div>}
-                <pre style={{fontFamily:FG,fontSize:10,color:t.t3,whiteSpace:'pre-wrap' as const,wordBreak:'break-all' as const,margin:0}}>{JSON.stringify(d.erro??d,null,2).slice(0,900)}</pre>
-              </>}
+                <button disabled={salvando===c.campaignId}
+                  onClick={()=>aplicar(c,{state:ativa?'PAUSED':'ENABLED'},`${ativa?'PAUSAR':'REATIVAR'} a campanha "${c.nome}"?\n\nIsso altera de verdade na Amazon.`)}
+                  style={{padding:'4px 11px',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:10.5,fontWeight:700,
+                    border:`1px solid ${ativa?'rgba(248,113,113,0.35)':'rgba(52,211,153,0.35)'}`,background:'transparent',color:ativa?t.red:t.grn}}>
+                  {salvando===c.campaignId?'…':ativa?'pausar':'reativar'}
+                </button>
+                <span style={{fontFamily:FG,fontSize:9.5,color:t.t3,opacity:.6}}>#{c.campaignId}</span>
+              </div>
+            )
+          })}
+          {vis.length>40 && <div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Mostrando 40 de {vis.length} — use o filtro pra achar as outras.</div>}
         </div>
       )}
     </div>
@@ -803,7 +853,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin}:{m:ProductMetrics[
     {upd && <div style={{fontSize:10.5,color:t.t3,marginTop:10,display:'flex',gap:6,alignItems:'center'}}>
       <i className="ti ti-refresh" style={{fontSize:12}} aria-hidden="true"/>Atualizado {upd.toLocaleString('pt-BR')} · dado real da Advertising API{adsReal.stale?' · revalidando no fundo':''}
     </div>}
-    {isAdmin && <AdsSonda/>}
+    {isAdmin && <AdsAdmin/>}
   </>)
 }
 function Analitico({realDre,hide,connected,mockM,costs={},imposto=0}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;imposto?:number}){
