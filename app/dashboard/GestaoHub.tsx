@@ -709,16 +709,24 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
    ⚠️ ALTERA GASTO REAL DE ANÚNCIO. Toda alteração passa por confirmação e vai
    pra tabela de auditoria no backend. Mostra TODAS as campanhas (a aba Ads
    mostra só quem teve gasto na janela; aqui vêm as pausadas também). */
-// Régua do NEO (backend `neoSignals.ts`): >30% crítico, 20–30% atenção.
-const ACOS_CRITICO=30, ACOS_ATENCAO=20
+// ⭐ ACOS SE COMPARA COM A MARGEM, não com um número fixo (correção do João).
+// ACOS é a fatia da venda que foi pro anúncio; margem é o que sobrava antes dele.
+// Margem 20% com ACOS 25% = prejuízo de 5 pontos — mesmo sendo "só 25%".
+// Régua fixa só quando a margem é desconhecida (CMV não cadastrado).
+const ACOS_CRITICO_SEM_MARGEM=30, ACOS_ATENCAO_SEM_MARGEM=20
+// Quanto da margem o ACOS pode comer antes de virar alerta amarelo.
+const FATIA_ATENCAO=0.7
 // Piso de gasto pra opinar. Recomendar "pause" numa campanha que gastou R$1,77
 // é conselho ruim — ela mal foi testada. Abaixo disto o NEO fica calado, que é
 // mais honesto que palpitar com dado insuficiente.
 const GASTO_MINIMO_P_OPINAR=20
 
 /** Cruza desempenho (relatório: nome+gasto+vendas) com gestão (id+estado) e devolve
- *  o que merece decisão. Só campanha ATIVA — sugerir pausar o que já está pausado é ruído. */
-function recomendacoes(byCampaign:any[], campanhas:any[]){
+ *  o que merece decisão. Só campanha ATIVA — sugerir pausar o que já está pausado é ruído.
+ *  `margem` (%) = régua real do seller; null quando não dá pra saber. */
+function recomendacoes(byCampaign:any[], campanhas:any[], margem:number|null){
+  const critico = margem!=null ? margem : ACOS_CRITICO_SEM_MARGEM
+  const atencao = margem!=null ? margem*FATIA_ATENCAO : ACOS_ATENCAO_SEM_MARGEM
   const porNome=new Map(campanhas.map((c:any)=>[String(c.nome||'').trim().toLowerCase(),c]))
   const out:any[]=[]
   for(const r of (byCampaign||[])){
@@ -727,17 +735,35 @@ function recomendacoes(byCampaign:any[], campanhas:any[]){
     const c=porNome.get(String(r.campaign||'').trim().toLowerCase())
     if(!c||c.estado!=='ENABLED') continue
     const acos=v>0?(g/v)*100:null
-    if(v<=0) out.push({c,g,v,acos,sev:'critico',txt:`gastou ${brl2(g)} e não vendeu nada no período`})
-    else if(acos!==null&&acos>ACOS_CRITICO) out.push({c,g,v,acos,sev:'critico',txt:`ACOS de ${acos.toFixed(0)}% — ${brl2(g)} investidos pra ${brl2(v)} em vendas`})
-    else if(acos!==null&&acos>=ACOS_ATENCAO) out.push({c,g,v,acos,sev:'atencao',txt:`ACOS de ${acos.toFixed(0)}%, acima da faixa saudável`})
+    if(v<=0){
+      out.push({c,g,v,acos,sev:'critico',txt:`gastou ${brl2(g)} e não vendeu nada`})
+    } else if(acos!==null&&acos>=critico){
+      // Diz o PREJUÍZO em pontos, não só o ACOS — é o número que decide.
+      const perda=margem!=null?` — come ${(acos-margem).toFixed(0)} pontos além da sua margem de ${margem.toFixed(0)}%`:''
+      out.push({c,g,v,acos,sev:'critico',txt:`ACOS de ${acos.toFixed(0)}%${perda}. ${brl2(g)} investidos pra ${brl2(v)} em vendas`})
+    } else if(acos!==null&&acos>=atencao){
+      const quanto=margem!=null?` — está comendo quase toda a margem de ${margem.toFixed(0)}%`:', acima da faixa saudável'
+      out.push({c,g,v,acos,sev:'atencao',txt:`ACOS de ${acos.toFixed(0)}%${quanto}`})
+    }
   }
   // Quem queima mais dinheiro primeiro — é a ordem em que vale decidir.
   return out.sort((a,b)=>(a.sev===b.sev?b.g-a.g:a.sev==='critico'?-1:1))
 }
 
-function AdsAdmin({byCampaign}:{byCampaign?:any[]}){
+function AdsAdmin({margem}:{margem?:number|null}){
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
+  // ⭐ O NEO analisa SEMPRE 30 DIAS, ignorando o seletor de período da tela.
+  // Dois motivos: (1) em "Hoje" o gasto é de centavos e ele ficava mudo, então o
+  // cliente nunca descobria que o NEO existe; (2) conselho sobre campanha precisa
+  // de janela longa pra ser sério. O seletor é pra VER número; isto é diagnóstico.
+  const [ads30,setAds30]=useState<any[]|null>(null)
+  useEffect(()=>{
+    let vivo=true
+    fetch('/api/ads/report?window=30d').then(r=>r.json())
+      .then(d=>{ if(vivo&&Array.isArray(d?.byCampaign)) setAds30(d.byCampaign) }).catch(()=>{})
+    return ()=>{ vivo=false }
+  },[])
   const [busca,setBusca]=useState('')
   const [salvando,setSalvando]=useState<string|null>(null)
   const [aviso,setAviso]=useState<{ok:boolean;txt:string}|null>(null)
@@ -775,7 +801,7 @@ function AdsAdmin({byCampaign}:{byCampaign?:any[]}){
 
   const d=st?.data
   const todas:any[]=d?.campanhas||[]
-  const recs=d?.ok?recomendacoes(byCampaign||[],todas):[]
+  const recs=d?.ok&&ads30?recomendacoes(ads30,todas,margem??null):[]
   const vis=todas.filter(c=>!busca||String(c.nome||'').toLowerCase().includes(busca.toLowerCase()))
   const btn={padding:'7px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}
 
@@ -805,7 +831,7 @@ function AdsAdmin({byCampaign}:{byCampaign?:any[]}){
           Amazon não tem "desfazer"). */}
       {d?.ok && recs.length>0 && (
         <div style={{marginTop:14,padding:'12px 14px',borderRadius:10,border:`1px solid rgba(240,180,41,0.28)`,background:'rgba(240,180,41,0.05)'}}>
-          <div style={{fontSize:11.5,fontWeight:700,color:t.gold,marginBottom:2}}>O NEO olhou suas campanhas</div>
+          <div style={{fontSize:11.5,fontWeight:700,color:t.gold,marginBottom:2}}>O NEO olhou suas campanhas · últimos 30 dias</div>
           <div style={{fontSize:10.5,color:t.t3,marginBottom:10}}>{recs.length} pedem decisão. Nada é aplicado sem você clicar.</div>
           {recs.slice(0,6).map((r:any)=>(
             <div key={r.c.campaignId} style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,padding:'7px 0',borderTop:`1px solid ${t.line}`}}>
@@ -823,14 +849,16 @@ function AdsAdmin({byCampaign}:{byCampaign?:any[]}){
             </div>
           ))}
           <div style={{fontSize:10,color:t.t3,marginTop:9,lineHeight:1.5}}>
-            Régua: ACOS acima de {ACOS_CRITICO}% é prejuízo, {ACOS_ATENCAO}–{ACOS_CRITICO}% é atenção. Campanha com menos de {brl2(GASTO_MINIMO_P_OPINAR)} gastos fica de fora — ainda não deu pra saber. Reduzir o orçamento é alternativa mais branda que pausar.
+            {margem!=null
+              ? <>Régua: sua <b>margem é {margem.toFixed(0)}%</b> — ACOS acima disso vende no prejuízo. Reduzir o orçamento é alternativa mais branda que pausar.</>
+              : <>⚠️ <b>Cadastre o custo (CMV) na aba Gerenciamento</b> — sem ele não dá pra saber sua margem, e ACOS só faz sentido comparado a ela. Enquanto isso uso a régua genérica ({ACOS_ATENCAO_SEM_MARGEM}% atenção, {ACOS_CRITICO_SEM_MARGEM}% prejuízo), que pode errar pro seu produto.</>}
+            {' '}Campanha com menos de {brl2(GASTO_MINIMO_P_OPINAR)} gastos fica de fora — ainda não deu pra saber.
           </div>
         </div>
       )}
-      {d?.ok && recs.length===0 && byCampaign && byCampaign.length>0 && (
+      {d?.ok && ads30 && recs.length===0 && (
         <div style={{marginTop:12,fontSize:11.5,color:t.grn,lineHeight:1.5}}>
-          ✓ Nenhuma campanha ativa queimando dinheiro <b>neste período</b>.
-          <span style={{color:t.t3}}> Em janelas curtas (Hoje/Ontem) o gasto raramente chega aos {brl2(GASTO_MINIMO_P_OPINAR)} necessários pra opinar — experimente 30 dias.</span>
+          ✓ O NEO olhou os últimos 30 dias: nenhuma campanha ativa vendendo no prejuízo.
         </div>
       )}
 
@@ -873,7 +901,7 @@ function AdsAdmin({byCampaign}:{byCampaign?:any[]}){
     </div>
   )
 }
-function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean;isAdmin?:boolean}){
+function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean;isAdmin?:boolean;margemAds?:number|null}){
   const t=useT()
   // Não conectou a conta de Ads ainda
   if(adsConnected===false) return(
@@ -918,7 +946,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin}:{m:ProductMetrics[
     {upd && <div style={{fontSize:10.5,color:t.t3,marginTop:10,display:'flex',gap:6,alignItems:'center'}}>
       <i className="ti ti-refresh" style={{fontSize:12}} aria-hidden="true"/>Atualizado {upd.toLocaleString('pt-BR')} · dado real da Advertising API{adsReal.stale?' · revalidando no fundo':''}
     </div>}
-    {isAdmin && <AdsAdmin byCampaign={camps}/>}
+    {isAdmin && <AdsAdmin margem={margemAds}/>}
   </>)
 }
 function Analitico({realDre,hide,connected,mockM,costs={},imposto=0}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;imposto?:number}){
@@ -1395,6 +1423,15 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   // Produto selecionado para o modal de detalhamento (lupinha).
   const [detail,setDetail]=useState<{sku:string;name:string;image?:string;asin?:string}|null>(null)
   const cmv = realDre?.produtos ? realDre.produtos.reduce((sum:number,p:any)=>sum+p.units*(custoUnit[p.sku]||0),0) : 0
+  // Margem ANTES de ads = a régua pra julgar ACOS (ACOS acima dela é prejuízo).
+  // ⚠️ null quando o CMV não foi cadastrado: sem custo o "lucro" fica inflado e a
+  // margem sairia otimista (~85%), calando o NEO justamente em quem mais precisa.
+  // Melhor assumir que não sei e pedir o custo do que dar régua errada.
+  const margemRef = useMemo(()=>{
+    const fat=realDre?.linhas?.receitaBruta||0
+    if(!(cmv>0)||!(fat>0)) return null
+    return ((realDre?.liqMarketplace||0)-cmv)/fat*100
+  },[realDre,cmv])
   const realM = realDre?.produtos ? realProductMetrics(realDre,custoUnit,imposto) : null
   // Produtos que VENDERAM no período mas estão sem custo informado — sem isso o
   // Oráculo não tem como calcular lucro/margem/ROI/MPA (mostra "—").
@@ -1517,7 +1554,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide} onDetail={setDetail}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
-        {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin}/>}
+        {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
