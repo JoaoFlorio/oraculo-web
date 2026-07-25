@@ -1818,15 +1818,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
         </div>
       )}
 
-      {/* Botão flutuante de suporte — some quando há modal aberto e na aba do
-          NEO (lá ele cobria o botão de enviar no celular; o suporte continua
-          acessível pela bolinha e pelo menu lateral) */}
-      {!detail&&!upgrade&&!promoOpen&&!expired&&nav!=='agente'&&(
-        <a href={WA_LINK} target="_blank" rel="noreferrer" className="ora-wa-fab" aria-label="Suporte no WhatsApp" title="Suporte no WhatsApp"
-          style={{position:'fixed',bottom:24,right:24,width:52,height:52,borderRadius:'50%',background:T.g,display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'var(--elev2)',zIndex:90}}>
-          <WaIcon size={26} c="#fff"/>
-        </a>
-      )}
+      {/* O FAB flutuante do WhatsApp saiu (pedido do João): com a bolinha do
+          Suporte no mesmo canto, eram dois botões disputando o rodapé direito.
+          O WhatsApp continua no MENU LATERAL, que é onde ele deve ficar. */}
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap');
@@ -1852,8 +1846,6 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
         .ora-spin{animation:oraSpin .9s linear infinite}
         .ora-avatar .cam{opacity:0}
         .ora-avatar:hover .cam,.ora-avatar .cam.busy{opacity:1}
-        .ora-wa-fab{transition:transform .18s ease-out, box-shadow .18s ease-out}
-        .ora-wa-fab:hover{transform:scale(1.06)}
         .ora-wa-side{transition:background .15s ease-out, border-color .15s ease-out}
         .ora-wa-side:hover{background:color-mix(in srgb, var(--g) 16%, transparent)!important}
         button:not(:disabled):active{transform:scale(.98)}

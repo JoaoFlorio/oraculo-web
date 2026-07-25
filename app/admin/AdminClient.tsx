@@ -196,6 +196,8 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   const [licenses, setLicenses] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [fStatus, setFStatus] = useState<'all' | 'active' | 'overdue' | 'canceled'>('all')
+  // Diagnóstico do push por cliente ("não recebo notificação") — ver painel abaixo.
+  const [diag, setDiag] = useState<{ email: string; loading: boolean; data: any } | null>(null)
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
   const [loading, setLoading] = useState(false)
   const [created, setCreated] = useState<any>(null)
@@ -304,6 +306,16 @@ export default function AdminClient({ role, name, previewData }: { role: string;
     })
     await load()
   }
+  async function diagPush(email: string) {
+    setDiag({ email, loading: true, data: null })
+    try {
+      const r = await fetch(`/api/admin/push-diagnose?email=${encodeURIComponent(email)}`)
+      const d = await r.json()
+      setDiag({ email, loading: false, data: r.ok ? d : { erro: d?.error || 'falhou' } })
+    } catch {
+      setDiag({ email, loading: false, data: { erro: 'sem resposta do servidor' } })
+    }
+  }
   async function markSaleTest(id: string, email: string, amount: number) {
     if (!confirm(`Marcar a venda de ${email} (${brl(amount)}) como TESTE?\n\nSai do faturamento, MRR e ticket médio. A linha continua no histórico.`)) return
     setMsg(null); setCreated(null)
@@ -368,6 +380,71 @@ export default function AdminClient({ role, name, previewData }: { role: string;
           </a>
         )}
         <button onClick={() => setCreated(null)} className="orc-ghost" style={{ background: 'none', border: `1px solid ${C.line}`, borderRadius: 7, color: C.t3, fontSize: 11, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .15s,border-color .15s' }}>Fechar</button>
+      </div>
+    </div>
+  )
+
+  // Painel do diagnóstico de push. O valor está em TRADUZIR o JSON num veredito
+  // — quem atende o cliente precisa da causa, não do dump. O cru fica no rodapé.
+  const diagBox = diag && (
+    <div onClick={() => setDiag(null)}
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(3,4,10,0.72)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '48px 16px', overflowY: 'auto' }}>
+      <div onClick={e => e.stopPropagation()} style={{ ...card, padding: '20px 22px', maxWidth: 520, width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: C.t1, flex: 1, wordBreak: 'break-all' as const }}>Push de {diag.email}</span>
+          <button onClick={() => setDiag(null)} style={{ background: 'transparent', border: 'none', color: C.t3, fontSize: 18, cursor: 'pointer', lineHeight: 1, fontFamily: 'inherit' }} aria-label="Fechar">×</button>
+        </div>
+        {diag.loading && <div style={{ fontSize: 12.5, color: C.t3, padding: '12px 0' }}>Consultando…</div>}
+        {!diag.loading && diag.data?.erro && <div style={{ fontSize: 12.5, color: C.red, padding: '10px 0' }}>{diag.data.erro}</div>}
+        {!diag.loading && diag.data && !diag.data.erro && (() => {
+          const d = diag.data
+          const v = d.vigia || {}
+          const linha = (ok: boolean, txt: string) => (
+            <div key={txt} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '6px 0', fontSize: 12.5, color: C.t2 }}>
+              <span style={{ color: ok ? C.green : C.red, fontWeight: 700, flexShrink: 0 }}>{ok ? '✓' : '✗'}</span>
+              <span>{txt}</span>
+            </div>
+          )
+          // Veredito: a primeira coisa que está errada na ordem em que quebra.
+          const veredito = !d.subscribed
+            ? { cor: C.amber, txt: 'Não está inscrito. O cliente precisa ativar as notificações no painel — e no iPhone o app tem que estar instalado na tela de início (pelo Safari não recebe).' }
+            : !d.amazonConectada
+              ? { cor: C.amber, txt: 'Conta Amazon não conectada. Sem isso o vigia nem olha os pedidos dele.' }
+              : v.lastError
+                ? { cor: C.red, txt: `O vigia está com erro: ${v.lastError}` }
+                : (d.pedidosNaJanela ?? 0) === 0
+                  ? { cor: C.t2, txt: 'Configuração OK. Não houve pedido nas últimas 24h — não havia o que notificar.' }
+                  : { cor: C.green, txt: `Configuração OK e houve ${d.pedidosNaJanela} pedido(s) em 24h. Se mesmo assim não chegou, o gargalo é no aparelho: no iPhone o app precisa estar na tela de início, e o modo Foco/silencioso esconde o alerta.` }
+          return (
+            <>
+              <div style={{ fontSize: 12.5, color: veredito.cor, padding: '10px 12px', borderRadius: 9, background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.line}`, margin: '10px 0 14px', lineHeight: 1.5 }}>
+                {veredito.txt}
+              </div>
+              {linha(!!d.subscribed, `Inscrito no servidor${d.subscriptions ? ` · ${d.subscriptions} dispositivo(s)` : ''}`)}
+              {linha(!!d.amazonConectada, 'Conta Amazon conectada')}
+              {linha(!!d.active, 'Web Push configurado no servidor (VAPID)')}
+              {linha(!v.lastError, v.lastError ? `Vigia com erro: ${v.lastError}` : `Vigia rodando · ${v.runs || 0} ciclos · ${v.sellers || 0} sellers · ciclo ${v.cicloMin || '?'}min`)}
+              {linha((d.pedidosNaJanela ?? 0) > 0, `${d.pedidosNaJanela ?? 0} pedido(s) nas últimas ${d.janelaHoras || 24}h`)}
+              {!!(d.ultimosPedidos || []).length && (
+                <div style={{ marginTop: 12, borderTop: `1px solid ${C.line}`, paddingTop: 10 }}>
+                  <div style={{ ...upLabel, marginBottom: 6 }}>Últimos pedidos</div>
+                  {d.ultimosPedidos.map((o: any, i: number) => (
+                    <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 11.5, color: C.t3, padding: '3px 0' }}>
+                      <span style={{ ...num }}>{fmtDM(o.data)}</span>
+                      <span style={{ flex: 1 }}>{o.status}</span>
+                      {/* total 0 = a Amazon suprime o valor no pedido Pending */}
+                      <span style={{ ...num, color: o.total > 0 ? C.t2 : C.amber }}>{o.total > 0 ? brl(o.total) : 'sem valor'}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <details style={{ marginTop: 12 }}>
+                <summary style={{ ...upLabel, cursor: 'pointer' }}>Resposta crua</summary>
+                <pre style={{ ...num, fontSize: 10, color: C.t3, whiteSpace: 'pre-wrap' as const, wordBreak: 'break-all' as const, marginTop: 8 }}>{JSON.stringify(d, null, 2)}</pre>
+              </details>
+            </>
+          )
+        })()}
       </div>
     </div>
   )
@@ -454,6 +531,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
           ))}
         </div>
 
+        {diagBox}
         {msgBox}
         {credentialsCard}
 
@@ -632,6 +710,8 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                               <option value="" disabled>Plano…</option>
                               {PLANS.map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
                             </select>
+                            <button onClick={() => diagPush(c.email)} className="orc-mini" title="Por que este cliente não recebe notificação de venda?"
+                              style={{ background: 'rgba(139,120,255,0.08)', border: '1px solid rgba(139,120,255,0.3)', color: C.violet, fontSize: 10, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Push</button>
                             {c.active === false
                               ? <button onClick={() => toggleClient(c.email, true)} className="orc-mini" style={{ background: 'rgba(52,211,153,0.08)', border: '1px solid rgba(52,211,153,0.3)', color: C.green, fontSize: 10, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Reativar</button>
                               : <button onClick={() => toggleClient(c.email, false)} className="orc-mini" style={{ background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)', color: C.red, fontSize: 10, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Desativar</button>}
