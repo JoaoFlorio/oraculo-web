@@ -750,6 +750,123 @@ function recomendacoes(byCampaign:any[], campanhas:any[], margem:number|null){
   return out.sort((a,b)=>(a.sev===b.sev?b.g-a.g:a.sev==='critico'?-1:1))
 }
 
+// Piso pra opinar numa PALAVRA (menor que o de campanha: aqui os valores são
+// naturalmente menores, mas ainda precisa de gasto que signifique alguma coisa).
+const GASTO_MINIMO_KW=5
+// Corte máximo num passo. A conta pura pode mandar cair pra 1/3 do lance; cortar
+// tanto de uma vez costuma matar a palavra (perde posição e para de aparecer).
+// Metade por vez, duas rodadas se precisar — o NEO recalcula na próxima.
+const CORTE_MAXIMO=0.5
+
+/** Lance sugerido pra trazer o ACOS até a margem.
+ *  Regra de três clássica: se o ACOS está 3x a margem, o lance precisa cair a ~1/3.
+ *  Limitado por CORTE_MAXIMO e nunca abaixo de R$0,02 (mínimo da Amazon). */
+function lanceSugerido(lance:number, acos:number, alvo:number):number{
+  if(!(lance>0)||!(acos>0)||!(alvo>0)) return 0
+  const ideal=lance*(alvo/acos)
+  return Math.max(0.02,Math.round(Math.max(lance*CORTE_MAXIMO,ideal)*100)/100)
+}
+
+/** Painel de palavras-chave de UMA campanha: desempenho + lance + sugestão do NEO. */
+function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem?:number|null}){
+  const t=useT()
+  const [kws,setKws]=useState<any[]|null>(null)
+  const [erro,setErro]=useState<string|null>(null)
+  const [gerando,setGerando]=useState(false)
+  const [salvando,setSalvando]=useState<string|null>(null)
+  const [rasc,setRasc]=useState<Record<string,string>>({})
+  const alvo=margem??20   // sem CMV cadastrado, mira genérica de 20%
+
+  const carregar=async()=>{
+    setErro(null)
+    try{
+      const r=await fetch(`/api/admin/ads-keywords?campaignId=${encodeURIComponent(campaignId)}`)
+      const d=await r.json()
+      if(d.ok) setKws(d.keywords||[]); else setErro(d.erro||d.error||'falhou')
+    }catch{ setErro('sem resposta do servidor') }
+  }
+  useEffect(()=>{ carregar() },[campaignId])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function gerar(){
+    setGerando(true); setErro(null)
+    try{
+      const r=await fetch('/api/admin/ads-keywords',{method:'POST'})
+      const d=await r.json()
+      if(!d.ok) setErro(d.erro||'não deu pra gerar')
+      await carregar()
+    }catch{ setErro('sem resposta do servidor') }
+    setGerando(false)
+  }
+  async function salvarLance(k:any, bid:number){
+    if(!confirm(`Mudar o lance de "${k.texto}"\n\nDe R$ ${k.lance} para R$ ${bid}?\n\nIsso altera de verdade na Amazon.`)) return
+    setSalvando(k.keywordId)
+    try{
+      const r=await fetch('/api/admin/ads-keywords',{method:'PATCH',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({keywordId:k.keywordId,bid})})
+      const d=await r.json()
+      if(d.ok){ setKws(v=>(v||[]).map(x=>x.keywordId===k.keywordId?{...x,lance:bid}:x)); setRasc(v=>{const n={...v};delete n[k.keywordId];return n}) }
+      else setErro(d.erro||d.error||'não foi aplicado')
+    }catch{ setErro('sem resposta do servidor') }
+    setSalvando(null)
+  }
+
+  const semDados=kws!==null&&kws.every(k=>k.gasto<=0)
+  return(
+    <div style={{padding:'10px 0 12px 14px',borderLeft:`2px solid ${t.line}`,marginLeft:4}}>
+      {erro && <div style={{fontSize:11,color:t.red,marginBottom:8,wordBreak:'break-all' as const}}>{erro}</div>}
+      {kws===null && <div style={{fontSize:11,color:t.t3}}>Carregando palavras…</div>}
+      {kws!==null && kws.length===0 && <div style={{fontSize:11,color:t.t3}}>Nenhuma palavra-chave nesta campanha (pode ser segmentação automática).</div>}
+      {semDados && kws.length>0 && (
+        <div style={{fontSize:11,color:t.t3,marginBottom:8,lineHeight:1.5}}>
+          Os lances estão aqui, mas o <b>desempenho por palavra</b> ainda não foi baixado.
+          <button onClick={gerar} disabled={gerando} style={{marginLeft:8,padding:'3px 9px',borderRadius:6,cursor:gerando?'default':'pointer',fontFamily:'inherit',fontSize:10.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}}>
+            {gerando?'gerando… (minutos)':'baixar desempenho'}
+          </button>
+        </div>
+      )}
+      {(kws||[]).slice(0,25).map(k=>{
+        const acos=k.vendas>0?(k.gasto/k.vendas)*100:null
+        const opinavel=k.gasto>=GASTO_MINIMO_KW
+        const ruim=opinavel&&(k.vendas<=0||(acos!==null&&acos>=alvo))
+        const sug=ruim&&k.lance>0?(acos!==null?lanceSugerido(k.lance,acos,alvo):Math.max(0.02,Math.round(k.lance*CORTE_MAXIMO*100)/100)):0
+        const val=rasc[k.keywordId]
+        const mudou=val!=null&&val!==''&&Number(val)!==Number(k.lance)
+        return(
+          <div key={k.keywordId} style={{display:'flex',gap:7,alignItems:'center',flexWrap:'wrap' as const,padding:'5px 0',borderTop:`1px solid ${t.line}`}}>
+            <span style={{flex:'1 1 150px',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,fontSize:11.5,color:ruim?t.t1:t.t2}}>
+              {ruim&&<span style={{color:t.red,marginRight:4}}>▲</span>}{k.texto}
+              <span style={{color:t.t3,fontSize:9.5,marginLeft:5}}>{k.matchType}</span>
+            </span>
+            <span style={{fontFamily:FG,fontSize:10.5,color:t.t3,minWidth:96}}>{brl2(k.gasto)} → {brl2(k.vendas)}</span>
+            <span style={{fontFamily:FG,fontSize:10.5,minWidth:52,color:acos===null?(k.gasto>0?t.red:t.t3):acos>=alvo?t.red:t.grn}}>
+              {acos===null?(k.gasto>0?'sem venda':'—'):`${acos.toFixed(0)}%`}
+            </span>
+            <div style={{display:'flex',alignItems:'center',gap:3}}>
+              <span style={{fontSize:10,color:t.t3}}>R$</span>
+              <input value={val??String(k.lance??'')} onChange={e=>setRasc(v=>({...v,[k.keywordId]:e.target.value}))}
+                inputMode="decimal" style={{width:52,padding:'3px 5px',borderRadius:5,border:`1px solid ${mudou?t.gold:t.line}`,background:'transparent',color:t.t1,fontSize:11,fontFamily:FG,outline:'none'}}/>
+              {mudou && <button disabled={salvando===k.keywordId} onClick={()=>salvarLance(k,Number(val))}
+                style={{padding:'3px 7px',borderRadius:5,cursor:'pointer',fontFamily:'inherit',fontSize:10,fontWeight:700,border:`1px solid ${t.gold}`,background:'transparent',color:t.gold}}>ok</button>}
+            </div>
+            {sug>0&&sug<k.lance&&!mudou && (
+              <button disabled={salvando===k.keywordId} onClick={()=>salvarLance(k,sug)}
+                title={`ACOS ${acos?acos.toFixed(0)+'%':'sem venda'} contra alvo de ${alvo.toFixed(0)}%`}
+                style={{padding:'3px 9px',borderRadius:5,cursor:'pointer',fontFamily:'inherit',fontSize:10,fontWeight:700,border:`1px solid rgba(240,180,41,0.45)`,background:'rgba(240,180,41,0.07)',color:t.gold}}>
+                {salvando===k.keywordId?'…':`baixar p/ ${brl2(sug)}`}
+              </button>
+            )}
+          </div>
+        )
+      })}
+      {kws!==null&&kws.length>0 && (
+        <div style={{fontSize:9.5,color:t.t3,marginTop:8,lineHeight:1.5}}>
+          Alvo de ACOS: {alvo.toFixed(0)}%{margem!=null?' (sua margem)':' (genérico — cadastre o CMV pra afinar)'}. O lance sugerido usa regra de três (ACOS ÷ alvo), com corte de no máximo 50% por vez — cortar demais de uma vez costuma matar a palavra. Palavra com menos de {brl2(GASTO_MINIMO_KW)} gastos fica sem opinião.
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AdsAdmin({margem}:{margem?:number|null}){
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
@@ -768,6 +885,7 @@ function AdsAdmin({margem}:{margem?:number|null}){
   const [salvando,setSalvando]=useState<string|null>(null)
   const [aviso,setAviso]=useState<{ok:boolean;txt:string}|null>(null)
   const [rascunho,setRascunho]=useState<Record<string,string>>({})   // orçamento sendo digitado
+  const [aberta,setAberta]=useState<string|null>(null)               // campanha expandida (palavras)
 
   async function carregar(){
     setSt({loading:true,data:null}); setAviso(null)
@@ -874,7 +992,13 @@ function AdsAdmin({margem}:{margem?:number|null}){
             const val=rascunho[c.campaignId]
             const mudou=val!=null&&val!==''&&Number(val)!==Number(c.orcamento)
             return(
-              <div key={c.campaignId} style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,padding:'7px 0',borderTop:`1px solid ${t.line}`}}>
+              <div key={c.campaignId}>
+              <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,padding:'7px 0',borderTop:`1px solid ${t.line}`}}>
+                <button onClick={()=>setAberta(a=>a===c.campaignId?null:c.campaignId)}
+                  title="Ver palavras-chave e lances"
+                  style={{background:'transparent',border:'none',color:t.t3,cursor:'pointer',fontFamily:'inherit',fontSize:11,padding:'0 2px',lineHeight:1}}>
+                  {aberta===c.campaignId?'▾':'▸'}
+                </button>
                 <span style={{flex:'1 1 190px',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,fontSize:12,color:t.t1}}>{c.nome}</span>
                 <span style={{fontSize:10,fontWeight:700,color:ativa?t.grn:t.t3,minWidth:56}}>{ativa?'ATIVA':'PAUSADA'}</span>
                 <div style={{display:'flex',alignItems:'center',gap:4}}>
@@ -892,6 +1016,8 @@ function AdsAdmin({margem}:{margem?:number|null}){
                   {salvando===c.campaignId?'…':ativa?'pausar':'reativar'}
                 </button>
                 <span style={{fontFamily:FG,fontSize:9.5,color:t.t3,opacity:.6}}>#{c.campaignId}</span>
+              </div>
+              {aberta===c.campaignId && <Keywords campaignId={c.campaignId} nome={c.nome} margem={margem}/>}
               </div>
             )
           })}
