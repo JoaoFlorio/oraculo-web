@@ -654,10 +654,13 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                         {s.status === 'test' && <span style={{ ...upLabel, fontSize: 9, color: C.t3, flexShrink: 0 }}>teste</span>}
                         <PlanBadge plan={s.plan} />
                         <span style={{ ...num, fontSize: 12.5, fontWeight: 700, flexShrink: 0, color: dead ? C.red : C.t1, textDecoration: dead ? 'line-through' : 'none' }}>{brl(s.amount)}</span>
-                        {/* Só na venda ainda contada: marcar como teste é o que tira do faturamento */}
+                        {/* Só na venda ainda contada: marcar como teste é o que tira do faturamento.
+                            ⚠️ O rótulo era só "teste" e o João leu como STATUS ("essas vendas
+                            estão marcadas como teste?"), justo num painel de dinheiro. Verbo na
+                            frente deixa claro que é ação, não etiqueta. */}
                         {!dead && (
-                          <button onClick={() => markSaleTest(s.id, s.email, s.amount)} className="orc-mini" title="Não é receita de verdade (teste de webhook)"
-                            style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.t3, fontSize: 9.5, padding: '2px 7px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0 }}>teste</button>
+                          <button onClick={() => markSaleTest(s.id, s.email, s.amount)} className="orc-mini" title="Esta venda não é real (teste de webhook) — tirar do faturamento"
+                            style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.t3, fontSize: 9.5, padding: '2px 7px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, flexShrink: 0, whiteSpace: 'nowrap' }}>não é real</button>
                         )}
                       </div>
                     )
