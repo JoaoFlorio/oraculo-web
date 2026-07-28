@@ -7,6 +7,7 @@ import {
 } from 'recharts'
 import { getFinanceData, summary, productMetrics, abcCurve, type ProductMetrics } from './financeiroMock'
 import { adsDoProduto, temAdsPorSku, adsSemVenda } from '@/lib/adsProduto'
+import { margemDoProduto, custosFixosDoPeriodo } from '@/lib/margemProduto'
 
 const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#888'}}>Carregando DRE…</div>})
 
@@ -163,17 +164,23 @@ function PeriodPicker({value,custom,onChange}:{value:string;custom:{from:Date;to
 }
 
 // Converte os produtos reais (com nome/foto) em ProductMetrics p/ as abas Vendas/Curva ABC.
-function realProductMetrics(realDre:any, costs:Record<string,number>, aliquota=0):ProductMetrics[]{
+// ⚠️ Espalhava o "líquido do marketplace" da conta por receita (liqRatio) e ainda
+// devolvia refundUnits/refundValue CHUMBADOS em zero — então a aba Vendas mostrava
+// coluna de reembolso ao lado de um lucro que ignorava esse mesmo reembolso, na
+// MESMA linha. Agora usa a fonte única (margemDoProduto), com taxa medida por
+// produto e devolução real por SKU.
+function realProductMetrics(realDre:any, costs:Record<string,number>, aliquota=0, adsReal?:any):ProductMetrics[]{
   const prods=realDre?.produtos||[]
-  const recLiq=realDre?.linhas?.receitaLiquida||0
-  const liqRatio=recLiq>0?(realDre.liqMarketplace||0)/recLiq:0   // rateia o líquido do marketplace por receita
   return prods.map((p:any)=>{
-    const cost=costs[p.sku]||0, cmv=p.units*cost
-    const tax=p.receita*(aliquota/100)                          // imposto = alíquota % sobre a receita
-    const grossP=p.receita*liqRatio-cmv-tax
-    const margin=p.receita>0?grossP/p.receita*100:0
-    const roi=cmv>0?grossP/cmv*100:0
-    return {id:p.sku,name:p.name||p.sku,sku:p.sku,asin:p.asin||'',image:p.image||'',units:p.units,price:p.units>0?p.receita/p.units:0,unitCost:cost,adsSpend:0,adsSales:0,refundUnits:0,stockFBA:0,bsr:0,revenue:p.receita,commission:0,fbaFee:0,cmv,tax,refundValue:0,grossProfit:grossP,acos:0,roas:0,margin,roi,coverageDays:0} as ProductMetrics
+    const M=margemDoProduto({linhas:realDre?.linhas||{},produto:p,reembolsos:realDre?.reembolsos,
+      custoUnit:costs[p.sku]||0,imposto:aliquota,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
+    const base=M.lucro??M.lucroAntesAds??0
+    return {id:p.sku,name:p.name||p.sku,sku:p.sku,asin:p.asin||'',image:p.image||'',
+      units:p.units,price:p.units>0?M.receitaBruta/p.units:0,unitCost:costs[p.sku]||0,
+      adsSpend:M.ads||0,adsSales:0,refundUnits:M.devolucaoUnits,stockFBA:0,bsr:0,
+      revenue:M.receitaLiquida,commission:M.comissao||0,fbaFee:M.fba||0,cmv:M.cmv,tax:M.imposto,
+      refundValue:M.devolucaoValor,grossProfit:base,acos:0,roas:0,
+      margin:M.margem??0,roi:M.cmv>0?base/M.cmv*100:0,coverageDays:0} as ProductMetrics
   })
 }
 function realAbc(metrics:ProductMetrics[]){
@@ -391,20 +398,19 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
   const fatTot = realDre ? (L.receitaBruta||0) : 0
   const feesTot = (L.comissao||0)+(L.fba||0)+(L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.outrasTaxas||0)
   const top15 = realDre?.produtos ? (realDre.produtos as any[]).slice(0,15).map(p=>{
-    const receita=p.receita||0, units=p.units||0
-    const preco=units>0?receita/units:0
-    const custoU=costs[p.sku]||0, cmvP=custoU*units
-    const repres=fatTot>0?receita/fatTot*100:0
-    const share=fatTot>0?receita/fatTot:0
-    const impP=receita*(imposto/100)                       // imposto = alíquota % sobre a receita
-    const lucro=receita-cmvP-feesTot*share-impP            // lucro bruto (antes de ads)
-    const margem=receita>0?lucro/receita*100:0
-    // `null` = sem dado de ads por produto. Não rateia: lucro pós ADS e MPA
-    // viram "—" em vez de um número que depende do gasto dos OUTROS produtos.
-    const custoAds=adsDoProduto(adsReal,p.sku,p.asin).valor
-    const lucroPos=custoAds===null?null:lucro-custoAds
-    const mpa=(lucroPos!==null&&receita>0)?lucroPos/receita*100:null
-    return {p,receita,units,preco,custoU,repres,lucro,margem,custoAds,lucroPos,mpa}
+    // Mesma função do modal e da Curva ABC — as três não têm como discordar.
+    const M=margemDoProduto({linhas:L,produto:p,reembolsos:realDre?.reembolsos,
+      custoUnit:costs[p.sku]||0,imposto,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
+    const units=p.units||0
+    return {p,units,
+      receita:M.receitaLiquida,                              // líquida de devolução
+      preco:units>0?M.receitaBruta/units:0,
+      custoU:costs[p.sku]||0,
+      repres:fatTot>0?M.receitaBruta/fatTot*100:0,
+      devolucao:M.devolucaoValor,
+      lucro:M.lucroAntesAds, margem:M.margem,
+      custoAds:M.ads, lucroPos:M.lucro,
+      mpa:(M.lucro!==null&&M.receitaLiquida>0)?M.lucro/M.receitaLiquida*100:null}
   }) : []
   const adsReal_=temAdsPorSku(adsReal)
   const sangria=adsSemVenda(adsReal,realDre?.produtos||[])
@@ -458,8 +464,8 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
                 <NumTd>{r.units}</NumTd>
                 <NumTd strong hide={hide}>{brl2(r.receita)}</NumTd>
                 <NumTd color={t.t2}>{r.repres.toFixed(1).replace('.',',')}%</NumTd>
-                <NumTd color={r.custoU>0?(r.lucro>=0?t.grn:t.red):t.t3} hide={hide}>{r.custoU>0?brl2(r.lucro):'—'}</NumTd>
-                <PillTd>{r.custoU>0?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd>
+                <NumTd color={r.custoU>0&&r.lucro!==null?(r.lucro>=0?t.grn:t.red):t.t3} hide={hide}>{r.custoU>0&&r.lucro!==null?brl2(r.lucro):'—'}</NumTd>
+                <PillTd>{r.custoU>0&&r.margem!==null?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd>
                 {/* com dado real, R$0 é resposta (não anunciou) — não vira travessão.
                     `null` = sem dado por produto: "—", nunca um rateio. */}
                 <NumTd color={(r.custoAds||0)>0?t.t1:t.t3} hide={hide}>{r.custoAds===null?'—':brl2(r.custoAds)}</NumTd>
@@ -538,30 +544,22 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
   },[produto.sku,from,to])
 
   const L=realDre?.linhas||{}
-  const fatTot=L.receitaBruta||0
-  const feesTot=(L.comissao||0)+(L.fba||0)+(L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.outrasTaxas||0)
-  const receita=p?.receita||0, units=p?.units||0
-  const share=fatTot>0?receita/fatTot:0
-  const ads=adsDoProduto(adsReal,produto.sku,produto.asin)
-  const custoU=costs[produto.sku]||0, cmvP=custoU*units
-  // Decompõe o feesTot do produto em comissão/FBA proporcionais (só p/ exibir separado).
-  const comShare=feesTot>0?(L.comissao||0)/feesTot:0
-  const fbaShare=feesTot>0?((L.fba||0)+(L.taxaPrograma||0))/feesTot:0
-  const outShare=1-comShare-fbaShare
-  const feesP=feesTot*share
-  const comissaoP=feesP*comShare, fbaP=feesP*fbaShare, outrosP=feesP*outShare
-  // ⚠️ Ads SEM rateio: ou é o gasto medido deste produto, ou não entra na conta.
-  // Espalhar o total da conta por faturamento fazia a margem deste produto cair
-  // porque OUTRO produto gastou — foi o que o João pegou no Tapete (R$9,52 reais
-  // virando R$49,19). Sem o dado, o lucro se declara ANTES do ads em vez de
-  // fingir que está completo.
-  const adsP=ads.valor
-  const semAds=adsP===null
-  const impP=receita*(imposto/100)
-  const liqMkt=receita-feesP
-  const lucro=receita-feesP-(adsP||0)-impP-cmvP
-  const margem=receita>0?lucro/receita*100:0
-  const temCusto=custoU>0
+  const custoU=costs[produto.sku]||0
+  // ⭐ FONTE ÚNICA: a mesma função que alimenta Top 15, Curva ABC e Analítico.
+  // Antes cada tela repetia a conta com variações — por isso discordavam.
+  const M=margemDoProduto({
+    linhas:L, produto:p||{sku:produto.sku,units:0,receita:0}, reembolsos:realDre?.reembolsos,
+    custoUnit:custoU, imposto, ads:adsDoProduto(adsReal,produto.sku,produto.asin).valor,
+  })
+  const units=p?.units||0
+  const semPreco=p?.unitsSemPreco||0
+  const semAds=M.ads===null
+  const temCusto=M.temCusto
+  const lucroExib=M.lucro??M.lucroAntesAds     // sem ads mostra o de antes; sem taxa medida, "—"
+  const custosFixos=custosFixosDoPeriodo(L)
+  // Base pra distribuir os custos do produto entre os pedidos dele.
+  const precoMedio=units>0?M.receitaBruta/units:0
+  const feesProduto=M.feeMedido?(M.comissao as number)+(M.fba as number)+M.taxaPrograma+M.outrasTaxas:null
 
   const Row=({label,val,sign,strong,color,nota}:{label:string;val:number|null;sign?:'-'|'=';strong?:boolean;color?:string;hide?:boolean;nota?:string})=>(
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:12,padding:'8px 2px',borderBottom:`1px solid ${t.line}`,fontSize:strong?14:13}}>
@@ -586,24 +584,35 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
 
         {/* Waterfall — tudo que é descontado até a margem final */}
         <div style={{background:t.dark?'rgba(255,255,255,0.02)':'#FAFBFC',border:`1px solid ${t.line}`,borderRadius:12,padding:'14px 16px',marginBottom:16}}>
-          <Row label={`Faturado (${units} un.)`} val={receita} strong hide={hide}/>
-          <Row label="Comissão Amazon" val={comissaoP} sign="-" color={t.red} hide={hide}/>
-          <Row label="Taxa FBA" val={fbaP} sign="-" color={t.red} hide={hide}/>
-          {outrosP>0.005 && <Row label="Outras taxas" val={outrosP} sign="-" color={t.red} hide={hide}/>}
-          <Row label="Líq. do Marketplace" val={liqMkt} sign="=" strong color={t.grn} hide={hide}/>
-          <Row label="Ads deste produto" val={adsP} sign="-" color={t.red} hide={hide}
+          <Row label={`Faturado (${units} un.)`} val={M.receitaBruta} strong hide={hide}
+               nota={semPreco>0?`+${semPreco} un. que a Amazon ainda não precificou — fora da conta, não zeradas`:undefined}/>
+          {M.devolucaoValor>0.005 && <Row label={`Devoluções (${M.devolucaoUnits} un.)`} val={M.devolucaoValor} sign="-" color={t.red} hide={hide}
+               nota="estorno real do repasse — o custo dessas unidades também sai do CMV"/>}
+          <Row label="Comissão Amazon" val={M.comissao} sign="-" color={t.red} hide={hide}
+               nota={M.feeMedido?undefined:'a Amazon não devolveu a tarifa deste produto agora'}/>
+          <Row label="Taxa FBA" val={M.fba} sign="-" color={t.red} hide={hide}/>
+          {M.taxaPrograma>0.005 && <Row label="Taxa Amazon pra Todos" val={M.taxaPrograma} sign="-" color={t.red} hide={hide} nota="rateada por faturamento"/>}
+          {M.outrasTaxas>0.005 && <Row label="Outras taxas" val={M.outrasTaxas} sign="-" color={t.red} hide={hide} nota="rateadas por faturamento"/>}
+          <Row label="Líq. do Marketplace" val={M.liqMarketplace} sign="=" strong color={t.grn} hide={hide}/>
+          <Row label="Ads deste produto" val={M.ads} sign="-" color={t.red} hide={hide}
                nota={semAds?'gasto por produto ainda sincronizando — não rateamos o total da conta':undefined}/>
-          {imposto>0 && <Row label={`Imposto (${pc(imposto)})`} val={impP} sign="-" color={t.red} hide={hide}/>}
-          <Row label="Custo do produto (CMV)" val={cmvP} sign="-" color={temCusto?t.red:t.t3} hide={hide}/>
+          {imposto>0 && <Row label={`Imposto (${pc(imposto)})`} val={M.imposto} sign="-" color={t.red} hide={hide}/>}
+          <Row label={`Custo do produto (CMV${M.devolucaoUnits>0?`, ${M.unitsLiquidas} un.`:''})`} val={M.cmv} sign="-" color={temCusto?t.red:t.t3} hide={hide}/>
           <div style={{height:1,background:t.line,margin:'8px 0'}}/>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-            <span style={{fontSize:13.5,fontWeight:700,color:t.t1}}>{semAds?'Lucro antes do Ads':'Lucro do período'}</span>
+            <span style={{fontSize:13.5,fontWeight:700,color:t.t1}}>{!M.feeMedido?'Lucro do período':semAds?'Lucro antes do Ads':'Lucro do período'}</span>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
-              {temCusto&&<Pill kind={margem>20?'grn':margem>0?'gold':'red'}>{pc(margem)}</Pill>}
-              <span style={{fontSize:15,fontWeight:700,fontFamily:FG,color:temCusto?(lucro>=0?t.grn:t.red):t.t3,filter:hide?'blur(6px)':'none'}}>{temCusto?brl2(lucro):'informe o custo'}</span>
+              {temCusto&&M.margem!==null&&<Pill kind={M.margem>20?'grn':M.margem>0?'gold':'red'}>{pc(M.margem)}</Pill>}
+              <span style={{fontSize:15,fontWeight:700,fontFamily:FG,color:t.t3,filter:'none'}}>
+                {!temCusto?'informe o custo':(lucroExib===null?'—':<span style={{color:lucroExib>=0?t.grn:t.red,filter:hide?'blur(6px)':'none'}}>{brl2(lucroExib)}</span>)}
+              </span>
             </div>
           </div>
         </div>
+        {custosFixos>0.005 && <div style={{fontSize:10.5,color:t.t3,marginBottom:14,display:'flex',gap:6}}>
+          <i className="ti ti-info-circle" style={{fontSize:12,marginTop:1}} aria-hidden="true"/>
+          <span>Assinatura e armazenagem do período ({brl2(custosFixos)}) são custo fixo da conta e <b>não entram na margem de produto nenhum</b> — se entrassem, a margem deste produto mudaria conforme o dia que você escolhesse no filtro.</span>
+        </div>}
         {!temCusto && <div style={{fontSize:10.5,color:t.t3,marginBottom:14}}>Informe o custo (CMV) deste produto na aba <b>Gerenciamento</b> pra ver o lucro e a margem finais.</div>}
 
         {/* Lista de pedidos do produto (Espelho Local) */}
@@ -617,16 +626,23 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
         ) : (
           <Table head={[{label:'Data',w:'20%'},{label:'Un.',right:true},{label:'Total',right:true},{label:'Líq. Mkt',right:true},...(imposto>0?[{label:'Imposto',right:true}]:[]),{label:'Custo',right:true},{label:'Lucro',right:true},{label:'Margem',right:true}]}>
             {(orders.orders||[]).map((o:any,i:number)=>{
-              // Pedido pendente: a Amazon segura o valor até confirmar (pagamento+envio).
-              // Não computa custo/lucro contra receita 0 — mostra "—" e o selo Pendente
-              // (evita "prejuízo" fantasma de −CMV). Igual ao Gestor, que zera tudo.
+              // ⭐ O PENDENTE ENTRA COM VALOR. Antes a linha ia toda a "—" enquanto o
+              // card acima JÁ contava esse pedido pelo preço do anúncio — as duas
+              // metades da tela afirmavam coisas diferentes, e a fatia de taxa do
+              // pendente sumia da tabela mas continuava cobrada em cima. Agora a
+              // linha usa o MESMO valor que entrou no card, marcado como provisório,
+              // e a soma das linhas fecha com "Faturado".
               const pend=/pending/i.test(o.status||'') || (o.receita||0)<=0
-              const rShare=receita>0?o.receita/receita:0        // rateia os custos do produto por receita do pedido
-              const oFees=feesP*rShare, oAds=(adsP||0)*rShare, oImp=o.receita*(imposto/100), oCmv=custoU*o.qty
-              const oLiq=o.receita-oFees
-              const oLucro=o.receita-oFees-oAds-oImp-oCmv
-              const oMarg=o.receita>0?oLucro/o.receita*100:0
+              const oReceita=(o.receita||0)>0?o.receita:precoMedio*(o.qty||0)
+              const rShare=M.receitaBruta>0?oReceita/M.receitaBruta:0
+              const oFees=feesProduto===null?null:feesProduto*rShare
+              const oAds=M.ads===null?null:M.ads*rShare
+              const oImp=oReceita*(imposto/100), oCmv=custoU*(o.qty||0)
+              const oLiq=oFees===null?null:oReceita-oFees
+              const oLucro=(oFees===null)?null:oReceita-oFees-(oAds||0)-oImp-oCmv
+              const oMarg=(oLucro!==null&&oReceita>0)?oLucro/oReceita*100:null
               const dash=<span style={{fontSize:11,color:t.t3}}>—</span>
+              const money=(v:number|null)=>v===null?dash:brl2(v)
               return(
                 <tr key={i}>
                   <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,fontSize:11.5,color:t.t2}}>
@@ -634,18 +650,18 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
                     <div style={{fontSize:9.5,color:pend?t.gold:t.t3}}>{o.channel==='AFN'?'FBA':'FBM'}{pend?' · Pendente':''}</div>
                   </td>
                   <NumTd>{o.qty}</NumTd>
-                  <NumTd strong hide={hide}>{pend?dash:brl2(o.receita)}</NumTd>
-                  <NumTd color={t.t2} hide={hide}>{pend?dash:brl2(oLiq)}</NumTd>
-                  {imposto>0 && <NumTd color={t.red} hide={hide}>{pend?dash:brl2(oImp)}</NumTd>}
-                  <NumTd color={temCusto?t.t1:t.t3} hide={hide}>{pend?dash:(temCusto?brl2(oCmv):'—')}</NumTd>
-                  <NumTd color={temCusto?(oLucro>=0?t.grn:t.red):t.t3} hide={hide}>{pend?dash:(temCusto?brl2(oLucro):'—')}</NumTd>
-                  <PillTd>{pend?<Pill kind="gold">Pendente</Pill>:(temCusto?<Pill kind={oMarg>20?'grn':oMarg>0?'gold':'red'}>{pc(oMarg)}</Pill>:dash)}</PillTd>
+                  <NumTd strong hide={hide}>{money(oReceita)}</NumTd>
+                  <NumTd color={t.t2} hide={hide}>{money(oLiq)}</NumTd>
+                  {imposto>0 && <NumTd color={t.red} hide={hide}>{money(oImp)}</NumTd>}
+                  <NumTd color={temCusto?t.t1:t.t3} hide={hide}>{temCusto?money(oCmv):dash}</NumTd>
+                  <NumTd color={temCusto&&oLucro!==null?(oLucro>=0?t.grn:t.red):t.t3} hide={hide}>{temCusto?money(oLucro):dash}</NumTd>
+                  <PillTd>{pend?<Pill kind="gold">Pendente</Pill>:(temCusto&&oMarg!==null?<Pill kind={oMarg>20?'grn':oMarg>0?'gold':'red'}>{pc(oMarg)}</Pill>:dash)}</PillTd>
                 </tr>
               )
             })}
           </Table>
         )}
-        <div style={{fontSize:10,color:t.t3,marginTop:10}}>Comissão e FBA rateados por participação na receita. {semAds?<>O gasto de ads <b>deste</b> produto ainda não chegou — e não rateamos o total da conta, porque isso faria a margem dele cair só porque OUTRO produto gastou.</>:<><b>Ads é o gasto medido deste produto</b> (relatório de produto anunciado da Amazon).</>} Pedidos <b>Pendentes</b> entram pelo preço do anúncio (a Amazon só libera o valor ao faturar). Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
+        <div style={{fontSize:10,color:t.t3,marginTop:10}}>Comissão e Taxa FBA são as <b>deste produto</b> (tarifa da Amazon por ASIN), não um rateio do total da conta. {semAds?<>O gasto de ads <b>deste</b> produto ainda não chegou — e não rateamos o total, porque isso faria a margem dele cair só porque OUTRO produto gastou.</>:<><b>Ads é o gasto medido deste produto</b> (relatório de produto anunciado da Amazon).</>} Pedido <b>Pendente</b> entra pelo preço do anúncio, marcado como provisório — a Amazon só libera o valor ao faturar. {M.devolucaoValor>0.005&&<>As devoluções entram no cálculo acima e <b>não</b> são distribuídas por pedido (a Amazon informa o estorno por produto, não por pedido), então a soma da tabela fecha com o <b>Faturado</b>, não com o lucro final. </>}Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
       </div>
     </div>
   )
@@ -672,13 +688,12 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
       const share=fat>0?p.receita/fat:0
       const cmv=(costs[p.sku]||0)*p.units
       const temCusto=(costs[p.sku]||0)>0
-      const lucroBruto=p.receita-cmv-feesTot*share
-      // Sem gasto de ads medido do produto, "Lucro pós Ads" e MPA não existem —
-      // não se inventa rateio (a margem dele dependeria do gasto dos outros).
-      const adsP=adsDoProduto(adsReal,p.sku,p.asin).valor
-      const lucroPos=adsP===null?null:lucroBruto-adsP
-      const mpa=(lucroPos!==null&&p.receita>0)?lucroPos/p.receita*100:null
-      return {p,units:p.units,receita:p.receita,cls,lucroBruto,lucroPos,mpa,temCusto}
+      // Mesma função do modal e do Top 15 — sem cópia, sem divergir.
+      const M=margemDoProduto({linhas:L,produto:p,reembolsos:realDre?.reembolsos,
+        custoUnit:costs[p.sku]||0,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
+      return {p,units:p.units,receita:M.receitaLiquida,cls,
+        lucroBruto:M.lucroAntesAds,lucroPos:M.lucro,
+        mpa:(M.lucro!==null&&M.receitaLiquida>0)?M.lucro/M.receitaLiquida*100:null,temCusto}
     })
     const semAdsPorProduto=!temAdsPorSku(adsReal)
     // Curva Z = produtos com estoque FBA mas SEM giro (0 vendas no período)
@@ -687,7 +702,9 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
     const agg=(cls:string)=>{
       const its=rows.filter(r=>r.cls===cls)
       return {count:its.length,units:its.reduce((s,r)=>s+r.units,0),fat:its.reduce((s,r)=>s+r.receita,0),
-        lb:its.reduce((s,r)=>s+r.lucroBruto,0),
+        // Um produto sem taxa/ads medido contamina o agregado: melhor "—" que um
+        // total que finge estar completo faltando pedaço.
+        lb:its.some(r=>r.lucroBruto===null)?null:its.reduce((s,r)=>s+(r.lucroBruto||0),0),
         lp:its.some(r=>r.lucroPos===null)?null:its.reduce((s,r)=>s+(r.lucroPos||0),0),
         hasCusto:its.some(r=>r.temCusto)}
     }
@@ -706,15 +723,15 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:13,marginBottom:18}}>
         {cards.map(c=>{
           const color=clsColor(t,c.cls)
-          const lbPct=c.fat>0?c.lb/c.fat*100:0, lpPct=(c.lp!==null&&c.fat>0)?c.lp/c.fat*100:0
-          const temLp=c.hasCusto&&c.lp!==null
+          const lbPct=(c.lb!==null&&c.fat>0)?c.lb/c.fat*100:0, lpPct=(c.lp!==null&&c.fat>0)?c.lp/c.fat*100:0
+          const temLb=c.hasCusto&&c.lb!==null, temLp=c.hasCusto&&c.lp!==null
           return(
             <div key={c.cls} style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${color}`,borderRadius:14,padding:'14px 16px 12px'}}>
               <div style={{textAlign:'center' as const,fontFamily:FG,fontSize:18,fontWeight:700,color:t.t1,marginBottom:10}}>Curva {c.cls}</div>
               <Row label="Unidades Vendidas" value={String(c.units)}/>
               <Row label="Produtos diferentes" value={String(c.count)}/>
               <Row label="Faturamento" value={brl2(c.fat)}/>
-              <Row label="Lucro Bruto" value={c.hasCusto?`${brl2(c.lb)} (${pc(lbPct)})`:'—'} color={c.hasCusto?(c.lb>=0?t.grn:t.red):t.t3}/>
+              <Row label="Lucro Bruto" value={temLb?`${brl2(c.lb as number)} (${pc(lbPct)})`:'—'} color={temLb?((c.lb as number)>=0?t.grn:t.red):t.t3}/>
               <Row label="Lucro Pós Ads" value={temLp?`${brl2(c.lp as number)} (${pc(lpPct)})`:'—'} color={temLp?((c.lp as number)>=0?t.grn:t.red):t.t3}/>
             </div>
           )
@@ -726,7 +743,7 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
             <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}}/>
             <NumTd>{r.units}</NumTd>
             <NumTd strong hide={hide}>{brl2(r.receita)}</NumTd>
-            <NumTd color={r.temCusto?(r.lucroBruto>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto?brl2(r.lucroBruto):'—'}</NumTd>
+            <NumTd color={r.temCusto&&r.lucroBruto!==null?(r.lucroBruto>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto&&r.lucroBruto!==null?brl2(r.lucroBruto):'—'}</NumTd>
             <NumTd color={r.temCusto&&r.lucroPos!==null?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto&&r.lucroPos!==null?brl2(r.lucroPos):'—'}</NumTd>
             <PillTd>{r.temCusto&&r.mpa!==null?<Pill kind={r.mpa>15?'grn':r.mpa>0?'gold':'red'}>{pc(r.mpa)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
             <PillTd><ClassBadge t={t} cls={r.cls}/></PillTd>
@@ -1110,7 +1127,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds}:{m:Produ
     {isAdmin && <AdsAdmin margem={margemAds}/>}
   </>)
 }
-function Analitico({realDre,hide,connected,mockM,costs={},imposto=0}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;imposto?:number}){
+function Analitico({realDre,hide,connected,mockM,costs={},imposto=0,adsReal}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;imposto?:number;adsReal?:any}){
   const t=useT()
   if(connected && !realDre) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
   if(realDre){
@@ -1123,26 +1140,24 @@ function Analitico({realDre,hide,connected,mockM,costs={},imposto=0}:{realDre?:a
     const totalDevUn = reembolsos.reduce((s,r)=>s+(r.units||0),0)
     const receitaTotal = produtos.reduce((s,p)=>s+(p.receita||0),0)
     const unidadesTotal = produtos.reduce((s,p)=>s+(p.units||0),0)
-    // lucro/margem com o MESMO critério das outras abas: receita − CMV − taxas rateadas por faturamento
+    // Mesma fonte única do modal / Top 15 / Curva ABC. ⚠️ Antes esta aba exibia a
+    // coluna "Reembolsos" ao lado de um "Lucro bruto" que ignorava esse mesmo
+    // reembolso — na MESMA linha da tabela.
     const L=realDre.linhas||{}
-    const fat=L.receitaBruta||0
-    const feesTot=(L.comissao||0)+(L.fba||0)+(L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.outrasTaxas||0)
     const rows=[...produtos].sort((a:any,b:any)=>(b.receita||0)-(a.receita||0)).map((p:any)=>{
-      const receita=p.receita||0, units=p.units||0
-      const ticket=units>0?receita/units:0
-      const shareRec=receitaTotal>0?receita/receitaTotal*100:0
-      const custoU=costs[p.sku]||0, temCusto=custoU>0
-      const custoTotal=custoU*units
-      const share=fat>0?receita/fat:0
-      const impP=receita*(imposto/100)
-      const lucro=receita-custoTotal-feesTot*share-impP
-      const margem=receita>0?lucro/receita*100:0
-      const ref=refBySku[p.sku]||{units:0,valor:0}
-      return {p,receita,units,ticket,shareRec,custoTotal,temCusto,lucro,margem,ref}
+      const M=margemDoProduto({linhas:L,produto:p,reembolsos:realDre?.reembolsos,
+        custoUnit:costs[p.sku]||0,imposto,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
+      const units=p.units||0
+      return {p,receita:M.receitaLiquida,units,
+        ticket:units>0?M.receitaBruta/units:0,
+        shareRec:receitaTotal>0?M.receitaBruta/receitaTotal*100:0,
+        custoTotal:M.cmv,temCusto:M.temCusto,
+        lucro:M.lucroAntesAds,margem:M.margem,
+        ref:refBySku[p.sku]||{units:0,valor:0}}
     })
-    const comCusto=rows.filter(r=>r.temCusto)
+    const comCusto=rows.filter(r=>r.temCusto&&r.lucro!==null)
     const recCusto=comCusto.reduce((s,r)=>s+r.receita,0)
-    const margemMedia = recCusto>0 ? comCusto.reduce((s,r)=>s+r.lucro,0)/recCusto*100 : null
+    const margemMedia = recCusto>0 ? comCusto.reduce((s,r)=>s+(r.lucro||0),0)/recCusto*100 : null
     if(produtos.length===0 && reembolsos.length===0)
       return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhuma venda no período selecionado — nada para analisar por aqui.</div>
     const Chip=({label,value,color}:{label:string;value:string;color?:string})=>(
@@ -1183,8 +1198,8 @@ function Analitico({realDre,hide,connected,mockM,costs={},imposto=0}:{realDre?:a
                 </div>
               </td>
               <NumTd color={r.temCusto?t.gold:t.t3} hide={hide}>{r.temCusto?brl2(r.custoTotal):'—'}</NumTd>
-              <NumTd color={r.temCusto?(r.lucro>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto?brl2(r.lucro):'—'}</NumTd>
-              <PillTd>{r.temCusto?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
+              <NumTd color={r.temCusto&&r.lucro!==null?(r.lucro>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto&&r.lucro!==null?brl2(r.lucro):'—'}</NumTd>
+              <PillTd>{r.temCusto&&r.margem!==null?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
               <NumTd color={r.ref.units>0?t.red:t.t3} hide={hide}>{r.ref.units>0?`${r.ref.units} un · ${brl2(r.ref.valor)}`:'0'}</NumTd>
             </tr>
           ))}
@@ -1593,7 +1608,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
     if(!(cmv>0)||!(fat>0)) return null
     return ((realDre?.liqMarketplace||0)-cmv)/fat*100
   },[realDre,cmv])
-  const realM = realDre?.produtos ? realProductMetrics(realDre,custoUnit,imposto) : null
+  const realM = realDre?.produtos ? realProductMetrics(realDre,custoUnit,imposto,adsData) : null
   // Produtos que VENDERAM no período mas estão sem custo informado — sem isso o
   // Oráculo não tem como calcular lucro/margem/ROI/MPA (mostra "—").
   const prodsComVenda = (realDre?.produtos||[]).filter((p:any)=>(p.units||0)>0).length
@@ -1716,7 +1731,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide} onDetail={setDetail}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
-        {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto}/>}
+        {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto} adsReal={adsData}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
         {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={custoUnit}/>}
