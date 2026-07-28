@@ -747,14 +747,21 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
             }
 
             // Title recommendations
-            if(titleLen < 80){
+            // ⚠️ A Amazon cortou o título de ~200 para 75 caracteres em 27/07/2026.
+            // A régua antiga mandava CRESCER até 200 — hoje isso faz a IA da
+            // Amazon reescrever o título, perdendo as palavras-chave do vendedor.
+            if(titleLen > 75){
+              recs.push({priority:'Alta',icon:'✂️',
+                title:'Título passou do limite novo de 75 caracteres',
+                desc:`Seu título tem ${titleLen} caracteres. Desde 27/07/2026 a Amazon limita a 75 e reescreve sozinha o que passar — cortando por tamanho, sem cuidar das suas palavras-chave. Encurte você mesmo e mande o resto pro campo Item Highlights (125 caracteres), que também conta na busca.`})
+            } else if(titleLen < 45){
               recs.push({priority:'Alta',icon:'🔤',
-                title:'Título muito curto — expanda com palavras-chave',
-                desc:`Seu título tem ${titleLen} caracteres. O ideal é 130-200. Inclua: modelo, material, benefício principal, público-alvo e compatibilidades. Cada palavra-chave extra é tráfego extra.`})
-            } else if(titleLen < 130){
+                title:'Título muito curto — está desperdiçando espaço',
+                desc:`Seu título tem ${titleLen} caracteres de 75 possíveis. Use o espaço com o que o cliente digita na busca: modelo, material, benefício principal.`})
+            } else if(titleLen < 60){
               recs.push({priority:'Média',icon:'🔤',
-                title:'Otimize o título com mais palavras-chave de cauda longa',
-                desc:`Título com ${titleLen} caracteres pode crescer até 200. Adicione especificações técnicas, casos de uso e variações de busca que o cliente usaria.`})
+                title:'Dá pra aproveitar melhor o título',
+                desc:`Título com ${titleLen} caracteres — cabem até 75. Encaixe mais uma variação de busca sem estourar o limite.`})
             }
 
             // Bullets (based on breakdown)
