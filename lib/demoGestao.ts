@@ -210,7 +210,22 @@ export function demoAdsReport(cfg: DemoConfig, window: string, from?: string, to
     { campaign: 'SP · Auto — Descoberta', frac: 0.16 },
   ]
   const byCampaign = camps.map(c => ({ campaign: c.campaign, spend: r2(spend * c.frac), sales: r2(sales * c.frac), clicks: Math.round(spend * c.frac / 1.3), impressions: Math.round(spend * c.frac / 1.3 * 22) }))
-  return { connected: true, ready: true, cached: true, stale: false, window, updatedAt: new Date().toISOString(), period: { from: range.from, to: range.to }, spend, sales, purchases: Math.round(sales / (avgTicket(cfg) || 1)), clicks: Math.round(spend / 1.3), impressions: Math.round(spend / 1.3 * 22), acos, roas, byCampaign, demo: true }
+  // Gasto por PRODUTO — o painel usa isto no lugar do rateio por faturamento.
+  // De propósito NÃO é proporcional à receita (é o tilt determinístico abaixo):
+  // no real também não é, e é justamente essa diferença que a Gestão revela.
+  // 8% fica sem atribuição (Sponsored Brands / linha que a Amazon não atribui).
+  const prods = coreDre(cfg, revenue).produtos
+  const pesos = prods.map((p: any, i: number) => (p.receita || 0) * (0.7 + 0.15 * ((i * 7) % 5)))
+  const somaPesos = pesos.reduce((s: number, w: number) => s + w, 0) || 1
+  const bySku = prods.map((p: any, i: number) => ({
+    sku: p.sku, asin: p.asin,
+    spend: r2(spend * 0.92 * pesos[i] / somaPesos),
+    sales: r2(sales * 0.92 * pesos[i] / somaPesos),
+    clicks: Math.round(spend * 0.92 * pesos[i] / somaPesos / 1.3),
+    impressions: Math.round(spend * 0.92 * pesos[i] / somaPesos / 1.3 * 22),
+  })).sort((a: any, b: any) => b.spend - a.spend)
+  const adsNaoAtribuido = r2(Math.max(0, spend - bySku.reduce((s: number, x: any) => s + x.spend, 0)))
+  return { connected: true, ready: true, cached: true, stale: false, window, updatedAt: new Date().toISOString(), period: { from: range.from, to: range.to }, spend, sales, purchases: Math.round(sales / (avgTicket(cfg) || 1)), clicks: Math.round(spend / 1.3), impressions: Math.round(spend / 1.3 * 22), acos, roas, byCampaign, bySku, adsPorSku: true, adsNaoAtribuido, demo: true }
 }
 
 // Estoque FBA fake por produto.
