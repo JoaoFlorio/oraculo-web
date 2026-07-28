@@ -90,10 +90,29 @@ const NAV_GROUPS = [
   { group:'Ferramentas', ids:['agente','extension'] },
   { group:'Conta',       ids:['perfil'] },
 ]
+// ⚠️ COMISSÃO OFICIAL DA AMAZON BR (venda.amazon.com.br/precos, conferida em
+// 27/07/2026). Os valores anteriores estavam TODOS errados — Eletrônicos a 8%
+// quando é 13%, Brinquedos a 16% quando é 12%, Saúde a 8% quando é 12%.
+//
+// ⭐ A FONTE DE VERDADE é `oraculo-backend/src/lib/comissoes.ts`, que também
+// conhece o piso mínimo (R$1/R$2) e as faixas de preço. Esta cópia existe só
+// porque o simulador da mineração calcula no navegador; ao mexer numa, conferir
+// a outra. (Unificar de vez = a busca passar a devolver a taxa junto do produto.)
 const REF: Record<string,number> = {
-  electronics:.08, computers:.08, health:.08, tools:.12, toys:.16,
-  home:.15, sports:.15, beauty:.15, 'pet-supplies':.15, 'office-products':.15,
+  electronics:.13,       // Eletrônicos portáteis
+  computers:.12,         // PC
+  health:.12,            // Saúde e cuidados pessoais
+  tools:.11,             // Ferramentas e Construção
+  toys:.12,              // Brinquedos e jogos
+  home:.12,              // Casa / Cozinha
+  sports:.12,            // Esportes, aventura e lazer
+  beauty:.13,            // Beleza
+  'pet-supplies':.12,    // Produtos para animais de estimação
+  'office-products':.13, // Papelaria e Escritório
 }
+// Piso mínimo por item — não existia no site. Produto de R$10 em Beleza paga
+// R$2,00, não os R$1,30 do percentual.
+const REF_MIN = 2
 const DEF_P: Record<string,number> = {
   electronics:150, computers:800, home:80, sports:120, beauty:60,
   toys:70, tools:90, 'pet-supplies':50, health:80, 'office-products':45,
@@ -512,7 +531,7 @@ function DetailModal({product,onClose,promo}:{product:any;onClose:()=>void;promo
   // senão usa o rótulo do backend. Coerente em qualquer caminho.
   const dem=lsData?.salesEst?dInfo(sales):demInfo(product,sales)
   const ref=REF[catId]||.15
-  const refFee=promo.active&&(promo.type==='comissao'||promo.type==='ambas') ? 0 : +(price*ref).toFixed(2)
+  const refFee=promo.active&&(promo.type==='comissao'||promo.type==='ambas') ? 0 : Math.max(REF_MIN, +(price*ref).toFixed(2))
   const fba=promo.active&&(promo.type==='fba'||promo.type==='ambas') ? 0 : (price<50?12:price<150?18:price<400?24:32)
   const fbaBase=price<50?12:price<150?18:price<400?24:32
   const profit=+(price-refFee-fba-cost).toFixed(2)
