@@ -399,9 +399,11 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
     const impP=receita*(imposto/100)                       // imposto = alíquota % sobre a receita
     const lucro=receita-cmvP-feesTot*share-impP            // lucro bruto (antes de ads)
     const margem=receita>0?lucro/receita*100:0
-    const custoAds=adsDoProduto(adsReal,p.sku,p.asin,share).valor
-    const lucroPos=lucro-custoAds
-    const mpa=receita>0?lucroPos/receita*100:0
+    // `null` = sem dado de ads por produto. Não rateia: lucro pós ADS e MPA
+    // viram "—" em vez de um número que depende do gasto dos OUTROS produtos.
+    const custoAds=adsDoProduto(adsReal,p.sku,p.asin).valor
+    const lucroPos=custoAds===null?null:lucro-custoAds
+    const mpa=(lucroPos!==null&&receita>0)?lucroPos/receita*100:null
     return {p,receita,units,preco,custoU,repres,lucro,margem,custoAds,lucroPos,mpa}
   }) : []
   const adsReal_=temAdsPorSku(adsReal)
@@ -458,10 +460,11 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
                 <NumTd color={t.t2}>{r.repres.toFixed(1).replace('.',',')}%</NumTd>
                 <NumTd color={r.custoU>0?(r.lucro>=0?t.grn:t.red):t.t3} hide={hide}>{r.custoU>0?brl2(r.lucro):'—'}</NumTd>
                 <PillTd>{r.custoU>0?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd>
-                {/* com dado real, R$0 é resposta (não anunciou) — não vira travessão */}
-                <NumTd color={r.custoAds>0?t.t1:t.t3} hide={hide}>{r.custoAds>0||adsReal_?brl2(r.custoAds):'—'}</NumTd>
-                <NumTd color={r.custoU>0?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.custoU>0?brl2(r.lucroPos):'—'}</NumTd>
-                <PillTd>{r.custoU>0?<Pill kind={r.mpa>15?'grn':r.mpa>0?'gold':'red'}>{pc(r.mpa)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd>
+                {/* com dado real, R$0 é resposta (não anunciou) — não vira travessão.
+                    `null` = sem dado por produto: "—", nunca um rateio. */}
+                <NumTd color={(r.custoAds||0)>0?t.t1:t.t3} hide={hide}>{r.custoAds===null?'—':brl2(r.custoAds)}</NumTd>
+                <NumTd color={r.custoU>0&&r.lucroPos!==null?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.custoU>0&&r.lucroPos!==null?brl2(r.lucroPos):'—'}</NumTd>
+                <PillTd>{r.custoU>0&&r.mpa!==null?<Pill kind={r.mpa>15?'grn':r.mpa>0?'gold':'red'}>{pc(r.mpa)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd>
                 <PillTd><ZoomBtn onClick={()=>onDetail?.(r.p)}/></PillTd>
               </tr>
             ))}
@@ -482,7 +485,7 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
             </div>
           </div>
         )}
-        <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Informe o custo (CMV) na aba Gerenciamento para ver lucro, margem e MPA. Comissão e FBA rateados por faturamento. {adsReal_?'Ads = gasto REAL de cada produto (relatório da Amazon).':'Ads rateado por faturamento (estimativa — o detalhe por produto ainda está sincronizando).'}</div>
+        <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Informe o custo (CMV) na aba Gerenciamento para ver lucro, margem e MPA. Comissão e FBA rateados por faturamento. {adsReal_?'Ads = gasto REAL de cada produto (relatório da Amazon).':'O gasto de ads por produto ainda está sincronizando — as colunas de Ads ficam vazias até chegar. Não rateamos o total da conta: isso faria a margem de um produto depender do que os outros gastaram.'}</div>
       </div>
     )}
   </>)
@@ -539,7 +542,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
   const feesTot=(L.comissao||0)+(L.fba||0)+(L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.outrasTaxas||0)
   const receita=p?.receita||0, units=p?.units||0
   const share=fatTot>0?receita/fatTot:0
-  const ads=adsDoProduto(adsReal,produto.sku,produto.asin,share)
+  const ads=adsDoProduto(adsReal,produto.sku,produto.asin)
   const custoU=costs[produto.sku]||0, cmvP=custoU*units
   // Decompõe o feesTot do produto em comissão/FBA proporcionais (só p/ exibir separado).
   const comShare=feesTot>0?(L.comissao||0)/feesTot:0
@@ -547,17 +550,24 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
   const outShare=1-comShare-fbaShare
   const feesP=feesTot*share
   const comissaoP=feesP*comShare, fbaP=feesP*fbaShare, outrosP=feesP*outShare
+  // ⚠️ Ads SEM rateio: ou é o gasto medido deste produto, ou não entra na conta.
+  // Espalhar o total da conta por faturamento fazia a margem deste produto cair
+  // porque OUTRO produto gastou — foi o que o João pegou no Tapete (R$9,52 reais
+  // virando R$49,19). Sem o dado, o lucro se declara ANTES do ads em vez de
+  // fingir que está completo.
   const adsP=ads.valor
+  const semAds=adsP===null
   const impP=receita*(imposto/100)
   const liqMkt=receita-feesP
-  const lucro=receita-feesP-adsP-impP-cmvP
+  const lucro=receita-feesP-(adsP||0)-impP-cmvP
   const margem=receita>0?lucro/receita*100:0
   const temCusto=custoU>0
 
-  const Row=({label,val,sign,strong,color}:{label:string;val:number;sign?:'-'|'=';strong?:boolean;color?:string;hide?:boolean})=>(
-    <div style={{display:'flex',justifyContent:'space-between',padding:'8px 2px',borderBottom:`1px solid ${t.line}`,fontSize:strong?14:13}}>
-      <span style={{color:strong?t.t1:t.t2,fontWeight:strong?600:400}}>{sign==='='?'= ':sign==='-'?'(–) ':''}{label}</span>
-      <span style={{color:color||t.t1,fontWeight:strong?700:500,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide?'blur(6px)':'none'}}>{brl2(val||0)}</span>
+  const Row=({label,val,sign,strong,color,nota}:{label:string;val:number|null;sign?:'-'|'=';strong?:boolean;color?:string;hide?:boolean;nota?:string})=>(
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:12,padding:'8px 2px',borderBottom:`1px solid ${t.line}`,fontSize:strong?14:13}}>
+      <span style={{color:strong?t.t1:t.t2,fontWeight:strong?600:400}}>{sign==='='?'= ':sign==='-'?'(–) ':''}{label}
+        {nota&&<span style={{display:'block',fontSize:10,color:t.t3,fontWeight:400,marginTop:1}}>{nota}</span>}</span>
+      <span style={{color:val===null?t.t3:(color||t.t1),fontWeight:strong?700:500,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide&&val!==null?'blur(6px)':'none',whiteSpace:'nowrap'}}>{val===null?'—':brl2(val||0)}</span>
     </div>
   )
   const card:React.CSSProperties={background:t.card,border:`1px solid ${t.line}`,borderRadius:16,width:'min(760px,96vw)',maxHeight:'92vh',overflowY:'auto',padding:'20px 22px',boxShadow:'0 24px 70px rgba(0,0,0,0.35)'}
@@ -581,12 +591,13 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
           <Row label="Taxa FBA" val={fbaP} sign="-" color={t.red} hide={hide}/>
           {outrosP>0.005 && <Row label="Outras taxas" val={outrosP} sign="-" color={t.red} hide={hide}/>}
           <Row label="Líq. do Marketplace" val={liqMkt} sign="=" strong color={t.grn} hide={hide}/>
-          <Row label={ads.real?'Ads deste produto (real)':adsReal?.ready?'Ads (rateio estimado)':'Ads (parcial)'} val={adsP} sign="-" color={t.red} hide={hide}/>
+          <Row label="Ads deste produto" val={adsP} sign="-" color={t.red} hide={hide}
+               nota={semAds?'gasto por produto ainda sincronizando — não rateamos o total da conta':undefined}/>
           {imposto>0 && <Row label={`Imposto (${pc(imposto)})`} val={impP} sign="-" color={t.red} hide={hide}/>}
           <Row label="Custo do produto (CMV)" val={cmvP} sign="-" color={temCusto?t.red:t.t3} hide={hide}/>
           <div style={{height:1,background:t.line,margin:'8px 0'}}/>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-            <span style={{fontSize:13.5,fontWeight:700,color:t.t1}}>Lucro do período</span>
+            <span style={{fontSize:13.5,fontWeight:700,color:t.t1}}>{semAds?'Lucro antes do Ads':'Lucro do período'}</span>
             <div style={{display:'flex',alignItems:'center',gap:10}}>
               {temCusto&&<Pill kind={margem>20?'grn':margem>0?'gold':'red'}>{pc(margem)}</Pill>}
               <span style={{fontSize:15,fontWeight:700,fontFamily:FG,color:temCusto?(lucro>=0?t.grn:t.red):t.t3,filter:hide?'blur(6px)':'none'}}>{temCusto?brl2(lucro):'informe o custo'}</span>
@@ -611,7 +622,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
               // (evita "prejuízo" fantasma de −CMV). Igual ao Gestor, que zera tudo.
               const pend=/pending/i.test(o.status||'') || (o.receita||0)<=0
               const rShare=receita>0?o.receita/receita:0        // rateia os custos do produto por receita do pedido
-              const oFees=feesP*rShare, oAds=adsP*rShare, oImp=o.receita*(imposto/100), oCmv=custoU*o.qty
+              const oFees=feesP*rShare, oAds=(adsP||0)*rShare, oImp=o.receita*(imposto/100), oCmv=custoU*o.qty
               const oLiq=o.receita-oFees
               const oLucro=o.receita-oFees-oAds-oImp-oCmv
               const oMarg=o.receita>0?oLucro/o.receita*100:0
@@ -634,7 +645,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
             })}
           </Table>
         )}
-        <div style={{fontSize:10,color:t.t3,marginTop:10}}>Comissão e FBA rateados por participação na receita. {ads.real?<><b>Ads é o gasto real deste produto</b> (relatório de produto anunciado da Amazon) — não é rateio do total da conta.</>:'Ads rateado por faturamento (estimativa — o detalhe por produto ainda está sincronizando).'} Pedidos <b>Pendentes</b> entram pelo preço do anúncio (a Amazon só libera o valor ao faturar). Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
+        <div style={{fontSize:10,color:t.t3,marginTop:10}}>Comissão e FBA rateados por participação na receita. {semAds?<>O gasto de ads <b>deste</b> produto ainda não chegou — e não rateamos o total da conta, porque isso faria a margem dele cair só porque OUTRO produto gastou.</>:<><b>Ads é o gasto medido deste produto</b> (relatório de produto anunciado da Amazon).</>} Pedidos <b>Pendentes</b> entram pelo preço do anúncio (a Amazon só libera o valor ao faturar). Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
       </div>
     </div>
   )
@@ -662,17 +673,23 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
       const cmv=(costs[p.sku]||0)*p.units
       const temCusto=(costs[p.sku]||0)>0
       const lucroBruto=p.receita-cmv-feesTot*share
-      const lucroPos=lucroBruto-adsDoProduto(adsReal,p.sku,p.asin,share).valor
-      const mpa=p.receita>0?lucroPos/p.receita*100:0
+      // Sem gasto de ads medido do produto, "Lucro pós Ads" e MPA não existem —
+      // não se inventa rateio (a margem dele dependeria do gasto dos outros).
+      const adsP=adsDoProduto(adsReal,p.sku,p.asin).valor
+      const lucroPos=adsP===null?null:lucroBruto-adsP
+      const mpa=(lucroPos!==null&&p.receita>0)?lucroPos/p.receita*100:null
       return {p,units:p.units,receita:p.receita,cls,lucroBruto,lucroPos,mpa,temCusto}
     })
+    const semAdsPorProduto=!temAdsPorSku(adsReal)
     // Curva Z = produtos com estoque FBA mas SEM giro (0 vendas no período)
     const sold=new Set(sorted.map((p:any)=>p.sku))
     const zItems=(inv?.inventario||[]).filter((it:any)=>it.total>0 && !sold.has(it.sku))
     const agg=(cls:string)=>{
       const its=rows.filter(r=>r.cls===cls)
       return {count:its.length,units:its.reduce((s,r)=>s+r.units,0),fat:its.reduce((s,r)=>s+r.receita,0),
-        lb:its.reduce((s,r)=>s+r.lucroBruto,0),lp:its.reduce((s,r)=>s+r.lucroPos,0),hasCusto:its.some(r=>r.temCusto)}
+        lb:its.reduce((s,r)=>s+r.lucroBruto,0),
+        lp:its.some(r=>r.lucroPos===null)?null:its.reduce((s,r)=>s+(r.lucroPos||0),0),
+        hasCusto:its.some(r=>r.temCusto)}
     }
     const cards=[
       {cls:'A',...agg('A')},{cls:'B',...agg('B')},{cls:'C',...agg('C')},
@@ -689,7 +706,8 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:13,marginBottom:18}}>
         {cards.map(c=>{
           const color=clsColor(t,c.cls)
-          const lbPct=c.fat>0?c.lb/c.fat*100:0, lpPct=c.fat>0?c.lp/c.fat*100:0
+          const lbPct=c.fat>0?c.lb/c.fat*100:0, lpPct=(c.lp!==null&&c.fat>0)?c.lp/c.fat*100:0
+          const temLp=c.hasCusto&&c.lp!==null
           return(
             <div key={c.cls} style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${color}`,borderRadius:14,padding:'14px 16px 12px'}}>
               <div style={{textAlign:'center' as const,fontFamily:FG,fontSize:18,fontWeight:700,color:t.t1,marginBottom:10}}>Curva {c.cls}</div>
@@ -697,7 +715,7 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
               <Row label="Produtos diferentes" value={String(c.count)}/>
               <Row label="Faturamento" value={brl2(c.fat)}/>
               <Row label="Lucro Bruto" value={c.hasCusto?`${brl2(c.lb)} (${pc(lbPct)})`:'—'} color={c.hasCusto?(c.lb>=0?t.grn:t.red):t.t3}/>
-              <Row label="Lucro Pós Ads" value={c.hasCusto?`${brl2(c.lp)} (${pc(lpPct)})`:'—'} color={c.hasCusto?(c.lp>=0?t.grn:t.red):t.t3}/>
+              <Row label="Lucro Pós Ads" value={temLp?`${brl2(c.lp as number)} (${pc(lpPct)})`:'—'} color={temLp?((c.lp as number)>=0?t.grn:t.red):t.t3}/>
             </div>
           )
         })}
@@ -709,13 +727,13 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
             <NumTd>{r.units}</NumTd>
             <NumTd strong hide={hide}>{brl2(r.receita)}</NumTd>
             <NumTd color={r.temCusto?(r.lucroBruto>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto?brl2(r.lucroBruto):'—'}</NumTd>
-            <NumTd color={r.temCusto?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto?brl2(r.lucroPos):'—'}</NumTd>
-            <PillTd>{r.temCusto?<Pill kind={r.mpa>15?'grn':r.mpa>0?'gold':'red'}>{pc(r.mpa)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
+            <NumTd color={r.temCusto&&r.lucroPos!==null?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto&&r.lucroPos!==null?brl2(r.lucroPos):'—'}</NumTd>
+            <PillTd>{r.temCusto&&r.mpa!==null?<Pill kind={r.mpa>15?'grn':r.mpa>0?'gold':'red'}>{pc(r.mpa)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
             <PillTd><ClassBadge t={t} cls={r.cls}/></PillTd>
           </tr>
         ))}
       </Table>
-      <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Lucro/MPA usam o custo (CMV) informado em Gerenciamento + comissão/FBA rateados por faturamento. {temAdsPorSku(adsReal)?'Ads = gasto real de cada produto.':'Ads rateado por faturamento (estimativa).'}</div>
+      <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Lucro/MPA usam o custo (CMV) informado em Gerenciamento + comissão/FBA rateados por faturamento. {semAdsPorProduto?'O gasto de ads por produto ainda está sincronizando — "Lucro pós Ads" e MPA ficam vazios até chegar, em vez de sair de um rateio.':'Ads = gasto medido de cada produto.'}</div>
     </>)
   }
   // Não conectado → vazio (sem mock). (mockD ignorado de propósito.)

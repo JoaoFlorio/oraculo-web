@@ -15,7 +15,6 @@
 
 export interface AdsSkuRow { sku: string; asin?: string; spend: number; sales?: number; clicks?: number; impressions?: number }
 export interface AdsReport { ready?: boolean; spend?: number; bySku?: AdsSkuRow[]; adsPorSku?: boolean }
-export interface AdsProduto { valor: number; real: boolean }
 
 const chave = (x: unknown): string => String(x ?? '').trim().toUpperCase()
 
@@ -25,20 +24,23 @@ export function temAdsPorSku(adsReal: AdsReport | null | undefined): boolean {
 }
 
 /**
- * Gasto de ads de UM produto.
- * ⚠️ `real:true` com valor 0 é resposta legítima — produto sem campanha gasta
- * zero. Não confundir com "não sei" (`real:false`, que é o rateio antigo).
- * `share` = participação do produto no faturamento; só usado no fallback.
+ * Gasto de ads de UM produto — ou `null` quando não dá pra saber.
+ *
+ * ⚠️ NÃO EXISTE RATEIO AQUI, DE PROPÓSITO. Espalhar o gasto da conta por
+ * participação na receita faz a margem de um produto depender de quanto os
+ * OUTROS gastaram: o que vende absorve o desperdício do que só queima, e o que
+ * queima sai de graça (sem receita, share 0). É afirmação falsa sobre o produto,
+ * e a tela não tem como avisar que é chute. Sem dado por SKU, a resposta certa
+ * é "não sei" — quem chama exibe "—" e rotula o lucro como ANTES do ads.
+ *
+ * `0` é resposta legítima e diferente de `null`: produto sem campanha gastou zero.
  */
-export function adsDoProduto(adsReal: AdsReport | null | undefined, sku: string, asin?: string, share = 0): AdsProduto {
-  if (temAdsPorSku(adsReal)) {
-    const linhas = adsReal!.bySku!
-    const hit = linhas.find(l => chave(l.sku) === chave(sku))
-      || (asin ? linhas.find(l => chave(l.asin) === chave(asin)) : undefined)
-    return { valor: hit ? Number(hit.spend) || 0 : 0, real: true }
-  }
-  const total = adsReal?.ready ? (Number(adsReal.spend) || 0) : 0
-  return { valor: total * share, real: false }
+export function adsDoProduto(adsReal: AdsReport | null | undefined, sku: string, asin?: string): { valor: number | null } {
+  if (!temAdsPorSku(adsReal)) return { valor: null }
+  const linhas = adsReal!.bySku!
+  const hit = linhas.find(l => chave(l.sku) === chave(sku))
+    || (asin ? linhas.find(l => chave(l.asin) === chave(asin)) : undefined)
+  return { valor: hit ? Number(hit.spend) || 0 : 0 }
 }
 
 /**
