@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { margemDoProduto, custosFixosDoPeriodo } from '../lib/margemProduto.ts'
+import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo } from '../lib/margemProduto.ts'
 
 const perto = (a: number | null, b: number, tol = 0.011) =>
   assert.ok(a !== null && Math.abs(a - b) < tol, `esperado ~${b}, deu ${a}`)
@@ -162,6 +162,45 @@ test('Líq. do Marketplace NUNCA passa da receita do produto', () => {
     assert.ok(M.liqMarketplace <= M.receitaBruta + 0.01,
       `liq ${M.liqMarketplace} > receita ${M.receitaBruta} em ${c.produto.sku}`)
   }
+})
+
+/* ⚠️ O KPI DA CAPA TEM QUE SER A SOMA DO DETALHE (28/07, pego pelo João comparando
+   com o Gestor Seller): o Resumo calculava o CMV por fora com unidade BRUTA e não
+   descontava o imposto no "Lucro Bruto". Deu margem 27,8% onde a referência dele
+   dava 23,8% — a diferença era exatamente os 4% de alíquota. */
+test('totaisDoPeriodo soma o MESMO que cada produto mostra', () => {
+  const prods = [DONUTS, MEIAS]
+  const custo = { [DONUTS.sku]: 20, [MEIAS.sku]: 30 }
+  const T = totaisDoPeriodo(LINHAS, prods, REEMBOLSOS, custo, 4)
+  const somaCmv = prods.reduce((s, p) =>
+    s + margemDoProduto({ linhas: LINHAS, produto: p, reembolsos: REEMBOLSOS, custoUnit: custo[p.sku], imposto: 4 }).cmv, 0)
+  const somaImp = prods.reduce((s, p) =>
+    s + margemDoProduto({ linhas: LINHAS, produto: p, reembolsos: REEMBOLSOS, custoUnit: custo[p.sku], imposto: 4 }).imposto, 0)
+  perto(T.cmv, somaCmv); perto(T.imposto, somaImp)
+})
+
+test('o CMV do total NÃO cobra a unidade devolvida', () => {
+  const T = totaisDoPeriodo(LINHAS, [DONUTS], REEMBOLSOS, { [DONUTS.sku]: 20 }, 0)
+  assert.equal(T.cmv, 60)               // 3 líquidas × 20, não 5 × 20 = 100
+  assert.equal(T.unidadesLiquidas, 3)
+})
+
+test('Lucro Bruto da capa = Σ lucro dos produtos − custos fixos', () => {
+  // Fixture FECHADA de propósito: o total da conta é exatamente a soma dos dois
+  // produtos (800 de receita, comissão 48+32, FBA 55+5). Só assim a reconciliação
+  // é testável — com produto faltando na lista, a diferença é o produto ausente.
+  const L = { receitaBruta: 800, comissao: 80, fba: 60, taxaPrograma: 10, outrasTaxas: 5, armazenagem: 80, assinatura: 19 }
+  const prods = [DONUTS, MEIAS]
+  const custo = { [DONUTS.sku]: 20, [MEIAS.sku]: 30 }
+  const T = totaisDoPeriodo(L, prods, undefined, custo, 4)
+  // Como a capa monta: líquido da CONTA − cmv − imposto
+  const liqConta = L.receitaBruta - L.comissao - L.fba - L.taxaPrograma - L.outrasTaxas - L.armazenagem - L.assinatura
+  const capa = liqConta - T.cmv - T.imposto
+  // Como o detalhe monta, produto a produto
+  const detalhe = prods.reduce((s, p) =>
+    s + (margemDoProduto({ linhas: L, produto: p, custoUnit: custo[p.sku], imposto: 4 }).lucroAntesAds || 0), 0)
+  // Batem a menos dos custos fixos, que não são atribuídos a produto nenhum.
+  perto(capa, detalhe - custosFixosDoPeriodo(L))
 })
 
 test('produto que some do payload não explode', () => {

@@ -75,6 +75,30 @@ export interface EntradaMargem {
 
 const chave = (x: unknown): string => String(x ?? '').trim().toUpperCase()
 
+/**
+ * Totais do período somando PRODUTO A PRODUTO, com a mesma conta da tela de
+ * detalhe. ⚠️ Existe porque o Resumo calculava por fora: o CMV dele era
+ * `Σ units × custo` com unidade BRUTA (cobrando o custo do que foi devolvido) e
+ * o imposto simplesmente não entrava no Lucro Bruto — enquanto o modal do
+ * produto descontava os dois. O KPI da capa discordava do detalhe, e a
+ * ferramenta de referência do seller estava certa e a nossa errada.
+ */
+export function totaisDoPeriodo(
+  linhas: LinhasDre,
+  produtos: ProdutoDre[],
+  reembolsos: Reembolso[] | undefined,
+  custoUnit: Record<string, number>,
+  imposto = 0,
+): { cmv: number; imposto: number; unidadesLiquidas: number } {
+  let cmv = 0, impostoTotal = 0, unidadesLiquidas = 0
+  for (const p of (produtos || [])) {
+    const M = margemDoProduto({ linhas, produto: p, reembolsos, custoUnit: custoUnit[p.sku] || 0, imposto })
+    cmv += M.cmv; impostoTotal += M.imposto; unidadesLiquidas += M.unitsLiquidas
+  }
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  return { cmv: r2(cmv), imposto: r2(impostoTotal), unidadesLiquidas }
+}
+
 /** Custos do PERÍODO que não pertencem a produto nenhum. A tela mostra separado.
  *  Inclui a taxa de SERVIÇO da conta (`outrasConta`): ela vem do
  *  ServiceFeeEventList, sem pedido nem SKU atrelado — não há a quem atribuir. */

@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import { getFinanceData, summary, productMetrics, abcCurve, type ProductMetrics } from './financeiroMock'
 import { adsDoProduto, temAdsPorSku, adsSemVenda } from '@/lib/adsProduto'
-import { margemDoProduto, custosFixosDoPeriodo } from '@/lib/margemProduto'
+import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo } from '@/lib/margemProduto'
 
 const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#888'}}>Carregando DRE…</div>})
 
@@ -356,7 +356,7 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
   while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
   return out
 }
-function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail}:{hide:boolean;realDre?:any;cmv?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void}){
+function Resumo({hide,realDre,cmv=0,impostoTotal=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void}){
   const t=useT()
   // (Removidos os KPIs/composição MOCK com deltas fabricados "+12,4%" etc. — eram
   // código morto: o render usa só RK.kpis (real), loadingKpis ou emptyKpis.)
@@ -369,7 +369,13 @@ function Resumo({hide,realDre,cmv=0,adsReal,costs={},chart30,connected,adsConnec
     const fat=L.receitaBruta||0, liq=realDre.liqMarketplace||0   // Faturamento = BRUTO (devoluções são linha à parte)
     const vendas=realDre.vendas||0, unidades=realDre.unidades||0
     const ticket=vendas>0?fat/vendas:0, tacos=fat>0?ads/fat*100:0
-    const lucroBruto=liq-cmv, lucroPosAds=lucroBruto-ads
+    // ⚠️ O IMPOSTO ENTRA AQUI. Ficava de fora e o "Lucro Bruto" da capa saía maior
+    // que a soma do que cada produto mostra — a Gestão dizia margem 27,8% onde a
+    // ferramenta de referência do seller dizia 23,8%, exatamente os 4% de alíquota.
+    // E a aba Gerenciamento promete por escrito: "entra como dedução no lucro e na
+    // margem de todas as abas". Vem somado produto a produto (mesma base do modal:
+    // receita LÍQUIDA de devolução), não recalculado por fora.
+    const lucroBruto=liq-cmv-impostoTotal, lucroPosAds=lucroBruto-ads
     const margem=fat>0?lucroBruto/fat*100:0, roi=cmv>0?lucroBruto/cmv*100:0
     const mpa=fat>0?lucroPosAds/fat*100:0, cm=cmv>0, dash='—'
     return {
@@ -1622,7 +1628,14 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   }
   // Produto selecionado para o modal de detalhamento (lupinha).
   const [detail,setDetail]=useState<{sku:string;name:string;image?:string;asin?:string}|null>(null)
-  const cmv = realDre?.produtos ? realDre.produtos.reduce((sum:number,p:any)=>sum+p.units*(custoUnit[p.sku]||0),0) : 0
+  // ⚠️ Somado PRODUTO A PRODUTO com a mesma conta do modal. Antes era
+  // `Σ units × custo` com unidade BRUTA — cobrava o custo do que foi DEVOLVIDO,
+  // enquanto o detalhe já usava unidade líquida. Capa e detalhe discordavam.
+  const totais = useMemo(
+    ()=>totaisDoPeriodo(realDre?.linhas||{},realDre?.produtos||[],realDre?.reembolsos,custoUnit,imposto),
+    [realDre,custoUnit,imposto],
+  )
+  const cmv = totais.cmv
   // Margem ANTES de ads = a régua pra julgar ACOS (ACOS acima dela é prejuízo).
   // ⚠️ null quando o CMV não foi cadastrado: sem custo o "lucro" fica inflado e a
   // margem sairia otimista (~85%), calando o NEO justamente em quem mais precisa.
@@ -1751,7 +1764,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         )}
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} impostoTotal={totais.imposto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide} onDetail={setDetail}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
