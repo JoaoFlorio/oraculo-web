@@ -1103,9 +1103,55 @@ const DIAG:Record<DiagABC,{rotulo:string;kind:'grn'|'gold'|'red'|'cinza';dica:st
   peso:       {rotulo:'Peso morto',    kind:'cinza',dica:'Pouco volume e pouca margem. Reveja preço, custo ou descontinue.'},
   incerto:    {rotulo:'Informe o custo',kind:'cinza',dica:'Sem o CMV não dá pra dizer se esse produto dá dinheiro.'},
 }
+/* Classifica uma lista de produtos igual a tela faz — usada pro período ATUAL e
+   pro ANTERIOR, pra comparacao ser maca com maca. */
+function classificarABC(dre:any,costs:Record<string,number>,imposto:number,eixo:'receita'|'lucro',ajustes?:AjustePedido[]){
+  const L=dre?.linhas||{}
+  const from=dre?.period?.from, to=dre?.period?.to
+  const base=(dre?.produtos||[]).map((p:any)=>{
+    // ⚠️ ads NAO entra: o periodo anterior exigiria uma segunda chamada de ads e
+    // o relatorio so guarda ~95 dias. Os dois lados usam lucro ANTES do ads —
+    // comparar um lado com ads e outro sem seria pior que nao comparar.
+    const M=margemDoProduto({linhas:L,produto:p,reembolsos:dre?.reembolsos,
+      custoUnit:costs[p.sku]||0,imposto,ads:null,
+      ajustes:ajustesDoProduto(ajustes,p.sku,from,to)})
+    return {sku:p.sku,receita:M.receitaLiquida,lucro:M.lucroAntesAds}
+  })
+  const valorDe=(r:any)=>eixo==='lucro'?(r.lucro??null):r.receita
+  const ord=base.filter((r:any)=>valorDe(r)!==null).sort((a:any,b:any)=>(valorDe(b)||0)-(valorDe(a)||0))
+  const tot=ord.reduce((s:number,r:any)=>s+Math.max(0,valorDe(r)||0),0)
+  let cum=0,aDone=false,bDone=false
+  const mapa=new Map<string,{cls:'A'|'B'|'C';valor:number}>()
+  for(const r of ord){
+    cum+=Math.max(0,valorDe(r)||0)
+    const acum=tot>0?cum/tot*100:0
+    let cls:'A'|'B'|'C'; if(!aDone){cls='A'; if(acum>=80)aDone=true} else if(!bDone){cls='B'; if(acum>=95)bDone=true} else cls='C'
+    mapa.set(r.sku,{cls,valor:valorDe(r)||0})
+  }
+  return mapa
+}
+const ORDEM_CLS:Record<string,number>={A:0,B:1,C:2}
+
 function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,ajustes,onDetail}:{realDre?:any;costs?:Record<string,number>;adsReal?:any;inv?:any;connected?:boolean|null;mockD?:ReturnType<typeof abcCurve>;hide:boolean;imposto?:number;ajustes?:AjustePedido[];onDetail?:(p:any)=>void}){
   const t=useT()
   const [eixo,setEixo]=useState<'receita'|'lucro'>('receita')
+  // ⚠️ Comparacao NASCE DESLIGADA e busca sob demanda: e uma segunda DRE inteira.
+  // Ligar por padrao dobraria o tempo de abrir a aba pra quem nem quer comparar.
+  const [comparar,setComparar]=useState(false)
+  const [antes,setAntes]=useState<any|null|'erro'>(null)
+  const pFrom=realDre?.period?.from, pTo=realDre?.period?.to
+  useEffect(()=>{
+    if(!comparar||!pFrom||!pTo){ return }
+    const ini=Date.parse(pFrom), fim=Date.parse(pTo)
+    if(!isFinite(ini)||!isFinite(fim)||fim<=ini) return
+    const dur=fim-ini
+    const aFrom=new Date(ini-dur-1).toISOString(), aTo=new Date(ini-1).toISOString()
+    let vivo=true; setAntes(null)
+    fetch(`/api/amazon/finance?from=${encodeURIComponent(aFrom)}&to=${encodeURIComponent(aTo)}`)
+      .then(r=>r.json()).then(d=>{ if(vivo) setAntes(d&&d.produtos?d:'erro') })
+      .catch(()=>{ if(vivo) setAntes('erro') })
+    return ()=>{ vivo=false }
+  },[comparar,pFrom,pTo])
   if(connected && !realDre) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
   if(!realDre){ void mockD; return <ConnectEmpty/> }
 
@@ -1170,6 +1216,28 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
   const recArmadilha=armadilhas.reduce((s:number,r:any)=>s+r.receita,0)
   const semAdsPorProduto=!temAdsPorSku(adsReal)
 
+  // ── Comparação com o período anterior de MESMA duração ──────────────────────
+  const antesOk=comparar&&antes&&antes!=='erro'
+  const mapaAntes=antesOk?classificarABC(antes,costs,imposto,eixo,ajustes):null
+  const movimento=(sku:string,valorAtual:number)=>{
+    if(!mapaAntes) return null
+    const a=mapaAntes.get(sku)
+    if(!a) return {tipo:'novo' as const,clsAntes:null,delta:null}
+    const delta=a.valor!==0?(valorAtual-a.valor)/Math.abs(a.valor)*100:null
+    return {tipo:'existia' as const,clsAntes:a.cls,delta,valorAntes:a.valor}
+  }
+  // Produtos que vendiam antes e não venderam agora — sinal que ninguém mostra.
+  const skusAgora=new Set(rows.map((r:any)=>r.sku||r.p.sku))
+  const sumiram=mapaAntes?[...mapaAntes.entries()].filter(([sku])=>!skusAgora.has(sku)):[]
+  // Pareia linha↔movimento pelo ÍNDICE (nada de indexOf sobre objetos: com dois
+  // produtos de mesmo movimento ele casaria o errado, além de ser O(n²)).
+  const linhas2=rows.map((r:any)=>({r,m:movimento(r.p.sku,eixo==='lucro'?(r.lucro||0):r.receita)}))
+  const subiu=(x:any)=>!!x.m?.clsAntes&&ORDEM_CLS[x.m.clsAntes]>ORDEM_CLS[x.r.cls]
+  const caiu =(x:any)=>!!x.m?.clsAntes&&ORDEM_CLS[x.m.clsAntes]<ORDEM_CLS[x.r.cls]
+  const nSubiu=linhas2.filter(subiu).length
+  const nCaiu=linhas2.filter(caiu).length
+  const nNovos=linhas2.filter((x:any)=>x.m?.tipo==='novo').length
+
   const kpi=(rotulo:string,valor:string,nota:string,cor:string)=>(
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:13,padding:'13px 16px'}}>
       <div style={{fontSize:10,color:t.t3,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.05em',fontFamily:FG}}>{rotulo}</div>
@@ -1197,7 +1265,45 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
       <span style={{fontSize:10.5,color:t.t3,marginLeft:4}}>
         {eixo==='receita'?'quem mais fatura':'quem mais deixa dinheiro — costuma ser outra ordem'}
       </span>
+      <button onClick={()=>setComparar(v=>!v)} style={{marginLeft:'auto',padding:'6px 13px',borderRadius:8,
+        border:`1px solid ${comparar?t.blue:t.line2}`,background:comparar?t.blue+(t.dark?'22':'1A'):'transparent',
+        color:comparar?t.blue:t.t2,fontSize:11.5,fontWeight:600,fontFamily:FG,cursor:'pointer',
+        display:'inline-flex',alignItems:'center',gap:6}}>
+        <i className={`ti ti-${comparar?'eye-off':'arrows-left-right'}`} style={{fontSize:14}} aria-hidden="true"/>
+        {comparar?'Ocultar comparação':'Comparar com período anterior'}
+      </button>
     </div>
+
+    {/* Movimento entre períodos — só quando o seller pede. */}
+    {comparar && (
+      antes===null ? (
+        <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'13px 16px',marginBottom:14,fontSize:12,color:t.t3,fontFamily:FG}}>
+          Buscando o período anterior de mesma duração…
+        </div>
+      ) : antes==='erro' ? (
+        <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'13px 16px',marginBottom:14,fontSize:12,color:t.t3,fontFamily:FG}}>
+          Não consegui montar o período anterior agora. Tente de novo em instantes.
+        </div>
+      ) : (
+        <div style={{background:t.card,border:`1px solid ${t.line}`,borderLeft:`3px solid ${t.blue}`,borderRadius:12,padding:'13px 16px',marginBottom:14}}>
+          <div style={{display:'flex',gap:18,flexWrap:'wrap' as const,alignItems:'baseline'}}>
+            <span style={{fontSize:12.5,fontWeight:700,color:t.t1,fontFamily:FG}}>vs. período anterior</span>
+            <span style={{fontSize:12,color:t.grn,fontFamily:FG}}><b>{nSubiu}</b> {nSubiu===1?'subiu':'subiram'} de curva</span>
+            <span style={{fontSize:12,color:t.red,fontFamily:FG}}><b>{nCaiu}</b> {nCaiu===1?'caiu':'caíram'}</span>
+            <span style={{fontSize:12,color:t.t2,fontFamily:FG}}><b>{nNovos}</b> novo{nNovos===1?'':'s'}</span>
+            {sumiram.length>0 && <span style={{fontSize:12,color:t.gold,fontFamily:FG}}><b>{sumiram.length}</b> {sumiram.length===1?'parou':'pararam'} de vender</span>}
+          </div>
+          {sumiram.length>0 && (
+            <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.5}}>
+              Vendiam antes e não venderam agora: {sumiram.slice(0,5).map(([sku]:any)=>sku).join(' · ')}{sumiram.length>5?` · +${sumiram.length-5}`:''}
+            </div>
+          )}
+          <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.5}}>
+            Compara com os {Math.max(1,Math.round((Date.parse(pTo||'')-Date.parse(pFrom||''))/86400000))} dia(s) imediatamente anteriores. Os dois lados usam lucro <b>antes do ads</b>, pra comparar maçã com maçã.
+          </div>
+        </div>
+      )
+    )}
 
     {/* Leitura do período, não só a classificação */}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:12,marginBottom:16}} className="ora-kpis4">
@@ -1263,15 +1369,30 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
       </div>
     </div>
 
-    <Table minWidth={1020} head={[{label:'Produto',w:'26%'},{label:'Curva',right:true,w:'7%'},{label:'Un.',right:true,w:'6%'},
-      {label:eixo==='lucro'?'Lucro':'Receita',right:true,w:'12%'},{label:'% acum.',right:true,w:'8%'},
-      {label:'Margem',right:true,w:'9%'},{label:'Lucro pós Ads',right:true,w:'12%'},{label:'Diagnóstico',right:true,w:'13%'},{label:'',right:true,w:'7%'}]}>
-      {rows.map((r:any,i:number)=>{
+    <Table minWidth={mapaAntes?1180:1020} head={[{label:'Produto',w:'24%'},{label:'Curva',right:true,w:'7%'},
+      ...(mapaAntes?[{label:'vs. anterior',right:true,w:'13%'}]:[]),
+      {label:'Un.',right:true,w:'6%'},
+      {label:eixo==='lucro'?'Lucro':'Receita',right:true,w:'11%'},{label:'% acum.',right:true,w:'7%'},
+      {label:'Margem',right:true,w:'8%'},{label:'Lucro pós Ads',right:true,w:'11%'},{label:'Diagnóstico',right:true,w:'12%'},{label:'',right:true,w:'6%'}]}>
+      {linhas2.map(({r,m}:any,i:number)=>{
         const d=DIAG[r.diag as DiagABC]
+        const dir=m?.clsAntes?(ORDEM_CLS[m.clsAntes]>ORDEM_CLS[r.cls]?'sobe':ORDEM_CLS[m.clsAntes]<ORDEM_CLS[r.cls]?'cai':'igual'):null
         return(
           <tr key={i}>
             <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}}/>
             <PillTd><ClassBadge t={t} cls={r.cls}/></PillTd>
+            {mapaAntes && <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right' as const,whiteSpace:'nowrap' as const}}>
+              {!m ? <span style={{fontSize:11,color:t.t3}}>—</span>
+                : m.tipo==='novo' ? <Pill kind="gold">novo</Pill>
+                : (<span style={{display:'inline-flex',alignItems:'center',gap:6,justifyContent:'flex-end'}}>
+                    <span style={{fontSize:11,color:t.t3,fontFamily:FG}}>{m.clsAntes}</span>
+                    <i className={`ti ti-arrow-${dir==='sobe'?'up':dir==='cai'?'down':'right'}`}
+                       style={{fontSize:13,color:dir==='sobe'?t.grn:dir==='cai'?t.red:t.t3}} aria-hidden="true"/>
+                    {m.delta!==null && <span style={{fontSize:11.5,fontWeight:600,fontFamily:FG,fontVariantNumeric:'tabular-nums',
+                      color:m.delta>=0?t.grn:t.red,filter:hide?'blur(5px)':'none'}}>
+                      {m.delta>=0?'+':''}{m.delta.toFixed(0)}%</span>}
+                  </span>)}
+            </td>}
             <NumTd>{r.units}</NumTd>
             <NumTd strong hide={hide}>{eixo==='lucro'?(r.lucro!==null?brl2(r.lucro):'—'):brl2(r.receita)}</NumTd>
             <NumTd color={t.t2}>{r.acum.toFixed(0)}%</NumTd>
