@@ -1096,12 +1096,32 @@ function ClassBadge({t,cls}:{t:Theme;cls:string}){
    quem é "A" na venda e não é "A" no bolso.
    ────────────────────────────────────────────────────────────────────────── */
 type DiagABC='chefe'|'armadilha'|'oportunidade'|'peso'|'incerto'
-const DIAG:Record<DiagABC,{rotulo:string;kind:'grn'|'gold'|'red'|'cinza';dica:string}>={
-  chefe:      {rotulo:'Carro-chefe',   kind:'grn',  dica:'Vende muito E dá margem. Proteja o estoque e escale o anúncio.'},
-  armadilha:  {rotulo:'Armadilha',     kind:'red',  dica:'Vende muito e ganha pouco. É aqui que ajustar preço ou custo rende mais.'},
-  oportunidade:{rotulo:'Oportunidade', kind:'gold', dica:'Margem boa e volume baixo. Vale testar mais anúncio.'},
-  peso:       {rotulo:'Peso morto',    kind:'cinza',dica:'Pouco volume e pouca margem. Reveja preço, custo ou descontinue.'},
-  incerto:    {rotulo:'Informe o custo',kind:'cinza',dica:'Sem o CMV não dá pra dizer se esse produto dá dinheiro.'},
+/* ⚠️ Cada diagnóstico carrega o PORQUÊ e o QUE FAZER, não só o rótulo. Um selo
+   que julga sem explicar ("Peso morto") não informa — gera dúvida e ansiedade.
+   `motivo` é a regra em uma linha; `acao` é o próximo passo concreto. */
+const DIAG:Record<DiagABC,{rotulo:string;kind:'grn'|'gold'|'red'|'cinza';motivo:string;acao:string}>={
+  chefe:{rotulo:'Carro-chefe',kind:'grn',
+    motivo:'Está entre os que mais vendem E a margem dele é acima da média da sua conta.',
+    acao:'Proteja o estoque desse aqui antes de qualquer outro e escale o anúncio: cada real investido nele volta melhor que na média.'},
+  armadilha:{rotulo:'Armadilha',kind:'red',
+    motivo:'Está entre os que mais vendem, mas a margem dele é ABAIXO da média da sua conta.',
+    acao:'É onde mexer rende mais: como ele tem volume, cada ponto de margem recuperado vale muito. Reveja preço, custo de compra ou o gasto de anúncio dele.'},
+  oportunidade:{rotulo:'Oportunidade',kind:'gold',
+    motivo:'Vende pouco, mas a margem dele é acima da média da sua conta.',
+    acao:'Ganha bem e quase ninguém compra. Vale testar anúncio ou melhorar o anúncio antes de investir em produto novo.'},
+  peso:{rotulo:'Peso morto',kind:'cinza',
+    motivo:'Vende pouco E a margem dele é abaixo da média da sua conta.',
+    acao:'Ocupa estoque, atenção e capital sem devolver. Reveja preço e custo; se não virar, considere não repor.'},
+  incerto:{rotulo:'Informe o custo',kind:'cinza',
+    motivo:'Sem o custo (CMV) cadastrado não dá pra saber se esse produto dá dinheiro.',
+    acao:'Informe o custo dele na aba Gerenciamento — é o que falta pro Oráculo classificar.'},
+}
+const RESUMO_DIAG:Record<DiagABC,string>={
+  chefe:'vende muito · margem acima da média',
+  armadilha:'vende muito · margem ABAIXO da média',
+  oportunidade:'vende pouco · margem acima da média',
+  peso:'vende pouco · margem abaixo da média',
+  incerto:'falta o custo',
 }
 /* Classifica uma lista de produtos igual a tela faz — usada pro período ATUAL e
    pro ANTERIOR, pra comparacao ser maca com maca. */
@@ -1131,10 +1151,16 @@ function classificarABC(dre:any,costs:Record<string,number>,imposto:number,eixo:
   return mapa
 }
 const ORDEM_CLS:Record<string,number>={A:0,B:1,C:2}
+function chipDiag(t:Theme,ativo:boolean,cor:string):React.CSSProperties{
+  return {padding:'6px 12px',borderRadius:20,border:`1px solid ${ativo?cor:t.line2}`,
+    background:ativo?cor+(t.dark?'22':'1A'):'transparent',color:ativo?cor:t.t2,
+    fontSize:11.5,fontWeight:600,fontFamily:FG,cursor:'pointer',whiteSpace:'nowrap'}
+}
 
 function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,ajustes,onDetail}:{realDre?:any;costs?:Record<string,number>;adsReal?:any;inv?:any;connected?:boolean|null;mockD?:ReturnType<typeof abcCurve>;hide:boolean;imposto?:number;ajustes?:AjustePedido[];onDetail?:(p:any)=>void}){
   const t=useT()
   const [eixo,setEixo]=useState<'receita'|'lucro'>('receita')
+  const [filtro,setFiltro]=useState<DiagABC|null>(null)
   // ⚠️ Comparacao NASCE DESLIGADA e busca sob demanda: e uma segunda DRE inteira.
   // Ligar por padrao dobraria o tempo de abrir a aba pra quem nem quer comparar.
   const [comparar,setComparar]=useState(false)
@@ -1369,12 +1395,49 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
       </div>
     </div>
 
+    {/* FILTRO POR DIAGNÓSTICO — clicar mostra só aquele grupo E explica o que é.
+        Sem isso o selo julgava sem dizer por quê, e não dava pra isolar o grupo
+        que interessa naquele momento. */}
+    <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,marginBottom:12,alignItems:'center'}}>
+      <button onClick={()=>setFiltro(null)} style={chipDiag(t,filtro===null,t.t2)}>
+        Todos <span style={{opacity:0.7}}>({rows.length})</span>
+      </button>
+      {(['chefe','armadilha','oportunidade','peso','incerto'] as DiagABC[]).map(k=>{
+        const n=rows.filter((r:any)=>r.diag===k).length
+        if(!n) return null
+        const cor=k==='chefe'?t.grn:k==='armadilha'?t.red:k==='oportunidade'?t.gold:t.t3
+        return(<button key={k} onClick={()=>setFiltro(filtro===k?null:k)} style={chipDiag(t,filtro===k,cor)}>
+          {DIAG[k].rotulo} <span style={{opacity:0.7}}>({n})</span>
+        </button>)
+      })}
+    </div>
+    {filtro && (
+      <div style={{background:t.card,border:`1px solid ${t.line}`,
+        borderLeft:`3px solid ${filtro==='chefe'?t.grn:filtro==='armadilha'?t.red:filtro==='oportunidade'?t.gold:t.t3}`,
+        borderRadius:12,padding:'13px 16px',marginBottom:14}}>
+        <div style={{fontSize:12.5,fontWeight:700,color:t.t1,fontFamily:FG,marginBottom:5}}>
+          {DIAG[filtro].rotulo} — por que esses produtos caíram aqui
+        </div>
+        <div style={{fontSize:12,color:t.t2,lineHeight:1.55}}>{DIAG[filtro].motivo}</div>
+        <div style={{fontSize:12,color:t.t1,lineHeight:1.55,marginTop:7}}>
+          <b>O que fazer:</b> {DIAG[filtro].acao}
+        </div>
+        {margemMedia!==null && filtro!=='incerto' && (
+          <div style={{fontSize:10.5,color:t.t3,marginTop:7}}>
+            A régua é a margem média ponderada da sua conta no período: <b>{pc(margemMedia)}</b>.
+            Ela muda quando você muda o filtro de data.
+          </div>
+        )}
+      </div>
+    )}
+
     <Table minWidth={mapaAntes?1180:1020} head={[{label:'Produto',w:'24%'},{label:'Curva',right:true,w:'7%'},
       ...(mapaAntes?[{label:'vs. anterior',right:true,w:'13%'}]:[]),
       {label:'Un.',right:true,w:'6%'},
       {label:eixo==='lucro'?'Lucro':'Receita',right:true,w:'11%'},{label:'% acum.',right:true,w:'7%'},
-      {label:'Margem',right:true,w:'8%'},{label:'Lucro pós Ads',right:true,w:'11%'},{label:'Diagnóstico',right:true,w:'12%'},{label:'',right:true,w:'6%'}]}>
-      {linhas2.map(({r,m}:any,i:number)=>{
+      {label:margemMedia!==null?`Margem · média ${pc(margemMedia)}`:'Margem',right:true,w:'10%'},
+      {label:'Lucro pós Ads',right:true,w:'11%'},{label:'Diagnóstico',right:true,w:'14%'},{label:'',right:true,w:'6%'}]}>
+      {linhas2.filter(({r}:any)=>!filtro||r.diag===filtro).map(({r,m}:any,i:number)=>{
         const d=DIAG[r.diag as DiagABC]
         const dir=m?.clsAntes?(ORDEM_CLS[m.clsAntes]>ORDEM_CLS[r.cls]?'sobe':ORDEM_CLS[m.clsAntes]<ORDEM_CLS[r.cls]?'cai':'igual'):null
         return(
@@ -1398,7 +1461,11 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
             <NumTd color={t.t2}>{r.acum.toFixed(0)}%</NumTd>
             <PillTd>{r.margem!==null?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
             <NumTd color={r.lucroPos!==null?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.lucroPos!==null?brl2(r.lucroPos):'—'}</NumTd>
-            <PillTd><span title={d.dica}><Pill kind={d.kind==='cinza'?'gold':d.kind}>{d.rotulo}</Pill></span></PillTd>
+            <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right' as const}}>
+              <Pill kind={d.kind==='cinza'?'gold':d.kind}>{d.rotulo}</Pill>
+              {/* O PORQUÊ na própria linha — não em tooltip, que some no celular. */}
+              <div style={{fontSize:9.5,color:t.t3,marginTop:3,lineHeight:1.35,whiteSpace:'normal' as const}}>{RESUMO_DIAG[r.diag as DiagABC]}</div>
+            </td>
             <PillTd><ZoomBtn onClick={()=>onDetail?.({sku:r.p.sku,name:r.p.name||r.p.sku,image:r.p.image,asin:r.p.asin})}/></PillTd>
           </tr>
         )
