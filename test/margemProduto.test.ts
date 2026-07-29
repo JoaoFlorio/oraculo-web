@@ -145,6 +145,25 @@ test('Σ produtos + custos fixos = Líq. do Marketplace da conta', () => {
   perto(soma - custosFixosDoPeriodo(linhas), dreConta)
 })
 
+/* ⚠️ A INVARIANTE QUE EU QUEBREI EM PRODUÇÃO (28/07): somei o reembolso de estoque
+   do FBA dentro do Líq. do Marketplace e ele saiu MAIOR que o faturamento — margem
+   de 62,5% num dia de R$389 de venda. O líquido é o que sobra DA VENDA depois da
+   parte da Amazon: por definição nunca passa da receita. */
+test('Líq. do Marketplace NUNCA passa da receita do produto', () => {
+  const casos = [
+    { linhas: LINHAS, produto: DONUTS },
+    { linhas: LINHAS, produto: MEIAS, reembolsos: REEMBOLSOS },
+    { linhas: { ...LINHAS, comissao: 0, fba: 0, taxaPrograma: 0, outrasTaxas: 0 }, produto: { ...DONUTS, comissao: 0, fba: 0 } },
+    { linhas: {}, produto: { sku: 'Z', units: 1, receita: 10, comissao: 0, fba: 0, feeMedido: true } },
+  ]
+  for (const c of casos) {
+    const M = margemDoProduto(c)
+    if (M.liqMarketplace === null) continue
+    assert.ok(M.liqMarketplace <= M.receitaBruta + 0.01,
+      `liq ${M.liqMarketplace} > receita ${M.receitaBruta} em ${c.produto.sku}`)
+  }
+})
+
 test('produto que some do payload não explode', () => {
   const d = margemDoProduto({ linhas: {}, produto: { sku: 'X', units: 0, receita: 0 } })
   assert.equal(d.receitaLiquida, 0)

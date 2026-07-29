@@ -313,10 +313,6 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
       <Row label="Tarifa FBA" val={L.fba} sign="-" color={t.red}/>
       {L.armazenagem>0 && <Row label="Armazenagem" val={L.armazenagem} sign="-" color={t.red}/>}
       <Row label="Assinatura" val={L.assinatura} sign="-" color={t.red}/>
-      {/* Reembolso de estoque perdido/danificado pelo FBA e correções do repasse.
-          Estes eventos NÃO eram lidos por ninguém — dinheiro entrando e saindo
-          fora da DRE. Positivo = a favor do seller. */}
-      {Math.abs(L.ajustes||0)>0.005 && <Row label={(L.ajustes||0)>0?'Reembolsos e ajustes da Amazon':'Ajustes e dívida cobrada'} val={Math.abs(L.ajustes)} sign={(L.ajustes||0)>0?'=':'-'} color={(L.ajustes||0)>0?t.grn:t.red}/>}
       <Row label="Líq. do Marketplace" val={data.liqMarketplace} sign="=" strong color={t.grn}/>
       <Row label={adsReal?.ready?'Ads (Advertising API)':'Ads (parcial)'} val={adsReal?.ready?(Number(adsReal.spend)||0):L.ads} sign="-" color={t.red}/>
       <FeesOrigem fees={data.fees}/>
@@ -331,7 +327,17 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
           </span>
         </div>
       )}
-      {Math.abs(L.ajustes||0)>0.005 && <div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Reembolsos/ajustes são da conta, não de um produto — não entram na margem de produto nenhum.</div>}
+      {/* ⚠️ FORA da margem, de propósito. Reembolso de estoque do FBA é resultado de
+          OUTRO período e de outra natureza — não é venda. Somei dentro do Líq. do
+          Marketplace em 28/07 e a margem de um dia foi pra 62,5% com o líquido
+          MAIOR que o faturamento. É informação real, mas em bloco separado. */}
+      {Math.abs(L.ajustes||0)>0.005 && (
+        <div style={{marginTop:12,paddingTop:11,borderTop:`1px dashed ${t.line2||t.line}`}}>
+          <div style={{fontSize:11,color:t.t3,fontWeight:600,textTransform:'uppercase' as const,letterSpacing:'0.05em',marginBottom:6}}>Fora da operação de venda</div>
+          <Row label={(L.ajustes||0)>0?'Reembolsos e ajustes da Amazon':'Ajustes e dívida cobrada'} val={Math.abs(L.ajustes)} sign={(L.ajustes||0)>0?undefined:'-'} color={(L.ajustes||0)>0?t.grn:t.red}/>
+          <div style={{fontSize:10.5,color:t.t3,marginTop:7}}>Estoque que a Amazon perdeu ou danificou, e correções do repasse. É dinheiro real, mas <b>não é venda deste período</b> — por isso fica fora da margem e do lucro acima, que medem a sua operação.</div>
+        </div>
+      )}
       <div style={{fontSize:10.5,color:t.t3,marginTop:10}}>{adsReal?.ready?'Ads real da Advertising API · CMV e despesas você informa em Gerenciamento.':'Ads completo virá da Advertising API · CMV e despesas você informa em Gerenciamento.'}</div>
     </div>
   )
