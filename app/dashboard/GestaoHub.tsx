@@ -1095,34 +1095,78 @@ function ClassBadge({t,cls}:{t:Theme;cls:string}){
    O eixo é escolhível: classificar por LUCRO em vez de receita revela na hora
    quem é "A" na venda e não é "A" no bolso.
    ────────────────────────────────────────────────────────────────────────── */
-type DiagABC='chefe'|'armadilha'|'oportunidade'|'peso'|'incerto'
-/* ⚠️ Cada diagnóstico carrega o PORQUÊ e o QUE FAZER, não só o rótulo. Um selo
-   que julga sem explicar ("Peso morto") não informa — gera dúvida e ansiedade.
-   `motivo` é a regra em uma linha; `acao` é o próximo passo concreto. */
+type DiagABC='chefe'|'adsPrejuizo'|'adsPesado'|'prejuizo'|'armadilha'|'oportunidade'|'apertado'|'incerto'
+/* ⚠️ REESCRITO depois que o João olhou o painel dele e a curva A INTEIRA saiu
+   como "Armadilha" — e uma Máquina de Donuts com +R$356 de lucro saiu como
+   "Peso morto". Dois defeitos:
+
+   1) BUG DE RÉGUA: a margem de cada produto era a DEPOIS do ads, e a média da
+      conta usada como régua era a de ANTES. Descontar o anúncio de um lado e não
+      do outro joga quase todo mundo "abaixo da média" por construção.
+
+   2) DIAGNÓSTICO SEM CAUSA: "mate esse produto" quando o problema é a CAMPANHA
+      é conselho errado. Produto com margem boa que o anúncio derruba não é
+      produto ruim — é campanha mal ajustada, e a ação é outra.
+
+   A régua do ads é a que o João já usa com os mentorados: ACOS contra a margem
+   ANTES do anúncio. Se o anúncio consome mais do que o produto ganha, o
+   problema tem nome. */
 const DIAG:Record<DiagABC,{rotulo:string;kind:'grn'|'gold'|'red'|'cinza';motivo:string;acao:string}>={
   chefe:{rotulo:'Carro-chefe',kind:'grn',
     motivo:'Está entre os que mais vendem E a margem dele é acima da média da sua conta.',
-    acao:'Proteja o estoque desse aqui antes de qualquer outro e escale o anúncio: cada real investido nele volta melhor que na média.'},
+    acao:'Proteja o estoque desse antes de qualquer outro e escale o anúncio: cada real investido nele volta melhor que na média.'},
+  adsPrejuizo:{rotulo:'Ads comendo o lucro',kind:'red',
+    motivo:'O produto GANHA dinheiro na operação, mas o anúncio consome mais do que a margem dele aguenta — o ACOS passou da margem antes do ads.',
+    acao:'Não é o produto, é a campanha. Antes de mexer em preço: baixe o lance, corte as palavras que gastam sem converter, ou pause a campanha e veja o que sobra de venda orgânica.'},
+  adsPesado:{rotulo:'Ads pesado',kind:'gold',
+    motivo:'Sobra lucro, mas o anúncio já come mais da metade da margem que o produto gera.',
+    acao:'Ainda dá lucro, então não pare — otimize. Veja as palavras de maior gasto e menor conversão; cada ponto de ACOS que você tira vira margem direta.'},
+  prejuizo:{rotulo:'No prejuízo',kind:'red',
+    motivo:'Não fecha nem sem o anúncio: a margem antes do ads já é negativa.',
+    acao:'Aqui o anúncio não é o vilão. É preço, custo de compra, tarifa ou devolução. Revise o custo cadastrado primeiro — depois o preço.'},
   armadilha:{rotulo:'Armadilha',kind:'red',
-    motivo:'Está entre os que mais vendem, mas a margem dele é ABAIXO da média da sua conta.',
-    acao:'É onde mexer rende mais: como ele tem volume, cada ponto de margem recuperado vale muito. Reveja preço, custo de compra ou o gasto de anúncio dele.'},
+    motivo:'Está entre os que mais vendem, dá lucro, mas rende bem menos que a média da sua conta.',
+    acao:'Como tem volume, cada ponto de margem recuperado aqui vale muito mais que em qualquer outro produto. Comece por preço e custo de compra.'},
   oportunidade:{rotulo:'Oportunidade',kind:'gold',
-    motivo:'Vende pouco, mas a margem dele é acima da média da sua conta.',
+    motivo:'Ganha acima da média da sua conta e vende pouco.',
     acao:'Ganha bem e quase ninguém compra. Vale testar anúncio ou melhorar o anúncio antes de investir em produto novo.'},
-  peso:{rotulo:'Peso morto',kind:'cinza',
-    motivo:'Vende pouco E a margem dele é abaixo da média da sua conta.',
-    acao:'Ocupa estoque, atenção e capital sem devolver. Reveja preço e custo; se não virar, considere não repor.'},
+  apertado:{rotulo:'Margem apertada',kind:'cinza',
+    motivo:'Dá lucro, mas abaixo da média da conta, e sem volume pra compensar.',
+    acao:'Não é urgente nem é campeão. Se quiser mexer, veja preço e custo — mas priorize os de volume antes deste.'},
   incerto:{rotulo:'Informe o custo',kind:'cinza',
     motivo:'Sem o custo (CMV) cadastrado não dá pra saber se esse produto dá dinheiro.',
     acao:'Informe o custo dele na aba Gerenciamento — é o que falta pro Oráculo classificar.'},
 }
 const RESUMO_DIAG:Record<DiagABC,string>={
   chefe:'vende muito · margem acima da média',
-  armadilha:'vende muito · margem ABAIXO da média',
-  oportunidade:'vende pouco · margem acima da média',
-  peso:'vende pouco · margem abaixo da média',
+  adsPrejuizo:'o anúncio consome mais que a margem',
+  adsPesado:'o anúncio come mais da metade da margem',
+  prejuizo:'negativo já antes do anúncio',
+  armadilha:'vende muito · rende abaixo da média',
+  oportunidade:'margem acima da média · vende pouco',
+  apertado:'lucro abaixo da média · sem volume',
   incerto:'falta o custo',
 }
+
+/* A regra, num lugar só. `pre` = margem ANTES do ads, `pos` = DEPOIS, ambas em %.
+   `acos` = quanto o anúncio consome da receita do produto. */
+function diagnosticar(o:{cls:'A'|'B'|'C';temCusto:boolean;pre:number|null;pos:number|null;acos:number|null;media:number|null}):DiagABC{
+  if(!o.temCusto||o.pre===null) return 'incerto'
+  // Negativo ANTES do anúncio: o anúncio não tem culpa nenhuma.
+  if(o.pre<0) return 'prejuizo'
+  if(o.acos!==null){
+    if(o.acos>o.pre) return 'adsPrejuizo'          // consome mais do que o produto gera
+    if(o.acos>o.pre/2) return 'adsPesado'          // come mais da metade da margem
+  }
+  const m=o.pos??o.pre
+  // ⚠️ PISO EM ZERO na régua. Num mês em que a conta inteira fecha no vermelho, a
+  // média fica negativa e um produto de 1% de margem viraria "carro-chefe" por
+  // estar "acima da média". Estar acima de uma média ruim não é ser bom.
+  const regua=o.media===null?0:Math.max(0,o.media)
+  if(m>=regua) return o.cls==='A'?'chefe':'oportunidade'
+  return o.cls==='A'?'armadilha':'apertado'
+}
+
 /* Classifica uma lista de produtos igual a tela faz — usada pro período ATUAL e
    pro ANTERIOR, pra comparacao ser maca com maca. */
 function classificarABC(dre:any,costs:Record<string,number>,imposto:number,eixo:'receita'|'lucro',ajustes?:AjustePedido[]){
@@ -1151,6 +1195,9 @@ function classificarABC(dre:any,costs:Record<string,number>,imposto:number,eixo:
   return mapa
 }
 const ORDEM_CLS:Record<string,number>={A:0,B:1,C:2}
+function corDiag(t:Theme,k:DiagABC):string{
+  return DIAG[k].kind==='grn'?t.grn:DIAG[k].kind==='red'?t.red:DIAG[k].kind==='gold'?t.gold:t.t3
+}
 function chipDiag(t:Theme,ativo:boolean,cor:string):React.CSSProperties{
   return {padding:'6px 12px',borderRadius:20,border:`1px solid ${ativo?cor:t.line2}`,
     background:ativo?cor+(t.dark?'22':'1A'):'transparent',color:ativo?cor:t.t2,
@@ -1188,14 +1235,27 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
     const M=margemDoProduto({linhas:L,produto:p,reembolsos:realDre?.reembolsos,
       custoUnit:costs[p.sku]||0,imposto,ads:adsDoProduto(adsReal,p.sku,p.asin).valor,
       ajustes:ajustesDoProduto(ajustes,p.sku,from,to)})
+    // `pre` e `pos` explícitas: a régua do diagnóstico compara SEMPRE a mesma
+    // grandeza dos dois lados (foi misturar as duas que fez a curva A inteira
+    // virar "armadilha" no painel do João).
+    const pre=M.receitaLiquida>0&&M.lucroAntesAds!==null?M.lucroAntesAds/M.receitaLiquida*100:null
+    const pos=M.receitaLiquida>0&&M.lucro!==null?M.lucro/M.receitaLiquida*100:null
+    const acos=M.receitaLiquida>0&&M.ads!==null?M.ads/M.receitaLiquida*100:null
     return {p,units:p.units||0,receita:M.receitaLiquida,lucro:M.lucroAntesAds,
-      lucroPos:M.lucro,margem:M.margem,temCusto:M.temCusto}
+      lucroPos:M.lucro,margem:M.margem,temCusto:M.temCusto,pre,pos,acos,ads:M.ads}
   })
 
   // Margem média PONDERADA da conta (só quem tem custo) — é a régua do diagnóstico.
-  const comCusto=base.filter((r:any)=>r.temCusto&&r.margem!==null)
+  // ⚠️ A régua tem que ser da MESMA grandeza que a margem mostrada na linha.
+  // Se há ads medido por produto, a margem exibida é PÓS ads → a média também.
+  // Antes eu comparava margem pós-ads contra média pré-ads: quase todo produto
+  // caía "abaixo da média" por construção, e a curva A inteira virava armadilha.
+  const usaPos=temAdsPorSku(adsReal)
+  const comCusto=base.filter((r:any)=>r.temCusto&&(usaPos?r.pos!==null:r.pre!==null))
   const recCC=comCusto.reduce((s:number,r:any)=>s+r.receita,0)
-  const margemMedia=recCC>0?comCusto.reduce((s:number,r:any)=>s+(r.lucro||0),0)/recCC*100:null
+  const margemMedia=recCC>0
+    ? comCusto.reduce((s:number,r:any)=>s+((usaPos?r.lucroPos:r.lucro)||0),0)/recCC*100
+    : null
 
   // Classificação: por RECEITA (padrão) ou por LUCRO. No eixo lucro, produto sem
   // custo não entra — classificar por um lucro que não existe seria inventar.
@@ -1209,11 +1269,7 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
     cum+=Math.max(0,valorDe(r)||0)
     const acum=totalEixo>0?cum/totalEixo*100:0
     let cls:'A'|'B'|'C'; if(!aDone){cls='A'; if(acum>=80)aDone=true} else if(!bDone){cls='B'; if(acum>=95)bDone=true} else cls='C'
-    let diag:DiagABC='incerto'
-    if(r.temCusto&&r.margem!==null&&margemMedia!==null){
-      const acima=r.margem>=margemMedia
-      diag=cls==='A'?(acima?'chefe':'armadilha'):(acima?'oportunidade':'peso')
-    }
+    const diag=diagnosticar({cls,temCusto:r.temCusto,pre:r.pre,pos:r.pos,acos:r.acos,media:margemMedia})
     return {...r,cls,acum,diag}
   })
 
@@ -1240,6 +1296,12 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
   const top1=rows[0], top3=rows.slice(0,3).reduce((s:number,r:any)=>s+r.receita,0)
   const armadilhas=rows.filter((r:any)=>r.diag==='armadilha')
   const recArmadilha=armadilhas.reduce((s:number,r:any)=>s+r.receita,0)
+  // ⭐ Quanto de lucro o ANÚNCIO está comendo nos produtos onde ele é o vilão.
+  // É o número acionável que faltava: em vez de mandar matar o produto, mostra
+  // quanto dá pra recuperar mexendo só na campanha.
+  const adsVilao=rows.filter((r:any)=>r.diag==='adsPrejuizo'||r.diag==='adsPesado')
+  const lucroComidoAds=adsVilao.reduce((s:number,r:any)=>s+((r.lucro||0)-(r.lucroPos??r.lucro??0)),0)
+  const noPrejuizoPorAds=rows.filter((r:any)=>r.diag==='adsPrejuizo')
   const semAdsPorProduto=!temAdsPorSku(adsReal)
 
   // ── Comparação com o período anterior de MESMA duração ──────────────────────
@@ -1338,9 +1400,13 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
         (top1&&fatTotal>0&&top1.receita/fatTotal>0.4)?t.red:t.t1)}
       {kpi('Top 3 do faturamento',fatTotal>0?pc(top3/fatTotal*100):'—',
         `${A.count} produto${A.count===1?'':'s'} fazem 80% do total`,t.t1)}
-      {kpi('Receita em armadilha',armadilhas.length?brl2(recArmadilha):'—',
-        armadilhas.length?`${armadilhas.length} produto${armadilhas.length===1?'':'s'} vendem muito e ganham pouco`:'nenhum produto A abaixo da média',
-        armadilhas.length?t.red:t.grn)}
+      {adsVilao.length>0
+        ? kpi('Lucro que o Ads comeu',brl2(lucroComidoAds),
+            `${adsVilao.length} produto${adsVilao.length===1?'':'s'} com anúncio pesado${noPrejuizoPorAds.length?` · ${noPrejuizoPorAds.length} no prejuízo SÓ por causa dele`:''}`,
+            noPrejuizoPorAds.length?t.red:t.gold)
+        : kpi('Receita em armadilha',armadilhas.length?brl2(recArmadilha):'—',
+            armadilhas.length?`${armadilhas.length} produto${armadilhas.length===1?'':'s'} vendem muito e ganham pouco`:'nenhum produto A abaixo da média',
+            armadilhas.length?t.red:t.grn)}
       {kpi('Capital parado',zItens.length?brl2(zCapital):'—',
         zItens.length?`${zUnidades} un. em estoque sem giro${zSemCusto?` · ${zSemCusto} sem custo informado`:''}`:'nada parado no FBA',
         zCapital>0?t.gold:t.t1)}
@@ -1402,18 +1468,17 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
       <button onClick={()=>setFiltro(null)} style={chipDiag(t,filtro===null,t.t2)}>
         Todos <span style={{opacity:0.7}}>({rows.length})</span>
       </button>
-      {(['chefe','armadilha','oportunidade','peso','incerto'] as DiagABC[]).map(k=>{
+      {(['chefe','adsPrejuizo','adsPesado','prejuizo','armadilha','oportunidade','apertado','incerto'] as DiagABC[]).map(k=>{
         const n=rows.filter((r:any)=>r.diag===k).length
         if(!n) return null
-        const cor=k==='chefe'?t.grn:k==='armadilha'?t.red:k==='oportunidade'?t.gold:t.t3
-        return(<button key={k} onClick={()=>setFiltro(filtro===k?null:k)} style={chipDiag(t,filtro===k,cor)}>
+        return(<button key={k} onClick={()=>setFiltro(filtro===k?null:k)} style={chipDiag(t,filtro===k,corDiag(t,k))}>
           {DIAG[k].rotulo} <span style={{opacity:0.7}}>({n})</span>
         </button>)
       })}
     </div>
     {filtro && (
       <div style={{background:t.card,border:`1px solid ${t.line}`,
-        borderLeft:`3px solid ${filtro==='chefe'?t.grn:filtro==='armadilha'?t.red:filtro==='oportunidade'?t.gold:t.t3}`,
+        borderLeft:`3px solid ${corDiag(t,filtro)}`,
         borderRadius:12,padding:'13px 16px',marginBottom:14}}>
         <div style={{fontSize:12.5,fontWeight:700,color:t.t1,fontFamily:FG,marginBottom:5}}>
           {DIAG[filtro].rotulo} — por que esses produtos caíram aqui
@@ -1424,8 +1489,9 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
         </div>
         {margemMedia!==null && filtro!=='incerto' && (
           <div style={{fontSize:10.5,color:t.t3,marginTop:7}}>
-            A régua é a margem média ponderada da sua conta no período: <b>{pc(margemMedia)}</b>.
-            Ela muda quando você muda o filtro de data.
+            A régua é a margem média ponderada da sua conta no período: <b>{pc(margemMedia)}</b>
+            {margemMedia<0?', com piso em 0% — estar acima de uma média negativa não conta como estar bem':''}.
+            Ela muda quando você muda o filtro de data.{temAdsPorSku(adsReal)?' Como há gasto de ads por produto, a régua e as margens são DEPOIS do anúncio, dos dois lados.':''}
           </div>
         )}
       </div>
@@ -1464,7 +1530,12 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
             <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right' as const}}>
               <Pill kind={d.kind==='cinza'?'gold':d.kind}>{d.rotulo}</Pill>
               {/* O PORQUÊ na própria linha — não em tooltip, que some no celular. */}
-              <div style={{fontSize:9.5,color:t.t3,marginTop:3,lineHeight:1.35,whiteSpace:'normal' as const}}>{RESUMO_DIAG[r.diag as DiagABC]}</div>
+              {/* O número que SUSTENTA o diagnóstico, não só o adjetivo. */}
+              <div style={{fontSize:9.5,color:t.t3,marginTop:3,lineHeight:1.35,whiteSpace:'normal' as const}}>
+                {(r.diag==='adsPrejuizo'||r.diag==='adsPesado')&&r.acos!==null&&r.pre!==null
+                  ? `ACOS ${pc(r.acos)} · margem ${pc(r.pre)} antes do ads`
+                  : RESUMO_DIAG[r.diag as DiagABC]}
+              </div>
             </td>
             <PillTd><ZoomBtn onClick={()=>onDetail?.({sku:r.p.sku,name:r.p.name||r.p.sku,image:r.p.image,asin:r.p.asin})}/></PillTd>
           </tr>
