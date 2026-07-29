@@ -311,6 +311,7 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
         <span style={{fontSize:10.5,color:t.t3}}>· ao vivo da Finances API</span>
       </div>
       <Row label="Receita bruta" val={L.receitaBruta}/>
+      {(L.promocoes||0)>0.005 && <Row label="Desconto que você deu" val={L.promocoes} color={t.gold}/>}
       <Row label="Devoluções" val={L.devolucoes} sign="-" color={t.red}/>
       <Row label="Receita líquida" val={L.receitaLiquida} sign="=" strong/>
       <Row label="Comissão Amazon" val={L.comissao} sign="-" color={t.red}/>
@@ -987,6 +988,10 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
         <div style={{background:t.dark?'rgba(255,255,255,0.02)':'#FAFBFC',border:`1px solid ${t.line}`,borderRadius:12,padding:'14px 16px',marginBottom:16}}>
           <Row label={`Faturado (${units} un.)`} val={M.receitaBruta} strong hide={hide}
                nota={semPreco>0?`+${semPreco} un. que a Amazon ainda não precificou — fora da conta, não zeradas`:undefined}/>
+          {/* ⭐ O desconto que o SELLER deu. Já estava descontado da receita acima,
+              mas invisível: ele dava cupom e não sabia quanto tinha dado. */}
+          {(p?.promo||0)>0.005 && <Row label="Desconto que você deu" val={p.promo} color={t.gold} hide={hide}
+               nota="cupom, promoção ou frete grátis — já descontado do Faturado acima"/>}
           {M.devolucaoValor>0.005 && <Row label={`Devoluções (${M.devolucaoUnits} un.)`} val={M.devolucaoValor} sign="-" color={t.red} hide={hide}
                nota="estorno real do repasse — o custo dessas unidades também sai do CMV"/>}
           <Row label="Comissão Amazon" val={M.comissao} sign="-" color={t.red} hide={hide}

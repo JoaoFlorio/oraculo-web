@@ -30,12 +30,18 @@ export interface LinhasDre {
   taxaPrograma?: number; armazenagem?: number; assinatura?: number; outrasTaxas?: number
   /** Parte de `outrasTaxas` que é taxa de SERVIÇO da conta (sem pedido/SKU). */
   outrasConta?: number
+  /** Desconto concedido pelo seller no período (cupom/promoção/frete grátis). */
+  promocoes?: number
+  /** Receita de embrulho para presente, que o comprador paga. */
+  embrulho?: number
 }
 export interface ProdutoDre {
   sku: string; asin?: string; units: number; receita: number
   comissao?: number | null; fba?: number | null
   taxaPrograma?: number | null; outrasTaxas?: number | null
   feeMedido?: boolean
+  /** Desconto que o SELLER concedeu (cupom/promoção). Já está fora da `receita`. */
+  promo?: number
 }
 export interface Reembolso { sku: string; units: number; valor: number }
 
