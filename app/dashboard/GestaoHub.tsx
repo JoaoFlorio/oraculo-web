@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import { getFinanceData, summary, productMetrics, abcCurve, type ProductMetrics } from './financeiroMock'
 import { adsDoProduto, temAdsPorSku, adsSemVenda } from '@/lib/adsProduto'
-import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo } from '@/lib/margemProduto'
+import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, ajustesDoPedido, ajustesDoProduto, type AjustePedido } from '@/lib/margemProduto'
 
 const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#888'}}>Carregando DRE…</div>})
 
@@ -564,7 +564,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,semCusto=0,receitaSemCusto=0,
    ⚠️ As taxas por unidade saem do `produtos[]` da DRE (comissão e FBA MEDIDOS por
    SKU) divididas pelas unidades do período — assim a soma dos pedidos fecha com o
    card do produto e com a DRE por construção, e não por coincidência. */
-function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail}:{realDre?:any;costs:Record<string,number>;extras:Record<string,number>;imposto:number;hide:boolean;connected?:boolean|null;adsReal?:any;onDetail?:(p:any)=>void}){
+function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail,ajustes,onAddAjuste,onRemoverAjuste}:{realDre?:any;costs:Record<string,number>;extras:Record<string,number>;imposto:number;hide:boolean;connected?:boolean|null;adsReal?:any;onDetail?:(p:any)=>void;ajustes:AjustePedido[];onAddAjuste:(a:Omit<AjustePedido,'id'>)=>void;onRemoverAjuste:(id:string)=>void}){
   const t=useT()
   const [dados,setDados]=useState<any|null>(null)
   const [aberto,setAberto]=useState<string|null>(null)
@@ -623,6 +623,8 @@ function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail}:{
       ) : pedidos.map((o:any)=>(
         <PedidoCard key={o.orderId} pedido={o} conta={contaItem} hide={hide}
           expandido={aberto===o.orderId} onToggle={()=>setAberto(aberto===o.orderId?null:o.orderId)}
+          ajustes={ajustes} onAddAjuste={onAddAjuste} onRemoverAjuste={onRemoverAjuste}
+          nomeDe={(sku:string)=>porSku.get(sku)?.nome||sku}
           onProduto={(sku:string)=>{ const r=porSku.get(sku); onDetail?.({sku,name:r?.nome||sku,image:r?.image,asin:r?.asin}) }}/>
       ))}
   </>)
@@ -630,8 +632,10 @@ function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail}:{
 
 /* Cartão de UM pedido. Estrutura do Gestor: cabeçalho com selo/data/hora/canal,
    uma linha por item com a conta até a margem, e a setinha que abre o resumo. */
-function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto}:{pedido:any;conta:(it:any)=>any;hide:boolean;expandido:boolean;onToggle:()=>void;onProduto:(sku:string)=>void}){
+function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAddAjuste,onRemoverAjuste,nomeDe}:{pedido:any;conta:(it:any)=>any;hide:boolean;expandido:boolean;onToggle:()=>void;onProduto:(sku:string)=>void;ajustes:AjustePedido[];onAddAjuste:(a:Omit<AjustePedido,'id'>)=>void;onRemoverAjuste:(id:string)=>void;nomeDe:(sku:string)=>string}){
   const t=useT()
+  const [lancar,setLancar]=useState<'credito'|'custo'|null>(null)
+  const meusAjustes=ajustesDoPedido(ajustes,pedido.orderId)
   const pend=/pending/i.test(pedido.status||'')
   const itens=(pedido.itens||[])
   const c=itens.map(conta)
@@ -640,7 +644,11 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto}:{pedido:any
   const algumSemCusto=c.some((x:any)=>!x.temCusto)
   const tot={receita:som(x=>x.receita),comissao:som(x=>x.comissao),fba:som(x=>x.fba),
     imp:som(x=>x.imp),cmv:som(x=>x.cmv),extra:som(x=>x.custoExtra)}
-  const lucroTot=(algumSemFee||algumSemCusto)?null:som(x=>x.lucro)
+  // Lançamentos avulsos entram no lucro DO PEDIDO (e no do período, via
+  // totaisDoPeriodo) — mas nunca no custo unitário do produto.
+  const ajCred=meusAjustes.filter(a=>a.tipo==='credito').reduce((s,a)=>s+(Number(a.valor)||0),0)
+  const ajCusto=meusAjustes.filter(a=>a.tipo==='custo').reduce((s,a)=>s+(Number(a.valor)||0),0)
+  const lucroTot=(algumSemFee||algumSemCusto)?null:som(x=>x.lucro)+ajCred-ajCusto
   const d=new Date(pedido.date)
   const data=d.toLocaleDateString('pt-BR'), hora=d.toLocaleTimeString('pt-BR',{hour12:false})
 
@@ -752,7 +760,29 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto}:{pedido:any
             {tot.imp>0.005 && <LinhaPedido t={t} icone="ti-receipt-tax" cor={t.red} rotulo="Imposto" valor={tot.imp} sinal="-" hide={hide}/>}
             <LinhaPedido t={t} icone="ti-basket" cor={t.red} rotulo="Custo dos produtos" valor={tot.cmv} sinal="-" hide={hide} parcial={algumSemCusto}/>
             {tot.extra>0.005 && <LinhaPedido t={t} icone="ti-tools" cor={t.red} rotulo="Custo extra" valor={tot.extra} sinal="-" hide={hide}/>}
-            <div style={{height:1,background:t.line,margin:'10px 0 6px'}}/>
+            {/* Lançamentos avulsos DESTE pedido — cada um com o nome que o seller
+                deu e um ✕ pra desfazer. Sem a lista, dá pra lançar e não dá pra
+                ver nem corrigir. */}
+            {meusAjustes.map((a:AjustePedido)=>(
+              <div key={a.id} style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0'}}>
+                <span style={{width:27,height:27,borderRadius:8,background:(a.tipo==='credito'?t.grn:t.red)+(t.dark?'22':'1A'),display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <i className={`ti ${a.tipo==='credito'?'ti-plus':'ti-minus'}`} style={{fontSize:14,color:a.tipo==='credito'?t.grn:t.red}} aria-hidden="true"/>
+                </span>
+                <span style={{fontSize:12.5,color:t.t2,fontWeight:500,fontFamily:FG,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.nome}</span>
+                <span style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:8}}>
+                  <span style={{fontSize:12.5,fontWeight:600,fontFamily:FG,fontVariantNumeric:'tabular-nums',color:a.tipo==='credito'?t.grn:t.red,filter:hide?'blur(6px)':'none',whiteSpace:'nowrap'}}>
+                    {a.tipo==='credito'?'+':'−'}{brl2(a.valor)}
+                  </span>
+                  <button onClick={()=>onRemoverAjuste(a.id)} title="Remover lançamento"
+                    style={{background:'none',border:'none',color:t.t3,cursor:'pointer',padding:2,lineHeight:1,fontSize:15}}>×</button>
+                </span>
+              </div>
+            ))}
+            <div style={{display:'flex',gap:9,marginTop:9,flexWrap:'wrap' as const}}>
+              <button onClick={()=>setLancar('credito')} style={btnLanc(t,'credito')}>Adicionar crédito extra</button>
+              <button onClick={()=>setLancar('custo')} style={btnLanc(t,'custo')}>Adicionar custo eventual</button>
+            </div>
+            <div style={{height:1,background:t.line,margin:'12px 0 6px'}}/>
             <LinhaPedido t={t} icone="ti-coin" cor={lucroTot===null?t.t3:(lucroTot>=0?t.grn:t.red)} rotulo="Lucro do pedido" valor={lucroTot} forte hide={hide}/>
             {algumSemCusto && <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.45}}>Informe o custo deste produto em <b>Gerenciamento</b> pra fechar o lucro do pedido.</div>}
             {algumSemFee && <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.45}}>A tarifa deste produto ainda não voltou da Amazon.</div>}
@@ -765,6 +795,70 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto}:{pedido:any
         style={{width:'100%',height:38,background:t.dark?'rgba(255,255,255,0.02)':'#FAFBFC',border:'none',borderTop:`1px solid ${t.line}`,color:t.t3,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
         <i className={`ti ti-chevron-${expandido?'up':'down'}`} style={{fontSize:19}} aria-hidden="true"/>
       </button>
+
+      {lancar && <ModalLancamento t={t} tipo={lancar} itens={itens} nomeDe={nomeDe}
+        onCancel={()=>setLancar(null)}
+        onSalvar={(sku,nome,valor)=>{ onAddAjuste({orderId:pedido.orderId,sku,tipo:lancar,nome,valor,data:pedido.date}); setLancar(null) }}/>}
+    </div>
+  )
+}
+function btnLanc(t:Theme,tipo:'credito'|'custo'):React.CSSProperties{
+  const c=tipo==='credito'?t.grn:t.red
+  return {flex:'1 1 auto',padding:'8px 12px',borderRadius:9,border:`1px solid ${c}55`,background:c+(t.dark?'1F':'14'),
+    color:c,fontSize:11.5,fontWeight:600,fontFamily:FG,cursor:'pointer',whiteSpace:'nowrap'}
+}
+/* Modal de lançamento — mesmo formulário do Gestor: item, nome e valor. */
+function ModalLancamento({t,tipo,itens,nomeDe,onCancel,onSalvar}:{t:Theme;tipo:'credito'|'custo';itens:any[];nomeDe:(sku:string)=>string;onCancel:()=>void;onSalvar:(sku:string,nome:string,valor:number)=>void}){
+  const [sku,setSku]=useState(itens[0]?.sku||'')
+  const [nome,setNome]=useState('')
+  const [valor,setValor]=useState('')
+  const num=parseFloat(valor.replace(/\./g,'').replace(',','.'))
+  const valido=!!sku&&nome.trim().length>0&&isFinite(num)&&num>0
+  const cor=tipo==='credito'?t.grn:t.red
+  const campo:React.CSSProperties={width:'100%',padding:'10px 13px',borderRadius:9,border:`1px solid ${t.line2}`,
+    background:t.dark?'rgba(255,255,255,0.04)':'#FFFFFF',color:t.t1,fontSize:13,fontFamily:FG,outline:'none'}
+  const rot:React.CSSProperties={display:'block',fontSize:11.5,color:t.t2,marginBottom:6,fontWeight:600,fontFamily:FG}
+  useEffect(()=>{
+    const esc=(e:KeyboardEvent)=>{ if(e.key==='Escape') onCancel() }
+    document.addEventListener('keydown',esc); return ()=>document.removeEventListener('keydown',esc)
+  },[onCancel])
+  return(
+    <div onClick={onCancel} style={{position:'fixed',inset:0,zIndex:70,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'8vh 14px',backdropFilter:'blur(2px)'}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:16,width:'min(560px,96vw)',boxShadow:'0 24px 70px rgba(0,0,0,0.35)'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px',borderBottom:`1px solid ${t.line}`}}>
+          <span style={{fontSize:15,fontWeight:700,color:t.t1}}>{tipo==='credito'?'Adicionar crédito extra':'Adicionar custo eventual'}</span>
+          <button onClick={onCancel} style={{background:'none',border:'none',color:t.t3,fontSize:22,cursor:'pointer',lineHeight:1,padding:0}}>×</button>
+        </div>
+        <div style={{padding:'18px 20px',display:'flex',flexDirection:'column' as const,gap:14}}>
+          <div>
+            <label style={rot}>Item</label>
+            <select value={sku} onChange={e=>setSku(e.target.value)} style={{...campo,cursor:'pointer'}}>
+              {itens.map((it:any,i:number)=><option key={i} value={it.sku}>{nomeDe(it.sku)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={rot}>{tipo==='credito'?'Nome do crédito':'Nome do custo'}</label>
+            <input value={nome} onChange={e=>setNome(e.target.value)} maxLength={60}
+              placeholder={tipo==='credito'?'Ex: Reembolso de avaria':'Ex: Frete de devolução'} style={campo}/>
+          </div>
+          <div>
+            <label style={rot}>Valor</label>
+            <input value={valor} onChange={e=>setValor(e.target.value)} inputMode="decimal"
+              placeholder="Ex: 10,00" style={campo}/>
+          </div>
+          <div style={{fontSize:10.5,color:t.t3,lineHeight:1.5}}>
+            Entra <b>só neste pedido</b> e no lucro do período. Não altera o custo unitário do produto, então não afeta as outras vendas dele.
+          </div>
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'flex-end',padding:'14px 20px',borderTop:`1px solid ${t.line}`}}>
+          <button onClick={onCancel} style={{padding:'9px 16px',borderRadius:9,border:`1px solid ${t.line2}`,background:'transparent',color:t.t2,fontSize:12.5,fontWeight:600,cursor:'pointer',fontFamily:FG}}>Cancelar</button>
+          <button disabled={!valido} onClick={()=>onSalvar(sku,nome.trim(),num)}
+            style={{padding:'9px 18px',borderRadius:9,border:'none',background:valido?cor:t.line2,color:valido?(t.dark?'#0A0A14':'#FFFFFF'):t.t3,
+              fontSize:12.5,fontWeight:700,cursor:valido?'pointer':'not-allowed',fontFamily:FG}}>
+            {tipo==='credito'?'Adicionar crédito':'Adicionar custo'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -806,7 +900,7 @@ function ZoomBtn({onClick}:{onClick:()=>void}){
 // Mostra TUDO que é descontado (comissão, FBA, ads, imposto, custo) → margem final,
 // no agregado do período + a lista dos pedidos daquele produto (do Espelho Local).
 // Todos os rateios usam share de faturamento — reconcilia com o Top 15 e a DRE.
-function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{produto:{sku:string;name:string;image?:string;asin?:string};realDre:any;adsReal?:any;costs:Record<string,number>;imposto:number;hide:boolean;onClose:()=>void}){
+function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajustes}:{produto:{sku:string;name:string;image?:string;asin?:string};realDre:any;adsReal?:any;costs:Record<string,number>;imposto:number;hide:boolean;onClose:()=>void;ajustes?:AjustePedido[]}){
   const t=useT()
   const [orders,setOrders]=useState<any|null>(null)
   const p=(realDre?.produtos||[]).find((x:any)=>x.sku===produto.sku)
@@ -831,6 +925,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
   const M=margemDoProduto({
     linhas:L, produto:p||{sku:produto.sku,units:0,receita:0}, reembolsos:realDre?.reembolsos,
     custoUnit:custoU, imposto, ads:adsDoProduto(adsReal,produto.sku,produto.asin).valor,
+    ajustes:ajustesDoProduto(ajustes,produto.sku,from,to),
   })
   const units=p?.units||0
   const semPreco=p?.unitsSemPreco||0
@@ -881,6 +976,8 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
                nota={semAds?'gasto por produto ainda sincronizando — não rateamos o total da conta':undefined}/>
           {imposto>0 && <Row label={`Imposto (${pc(imposto)})`} val={M.imposto} sign="-" color={t.red} hide={hide}/>}
           <Row label={`Custo do produto (CMV${M.devolucaoUnits>0?`, ${M.unitsLiquidas} un.`:''})`} val={M.cmv} sign="-" color={temCusto?t.red:t.t3} hide={hide}/>
+          {M.credito>0.005 && <Row label="Créditos extras lançados" val={M.credito} color={t.grn} hide={hide} nota="lançados em pedidos deste produto, na aba Vendas"/>}
+          {M.custoEventual>0.005 && <Row label="Custos eventuais lançados" val={M.custoEventual} sign="-" color={t.red} hide={hide} nota="lançados em pedidos deste produto, na aba Vendas"/>}
           <div style={{height:1,background:t.line,margin:'8px 0'}}/>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <span style={{fontSize:13.5,fontWeight:700,color:t.t1}}>{!M.feeMedido?'Lucro do período':semAds?'Lucro antes do Ads':'Lucro do período'}</span>
@@ -1870,6 +1967,22 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
       return next
     })
   }
+  // ── LANÇAMENTOS AVULSOS POR PEDIDO (crédito extra / custo eventual) ──────────
+  // ⚠️ Guardados FORA do custo unitário de propósito: são daquele pedido, não do
+  // SKU. Se virassem CMV, valeriam pras próximas vendas todas e distorceriam a
+  // margem de tudo que vem depois. Entram na conta como linha própria.
+  const [ajustes,setAjustes]=useState<AjustePedido[]>([])
+  useEffect(()=>{ fetch('/api/user/metadata?key=gestao_ajustes').then(r=>r.json()).then(d=>{ if(Array.isArray(d?.value)) setAjustes(d.value) }).catch(()=>{}) },[])
+  const salvarAjustes=(lista:AjustePedido[])=>{
+    setAjustes(lista)
+    fetch('/api/user/metadata',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'gestao_ajustes',value:lista})}).catch(()=>{})
+  }
+  const addAjuste=(a:Omit<AjustePedido,'id'>)=>{
+    // id sem depender de lib: pedido+sku+timestamp já é único o bastante aqui.
+    salvarAjustes([...ajustes,{...a,id:`${a.orderId}-${a.sku}-${Date.now()}`}])
+  }
+  const removeAjuste=(id:string)=>salvarAjustes(ajustes.filter(a=>a.id!==id))
+
   // ⚠️ FONTE ÚNICA do custo unitário pro resto do painel. Todas as abas recebem
   // ESTE mapa no lugar do `costs` cru — assim custo extra entra em lucro,
   // margem, ROI, MPA, Curva ABC e capital em estoque sem tocar em cada cálculo.
@@ -1897,8 +2010,9 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   // `Σ units × custo` com unidade BRUTA — cobrava o custo do que foi DEVOLVIDO,
   // enquanto o detalhe já usava unidade líquida. Capa e detalhe discordavam.
   const totais = useMemo(
-    ()=>totaisDoPeriodo(realDre?.linhas||{},realDre?.produtos||[],realDre?.reembolsos,custoUnit,imposto),
-    [realDre,custoUnit,imposto],
+    ()=>totaisDoPeriodo(realDre?.linhas||{},realDre?.produtos||[],realDre?.reembolsos,custoUnit,imposto,
+      ajustes,{from:realDre?.period?.from,to:realDre?.period?.to}),
+    [realDre,custoUnit,imposto,ajustes],
   )
   const cmv = totais.cmv
   // Margem ANTES de ads = a régua pra julgar ACOS (ACOS acima dela é prejuízo).
@@ -2036,7 +2150,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
 
         {/* Conteúdo */}
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} impostoTotal={totais.imposto} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
-        {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail}/>}
+        {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail} ajustes={ajustes} onAddAjuste={addAjuste} onRemoverAjuste={removeAjuste}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto} adsReal={adsData}/>}
@@ -2046,7 +2160,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
 
         {/* Modal de detalhamento (lupinha) — sobre qualquer aba */}
-        {detail && realDre && <ProdutoDetalhe produto={detail} realDre={realDre} adsReal={adsData} costs={custoUnit} imposto={imposto} hide={hide} onClose={()=>setDetail(null)}/>}
+        {detail && realDre && <ProdutoDetalhe produto={detail} realDre={realDre} adsReal={adsData} costs={custoUnit} imposto={imposto} hide={hide} onClose={()=>setDetail(null)} ajustes={ajustes}/>}
       </div>
     </ThemeCtx.Provider>
   )

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo } from '../lib/margemProduto.ts'
+import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, ajustesDoProduto, ajustesDoPedido } from '../lib/margemProduto.ts'
 
 const perto = (a: number | null, b: number, tol = 0.011) =>
   assert.ok(a !== null && Math.abs(a - b) < tol, `esperado ~${b}, deu ${a}`)
@@ -201,6 +201,46 @@ test('Lucro Bruto da capa = Σ lucro dos produtos − custos fixos', () => {
     s + (margemDoProduto({ linhas: L, produto: p, custoUnit: custo[p.sku], imposto: 4 }).lucroAntesAds || 0), 0)
   // Batem a menos dos custos fixos, que não são atribuídos a produto nenhum.
   perto(capa, detalhe - custosFixosDoPeriodo(L))
+})
+
+/* ── Lançamento avulso por pedido (crédito extra / custo eventual) ─────────── */
+const AJUSTES = [
+  { id: 'a1', orderId: 'P-1', sku: 'CL-VVB5-X3JX', tipo: 'credito' as const, nome: 'Reembolso de avaria', valor: 25, data: '2026-07-10T12:00:00.000Z' },
+  { id: 'a2', orderId: 'P-1', sku: 'CL-VVB5-X3JX', tipo: 'custo' as const, nome: 'Frete de devolução', valor: 40, data: '2026-07-10T12:00:00.000Z' },
+  { id: 'a3', orderId: 'P-9', sku: 'MEIA-01', tipo: 'custo' as const, nome: 'Reembalagem', valor: 8, data: '2026-06-02T12:00:00.000Z' },
+]
+
+test('lançamento entra no lucro mas NÃO no custo unitário', () => {
+  const aj = ajustesDoProduto(AJUSTES, 'CL-VVB5-X3JX')
+  const sem = margemDoProduto({ linhas: LINHAS, produto: DONUTS, custoUnit: 20, imposto: 0 })
+  const com = margemDoProduto({ linhas: LINHAS, produto: DONUTS, custoUnit: 20, imposto: 0, ajustes: aj })
+  assert.equal(com.cmv, sem.cmv, 'o CMV do produto não pode mudar')
+  perto(com.lucroAntesAds, (sem.lucroAntesAds as number) + 25 - 40)
+  assert.equal(com.credito, 25); assert.equal(com.custoEventual, 40)
+})
+
+test('lançamento fica no PERÍODO do pedido, não no de hoje', () => {
+  const julho = ajustesDoProduto(AJUSTES, 'MEIA-01', '2026-07-01T00:00:00Z', '2026-07-31T23:59:59Z')
+  assert.equal(julho.custo, 0, 'o de junho não pode aparecer em julho')
+  const junho = ajustesDoProduto(AJUSTES, 'MEIA-01', '2026-06-01T00:00:00Z', '2026-06-30T23:59:59Z')
+  assert.equal(junho.custo, 8)
+})
+
+test('lançamento de um SKU não vaza pro outro', () => {
+  assert.equal(ajustesDoProduto(AJUSTES, 'MEIA-01').credito, 0)
+  assert.equal(ajustesDoProduto(AJUSTES, 'CL-VVB5-X3JX').custo, 40)
+})
+
+test('ajustesDoPedido devolve só os daquele pedido', () => {
+  assert.equal(ajustesDoPedido(AJUSTES, 'P-1').length, 2)
+  assert.equal(ajustesDoPedido(AJUSTES, 'P-9').length, 1)
+  assert.equal(ajustesDoPedido(AJUSTES, 'NAO-EXISTE').length, 0)
+})
+
+test('o total do período soma os lançamentos dos produtos', () => {
+  const T = totaisDoPeriodo(LINHAS, [DONUTS, MEIAS], undefined, { [DONUTS.sku]: 20, [MEIAS.sku]: 30 }, 0, AJUSTES)
+  assert.equal(T.credito, 25)
+  assert.equal(T.custoEventual, 48)   // 40 do donuts + 8 das meias
 })
 
 test('produto que some do payload não explode', () => {

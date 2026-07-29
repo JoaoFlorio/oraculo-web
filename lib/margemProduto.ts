@@ -39,6 +39,48 @@ export interface ProdutoDre {
 }
 export interface Reembolso { sku: string; units: number; valor: number }
 
+/**
+ * Lançamento avulso de UM pedido — crédito extra (a Amazon te devolveu algo) ou
+ * custo eventual (frete de devolução, reembalagem, avaria).
+ *
+ * ⚠️ NÃO mexe no custo unitário do produto, de propósito: é dinheiro daquele
+ * pedido, não do SKU. Cadastrar como CMV faria o custo valer pras próximas
+ * vendas todas e distorceria a margem de tudo que vem depois.
+ *
+ * `data` é a data do PEDIDO (não a de cadastro) — é ela que coloca o lançamento
+ * no período certo quando o seller filtra "junho" três meses depois.
+ */
+export interface AjustePedido {
+  id: string; orderId: string; sku: string
+  tipo: 'credito' | 'custo'
+  nome: string; valor: number
+  data: string
+}
+
+/** Lançamentos de um pedido específico (o cartão da aba Vendas). */
+export function ajustesDoPedido(ajustes: AjustePedido[] | undefined, orderId: string): AjustePedido[] {
+  return (ajustes || []).filter(a => a.orderId === orderId)
+}
+
+/** Soma os lançamentos de um SKU dentro do período (o card do produto e a DRE). */
+export function ajustesDoProduto(
+  ajustes: AjustePedido[] | undefined, sku: string, from?: string, to?: string,
+): { credito: number; custo: number; itens: AjustePedido[] } {
+  const ini = from ? Date.parse(from) : -Infinity
+  const fim = to ? Date.parse(to) : Infinity
+  const itens = (ajustes || []).filter(a => {
+    if (chave(a.sku) !== chave(sku)) return false
+    const d = Date.parse(a.data)
+    return !isFinite(d) || (d >= ini && d <= fim)
+  })
+  const r2 = (n: number) => Math.round(n * 100) / 100
+  return {
+    credito: r2(itens.filter(a => a.tipo === 'credito').reduce((s, a) => s + (Number(a.valor) || 0), 0)),
+    custo: r2(itens.filter(a => a.tipo === 'custo').reduce((s, a) => s + (Number(a.valor) || 0), 0)),
+    itens,
+  }
+}
+
 export interface MargemProduto {
   receitaBruta: number
   devolucaoValor: number; devolucaoUnits: number
@@ -52,6 +94,8 @@ export interface MargemProduto {
   ads: number | null
   imposto: number
   unitsLiquidas: number; cmv: number; temCusto: boolean
+  /** Crédito extra e custo eventual lançados nos pedidos deste SKU no período. */
+  credito: number; custoEventual: number
   /** Lucro sem o ads (existe assim que as taxas foram medidas). */
   lucroAntesAds: number | null
   /** Lucro final. `null` enquanto faltar taxa medida OU gasto de ads do produto. */
@@ -76,6 +120,8 @@ export interface EntradaMargem {
   imposto: number
   /** Gasto de ads MEDIDO do produto, ou null. Nunca rateio — ver lib/adsProduto. */
   ads?: number | null
+  /** Lançamentos avulsos daquele SKU no período (já somados por `ajustesDoProduto`). */
+  ajustes?: { credito: number; custo: number }
 }
 
 const chave = (x: unknown): string => String(x ?? '').trim().toUpperCase()
@@ -94,18 +140,23 @@ export function totaisDoPeriodo(
   reembolsos: Reembolso[] | undefined,
   custoUnit: Record<string, number>,
   imposto = 0,
-): { cmv: number; imposto: number; unidadesLiquidas: number; semCusto: number; receitaSemCusto: number } {
+  ajustes?: AjustePedido[],
+  periodo?: { from?: string; to?: string },
+): { cmv: number; imposto: number; unidadesLiquidas: number; semCusto: number; receitaSemCusto: number; credito: number; custoEventual: number } {
   let cmv = 0, impostoTotal = 0, unidadesLiquidas = 0, semCusto = 0, receitaSemCusto = 0
+  let credito = 0, custoEventual = 0
   for (const p of (produtos || [])) {
-    const M = margemDoProduto({ linhas, produto: p, reembolsos, custoUnit: custoUnit[p.sku] || 0, imposto })
+    const aj = ajustesDoProduto(ajustes, p.sku, periodo?.from, periodo?.to)
+    const M = margemDoProduto({ linhas, produto: p, reembolsos, custoUnit: custoUnit[p.sku] || 0, imposto, ajustes: aj })
     cmv += M.cmv; impostoTotal += M.imposto; unidadesLiquidas += M.unitsLiquidas
+    credito += M.credito; custoEventual += M.custoEventual
     // ⚠️ Produto sem custo cadastrado entra no lucro com CMV ZERO: a receita dele
     // conta inteira e o custo não. O agregado fica otimista e nada na tela avisa.
     // Contamos aqui pra a capa poder declarar de quanto é o buraco.
     if (M.receitaLiquida > 0 && !M.temCusto) { semCusto++; receitaSemCusto += M.receitaLiquida }
   }
   const r2 = (n: number) => Math.round(n * 100) / 100
-  return { cmv: r2(cmv), imposto: r2(impostoTotal), unidadesLiquidas, semCusto, receitaSemCusto: r2(receitaSemCusto) }
+  return { cmv: r2(cmv), imposto: r2(impostoTotal), unidadesLiquidas, semCusto, receitaSemCusto: r2(receitaSemCusto), credito: r2(credito), custoEventual: r2(custoEventual) }
 }
 
 /** Custos do PERÍODO que não pertencem a produto nenhum. A tela mostra separado.
@@ -163,7 +214,12 @@ export function margemDoProduto(e: EntradaMargem): MargemProduto {
   const temCusto = custoUnit > 0
 
   const ads = e.ads ?? null
-  const lucroAntesAds = liqMarketplace === null ? null : liqMarketplace - imposto - cmv
+  // Lançamentos avulsos do pedido entram DEPOIS do CMV, em linha própria. É
+  // dinheiro real do período; ficar de fora faria a soma dos pedidos não bater
+  // com o card do produto — o defeito que essa base inteira existe pra impedir.
+  const credito = Number(e.ajustes?.credito) || 0
+  const custoEventual = Number(e.ajustes?.custo) || 0
+  const lucroAntesAds = liqMarketplace === null ? null : liqMarketplace - imposto - cmv + credito - custoEventual
   const lucro = (lucroAntesAds === null || ads === null) ? null : lucroAntesAds - ads
   const base = lucro ?? lucroAntesAds
   const margem = (base !== null && receitaLiquida > 0) ? base / receitaLiquida * 100 : null
@@ -171,7 +227,7 @@ export function margemDoProduto(e: EntradaMargem): MargemProduto {
   return {
     receitaBruta, devolucaoValor, devolucaoUnits, receitaLiquida,
     comissao, fba, taxaPrograma, outrasTaxas, taxasMedidas: medePrograma && medeOutras, feeMedido,
-    liqMarketplace, ads, imposto, unitsLiquidas, cmv, temCusto,
+    liqMarketplace, ads, imposto, unitsLiquidas, cmv, temCusto, credito, custoEventual,
     lucroAntesAds, lucro, margem,
     completo: feeMedido && ads !== null,
   }
