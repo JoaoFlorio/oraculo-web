@@ -5,7 +5,8 @@ import { demoConfigFor } from '@/lib/demo'
 
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
 
-// Pedidos de um SKU no período (drill-down da lupinha) — via Espelho Local.
+// Pedidos do período — a lista inteira (aba Vendas) ou só a de um SKU
+// (drill-down da lupa). Sempre do Espelho Local, zero chamada à Amazon.
 export async function GET(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
@@ -13,9 +14,11 @@ export async function GET(req: NextRequest) {
   // Demo não tem pedidos reais — o modal cai no agregado.
   if (await demoConfigFor(user)) return NextResponse.json({ available: false, reason: 'demo' })
 
+  // `sku` é OPCIONAL: com ele, os pedidos daquele produto (modal da lupa);
+  // sem ele, a lista de pedidos do período item a item (aba Vendas).
   const sku = searchParams.get('sku')
-  if (!sku) return NextResponse.json({ error: 'sku obrigatório' }, { status: 400 })
-  const qs = new URLSearchParams({ email: user.email, sku })
+  const qs = new URLSearchParams({ email: user.email })
+  if (sku) qs.set('sku', sku)
   if (searchParams.get('from')) qs.set('from', searchParams.get('from')!)
   if (searchParams.get('to')) qs.set('to', searchParams.get('to')!)
   try {

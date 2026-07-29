@@ -1881,6 +1881,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           .ora-kpis4{grid-template-columns:repeat(2,1fr)!important}
           .ora-tscroll{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
           .ora-tscroll table{min-width:640px}
+          /* Detalhe do pedido (aba Vendas): as duas colunas viram uma no celular,
+             senão o resumo do lado direito espreme abaixo de 260px e quebra. */
+          .ora-pedido-det{grid-template-columns:minmax(0,1fr)!important;gap:14px!important}
           .ora-tabs{overflow-x:auto!important;flex-wrap:nowrap!important;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
           .ora-tabs::-webkit-scrollbar{display:none}
           .ora-wrap{flex-wrap:wrap!important}

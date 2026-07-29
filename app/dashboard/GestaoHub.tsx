@@ -556,18 +556,241 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,semCusto=0,receitaSemCusto=0,
 }
 
 /* ── Abas tabulares ─────────────────────────────────────────────────────── */
-function Vendas({realM,mockM,hide,connected,onDetail}:{realM?:ProductMetrics[]|null;mockM?:ProductMetrics[];hide:boolean;connected?:boolean|null;onDetail?:(p:any)=>void}){
+/* VENDAS — PEDIDO A PEDIDO, no formato do Gestor Seller.
+   Antes esta aba era um ranking com TUDO do dia somado por produto: o seller via
+   "3 unidades, R$239,70" e não conseguia responder "quanto a Amazon me cobrou
+   NAQUELE pedido das 19h?". Agora cada pedido é um cartão, cada item uma linha
+   com a conta completa até a margem, e a setinha abre o detalhe do pedido.
+   ⚠️ As taxas por unidade saem do `produtos[]` da DRE (comissão e FBA MEDIDOS por
+   SKU) divididas pelas unidades do período — assim a soma dos pedidos fecha com o
+   card do produto e com a DRE por construção, e não por coincidência. */
+function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail}:{realDre?:any;costs:Record<string,number>;extras:Record<string,number>;imposto:number;hide:boolean;connected?:boolean|null;adsReal?:any;onDetail?:(p:any)=>void}){
   const t=useT()
-  void mockM   // nunca renderiza mock — só dado real (evita produtos fabricados)
+  const [dados,setDados]=useState<any|null>(null)
+  const [aberto,setAberto]=useState<string|null>(null)
+  const from=realDre?.period?.from, to=realDre?.period?.to
+  useEffect(()=>{
+    if(!from||!to){ return }
+    let vivo=true; setDados(null)
+    const qs=new URLSearchParams(); qs.set('from',from); qs.set('to',to)
+    fetch(`/api/amazon/orders?${qs}`).then(r=>r.json())
+      .then(d=>{ if(vivo) setDados(d) }).catch(()=>{ if(vivo) setDados({available:false}) })
+    return ()=>{ vivo=false }
+  },[from,to])
+
   if(connected===false) return <ConnectEmpty/>
-  if(!realM) return <LoadingBox/>
-  const rows=[...realM].sort((a,b)=>b.revenue-a.revenue)
+  if(!realDre) return <LoadingBox/>
+
+  // Índice por SKU: nome, foto e as taxas MEDIDAS por unidade.
+  const porSku=new Map<string,any>()
+  for(const p of (realDre.produtos||[])){
+    const un=p.units||0
+    porSku.set(p.sku,{
+      nome:p.name||p.sku, image:p.image||'', asin:p.asin||'',
+      comissaoUn:(un>0&&p.feeMedido)?(p.comissao||0)/un:null,
+      fbaUn:(un>0&&p.feeMedido)?(p.fba||0)/un:null,
+      feeMedido:!!p.feeMedido,
+    })
+  }
+  const custoDe=(sku:string)=>costs[sku]||0
+  const extraDe=(sku:string)=>extras[sku]||0
+
+  // Conta de UM item do pedido — a mesma ordem de dedução do card do produto.
+  const contaItem=(it:any)=>{
+    const ref=porSku.get(it.sku)
+    const receita=it.receita||0, qty=it.qty||0
+    const comissao=ref?.comissaoUn!=null?ref.comissaoUn*qty:null
+    const fba=ref?.fbaUn!=null?ref.fbaUn*qty:null
+    const liq=(comissao===null||fba===null)?null:receita-comissao-fba
+    const imp=receita*(imposto/100)
+    const cmv=custoDe(it.sku)*qty, custoExtra=extraDe(it.sku)*qty
+    const temCusto=custoDe(it.sku)>0||extraDe(it.sku)>0
+    const lucro=(liq===null||!temCusto)?null:liq-imp-cmv-custoExtra
+    return {ref,receita,qty,comissao,fba,liq,imp,cmv,custoExtra,temCusto,lucro,
+      margem:(lucro!==null&&receita>0)?lucro/receita*100:null}
+  }
+
+  const pedidos:any[]=dados?.pedidos||[]
   return(<>
-    <Hint>Ranking por receita. Clique na 🔍 pra ver tudo que é descontado (comissão, FBA, ads, imposto, custo) até a margem final — e os pedidos daquele produto.</Hint>
-    <Table head={[{label:'Produto',w:'46%'},{label:'Un.',right:true},{label:'Receita',right:true},{label:'Margem',right:true},{label:'',right:true}]}>
-      {rows.map(p=><tr key={p.id}><ProdCell p={p}/><NumTd>{p.units}</NumTd><NumTd strong hide={hide}>{brl2(p.revenue)}</NumTd><PillTd>{p.unitCost>0?<Pill kind={p.margin>20?'grn':p.margin>0?'gold':'red'}>{pc(p.margin)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd><PillTd><ZoomBtn onClick={()=>onDetail?.({sku:p.sku,name:p.name,image:p.image,asin:p.asin})}/></PillTd></tr>)}
-    </Table>
+    <Hint>Cada venda do período, pedido a pedido — com o que a Amazon cobrou em cada um. Clique na seta pra abrir o detalhe do pedido. O gasto de anúncio não entra aqui: ele é do período, não de um pedido.</Hint>
+    {dados===null ? <LoadingBox/>
+      : !dados.available ? (
+        <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>
+          Detalhe por pedido {dados.reason==='demo'?'não disponível na conta demo':'sincronizando — disponível em instantes'}.
+        </div>
+      ) : pedidos.length===0 ? (
+        <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhuma venda no período selecionado.</div>
+      ) : pedidos.map((o:any)=>(
+        <PedidoCard key={o.orderId} pedido={o} conta={contaItem} hide={hide}
+          expandido={aberto===o.orderId} onToggle={()=>setAberto(aberto===o.orderId?null:o.orderId)}
+          onProduto={(sku:string)=>{ const r=porSku.get(sku); onDetail?.({sku,name:r?.nome||sku,image:r?.image,asin:r?.asin}) }}/>
+      ))}
   </>)
+}
+
+/* Cartão de UM pedido. Estrutura do Gestor: cabeçalho com selo/data/hora/canal,
+   uma linha por item com a conta até a margem, e a setinha que abre o resumo. */
+function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto}:{pedido:any;conta:(it:any)=>any;hide:boolean;expandido:boolean;onToggle:()=>void;onProduto:(sku:string)=>void}){
+  const t=useT()
+  const pend=/pending/i.test(pedido.status||'')
+  const itens=(pedido.itens||[])
+  const c=itens.map(conta)
+  const som=(f:(x:any)=>number|null)=>c.reduce((s:number,x:any)=>s+(f(x)??0),0)
+  const algumSemFee=c.some((x:any)=>x.liq===null)
+  const algumSemCusto=c.some((x:any)=>!x.temCusto)
+  const tot={receita:som(x=>x.receita),comissao:som(x=>x.comissao),fba:som(x=>x.fba),
+    imp:som(x=>x.imp),cmv:som(x=>x.cmv),extra:som(x=>x.custoExtra)}
+  const lucroTot=(algumSemFee||algumSemCusto)?null:som(x=>x.lucro)
+  const d=new Date(pedido.date)
+  const data=d.toLocaleDateString('pt-BR'), hora=d.toLocaleTimeString('pt-BR',{hour12:false})
+
+  const th:React.CSSProperties={fontSize:9.5,fontWeight:700,color:t.t3,textTransform:'uppercase',letterSpacing:'0.045em',padding:'0 10px 8px',fontFamily:FG,whiteSpace:'nowrap'}
+  const td:React.CSSProperties={fontSize:12.5,color:t.t1,fontFamily:FG,fontVariantNumeric:'tabular-nums',padding:'0 10px',textAlign:'right',whiteSpace:'nowrap'}
+  const meta:React.CSSProperties={display:'inline-flex',alignItems:'center',gap:5,fontSize:12,color:t.t2,fontFamily:FG}
+  const dash=<span style={{color:t.t3}}>—</span>
+  const money=(v:number|null)=>v===null?dash:<span style={{filter:hide?'blur(6px)':'none'}}>{brl2(v)}</span>
+
+  return(
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,marginBottom:14,overflow:'hidden',boxShadow:t.dark?'none':'0 1px 2px rgba(16,24,40,0.05)'}}>
+      {/* Cabeçalho do pedido */}
+      {/* ⚠️ Duas faixas com `minWidth:0`, não um flex-wrap solto: com o selo
+          "Pendente" presente, o `marginLeft:auto` do "Amazon BR" empurrava ele pra
+          uma segunda linha e o cabeçalho ficava torto. Agora a esquerda encolhe e
+          a direita fica ancorada. */}
+      <div style={{display:'flex',alignItems:'center',gap:12,padding:'13px 18px',borderBottom:`1px solid ${t.line}`}}>
+        <div style={{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap' as const,minWidth:0,flex:1}}>
+          <span title={pend?'Aguardando a Amazon confirmar':'Confirmado'} style={{width:11,height:11,borderRadius:'50%',background:pend?t.gold:t.grn,flexShrink:0}}/>
+          <span style={meta}><i className="ti ti-calendar" style={{fontSize:14}} aria-hidden="true"/>{data}</span>
+          <span style={meta}><i className="ti ti-clock" style={{fontSize:14}} aria-hidden="true"/>{hora}</span>
+          <span style={meta}><i className="ti ti-truck-delivery" style={{fontSize:14}} aria-hidden="true"/>{pedido.channel==='AFN'?'FBA — Logística da Amazon':'FBM — Envio próprio'}</span>
+          {pend && <Pill kind="gold">Pendente</Pill>}
+        </div>
+        <span style={{display:'inline-flex',alignItems:'center',gap:7,fontSize:12,color:t.t3,fontFamily:FG,flexShrink:0,whiteSpace:'nowrap'}}>
+          <i className="ti ti-brand-amazon" style={{fontSize:15,color:t.gold}} aria-hidden="true"/>Amazon BR
+        </span>
+      </div>
+
+      {/* Itens do pedido */}
+      {/* scrollbarColor: no tema escuro a barra nativa saía BRANCA cortando o card. */}
+      <div style={{padding:'14px 18px 4px',overflowX:'auto',scrollbarWidth:'thin' as const,
+                   scrollbarColor:t.dark?'rgba(255,255,255,0.18) transparent':'rgba(0,0,0,0.18) transparent'}}>
+        <table style={{width:'100%',borderCollapse:'collapse',minWidth:820}}>
+          <thead><tr>
+            <th style={{...th,textAlign:'left',width:'32%'}}>Item</th>
+            <th style={{...th,textAlign:'right'}}>Qtd</th>
+            <th style={{...th,textAlign:'right'}}>Total</th>
+            <th style={{...th,textAlign:'right'}}>Preço unit.</th>
+            <th style={{...th,textAlign:'right'}}>Líquido do marketplace</th>
+            <th style={{...th,textAlign:'right'}}>Imposto</th>
+            <th style={{...th,textAlign:'right'}}>Custo do produto</th>
+            <th style={{...th,textAlign:'right'}}>Custo extra</th>
+            <th style={{...th,textAlign:'right'}}>Lucro</th>
+            <th style={{...th,textAlign:'right'}}>Margem</th>
+          </tr></thead>
+          <tbody>
+            {itens.map((it:any,i:number)=>{
+              const x=c[i]
+              return(
+                <tr key={i}>
+                  <td style={{padding:'8px 10px'}}>
+                    <button onClick={()=>onProduto(it.sku)} title="Ver detalhamento do produto"
+                      style={{display:'flex',alignItems:'center',gap:11,background:'none',border:'none',padding:0,cursor:'pointer',textAlign:'left',width:'100%'}}>
+                      <span style={{width:46,height:46,borderRadius:9,overflow:'hidden',flexShrink:0,background:t.dark?'#0F0F1E':'#F3F4F6',border:`1px solid ${t.line}`,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        {x.ref?.image
+                          ? <img src={x.ref.image} alt="" style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+                          : <i className="ti ti-package" style={{fontSize:19,color:t.t3}} aria-hidden="true"/>}
+                      </span>
+                      <span style={{minWidth:0}}>
+                        <span style={{display:'block',fontSize:12.5,fontWeight:600,color:t.t1,lineHeight:1.35,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:280}}>{x.ref?.nome||it.sku}</span>
+                        <span style={{display:'block',fontSize:10.5,color:t.t3,marginTop:2,fontFamily:FG}}>SKU {it.sku}</span>
+                      </span>
+                    </button>
+                  </td>
+                  <td style={{...td,fontWeight:600}}>{it.qty}</td>
+                  <td style={{...td,fontWeight:700}}>{money(x.receita)}</td>
+                  <td style={td}>{money(x.qty>0?x.receita/x.qty:0)}</td>
+                  <td style={{...td,color:t.grn}}>{money(x.liq)}</td>
+                  <td style={{...td,color:x.imp>0?t.red:t.t3}}>{money(x.imp)}</td>
+                  <td style={{...td,color:x.cmv>0?t.red:t.t3}}>{x.temCusto?money(x.cmv):dash}</td>
+                  <td style={{...td,color:x.custoExtra>0?t.red:t.t3}}>{x.temCusto?money(x.custoExtra):dash}</td>
+                  <td style={{...td,fontWeight:700,color:x.lucro===null?t.t3:(x.lucro>=0?t.grn:t.red)}}>{money(x.lucro)}</td>
+                  <td style={{...td,paddingRight:0}}>
+                    {x.margem===null?dash:<Pill kind={x.margem>20?'grn':x.margem>0?'gold':'red'}>{pc(x.margem)}</Pill>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Detalhe do pedido (a setinha) */}
+      {expandido && (
+        <div style={{display:'grid',gridTemplateColumns:'minmax(0,1.35fr) minmax(260px,0.65fr)',gap:22,padding:'6px 18px 18px',alignItems:'start'}} className="ora-pedido-det">
+          <div style={{display:'flex',flexDirection:'column' as const,gap:11}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(190px,1fr))',gap:11}}>
+              <CaixaInfo t={t} rotulo="Data de criação" valor={`${data}, ${hora}`}/>
+              <CaixaInfo t={t} rotulo="Situação" valor={pend?'Aguardando confirmação':'Confirmado pela Amazon'}/>
+            </div>
+            <CaixaInfo t={t} rotulo="" valor="" custom={
+              <div style={{fontSize:12,color:t.t2,fontFamily:FG,lineHeight:1.8,textAlign:'center' as const}}>
+                <div><b style={{color:t.t1}}>ID do pedido:</b>{' '}
+                  <span style={{whiteSpace:'nowrap',fontVariantNumeric:'tabular-nums'}}>{pedido.orderId}</span></div>
+                {itens.some((i:any)=>i.asin) && <div><b style={{color:t.t1}}>ASIN:</b>{' '}
+                  {itens.map((i:any)=>i.asin).filter(Boolean).map((a:string,k:number)=>(
+                    <span key={k} style={{whiteSpace:'nowrap'}}>{k>0?' · ':''}{a}</span>))}</div>}
+              </div>}/>
+          </div>
+          <div style={{display:'flex',flexDirection:'column' as const,gap:2}}>
+            {/* ⚠️ Num pedido com VÁRIOS itens, se um deles não tem tarifa medida a
+                linha inteira ia pra "—" e escondia o que a gente sabe do outro.
+                Mostra o que foi medido e marca como parcial — some o número
+                incompleto, não o número inteiro. */}
+            <LinhaPedido t={t} icone="ti-shopping-cart" cor={t.grn} rotulo="Total dos itens" valor={tot.receita} sinal="+" hide={hide}/>
+            <LinhaPedido t={t} icone="ti-percentage" cor={t.red} rotulo="Comissão" valor={tot.comissao} sinal="-" hide={hide} parcial={algumSemFee}/>
+            <LinhaPedido t={t} icone="ti-package" cor={t.red} rotulo="Taxa FBA" valor={tot.fba} sinal="-" hide={hide} parcial={algumSemFee}/>
+            {tot.imp>0.005 && <LinhaPedido t={t} icone="ti-receipt-tax" cor={t.red} rotulo="Imposto" valor={tot.imp} sinal="-" hide={hide}/>}
+            <LinhaPedido t={t} icone="ti-basket" cor={t.red} rotulo="Custo dos produtos" valor={tot.cmv} sinal="-" hide={hide} parcial={algumSemCusto}/>
+            {tot.extra>0.005 && <LinhaPedido t={t} icone="ti-tools" cor={t.red} rotulo="Custo extra" valor={tot.extra} sinal="-" hide={hide}/>}
+            <div style={{height:1,background:t.line,margin:'10px 0 6px'}}/>
+            <LinhaPedido t={t} icone="ti-coin" cor={lucroTot===null?t.t3:(lucroTot>=0?t.grn:t.red)} rotulo="Lucro do pedido" valor={lucroTot} forte hide={hide}/>
+            {algumSemCusto && <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.45}}>Informe o custo deste produto em <b>Gerenciamento</b> pra fechar o lucro do pedido.</div>}
+            {algumSemFee && <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.45}}>A tarifa deste produto ainda não voltou da Amazon.</div>}
+          </div>
+        </div>
+      )}
+
+      {/* Setinha — no lugar da lupinha */}
+      <button onClick={onToggle} aria-expanded={expandido} title={expandido?'Fechar detalhe':'Ver detalhe do pedido'}
+        style={{width:'100%',height:38,background:t.dark?'rgba(255,255,255,0.02)':'#FAFBFC',border:'none',borderTop:`1px solid ${t.line}`,color:t.t3,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <i className={`ti ti-chevron-${expandido?'up':'down'}`} style={{fontSize:19}} aria-hidden="true"/>
+      </button>
+    </div>
+  )
+}
+function CaixaInfo({t,rotulo,valor,custom}:{t:Theme;rotulo:string;valor:string;custom?:React.ReactNode}){
+  return(
+    <div style={{border:`1px solid ${t.line}`,borderRadius:11,padding:'13px 15px',background:t.dark?'rgba(255,255,255,0.02)':'#FFFFFF',textAlign:'center' as const}}>
+      {custom || (<>
+        <div style={{fontSize:12.5,fontWeight:600,color:t.t1,fontFamily:FG}}>{rotulo}</div>
+        <div style={{fontSize:12,color:t.t2,marginTop:5,fontFamily:FG}}>{valor}</div>
+      </>)}
+    </div>
+  )
+}
+function LinhaPedido({t,icone,cor,rotulo,valor,sinal,forte,hide,parcial}:{t:Theme;icone:string;cor:string;rotulo:string;valor:number|null;sinal?:'+'|'-';forte?:boolean;hide:boolean;parcial?:boolean}){
+  return(
+    <div style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0'}}>
+      <span style={{width:27,height:27,borderRadius:8,background:cor+(t.dark?'22':'1A'),display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        <i className={`ti ${icone}`} style={{fontSize:14,color:cor}} aria-hidden="true"/>
+      </span>
+      <span style={{fontSize:12.5,color:forte?t.t1:t.t2,fontWeight:forte?700:500,fontFamily:FG,minWidth:0}}>{rotulo}
+        {parcial&&<span style={{display:'block',fontSize:10,color:t.t3,fontWeight:400,marginTop:1}}>parcial — falta um item</span>}</span>
+      <span style={{marginLeft:'auto',fontSize:forte?14:12.5,fontWeight:forte?700:600,fontFamily:FG,fontVariantNumeric:'tabular-nums',color:valor===null?t.t3:cor,filter:hide&&valor!==null?'blur(6px)':'none',whiteSpace:'nowrap'}}>
+        {valor===null?'—':`${sinal==='+'?'+':sinal==='-'?'−':''}${brl2(valor)}`}
+      </span>
+    </div>
+  )
 }
 // Botão lupinha (abre o detalhamento do produto).
 function ZoomBtn({onClick}:{onClick:()=>void}){
@@ -1813,7 +2036,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
 
         {/* Conteúdo */}
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} impostoTotal={totais.imposto} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
-        {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide} onDetail={setDetail}/>}
+        {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto} adsReal={adsData}/>}
