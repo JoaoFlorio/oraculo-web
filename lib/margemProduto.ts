@@ -165,6 +165,25 @@ export function totaisDoPeriodo(
   return { cmv: r2(cmv), imposto: r2(impostoTotal), unidadesLiquidas, semCusto, receitaSemCusto: r2(receitaSemCusto), credito: r2(credito), custoEventual: r2(custoEventual) }
 }
 
+/**
+ * LUCRO DO PERÍODO, antes do ads. A fórmula, num lugar só.
+ *
+ * ⚠️ Existia escrita à mão na capa da Gestão e no resumo que alimenta o push das
+ * 20h e o NEO. Duas cópias da mesma soma é como o imposto ficou de fora de um
+ * lado por semanas, e depois o crédito/custo eventual de outro: some uma parcela
+ * em qualquer uma das cópias e nada quebra — os números só passam a discordar.
+ *
+ * Não decide se o lucro EXISTE: quem sabe se há custo cadastrado é quem chama
+ * (sem CMV o certo é dizer "—", não exibir a receita inteira como lucro).
+ */
+export function lucroDoPeriodo(
+  liqMarketplace: number,
+  t: { cmv: number; imposto: number; credito?: number; custoEventual?: number },
+): number {
+  const v = (liqMarketplace || 0) - (t.cmv || 0) - (t.imposto || 0) + (t.credito || 0) - (t.custoEventual || 0)
+  return Math.round(v * 100) / 100
+}
+
 /** Custos do PERÍODO que não pertencem a produto nenhum. A tela mostra separado.
  *  Inclui a taxa de SERVIÇO da conta (`outrasConta`): ela vem do
  *  ServiceFeeEventList, sem pedido nem SKU atrelado — não há a quem atribuir. */

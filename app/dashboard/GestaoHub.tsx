@@ -7,8 +7,10 @@ import {
 } from 'recharts'
 import { getFinanceData, summary, productMetrics, abcCurve, type ProductMetrics } from './financeiroMock'
 import { adsDoProduto, temAdsPorSku, adsSemVenda } from '@/lib/adsProduto'
-import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, ajustesDoPedido, ajustesDoProduto, type AjustePedido } from '@/lib/margemProduto'
+import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, lucroDoPeriodo, ajustesDoPedido, ajustesDoProduto, type AjustePedido } from '@/lib/margemProduto'
 import { impactoTarifaAgo26, type ProdutoTarifa } from '@/lib/tarifaFbaAgo26'
+import { maturidadeDoPeriodo, type SeloMaturidade } from '@/lib/maturidadePeriodo'
+import { snapshotDoPeriodo, narrarMudancas, chaveDoPeriodo, type SnapshotPeriodo, type Diario } from '@/lib/diarioPeriodo'
 
 const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#888'}}>Carregando DRE…</div>})
 
@@ -191,6 +193,70 @@ function realAbc(metrics:ProductMetrics[]){
   return m.map(p=>{cum+=p.revenue;const sh=cum/total*100;return {...p,shareTotal:p.revenue/total*100,cls:(sh<=80?'A':sh<=95?'B':'C') as 'A'|'B'|'C'}})
 }
 
+/* ── SELO DE MATURIDADE + DIÁRIO DO PERÍODO ──────────────────────────────────
+   Responde as duas perguntas que o número que se mexe levanta: "dá pra confiar
+   nisto agora?" e "por que mudou desde ontem?". Sem elas, exatidão sobre um
+   período inacabado é lida como imprecisão. */
+function SeloEDiario({selo,diario,hide}:{selo:SeloMaturidade;diario:Diario|null;hide:boolean}){
+  const t=useT()
+  const [aberto,setAberto]=useState(false)
+  const cor=selo.nivel==='fechado'?t.grn:selo.nivel==='liquidando'?t.gold:t.blue
+  const ponto=selo.nivel==='fechado'?'🟢':selo.nivel==='liquidando'?'🟠':'🟡'
+  const quando=(iso:string)=>{
+    const d=new Date(iso); if(isNaN(d.getTime())) return 'a última vez'
+    const h=Math.floor((Date.now()-d.getTime())/3600000)
+    if(h<1) return 'há pouco'
+    if(h<24) return `há ${h}h`
+    const dias=Math.floor(h/24)
+    return dias===1?'ontem':`há ${dias} dias`
+  }
+  return(
+    <div style={{marginBottom:14}}>
+      <div style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const}}>
+        <button onClick={()=>setAberto(v=>!v)}
+          style={{display:'flex',alignItems:'center',gap:7,padding:'6px 12px',borderRadius:20,cursor:'pointer',fontFamily:'inherit',
+            border:`1px solid ${cor}${t.dark?'55':'44'}`,background:cor+(t.dark?'18':'12'),color:cor,fontSize:11.5,fontWeight:700}}>
+          <span aria-hidden="true">{ponto}</span>{selo.rotulo}
+          <i className={`ti ti-chevron-${aberto?'up':'down'}`} style={{fontSize:13}} aria-hidden="true"/>
+        </button>
+        {diario && (
+          <span style={{fontSize:11.5,color:t.t2}}>
+            mudou desde {quando(diario.desde)}
+            {diario.deltaLucro!==null && Math.abs(diario.deltaLucro)>0.5 && (
+              <b style={{color:diario.deltaLucro>0?t.grn:t.red,marginLeft:5}}>
+                {diario.deltaLucro>0?'+':'−'}{hide?'•••':brl2(Math.abs(diario.deltaLucro))} de lucro
+              </b>
+            )}
+          </span>
+        )}
+      </div>
+      {aberto && (
+        <div style={{marginTop:9,padding:'11px 13px',borderRadius:10,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.02)':'#FAFAFA'}}>
+          <div style={{fontSize:11.5,color:t.t2,lineHeight:1.6}}>{selo.motivo}</div>
+          <div style={{fontSize:11.5,color:t.t1,lineHeight:1.6,marginTop:6}}><b>{selo.acao}</b></div>
+        </div>
+      )}
+      {diario && (
+        <div style={{marginTop:9,padding:'11px 13px',borderRadius:10,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.02)':'#FAFAFA'}}>
+          <div style={{fontSize:11,fontWeight:700,color:t.t3,letterSpacing:.3,textTransform:'uppercase' as const,marginBottom:7}}>
+            O que mudou desde {quando(diario.desde)}
+          </div>
+          {diario.linhas.map((l,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:11.5,color:t.t2,lineHeight:1.6,marginTop:i?4:0}}>
+              <i className={`ti ti-arrow-${l.sinal==='sobe'?'up':l.sinal==='desce'?'down':'right'}`}
+                style={{fontSize:14,marginTop:1,flexShrink:0,color:l.sinal==='sobe'?t.grn:l.sinal==='desce'?t.red:t.t3}} aria-hidden="true"/>
+              <span>{hide?'•••':l.texto}</span>
+            </div>
+          ))}
+          <div style={{fontSize:10.5,color:t.t3,marginTop:8,lineHeight:1.55}}>
+            O Oráculo não congela o número velho pra parecer estável — ele mostra o valor certo de agora e conta o que mudou.
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ── Building blocks ─────────────────────────────────────────────────────── */
 function Pill({kind,children}:{kind:'grn'|'gold'|'red';children:React.ReactNode}){
   const t=useT(); const [bg,fg] = kind==='grn'?t.pillGrn:kind==='gold'?t.pillGold:t.pillRed
@@ -363,7 +429,7 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
   while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
   return out
 }
-function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;credito?:number;custoEventual?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void}){
+function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail,selo,diario}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;credito?:number;custoEventual?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void;selo?:SeloMaturidade;diario?:Diario|null}){
   const t=useT()
   // (Removidos os KPIs/composição MOCK com deltas fabricados "+12,4%" etc. — eram
   // código morto: o render usa só RK.kpis (real), loadingKpis ou emptyKpis.)
@@ -394,7 +460,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
     // conta desde que a aba Vendas passou a aceitar lançamento por pedido — a capa
     // não, então a soma dos produtos não fechava com o KPI logo acima deles. É o
     // mesmo defeito que o imposto tinha, com outro nome.
-    const lucroBruto=liq-cmv-impostoTotal+credito-custoEventual
+    const lucroBruto=lucroDoPeriodo(liq,{cmv,imposto:impostoTotal,credito,custoEventual})
     const lucroPosAds=ads===null?null:lucroBruto-ads
     const margem=base>0?lucroBruto/base*100:0, roi=cmv>0?lucroBruto/cmv*100:0
     const mpa=(lucroPosAds!==null&&base>0)?lucroPosAds/base*100:null
@@ -474,6 +540,9 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
   const adsReal_=temAdsPorSku(adsReal)
   const sangria=adsSemVenda(adsReal,realDre?.produtos||[])
   return(<>
+    {/* 0) Qual relógio está na tela, e o que mudou desde a última visita. Vem
+        ANTES dos KPIs de propósito: é a legenda deles. */}
+    {realDre && selo && <SeloEDiario selo={selo} diario={diario||null} hide={hide}/>}
     {/* 1) KPIs — cards estilo Gestor, 4 por linha */}
     <div className="ora-kpis" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:13,marginBottom:16}}>
       {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
@@ -2483,6 +2552,47 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
     return impactoTarifaAgo26(lista,imposto)
   },[realDre,custoUnit,imposto,ajustes])
   const [verTarifa,setVerTarifa]=useState(false)
+
+  /* ── SELO DE MATURIDADE + DIÁRIO ────────────────────────────────────────────
+     A Gestão mistura o relógio da operação (data da compra, provisório) com o do
+     repasse (data do lançamento, final, ~6 dias depois). Número que se mexe é
+     física do dado — o defeito era não dizer qual relógio está na tela nem o que
+     mudou desde a última visita. Congelar seria preferir o número velho ao certo;
+     a cura é narrar. */
+  const selo = useMemo(()=>maturidadeDoPeriodo(realDre?.period),[realDre?.period?.from,realDre?.period?.to])
+  const [diario,setDiario]=useState<Diario|null>(null)
+  const snapsRef=useRef<Record<string,SnapshotPeriodo>|null>(null)
+  const narradoRef=useRef<string>('')
+  useEffect(()=>{ fetch('/api/user/metadata?key=gestao_snapshots').then(r=>r.json())
+    .then(d=>{ snapsRef.current = (d?.value && typeof d.value==='object') ? d.value : {} }).catch(()=>{ snapsRef.current={} }) },[])
+  useEffect(()=>{
+    if(!realDre || snapsRef.current===null) return
+    const L=realDre.linhas||{}
+    const chave=chaveDoPeriodo(realDre.period)
+    // Um período só se narra uma vez por visita: sem isto, cada revalidação de 90s
+    // reescreveria a referência e o diário nunca teria o que contar.
+    if(narradoRef.current===chave) return
+    const atual=snapshotDoPeriodo(realDre.period,{
+      faturamento:L.receitaBruta||0, devolucoes:L.devolucoes||0, comissao:L.comissao||0, fba:L.fba||0,
+      unidades:realDre.unidades||0,
+      lucro:cmv>0?lucroDoPeriodo(realDre.liqMarketplace||0,{cmv,imposto:totais.imposto,credito:totais.credito,custoEventual:totais.custoEventual}):null,
+    })
+    const anterior=snapsRef.current[chave]||null
+    const d=narrarMudancas(anterior,atual)
+    narradoRef.current=chave
+    setDiario(d)
+    // Só move a régua quando há novidade: um F5 dois minutos depois não pode
+    // apagar o ponto de comparação e deixar o seller sem a explicação.
+    if(anterior && !d) return
+    // Guarda os 20 períodos mais recentes — o metadata não é lugar de histórico.
+    const novo={...snapsRef.current,[chave]:atual}
+    const chaves=Object.keys(novo).sort((a,b)=>Date.parse(novo[b].visto)-Date.parse(novo[a].visto)).slice(0,20)
+    const podado:Record<string,SnapshotPeriodo>={}; for(const k of chaves) podado[k]=novo[k]
+    snapsRef.current=podado
+    fetch('/api/user/metadata',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({key:'gestao_snapshots',value:podado})}).catch(()=>{})
+  },[realDre,cmv,totais])
+
   const realAbcData = realM ? realAbc(realM) : null
   useEffect(()=>{
     let s = (typeof document!=='undefined' && document.documentElement.getAttribute('data-theme')) || ''
@@ -2649,7 +2759,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         )}
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} impostoTotal={totais.imposto} credito={totais.credito} custoEventual={totais.custoEventual} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} selo={selo} diario={diario} cmv={cmv} impostoTotal={totais.imposto} credito={totais.credito} custoEventual={totais.custoEventual} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail} ajustes={ajustes} onAddAjuste={addAjuste} onRemoverAjuste={removeAjuste}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto} ajustes={ajustes} onDetail={setDetail}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
