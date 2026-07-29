@@ -47,6 +47,28 @@ test('a margem do produto não muda porque a mensalidade caiu naquele dia', () =
   assert.equal(a.margem, b.margem)
 })
 
+/* ── Taxa Amazon pra Todos / outras taxas: medidas, não rateadas ───────────── */
+test('taxa do repasse é a DO PRODUTO quando vem por SKU', () => {
+  const d = margemDoProduto({ linhas: LINHAS, produto: { ...DONUTS, taxaPrograma: 3.5, outrasTaxas: 1.2 } })
+  assert.equal(d.taxaPrograma, 3.5)   // não 10 × 0,4 = 4 do rateio
+  assert.equal(d.outrasTaxas, 1.2)
+  assert.equal(d.taxasMedidas, true)
+})
+
+test('payload antigo sem os campos volta pro rateio, e se declara', () => {
+  const d = margemDoProduto({ linhas: LINHAS, produto: DONUTS })
+  assert.equal(d.taxasMedidas, false)
+  perto(d.taxaPrograma, 4)            // 10 × (400/1000)
+})
+
+test('taxa de SERVIÇO da conta sai do rateio e vira custo fixo', () => {
+  // outrasTaxas 5 = 3 de serviço da conta (sem SKU) + 2 por item
+  const L = { ...LINHAS, outrasTaxas: 5, outrasConta: 3 }
+  const d = margemDoProduto({ linhas: L, produto: DONUTS })
+  perto(d.outrasTaxas, 0.8)                       // só os 2 por item, rateados: 2 × 0,4
+  perto(custosFixosDoPeriodo(L), 102)             // 80 + 19 + 3
+})
+
 /* ── Devolução ─────────────────────────────────────────────────────────────── */
 const REEMBOLSOS = [{ sku: 'CL-VVB5-X3JX', units: 2, valor: 160 }]
 

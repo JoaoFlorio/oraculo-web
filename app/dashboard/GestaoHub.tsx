@@ -591,8 +591,10 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
           <Row label="Comissão Amazon" val={M.comissao} sign="-" color={t.red} hide={hide}
                nota={M.feeMedido?undefined:'a Amazon não devolveu a tarifa deste produto agora'}/>
           <Row label="Taxa FBA" val={M.fba} sign="-" color={t.red} hide={hide}/>
-          {M.taxaPrograma>0.005 && <Row label="Taxa Amazon pra Todos" val={M.taxaPrograma} sign="-" color={t.red} hide={hide} nota="rateada por faturamento"/>}
-          {M.outrasTaxas>0.005 && <Row label="Outras taxas" val={M.outrasTaxas} sign="-" color={t.red} hide={hide} nota="rateadas por faturamento"/>}
+          {M.taxaPrograma>0.005 && <Row label="Taxa Amazon pra Todos" val={M.taxaPrograma} sign="-" color={t.red} hide={hide}
+               nota={M.taxasMedidas?'cobrada por item no seu repasse':'rateada por faturamento'}/>}
+          {M.outrasTaxas>0.005 && <Row label="Outras taxas" val={M.outrasTaxas} sign="-" color={t.red} hide={hide}
+               nota={M.taxasMedidas?'chargeback de frete/embrulho e taxas novas, do seu repasse':'rateadas por faturamento'}/>}
           <Row label="Líq. do Marketplace" val={M.liqMarketplace} sign="=" strong color={t.grn} hide={hide}/>
           <Row label="Ads deste produto" val={M.ads} sign="-" color={t.red} hide={hide}
                nota={semAds?'gasto por produto ainda sincronizando — não rateamos o total da conta':undefined}/>

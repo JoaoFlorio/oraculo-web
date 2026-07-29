@@ -28,10 +28,14 @@
 export interface LinhasDre {
   receitaBruta?: number; devolucoes?: number; comissao?: number; fba?: number
   taxaPrograma?: number; armazenagem?: number; assinatura?: number; outrasTaxas?: number
+  /** Parte de `outrasTaxas` que é taxa de SERVIÇO da conta (sem pedido/SKU). */
+  outrasConta?: number
 }
 export interface ProdutoDre {
   sku: string; asin?: string; units: number; receita: number
-  comissao?: number | null; fba?: number | null; feeMedido?: boolean
+  comissao?: number | null; fba?: number | null
+  taxaPrograma?: number | null; outrasTaxas?: number | null
+  feeMedido?: boolean
 }
 export interface Reembolso { sku: string; units: number; valor: number }
 
@@ -41,6 +45,8 @@ export interface MargemProduto {
   receitaLiquida: number
   comissao: number | null; fba: number | null
   taxaPrograma: number; outrasTaxas: number
+  /** As duas linhas acima foram MEDIDAS por produto (true) ou rateadas (false). */
+  taxasMedidas: boolean
   feeMedido: boolean
   liqMarketplace: number | null
   ads: number | null
@@ -69,9 +75,11 @@ export interface EntradaMargem {
 
 const chave = (x: unknown): string => String(x ?? '').trim().toUpperCase()
 
-/** Custos do PERÍODO que não pertencem a produto nenhum. A tela mostra separado. */
+/** Custos do PERÍODO que não pertencem a produto nenhum. A tela mostra separado.
+ *  Inclui a taxa de SERVIÇO da conta (`outrasConta`): ela vem do
+ *  ServiceFeeEventList, sem pedido nem SKU atrelado — não há a quem atribuir. */
 export function custosFixosDoPeriodo(linhas: LinhasDre): number {
-  return (linhas?.armazenagem || 0) + (linhas?.assinatura || 0)
+  return (linhas?.armazenagem || 0) + (linhas?.assinatura || 0) + (linhas?.outrasConta || 0)
 }
 
 export function margemDoProduto(e: EntradaMargem): MargemProduto {
@@ -87,12 +95,18 @@ export function margemDoProduto(e: EntradaMargem): MargemProduto {
   const devolucaoUnits = Math.abs(dev?.units || 0)
   const receitaLiquida = receitaBruta - devolucaoValor
 
-  // Taxas que a Amazon cobra POR ITEM mas o backend só entrega no total da conta.
-  // Continuam rateadas — e a tela precisa dizer que são rateio.
+  // "Taxa Amazon pra Todos" e demais taxas do repasse vêm POR ITEM (o ItemFeeList
+  // traz o SellerSKU), então também são MEDIDAS por produto — nada de rateio.
+  // O rateio só sobra pro payload antigo, que não trazia esses campos.
   const fatTot = L.receitaBruta || 0
   const share = fatTot > 0 ? receitaBruta / fatTot : 0
-  const taxaPrograma = (L.taxaPrograma || 0) * share
-  const outrasTaxas = (L.outrasTaxas || 0) * share
+  const medePrograma = p?.taxaPrograma !== undefined && p?.taxaPrograma !== null
+  const medeOutras = p?.outrasTaxas !== undefined && p?.outrasTaxas !== null
+  const taxaPrograma = medePrograma ? (p.taxaPrograma as number) : (L.taxaPrograma || 0) * share
+  // A taxa de SERVIÇO da conta (outrasConta) sai daqui: vira custo fixo do período.
+  const outrasTaxas = medeOutras
+    ? (p.outrasTaxas as number)
+    : Math.max(0, (L.outrasTaxas || 0) - (L.outrasConta || 0)) * share
 
   const feeMedido = !!p?.feeMedido
   const comissao = feeMedido ? (p.comissao ?? 0) : null
@@ -123,7 +137,7 @@ export function margemDoProduto(e: EntradaMargem): MargemProduto {
 
   return {
     receitaBruta, devolucaoValor, devolucaoUnits, receitaLiquida,
-    comissao, fba, taxaPrograma, outrasTaxas, feeMedido,
+    comissao, fba, taxaPrograma, outrasTaxas, taxasMedidas: medePrograma && medeOutras, feeMedido,
     liqMarketplace, ads, imposto, unitsLiquidas, cmv, temCusto,
     lucroAntesAds, lucro, margem,
     completo: feeMedido && ads !== null,
