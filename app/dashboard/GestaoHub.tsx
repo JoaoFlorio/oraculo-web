@@ -590,6 +590,10 @@ function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail,aj
       comissaoUn:(un>0&&p.feeMedido)?(p.comissao||0)/un:null,
       fbaUn:(un>0&&p.feeMedido)?(p.fba||0)/un:null,
       feeMedido:!!p.feeMedido,
+      // Preço médio do período — o MESMO que a DRE usou pro pedido Pendente,
+      // cujo valor a Amazon suprime. Sem isto o pedido vinha com receita 0 e
+      // comissão/FBA/CMV cheios em cima = prejuízo fantasma.
+      precoUn:un>0?(p.receita||0)/un:0,
     })
   }
   const custoDe=(sku:string)=>costs[sku]||0
@@ -598,15 +602,24 @@ function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail,aj
   // Conta de UM item do pedido — a mesma ordem de dedução do card do produto.
   const contaItem=(it:any)=>{
     const ref=porSku.get(it.sku)
-    const receita=it.receita||0, qty=it.qty||0
-    const comissao=ref?.comissaoUn!=null?ref.comissaoUn*qty:null
-    const fba=ref?.fbaUn!=null?ref.fbaUn*qty:null
+    const qty=it.qty||0
+    // PEDIDO PENDENTE: a Amazon suprime o valor e o espelho guarda 0. A DRE cai
+    // no preco do anuncio; ler o espelho cru aqui fazia a MESMA venda valer
+    // R$79,90 no card do produto e R$0,00 nesta aba - com o custo cheio em cima,
+    // virava prejuizo. Usa o mesmo preco medio que a DRE ja aplicou.
+    const bruto=it.receita||0
+    const estimado=bruto<=0&&qty>0&&(ref?.precoUn||0)>0
+    const receita=estimado?(ref.precoUn*qty):bruto
+    // Nem o anuncio tinha preco -> nao inventa nada e nao cobra custo de nada.
+    const semPreco=receita<=0&&qty>0
+    const comissao=(semPreco||ref?.comissaoUn==null)?null:ref.comissaoUn*qty
+    const fba=(semPreco||ref?.fbaUn==null)?null:ref.fbaUn*qty
     const liq=(comissao===null||fba===null)?null:receita-comissao-fba
     const imp=receita*(imposto/100)
-    const cmv=custoDe(it.sku)*qty, custoExtra=extraDe(it.sku)*qty
-    const temCusto=custoDe(it.sku)>0||extraDe(it.sku)>0
+    const cmv=semPreco?0:custoDe(it.sku)*qty, custoExtra=semPreco?0:extraDe(it.sku)*qty
+    const temCusto=!semPreco&&(custoDe(it.sku)>0||extraDe(it.sku)>0)
     const lucro=(liq===null||!temCusto)?null:liq-imp-cmv-custoExtra
-    return {ref,receita,qty,comissao,fba,liq,imp,cmv,custoExtra,temCusto,lucro,
+    return {ref,receita,qty,comissao,fba,liq,imp,cmv,custoExtra,temCusto,lucro,estimado,semPreco,
       margem:(lucro!==null&&receita>0)?lucro/receita*100:null}
   }
 
@@ -642,6 +655,8 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
   const som=(f:(x:any)=>number|null)=>c.reduce((s:number,x:any)=>s+(f(x)??0),0)
   const algumSemFee=c.some((x:any)=>x.liq===null)
   const algumSemCusto=c.some((x:any)=>!x.temCusto)
+  const algumEstimado=c.some((x:any)=>x.estimado)
+  const todosSemPreco=c.length>0&&c.every((x:any)=>x.semPreco)
   const tot={receita:som(x=>x.receita),comissao:som(x=>x.comissao),fba:som(x=>x.fba),
     imp:som(x=>x.imp),cmv:som(x=>x.cmv),extra:som(x=>x.custoExtra)}
   // Lançamentos avulsos entram no lucro DO PEDIDO (e no do período, via
@@ -715,10 +730,13 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
                     </button>
                   </td>
                   <td style={{...td,fontWeight:600}}>{it.qty}</td>
-                  <td style={{...td,fontWeight:700}}>{money(x.receita)}</td>
-                  <td style={td}>{money(x.qty>0?x.receita/x.qty:0)}</td>
+                  {/* "≈" quando o valor veio do preço do anúncio (Pendente, que a
+                      Amazon manda sem preço) — afirmar exatidão que não temos foi
+                      o que fez o cha-ching anunciar R$37 numa venda de R$32. */}
+                  <td style={{...td,fontWeight:700}}>{x.semPreco?dash:<>{x.estimado&&<span style={{color:t.t3,fontWeight:500}}>≈ </span>}{money(x.receita)}</>}</td>
+                  <td style={td}>{x.semPreco?dash:money(x.qty>0?x.receita/x.qty:0)}</td>
                   <td style={{...td,color:t.grn}}>{money(x.liq)}</td>
-                  <td style={{...td,color:x.imp>0?t.red:t.t3}}>{money(x.imp)}</td>
+                  <td style={{...td,color:x.imp>0?t.red:t.t3}}>{x.semPreco?dash:money(x.imp)}</td>
                   <td style={{...td,color:x.cmv>0?t.red:t.t3}}>{x.temCusto?money(x.cmv):dash}</td>
                   <td style={{...td,color:x.custoExtra>0?t.red:t.t3}}>{x.temCusto?money(x.custoExtra):dash}</td>
                   <td style={{...td,fontWeight:700,color:x.lucro===null?t.t3:(x.lucro>=0?t.grn:t.red)}}>{money(x.lucro)}</td>
@@ -754,7 +772,7 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
                 linha inteira ia pra "—" e escondia o que a gente sabe do outro.
                 Mostra o que foi medido e marca como parcial — some o número
                 incompleto, não o número inteiro. */}
-            <LinhaPedido t={t} icone="ti-shopping-cart" cor={t.grn} rotulo="Total dos itens" valor={tot.receita} sinal="+" hide={hide}/>
+            <LinhaPedido t={t} icone="ti-shopping-cart" cor={t.grn} rotulo="Total dos itens" valor={todosSemPreco?null:tot.receita} sinal="+" hide={hide}/>
             <LinhaPedido t={t} icone="ti-percentage" cor={t.red} rotulo="Comissão" valor={tot.comissao} sinal="-" hide={hide} parcial={algumSemFee}/>
             <LinhaPedido t={t} icone="ti-package" cor={t.red} rotulo="Taxa FBA" valor={tot.fba} sinal="-" hide={hide} parcial={algumSemFee}/>
             {tot.imp>0.005 && <LinhaPedido t={t} icone="ti-receipt-tax" cor={t.red} rotulo="Imposto" valor={tot.imp} sinal="-" hide={hide}/>}
@@ -785,7 +803,9 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
             <div style={{height:1,background:t.line,margin:'12px 0 6px'}}/>
             <LinhaPedido t={t} icone="ti-coin" cor={lucroTot===null?t.t3:(lucroTot>=0?t.grn:t.red)} rotulo="Lucro do pedido" valor={lucroTot} forte hide={hide}/>
             {algumSemCusto && <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.45}}>Informe o custo deste produto em <b>Gerenciamento</b> pra fechar o lucro do pedido.</div>}
-            {algumSemFee && <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.45}}>A tarifa deste produto ainda não voltou da Amazon.</div>}
+            {algumSemFee && !todosSemPreco && <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.45}}>A tarifa deste produto ainda não voltou da Amazon.</div>}
+            {algumEstimado && <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.45}}>Valor marcado com <b>≈</b> vem do preço do anúncio: a Amazon só libera o valor do pedido ao confirmar.</div>}
+            {todosSemPreco && <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.45}}>A Amazon ainda não liberou o valor deste pedido e o preço do anúncio não respondeu. Nada é cobrado dele até o valor chegar — em vez de mostrar prejuízo que não existe.</div>}
           </div>
         </div>
       )}
