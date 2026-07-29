@@ -363,7 +363,7 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
   while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
   return out
 }
-function Resumo({hide,realDre,cmv=0,impostoTotal=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void}){
+function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;credito?:number;custoEventual?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void}){
   const t=useT()
   // (Removidos os KPIs/composição MOCK com deltas fabricados "+12,4%" etc. — eram
   // código morto: o render usa só RK.kpis (real), loadingKpis ou emptyKpis.)
@@ -390,7 +390,11 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,semCusto=0,receitaSemCusto=0,
     // E a aba Gerenciamento promete por escrito: "entra como dedução no lucro e na
     // margem de todas as abas". Vem somado produto a produto (mesma base do modal:
     // receita LÍQUIDA de devolução), não recalculado por fora.
-    const lucroBruto=liq-cmv-impostoTotal
+    // ⚠️ CRÉDITO EXTRA E CUSTO EVENTUAL ENTRAM AQUI. O card de cada produto já os
+    // conta desde que a aba Vendas passou a aceitar lançamento por pedido — a capa
+    // não, então a soma dos produtos não fechava com o KPI logo acima deles. É o
+    // mesmo defeito que o imposto tinha, com outro nome.
+    const lucroBruto=liq-cmv-impostoTotal+credito-custoEventual
     const lucroPosAds=ads===null?null:lucroBruto-ads
     const margem=base>0?lucroBruto/base*100:0, roi=cmv>0?lucroBruto/cmv*100:0
     const mpa=(lucroPosAds!==null&&base>0)?lucroPosAds/base*100:null
@@ -2448,7 +2452,10 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
     const base=(L.receitaLiquida ?? L.receitaBruta) || 0
     if(!(cmv>0)||!(base>0)) return null
     const liqSemFixos=(realDre?.liqMarketplace||0)+custosFixosDoPeriodo(L)
-    return (liqSemFixos-cmv-totais.imposto)/base*100
+    // Crédito/custo eventual entram aqui pelo mesmo motivo que entram na capa: a
+    // régua tem que ser a mesma margem que o produto exibe, senão o NEO julga o
+    // ACOS contra um número que a tela não mostra.
+    return (liqSemFixos-cmv-totais.imposto+totais.credito-totais.custoEventual)/base*100
   },[realDre,cmv,totais])
   const realM = realDre?.produtos ? realProductMetrics(realDre,custoUnit,imposto,adsData) : null
   // Produtos que VENDERAM no período mas estão sem custo informado — sem isso o
@@ -2642,7 +2649,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         )}
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} impostoTotal={totais.imposto} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} impostoTotal={totais.imposto} credito={totais.credito} custoEventual={totais.custoEventual} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail} ajustes={ajustes} onAddAjuste={addAjuste} onRemoverAjuste={removeAjuste}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto} ajustes={ajustes} onDetail={setDetail}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
