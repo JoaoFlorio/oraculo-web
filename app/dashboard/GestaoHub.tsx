@@ -222,14 +222,19 @@ function NumTd({children,color,strong,hide}:{children:React.ReactNode;color?:str
 function PillTd({children}:{children:React.ReactNode}){
   const t=useT(); return <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right'}}>{children}</td>
 }
-function Table({head,children}:{head:{label:string;right?:boolean;w?:string}[];children:React.ReactNode}){
+function Table({head,children,minWidth}:{head:{label:string;right?:boolean;w?:string}[];children:React.ReactNode;minWidth?:number}){
   const t=useT()
   return(
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,overflow:'hidden'}}>
       {/* ora-tscroll: no mobile a tabela ganha min-width e rola horizontal (tableLayout
-          fixed + width 100% esmagaria as colunas em telas estreitas) */}
-      <div className="ora-tscroll" style={{overflowX:'auto' as const}}>
-        <table style={{width:'100%',borderCollapse:'collapse' as const,tableLayout:'fixed' as const}}>
+          fixed + width 100% esmagaria as colunas em telas estreitas).
+          ⚠️ `minWidth` existe pra tabela de muitas colunas (a Curva ABC tem 9): sem
+          ele, `tableLayout:fixed` espremia tudo e a lupa subia por cima da pílula
+          de diagnóstico em telas médias. Com min-width ela ROLA em vez de esmagar. */}
+      <div className="ora-tscroll" style={{overflowX:'auto' as const,
+        scrollbarWidth:'thin' as const,
+        scrollbarColor:t.dark?'rgba(255,255,255,0.18) transparent':'rgba(0,0,0,0.18) transparent'}}>
+        <table style={{width:'100%',borderCollapse:'collapse' as const,tableLayout:'fixed' as const,minWidth}}>
           <thead><tr style={{background:t.dark?'rgba(255,255,255,0.02)':'#FAFBFC'}}>
             {head.map((h,i)=><th key={i} style={{width:h.w,textAlign:h.right?'right':'left',padding:'10px 8px',fontSize:10.5,fontWeight:600,color:t.t3,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>{h.label}</th>)}
           </tr></thead>
@@ -1076,91 +1081,221 @@ function ClassBadge({t,cls}:{t:Theme;cls:string}){
   const c=clsColor(t,cls)
   return <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',background:c+'22',color:c,fontWeight:700,fontSize:12,fontFamily:FG}}>{cls}</span>
 }
-function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0}:{realDre?:any;costs?:Record<string,number>;adsReal?:any;inv?:any;connected?:boolean|null;mockD?:ReturnType<typeof abcCurve>;hide:boolean;imposto?:number}){
+/* ── CURVA ABC ───────────────────────────────────────────────────────────────
+   ⚠️ ABC só por RECEITA responde "o que vende", não "o que dá dinheiro" — e o
+   seller decide estoque e preço com a segunda pergunta. Aqui a classe cruza com
+   a MARGEM do produto e vira um diagnóstico:
+
+     A + margem acima da média = carro-chefe   → proteger estoque, escalar ads
+     A + margem abaixo         = ARMADILHA     → vende muito e ganha pouco
+     B/C + margem acima        = oportunidade  → escalar
+     B/C + margem abaixo       = peso morto    → rever preço ou matar
+     estoque sem giro          = capital parado
+
+   O eixo é escolhível: classificar por LUCRO em vez de receita revela na hora
+   quem é "A" na venda e não é "A" no bolso.
+   ────────────────────────────────────────────────────────────────────────── */
+type DiagABC='chefe'|'armadilha'|'oportunidade'|'peso'|'incerto'
+const DIAG:Record<DiagABC,{rotulo:string;kind:'grn'|'gold'|'red'|'cinza';dica:string}>={
+  chefe:      {rotulo:'Carro-chefe',   kind:'grn',  dica:'Vende muito E dá margem. Proteja o estoque e escale o anúncio.'},
+  armadilha:  {rotulo:'Armadilha',     kind:'red',  dica:'Vende muito e ganha pouco. É aqui que ajustar preço ou custo rende mais.'},
+  oportunidade:{rotulo:'Oportunidade', kind:'gold', dica:'Margem boa e volume baixo. Vale testar mais anúncio.'},
+  peso:       {rotulo:'Peso morto',    kind:'cinza',dica:'Pouco volume e pouca margem. Reveja preço, custo ou descontinue.'},
+  incerto:    {rotulo:'Informe o custo',kind:'cinza',dica:'Sem o CMV não dá pra dizer se esse produto dá dinheiro.'},
+}
+function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,ajustes,onDetail}:{realDre?:any;costs?:Record<string,number>;adsReal?:any;inv?:any;connected?:boolean|null;mockD?:ReturnType<typeof abcCurve>;hide:boolean;imposto?:number;ajustes?:AjustePedido[];onDetail?:(p:any)=>void}){
   const t=useT()
+  const [eixo,setEixo]=useState<'receita'|'lucro'>('receita')
   if(connected && !realDre) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
-  if(realDre){
-    const L=realDre.linhas||{}
-    const fat=L.receitaBruta||0
-    const feesTot=(L.comissao||0)+(L.fba||0)+(L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.outrasTaxas||0)
-    const sorted=[...(realDre.produtos||[])].sort((a:any,b:any)=>b.receita-a.receita)
-    // Classificação ABC (cumulativa, inclui o produto que cruza o limiar — corrige o dominante virar A)
-    let cum=0, aDone=false, bDone=false
-    const rows=sorted.map((p:any)=>{
-      cum+=p.receita; const sh=fat>0?cum/fat*100:0
-      let cls:'A'|'B'|'C'; if(!aDone){cls='A'; if(sh>=80)aDone=true} else if(!bDone){cls='B'; if(sh>=95)bDone=true} else cls='C'
-      const share=fat>0?p.receita/fat:0
-      const cmv=(costs[p.sku]||0)*p.units
-      const temCusto=(costs[p.sku]||0)>0
-      // Mesma função do modal e do Top 15 — sem cópia, sem divergir.
-      const M=margemDoProduto({linhas:L,produto:p,reembolsos:realDre?.reembolsos,
-        custoUnit:costs[p.sku]||0,imposto,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
-      return {p,units:p.units,receita:M.receitaLiquida,cls,
-        lucroBruto:M.lucroAntesAds,lucroPos:M.lucro,
-        mpa:(M.lucro!==null&&M.receitaLiquida>0)?M.lucro/M.receitaLiquida*100:null,temCusto}
-    })
-    const semAdsPorProduto=!temAdsPorSku(adsReal)
-    // Curva Z = produtos com estoque FBA mas SEM giro (0 vendas no período)
-    const sold=new Set(sorted.map((p:any)=>p.sku))
-    const zItems=(inv?.inventario||[]).filter((it:any)=>it.total>0 && !sold.has(it.sku))
-    const agg=(cls:string)=>{
-      const its=rows.filter(r=>r.cls===cls)
-      return {count:its.length,units:its.reduce((s,r)=>s+r.units,0),fat:its.reduce((s,r)=>s+r.receita,0),
-        // Um produto sem taxa/ads medido contamina o agregado: melhor "—" que um
-        // total que finge estar completo faltando pedaço.
-        lb:its.some(r=>r.lucroBruto===null)?null:its.reduce((s,r)=>s+(r.lucroBruto||0),0),
-        lp:its.some(r=>r.lucroPos===null)?null:its.reduce((s,r)=>s+(r.lucroPos||0),0),
-        hasCusto:its.some(r=>r.temCusto)}
+  if(!realDre){ void mockD; return <ConnectEmpty/> }
+
+  const L=realDre.linhas||{}
+  const from=realDre?.period?.from, to=realDre?.period?.to
+  // Uma passada por produto, com a fonte única. Nada de conta paralela aqui.
+  const base=(realDre.produtos||[]).map((p:any)=>{
+    const M=margemDoProduto({linhas:L,produto:p,reembolsos:realDre?.reembolsos,
+      custoUnit:costs[p.sku]||0,imposto,ads:adsDoProduto(adsReal,p.sku,p.asin).valor,
+      ajustes:ajustesDoProduto(ajustes,p.sku,from,to)})
+    return {p,units:p.units||0,receita:M.receitaLiquida,lucro:M.lucroAntesAds,
+      lucroPos:M.lucro,margem:M.margem,temCusto:M.temCusto}
+  })
+
+  // Margem média PONDERADA da conta (só quem tem custo) — é a régua do diagnóstico.
+  const comCusto=base.filter((r:any)=>r.temCusto&&r.margem!==null)
+  const recCC=comCusto.reduce((s:number,r:any)=>s+r.receita,0)
+  const margemMedia=recCC>0?comCusto.reduce((s:number,r:any)=>s+(r.lucro||0),0)/recCC*100:null
+
+  // Classificação: por RECEITA (padrão) ou por LUCRO. No eixo lucro, produto sem
+  // custo não entra — classificar por um lucro que não existe seria inventar.
+  const valorDe=(r:any)=>eixo==='lucro'?(r.lucro??null):r.receita
+  const classificaveis=base.filter((r:any)=>valorDe(r)!==null)
+  const semClasse=base.filter((r:any)=>valorDe(r)===null)
+  const ordenado=[...classificaveis].sort((a:any,b:any)=>(valorDe(b)||0)-(valorDe(a)||0))
+  const totalEixo=ordenado.reduce((s:number,r:any)=>s+Math.max(0,valorDe(r)||0),0)
+  let cum=0,aDone=false,bDone=false
+  const rows=ordenado.map((r:any)=>{
+    cum+=Math.max(0,valorDe(r)||0)
+    const acum=totalEixo>0?cum/totalEixo*100:0
+    let cls:'A'|'B'|'C'; if(!aDone){cls='A'; if(acum>=80)aDone=true} else if(!bDone){cls='B'; if(acum>=95)bDone=true} else cls='C'
+    let diag:DiagABC='incerto'
+    if(r.temCusto&&r.margem!==null&&margemMedia!==null){
+      const acima=r.margem>=margemMedia
+      diag=cls==='A'?(acima?'chefe':'armadilha'):(acima?'oportunidade':'peso')
     }
-    const cards=[
-      {cls:'A',...agg('A')},{cls:'B',...agg('B')},{cls:'C',...agg('C')},
-      {cls:'Z',count:zItems.length,units:0,fat:0,lb:0,lp:0,hasCusto:false},
-    ]
-    const Row=({label,value,color}:{label:string;value:string;color?:string})=>(
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',padding:'5px 0',borderTop:`1px solid ${t.line}`,fontSize:12}}>
-        <span style={{color:t.t2,fontFamily:FG}}>{label}</span>
-        <span style={{color:color||t.t1,fontWeight:600,fontFamily:FG,filter:hide?'blur(5px)':'none'}}>{value}</span>
+    return {...r,cls,acum,diag}
+  })
+
+  // Curva Z: estoque parado. O que importa não é quantos são — é quanto CAPITAL
+  // está preso ali. `custoUnit` já soma CMV + custos extras.
+  const vendeu=new Set(base.map((r:any)=>r.p.sku))
+  const zItens=(inv?.inventario||[]).filter((it:any)=>(it.total||0)>0&&!vendeu.has(it.sku))
+    .map((it:any)=>({...it,capital:(costs[it.sku]||0)*(it.total||0)}))
+    .sort((a:any,b:any)=>b.capital-a.capital)
+  const zCapital=zItens.reduce((s:number,it:any)=>s+it.capital,0)
+  const zUnidades=zItens.reduce((s:number,it:any)=>s+(it.total||0),0)
+  const zSemCusto=zItens.filter((it:any)=>!(costs[it.sku]>0)).length
+
+  const agg=(cls:string)=>{
+    const its=rows.filter((r:any)=>r.cls===cls)
+    return {count:its.length,units:its.reduce((s:number,r:any)=>s+r.units,0),
+      fat:its.reduce((s:number,r:any)=>s+r.receita,0),
+      lb:its.some((r:any)=>r.lucro===null)?null:its.reduce((s:number,r:any)=>s+(r.lucro||0),0),
+      lp:its.some((r:any)=>r.lucroPos===null)?null:its.reduce((s:number,r:any)=>s+(r.lucroPos||0),0),
+      hasCusto:its.some((r:any)=>r.temCusto)}
+  }
+  const A=agg('A'), B=agg('B'), C=agg('C')
+  const fatTotal=rows.reduce((s:number,r:any)=>s+r.receita,0)
+  const top1=rows[0], top3=rows.slice(0,3).reduce((s:number,r:any)=>s+r.receita,0)
+  const armadilhas=rows.filter((r:any)=>r.diag==='armadilha')
+  const recArmadilha=armadilhas.reduce((s:number,r:any)=>s+r.receita,0)
+  const semAdsPorProduto=!temAdsPorSku(adsReal)
+
+  const kpi=(rotulo:string,valor:string,nota:string,cor:string)=>(
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:13,padding:'13px 16px'}}>
+      <div style={{fontSize:10,color:t.t3,fontWeight:700,textTransform:'uppercase' as const,letterSpacing:'0.05em',fontFamily:FG}}>{rotulo}</div>
+      <div style={{fontSize:19,fontWeight:700,color:cor,fontFamily:FG,marginTop:5,fontVariantNumeric:'tabular-nums',filter:hide?'blur(6px)':'none'}}>{valor}</div>
+      <div style={{fontSize:10.5,color:t.t3,marginTop:3,lineHeight:1.4}}>{nota}</div>
+    </div>
+  )
+  const Linha=({label,value,color}:{label:string;value:string;color?:string})=>(
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',padding:'5px 0',borderTop:`1px solid ${t.line}`,fontSize:12}}>
+      <span style={{color:t.t2,fontFamily:FG}}>{label}</span>
+      <span style={{color:color||t.t1,fontWeight:600,fontFamily:FG,filter:hide?'blur(5px)':'none'}}>{value}</span>
+    </div>
+  )
+  const btnEixo=(v:'receita'|'lucro',rotulo:string)=>(
+    <button onClick={()=>setEixo(v)} style={{padding:'6px 13px',borderRadius:8,border:`1px solid ${eixo===v?t.gold:t.line2}`,
+      background:eixo===v?t.gold+(t.dark?'22':'1A'):'transparent',color:eixo===v?t.gold:t.t2,
+      fontSize:11.5,fontWeight:600,fontFamily:FG,cursor:'pointer'}}>{rotulo}</button>
+  )
+
+  return(<>
+    <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,marginBottom:12}}>
+      <span style={{fontSize:11.5,color:t.t2,fontFamily:FG,fontWeight:600}}>Classificar por:</span>
+      {btnEixo('receita','Receita')}
+      {btnEixo('lucro','Lucro')}
+      <span style={{fontSize:10.5,color:t.t3,marginLeft:4}}>
+        {eixo==='receita'?'quem mais fatura':'quem mais deixa dinheiro — costuma ser outra ordem'}
+      </span>
+    </div>
+
+    {/* Leitura do período, não só a classificação */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))',gap:12,marginBottom:16}} className="ora-kpis4">
+      {kpi('Concentração',top1&&fatTotal>0?pc(top1.receita/fatTotal*100):'—',
+        top1?`${top1.p.name?String(top1.p.name).slice(0,26):top1.p.sku} é seu maior produto`:'sem venda no período',
+        (top1&&fatTotal>0&&top1.receita/fatTotal>0.4)?t.red:t.t1)}
+      {kpi('Top 3 do faturamento',fatTotal>0?pc(top3/fatTotal*100):'—',
+        `${A.count} produto${A.count===1?'':'s'} fazem 80% do total`,t.t1)}
+      {kpi('Receita em armadilha',armadilhas.length?brl2(recArmadilha):'—',
+        armadilhas.length?`${armadilhas.length} produto${armadilhas.length===1?'':'s'} vendem muito e ganham pouco`:'nenhum produto A abaixo da média',
+        armadilhas.length?t.red:t.grn)}
+      {kpi('Capital parado',zItens.length?brl2(zCapital):'—',
+        zItens.length?`${zUnidades} un. em estoque sem giro${zSemCusto?` · ${zSemCusto} sem custo informado`:''}`:'nada parado no FBA',
+        zCapital>0?t.gold:t.t1)}
+    </div>
+
+    {/* Barra de Pareto — a proporção antes dos números */}
+    {fatTotal>0 && (
+      <div style={{marginBottom:16}}>
+        <div style={{display:'flex',height:12,borderRadius:7,overflow:'hidden',border:`1px solid ${t.line}`}}>
+          {(['A','B','C'] as const).map(cl=>{
+            const v=cl==='A'?A.fat:cl==='B'?B.fat:C.fat
+            return v>0?<div key={cl} title={`Curva ${cl}: ${brl2(v)}`} style={{width:`${v/fatTotal*100}%`,background:clsColor(t,cl)}}/>:null
+          })}
+        </div>
+        <div style={{display:'flex',gap:16,marginTop:7,flexWrap:'wrap' as const}}>
+          {(['A','B','C'] as const).map(cl=>{
+            const a=cl==='A'?A:cl==='B'?B:C
+            return(<span key={cl} style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:11,color:t.t2,fontFamily:FG}}>
+              <span style={{width:9,height:9,borderRadius:3,background:clsColor(t,cl)}}/>
+              Curva {cl} · {a.count} produto{a.count===1?'':'s'} · {fatTotal>0?pc(a.fat/fatTotal*100):'0%'}
+            </span>)
+          })}
+        </div>
       </div>
-    )
-    return(<>
-      <Hint>Curva A ≈ 80% do faturamento · B ≈ 15% · C ≈ resto · Z = em estoque sem giro. Foca estoque e ads nos produtos A.</Hint>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:13,marginBottom:18}}>
-        {cards.map(c=>{
-          const color=clsColor(t,c.cls)
-          const lbPct=(c.lb!==null&&c.fat>0)?c.lb/c.fat*100:0, lpPct=(c.lp!==null&&c.fat>0)?c.lp/c.fat*100:0
-          const temLb=c.hasCusto&&c.lb!==null, temLp=c.hasCusto&&c.lp!==null
-          return(
-            <div key={c.cls} style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${color}`,borderRadius:14,padding:'14px 16px 12px'}}>
-              <div style={{textAlign:'center' as const,fontFamily:FG,fontSize:18,fontWeight:700,color:t.t1,marginBottom:10}}>Curva {c.cls}</div>
-              <Row label="Unidades Vendidas" value={String(c.units)}/>
-              <Row label="Produtos diferentes" value={String(c.count)}/>
-              <Row label="Faturamento" value={brl2(c.fat)}/>
-              <Row label="Lucro Bruto" value={temLb?`${brl2(c.lb as number)} (${pc(lbPct)})`:'—'} color={temLb?((c.lb as number)>=0?t.grn:t.red):t.t3}/>
-              <Row label="Lucro Pós Ads" value={temLp?`${brl2(c.lp as number)} (${pc(lpPct)})`:'—'} color={temLp?((c.lp as number)>=0?t.grn:t.red):t.t3}/>
-            </div>
-          )
-        })}
+    )}
+
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:13,marginBottom:18}}>
+      {([{cls:'A',...A},{cls:'B',...B},{cls:'C',...C}] as any[]).map(c=>{
+        const color=clsColor(t,c.cls)
+        const lbPct=(c.lb!==null&&c.fat>0)?c.lb/c.fat*100:0, lpPct=(c.lp!==null&&c.fat>0)?c.lp/c.fat*100:0
+        const temLb=c.hasCusto&&c.lb!==null, temLp=c.hasCusto&&c.lp!==null
+        return(
+          <div key={c.cls} style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${color}`,borderRadius:14,padding:'14px 16px 12px'}}>
+            <div style={{textAlign:'center' as const,fontFamily:FG,fontSize:18,fontWeight:700,color:t.t1,marginBottom:10}}>Curva {c.cls}</div>
+            <Linha label="Produtos diferentes" value={String(c.count)}/>
+            <Linha label="Unidades vendidas" value={String(c.units)}/>
+            <Linha label="Faturamento" value={brl2(c.fat)}/>
+            <Linha label="Lucro" value={temLb?`${brl2(c.lb)} (${pc(lbPct)})`:'—'} color={temLb?(c.lb>=0?t.grn:t.red):t.t3}/>
+            <Linha label="Lucro pós Ads" value={temLp?`${brl2(c.lp)} (${pc(lpPct)})`:'—'} color={temLp?(c.lp>=0?t.grn:t.red):t.t3}/>
+          </div>
+        )
+      })}
+      {/* Z não é uma curva de venda — é capital parado. Card com cara própria. */}
+      <div style={{background:t.card,border:`1px solid ${t.line}`,borderTop:`3px solid ${t.t3}`,borderRadius:14,padding:'14px 16px 12px'}}>
+        <div style={{textAlign:'center' as const,fontFamily:FG,fontSize:18,fontWeight:700,color:t.t1,marginBottom:10}}>Curva Z</div>
+        <Linha label="Produtos parados" value={String(zItens.length)}/>
+        <Linha label="Unidades no FBA" value={String(zUnidades)}/>
+        <Linha label="Capital preso" value={zItens.length?brl2(zCapital):'—'} color={zCapital>0?t.gold:t.t3}/>
+        <div style={{fontSize:10.5,color:t.t3,marginTop:9,lineHeight:1.45}}>
+          Tem estoque e não vendeu nada no período. {zSemCusto>0?`${zSemCusto} sem custo informado — o capital real é maior.`:'Dinheiro parado que podia estar girando.'}
+        </div>
       </div>
-      <Table head={[{label:'Produto',w:'34%'},{label:'Unid. vendidas',right:true},{label:'Fat. total',right:true},{label:'Lucro',right:true},{label:'Lucro pós Ads',right:true},{label:'MPA',right:true},{label:'Curva',right:true}]}>
-        {rows.map((r,i)=>(
+    </div>
+
+    <Table minWidth={1020} head={[{label:'Produto',w:'26%'},{label:'Curva',right:true,w:'7%'},{label:'Un.',right:true,w:'6%'},
+      {label:eixo==='lucro'?'Lucro':'Receita',right:true,w:'12%'},{label:'% acum.',right:true,w:'8%'},
+      {label:'Margem',right:true,w:'9%'},{label:'Lucro pós Ads',right:true,w:'12%'},{label:'Diagnóstico',right:true,w:'13%'},{label:'',right:true,w:'7%'}]}>
+      {rows.map((r:any,i:number)=>{
+        const d=DIAG[r.diag as DiagABC]
+        return(
           <tr key={i}>
             <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}}/>
-            <NumTd>{r.units}</NumTd>
-            <NumTd strong hide={hide}>{brl2(r.receita)}</NumTd>
-            <NumTd color={r.temCusto&&r.lucroBruto!==null?(r.lucroBruto>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto&&r.lucroBruto!==null?brl2(r.lucroBruto):'—'}</NumTd>
-            <NumTd color={r.temCusto&&r.lucroPos!==null?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.temCusto&&r.lucroPos!==null?brl2(r.lucroPos):'—'}</NumTd>
-            <PillTd>{r.temCusto&&r.mpa!==null?<Pill kind={r.mpa>15?'grn':r.mpa>0?'gold':'red'}>{pc(r.mpa)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
             <PillTd><ClassBadge t={t} cls={r.cls}/></PillTd>
+            <NumTd>{r.units}</NumTd>
+            <NumTd strong hide={hide}>{eixo==='lucro'?(r.lucro!==null?brl2(r.lucro):'—'):brl2(r.receita)}</NumTd>
+            <NumTd color={t.t2}>{r.acum.toFixed(0)}%</NumTd>
+            <PillTd>{r.margem!==null?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:11,color:t.t3}}>—</span>}</PillTd>
+            <NumTd color={r.lucroPos!==null?(r.lucroPos>=0?t.grn:t.red):t.t3} hide={hide}>{r.lucroPos!==null?brl2(r.lucroPos):'—'}</NumTd>
+            <PillTd><span title={d.dica}><Pill kind={d.kind==='cinza'?'gold':d.kind}>{d.rotulo}</Pill></span></PillTd>
+            <PillTd><ZoomBtn onClick={()=>onDetail?.({sku:r.p.sku,name:r.p.name||r.p.sku,image:r.p.image,asin:r.p.asin})}/></PillTd>
           </tr>
-        ))}
-      </Table>
-      <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Lucro/MPA usam o custo (CMV) informado em Gerenciamento + comissão/FBA rateados por faturamento. {semAdsPorProduto?'O gasto de ads por produto ainda está sincronizando — "Lucro pós Ads" e MPA ficam vazios até chegar, em vez de sair de um rateio.':'Ads = gasto medido de cada produto.'}</div>
-    </>)
-  }
-  // Não conectado → vazio (sem mock). (mockD ignorado de propósito.)
-  void mockD
-  return <ConnectEmpty/>
+        )
+      })}
+    </Table>
+    {semClasse.length>0 && (
+      <div style={{fontSize:11,color:t.t3,marginTop:9,fontFamily:FG}}>
+        {semClasse.length} produto{semClasse.length===1?'':'s'} fora da classificação por lucro — falta o custo (CMV) em Gerenciamento.
+      </div>
+    )}
+    <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8,lineHeight:1.5}}>
+      Curva A ≈ 80% do {eixo==='lucro'?'lucro':'faturamento'} · B ≈ 15% · C ≈ resto · Z = em estoque sem giro.
+      O <b>diagnóstico</b> cruza a curva com a margem do produto contra a média da sua conta{margemMedia!==null?` (${pc(margemMedia)})`:''} — é isso que separa o que vende do que dá dinheiro.
+      {semAdsPorProduto?' O gasto de ads por produto ainda está sincronizando: "Lucro pós Ads" fica vazio até chegar, em vez de sair de um rateio.':''}
+    </div>
+  </>)
 }
+
 /* Gerenciador de campanhas — SÓ ADMIN, em teste.
    ⚠️ ALTERA GASTO REAL DE ANÚNCIO. Toda alteração passa por confirmação e vai
    pra tabela de auditoria no backend. Mostra TODAS as campanhas (a aba Ads
@@ -2171,7 +2306,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {/* Conteúdo */}
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} impostoTotal={totais.imposto} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail} ajustes={ajustes} onAddAjuste={addAjuste} onRemoverAjuste={removeAjuste}/>}
-        {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto}/>}
+        {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto} ajustes={ajustes} onDetail={setDetail}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto} adsReal={adsData}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto}/>}
