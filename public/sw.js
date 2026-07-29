@@ -5,13 +5,24 @@ self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
 self.addEventListener('push', (e) => {
   let d = {}
   try { d = e.data ? e.data.json() : {} } catch { d = { body: e.data ? e.data.text() : '' } }
-  e.waitUntil(self.registration.showNotification(d.title || 'ORÁCULO', {
+  // ⭐ `tag` = número do pedido. É o que permite CORRIGIR uma notificação já
+  // enviada: a Amazon suprime o valor do pedido enquanto ele está Pendente, o
+  // cha-ching sai com uma estimativa (marcada com ≈) e, quando ela confirma, o
+  // servidor manda o valor real com a MESMA tag — o sistema substitui o aviso
+  // no lugar de empilhar outro. Sem tag, cada push viraria uma notificação nova.
+  //
+  // `silent` na correção: o valor muda na tela sem vibrar de novo. Ninguém quer
+  // ser avisado duas vezes da mesma venda.
+  const opts = {
     body: d.body || '',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
-    vibrate: [90, 40, 90],
     data: { url: d.url || '/dashboard' },
-  }))
+  }
+  if (d.tag) opts.tag = String(d.tag)
+  if (d.silent) { opts.silent = true; opts.renotify = false }
+  else { opts.vibrate = [90, 40, 90]; if (d.tag) opts.renotify = true }
+  e.waitUntil(self.registration.showNotification(d.title || 'ORÁCULO', opts))
 })
 
 self.addEventListener('notificationclick', (e) => {
