@@ -356,28 +356,38 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
   while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
   return out
 }
-function Resumo({hide,realDre,cmv=0,impostoTotal=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void}){
+function Resumo({hide,realDre,cmv=0,impostoTotal=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void}){
   const t=useT()
   // (Removidos os KPIs/composição MOCK com deltas fabricados "+12,4%" etc. — eram
   // código morto: o render usa só RK.kpis (real), loadingKpis ou emptyKpis.)
   // ── KPIs e rosca REAIS quando conectado ──
   const RK = realDre ? (()=>{
     const L=realDre.linhas||{}
-    // Ads "cheio" da Advertising API quando disponível; senão o parcial da Finances.
-    const ads = adsReal?.ready ? (Number(adsReal.spend)||0) : (L.ads||0)
+    // ⚠️ Ads SEM dado é `null`, não zero. `linhas.ads` vem CHUMBADO em 0 do backend,
+    // então o fallback antigo afirmava "R$ 0,00 em ads · TACOS 0,0%" pra quem só
+    // não tinha o relatório pronto — a doutrina oposta à de lib/adsProduto.ts, que
+    // devolve null justamente pra tela poder dizer "não sei".
+    const ads: number|null = adsReal?.ready ? (Number(adsReal.spend)||0) : null
     const adsPending = adsConnected && !(adsReal?.ready)   // ads conectado mas ainda gerando relatório
     const fat=L.receitaBruta||0, liq=realDre.liqMarketplace||0   // Faturamento = BRUTO (devoluções são linha à parte)
+    // ⚠️ Denominador = receita LÍQUIDA, igual margemDoProduto. Dividir por bruto aqui
+    // e por líquido no produto fazia a margem da capa nascer maior que a de todos os
+    // produtos somados em qualquer período com devolução.
+    const base=(L.receitaLiquida ?? fat) || 0
     const vendas=realDre.vendas||0, unidades=realDre.unidades||0
-    const ticket=vendas>0?fat/vendas:0, tacos=fat>0?ads/fat*100:0
+    const ticket=vendas>0?fat/vendas:0
+    const tacos=(ads!==null&&base>0)?ads/base*100:null
     // ⚠️ O IMPOSTO ENTRA AQUI. Ficava de fora e o "Lucro Bruto" da capa saía maior
     // que a soma do que cada produto mostra — a Gestão dizia margem 27,8% onde a
     // ferramenta de referência do seller dizia 23,8%, exatamente os 4% de alíquota.
     // E a aba Gerenciamento promete por escrito: "entra como dedução no lucro e na
     // margem de todas as abas". Vem somado produto a produto (mesma base do modal:
     // receita LÍQUIDA de devolução), não recalculado por fora.
-    const lucroBruto=liq-cmv-impostoTotal, lucroPosAds=lucroBruto-ads
-    const margem=fat>0?lucroBruto/fat*100:0, roi=cmv>0?lucroBruto/cmv*100:0
-    const mpa=fat>0?lucroPosAds/fat*100:0, cm=cmv>0, dash='—'
+    const lucroBruto=liq-cmv-impostoTotal
+    const lucroPosAds=ads===null?null:lucroBruto-ads
+    const margem=base>0?lucroBruto/base*100:0, roi=cmv>0?lucroBruto/cmv*100:0
+    const mpa=(lucroPosAds!==null&&base>0)?lucroPosAds/base*100:null
+    const cm=cmv>0, dash='—'
     return {
       kpis:[
         {label:'Faturamento',value:brl2(fat),icon:'ti-cash',color:t.vio},
@@ -388,16 +398,16 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,adsReal,costs={},chart30,conn
         {label:'Número de Unidades Vendidas',value:String(unidades),icon:'ti-package',color:t.blue},
         {label:'Ticket Médio',value:brl2(ticket),icon:'ti-receipt',color:t.grn},
         {label:'Retorno Sobre Investimento',value:cm?pc(roi):dash,icon:'ti-rotate-clockwise',color:t.grn},
-        {label:'Valor em Ads',value:adsPending?'…':brl2(ads),icon:'ti-speakerphone',color:t.grn},
-        {label:'TACOS',value:adsPending?'…':pc(tacos),icon:'ti-target',color:t.grn},
-        {label:'Lucro bruto pós ADS',value:adsPending?'…':(cm?brl2(lucroPosAds):dash),icon:'ti-coin',color:t.grn},
-        {label:'MPA',value:adsPending?'…':(cm?pc(mpa):dash),icon:'ti-chart-pie',color:t.grn},
+        {label:'Valor em Ads',value:adsPending?'…':(ads===null?dash:brl2(ads)),icon:'ti-speakerphone',color:t.grn},
+        {label:'TACOS',value:adsPending?'…':(tacos===null?dash:pc(tacos)),icon:'ti-target',color:t.grn},
+        {label:'Lucro bruto pós ADS',value:adsPending?'…':((cm&&lucroPosAds!==null)?brl2(lucroPosAds):dash),icon:'ti-coin',color:t.grn},
+        {label:'MPA',value:adsPending?'…':((cm&&mpa!==null)?pc(mpa):dash),icon:'ti-chart-pie',color:t.grn},
       ],
       comp:[
-        {name:'Lucro líquido',value:Math.max(0,Math.round(lucroPosAds)),color:t.grn},
+        {name:'Lucro líquido',value:Math.max(0,Math.round(lucroPosAds??lucroBruto)),color:t.grn},
         {name:'CMV',value:Math.round(cmv),color:t.vio},
         {name:'Comissão',value:Math.round(L.comissao||0),color:t.gold},
-        {name:'Ads',value:Math.round(ads),color:t.red},
+        {name:'Ads',value:Math.round(ads||0),color:t.red},   // sem dado, some da rosca (filter x.value>0)
         {name:'FBA',value:Math.round(L.fba||0),color:t.blue},
         {name:'Outros',value:Math.round((L.taxaPrograma||0)+(L.armazenagem||0)+(L.assinatura||0)+(L.devolucoes||0)),color:t.t3},
       ].filter(x=>x.value>0),
@@ -447,6 +457,16 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,adsReal,costs={},chart30,conn
     <div className="ora-kpis" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:13,marginBottom:16}}>
       {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
     </div>
+    {/* ⚠️ Produto sem custo cadastrado entra no lucro com CMV ZERO: a receita conta
+        inteira e o custo não. O agregado fica otimista e nada avisava. */}
+    {realDre && semCusto>0 && (
+      <div style={{display:'flex',gap:9,alignItems:'flex-start',background:t.dark?'rgba(255,183,3,0.06)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(255,183,3,0.22)':'#FDE68A'}`,borderRadius:11,padding:'10px 13px',marginBottom:16}}>
+        <i className="ti ti-alert-triangle" style={{fontSize:14,color:t.gold,marginTop:1}} aria-hidden="true"/>
+        <span style={{fontSize:11.5,color:t.t2,lineHeight:1.45}}>
+          <b style={{color:t.t1}}>{semCusto} produto{semCusto>1?'s':''} sem custo cadastrado</b> — {brl2(receitaSemCusto)} de receita entra no lucro e na margem acima <b>sem nenhum custo descontado</b>, então os dois estão otimistas. Informe o CMV em <b>Gerenciamento</b>.
+        </span>
+      </div>
+    )}
     {/* 2) Gráfico de receitas — sempre 30 dias por data, largura cheia */}
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'16px 18px',marginBottom:16}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
@@ -667,7 +687,11 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose}:{pr
               const rShare=M.receitaBruta>0?oReceita/M.receitaBruta:0
               const oFees=feesProduto===null?null:feesProduto*rShare
               const oAds=M.ads===null?null:M.ads*rShare
-              const oImp=oReceita*(imposto/100), oCmv=custoU*(o.qty||0)
+              // ⚠️ Estas duas eram as ÚNICAS colunas não escaladas pelo rShare:
+              // usavam receita e unidade BRUTAS enquanto o card já usa as líquidas
+              // de devolução. Somando a tabela, Imposto e Custo davam mais que as
+              // linhas de cima. Como Σ rShare = 1, escalar fecha exato.
+              const oImp=M.imposto*rShare, oCmv=temCusto?M.cmv*rShare:0
               const oLiq=oFees===null?null:oReceita-oFees
               const oLucro=(oFees===null)?null:oReceita-oFees-(oAds||0)-oImp-oCmv
               const oMarg=(oLucro!==null&&oReceita>0)?oLucro/oReceita*100:null
@@ -702,7 +726,7 @@ function ClassBadge({t,cls}:{t:Theme;cls:string}){
   const c=clsColor(t,cls)
   return <span style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',background:c+'22',color:c,fontWeight:700,fontSize:12,fontFamily:FG}}>{cls}</span>
 }
-function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:any;costs?:Record<string,number>;adsReal?:any;inv?:any;connected?:boolean|null;mockD?:ReturnType<typeof abcCurve>;hide:boolean}){
+function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0}:{realDre?:any;costs?:Record<string,number>;adsReal?:any;inv?:any;connected?:boolean|null;mockD?:ReturnType<typeof abcCurve>;hide:boolean;imposto?:number}){
   const t=useT()
   if(connected && !realDre) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
   if(realDre){
@@ -720,7 +744,7 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide}:{realDre?:
       const temCusto=(costs[p.sku]||0)>0
       // Mesma função do modal e do Top 15 — sem cópia, sem divergir.
       const M=margemDoProduto({linhas:L,produto:p,reembolsos:realDre?.reembolsos,
-        custoUnit:costs[p.sku]||0,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
+        custoUnit:costs[p.sku]||0,imposto,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
       return {p,units:p.units,receita:M.receitaLiquida,cls,
         lucroBruto:M.lucroAntesAds,lucroPos:M.lucro,
         mpa:(M.lucro!==null&&M.receitaLiquida>0)?M.lucro/M.receitaLiquida*100:null,temCusto}
@@ -1416,7 +1440,7 @@ function downloadCSV(filename:string,content:string){
   const url=URL.createObjectURL(blob)
   const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url)
 }
-function Relatorio({realDre,inv,costs={}}:{realDre?:any;inv?:any;costs?:Record<string,number>}){
+function Relatorio({realDre,inv,costs={},adsReal}:{realDre?:any;inv?:any;costs?:Record<string,number>;adsReal?:any}){
   const t=useT()
   const produtos:any[]=realDre?.produtos||[]
   const reembolsos:any[]=realDre?.reembolsos||[]
@@ -1430,7 +1454,11 @@ function Relatorio({realDre,inv,costs={}}:{realDre?:any;inv?:any;costs?:Record<s
     {label:'Estoque FBA',icon:'ti-package',off:!inventario.length,file:'estoque-fba',
       gen:()=>toCSV(['Produto','SKU','FBA disponível','A caminho','Reservado','Total'],inventario.map(it=>[it.name||it.sku,it.sku,it.fulfillable,it.inbound,it.reserved,it.total]))},
     {label:'DRE / Operacional',icon:'ti-file-spreadsheet',off:!realDre,file:'dre',
-      gen:()=>toCSV(['Linha','Valor (R$)'],[['Receita bruta',L.receitaBruta||0],['Devoluções',L.devolucoes||0],['Receita líquida',L.receitaLiquida||0],['Comissão',L.comissao||0],['Tarifa FBA',L.fba||0],['Armazenagem',L.armazenagem||0],['Assinatura',L.assinatura||0],['Líq. Marketplace',realDre?.liqMarketplace||0],['Ads',L.ads||0]])},
+      // ⚠️ O CSV exportava Ads SEMPRE R$0 (o backend chumba `linhas.ads=0`; o gasto
+      // real vem da Advertising API, como na tela) e omitia duas linhas que a DRE
+      // desconta — Taxa Amazon pra Todos e Outras taxas. Resultado: a planilha não
+      // fechava com a tela nem consigo mesma. Agora usa a MESMA expressão do card.
+      gen:()=>toCSV(['Linha','Valor (R$)'],[['Receita bruta',L.receitaBruta||0],['Devoluções',L.devolucoes||0],['Receita líquida',L.receitaLiquida||0],['Comissão',L.comissao||0],['Tarifa FBA',L.fba||0],['Taxa Amazon pra Todos',L.taxaPrograma||0],['Outras taxas',L.outrasTaxas||0],['Armazenagem',L.armazenagem||0],['Assinatura',L.assinatura||0],['Líq. Marketplace',realDre?.liqMarketplace||0],['Ads',adsReal?.ready?(Number(adsReal.spend)||0):''],['Reembolsos e ajustes',L.ajustes||0]])},
   ]
   return(<>
     <Hint>Relatórios reais exportáveis em CSV (abre direto no Excel).</Hint>
@@ -1640,11 +1668,17 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   // ⚠️ null quando o CMV não foi cadastrado: sem custo o "lucro" fica inflado e a
   // margem sairia otimista (~85%), calando o NEO justamente em quem mais precisa.
   // Melhor assumir que não sei e pedir o custo do que dar régua errada.
+  // ⚠️ Esta régua decide o NEO mandar PAUSAR campanha. Era uma QUARTA fórmula, à
+  // parte da fonte única: sem imposto (margem alta demais), cobrando armazenagem e
+  // assinatura do período (que não são custo de produto) e dividindo por receita
+  // BRUTA. Três desvios empilhados numa régua que manda mexer em gasto real.
   const margemRef = useMemo(()=>{
-    const fat=realDre?.linhas?.receitaBruta||0
-    if(!(cmv>0)||!(fat>0)) return null
-    return ((realDre?.liqMarketplace||0)-cmv)/fat*100
-  },[realDre,cmv])
+    const L=realDre?.linhas||{}
+    const base=(L.receitaLiquida ?? L.receitaBruta) || 0
+    if(!(cmv>0)||!(base>0)) return null
+    const liqSemFixos=(realDre?.liqMarketplace||0)+custosFixosDoPeriodo(L)
+    return (liqSemFixos-cmv-totais.imposto)/base*100
+  },[realDre,cmv,totais])
   const realM = realDre?.produtos ? realProductMetrics(realDre,custoUnit,imposto,adsData) : null
   // Produtos que VENDERAM no período mas estão sem custo informado — sem isso o
   // Oráculo não tem como calcular lucro/margem/ROI/MPA (mostra "—").
@@ -1764,14 +1798,14 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         )}
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} impostoTotal={totais.imposto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} cmv={cmv} impostoTotal={totais.imposto} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realM={realM} mockM={m} connected={amazonConnected} hide={hide} onDetail={setDetail}/>}
-        {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide}/>}
+        {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto} adsReal={adsData}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
-        {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={custoUnit}/>}
+        {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={custoUnit} adsReal={adsData}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
 
         {/* Modal de detalhamento (lupinha) — sobre qualquer aba */}

@@ -67,8 +67,13 @@ export interface EntradaMargem {
   reembolsos?: Reembolso[]
   /** Custo unitário informado pelo seller (CMV + custos extras). */
   custoUnit?: number
-  /** Alíquota de imposto em % sobre a receita. */
-  imposto?: number
+  /**
+   * Alíquota de imposto em % sobre a receita. **OBRIGATÓRIO de propósito.**
+   * Era opcional, e a Curva ABC esqueceu de passar: o compilador não reclamou,
+   * o valor virou 0 em silêncio e o MESMO produto aparecia com lucro maior lá
+   * do que no Top 15 e no modal. Quem não quiser imposto passa 0 explicitamente.
+   */
+  imposto: number
   /** Gasto de ads MEDIDO do produto, ou null. Nunca rateio — ver lib/adsProduto. */
   ads?: number | null
 }
@@ -89,14 +94,18 @@ export function totaisDoPeriodo(
   reembolsos: Reembolso[] | undefined,
   custoUnit: Record<string, number>,
   imposto = 0,
-): { cmv: number; imposto: number; unidadesLiquidas: number } {
-  let cmv = 0, impostoTotal = 0, unidadesLiquidas = 0
+): { cmv: number; imposto: number; unidadesLiquidas: number; semCusto: number; receitaSemCusto: number } {
+  let cmv = 0, impostoTotal = 0, unidadesLiquidas = 0, semCusto = 0, receitaSemCusto = 0
   for (const p of (produtos || [])) {
     const M = margemDoProduto({ linhas, produto: p, reembolsos, custoUnit: custoUnit[p.sku] || 0, imposto })
     cmv += M.cmv; impostoTotal += M.imposto; unidadesLiquidas += M.unitsLiquidas
+    // ⚠️ Produto sem custo cadastrado entra no lucro com CMV ZERO: a receita dele
+    // conta inteira e o custo não. O agregado fica otimista e nada na tela avisa.
+    // Contamos aqui pra a capa poder declarar de quanto é o buraco.
+    if (M.receitaLiquida > 0 && !M.temCusto) { semCusto++; receitaSemCusto += M.receitaLiquida }
   }
   const r2 = (n: number) => Math.round(n * 100) / 100
-  return { cmv: r2(cmv), imposto: r2(impostoTotal), unidadesLiquidas }
+  return { cmv: r2(cmv), imposto: r2(impostoTotal), unidadesLiquidas, semCusto, receitaSemCusto: r2(receitaSemCusto) }
 }
 
 /** Custos do PERÍODO que não pertencem a produto nenhum. A tela mostra separado.
