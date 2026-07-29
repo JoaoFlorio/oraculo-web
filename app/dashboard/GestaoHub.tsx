@@ -426,9 +426,19 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,semCusto=0,receitaSemCusto=0,
   // Gráfico: SEMPRE 30 dias por data (não muda com o filtro de período) — igual ao Gestor.
   const cSrc = chart30 || realDre
   const realChart = !!cSrc?.daily
-  const netRatio = cSrc && (cSrc.linhas?.receitaBruta||0)>0 ? (cSrc.liqMarketplace||0)/(cSrc.linhas.receitaBruta) : 0
+  // ⚠️ DOIS defeitos nesta série, os dois corrigidos aqui.
+  // (1) O payload de `?daily=1` NÃO traz `linhas` nem `liqMarketplace` (o backend
+  //     devolve só {daily,faturamento,vendas}), então `netRatio` dava 0 e a área
+  //     verde ficava CHAPADA em R$ 0,00 nos 30 dias, ao lado de um card dizendo
+  //     "Lucro Bruto R$ X". Agora cai no `realDre`, que tem as linhas.
+  // (2) O nome mentia: mesmo funcionando, `receita × (liq/receita)` é o LÍQUIDO DO
+  //     MARKETPLACE — não passa perto de lucro, porque ignora CMV e imposto.
+  //     Chamar isso de "Lucro líquido" é a mesma doença de sempre.
+  const rSrc = (cSrc?.linhas?.receitaBruta||0)>0 ? cSrc : realDre
+  const netRatio = (rSrc?.linhas?.receitaBruta||0)>0 ? (rSrc.liqMarketplace||0)/rSrc.linhas.receitaBruta : null
   const chartData:any[] = realChart
-    ? fillDaily(cSrc.daily,cSrc.period?.from,cSrc.period?.to).map((x:any)=>({...x,lucro:Math.round(x.receita*netRatio*100)/100}))
+    ? fillDaily(cSrc.daily,cSrc.period?.from,cSrc.period?.to).map((x:any)=>({...x,
+        liq:netRatio===null?null:Math.round(x.receita*netRatio*100)/100}))
     : []   // não conectado / carregando → gráfico vazio (sem mock)
   const chartXKey = 'label'
   // Top 15 produtos vendidos no período (real) com métricas por produto (estilo Gestor).
@@ -471,7 +481,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,semCusto=0,receitaSemCusto=0,
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'16px 18px',marginBottom:16}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
         <span style={{fontFamily:FG,fontSize:15,fontWeight:600,color:t.t1}}>Resumo de Receitas</span>
-        <span style={{fontFamily:FG,fontSize:11,color:t.t3}}>{realChart?'últimos 30 dias':'período selecionado'}</span>
+        <span style={{fontFamily:FG,fontSize:11,color:t.t3}}>{realChart?'últimos 30 dias':'período selecionado'}{netRatio!==null?' · líquido proporcional ao período':''}</span>
       </div>
       <div style={{height:300}}>
         <ResponsiveContainer width="100%" height="100%">
@@ -485,7 +495,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,semCusto=0,receitaSemCusto=0,
             <YAxis tick={{fill:t.t3,fontSize:10.5,fontFamily:FG}} tickLine={false} axisLine={false} width={82} tickFormatter={(v:number)=>'R$ '+Math.round(v).toLocaleString('pt-BR')}/>
             <RTooltip contentStyle={{background:t.tipBg,border:`1px solid ${t.line2}`,borderRadius:10,fontSize:12,color:t.t1,fontFamily:FG}} labelStyle={{color:t.t3,fontWeight:600,marginBottom:4}} formatter={(v:any,n:any)=>[brl2(Number(v)),n]}/>
             <Area type="monotone" dataKey="receita" name="Receita" stroke={t.vio} strokeWidth={2.4} fill="url(#gReceita)" dot={false} activeDot={{r:4}}/>
-            {realChart && <Area type="monotone" dataKey="lucro" name="Lucro líquido" stroke={t.grn} strokeWidth={2.4} fill="url(#gLucro)" dot={false} activeDot={{r:4}}/>}
+            {realChart && netRatio!==null && <Area type="monotone" dataKey="liq" name="Líq. do Marketplace" stroke={t.grn} strokeWidth={2.4} fill="url(#gLucro)" dot={false} activeDot={{r:4}}/>}
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -1410,7 +1420,11 @@ function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realD
       ) : (
         <Table head={[{label:'Produto',w:'40%'},{label:'FBA disp.',right:true},{label:'A caminho',right:true},{label:'Reservado',right:true},{label:'Cobertura',right:true},{label:'Status',right:true}]}>
           {itens.map((it,i)=>{
-            const vel=(vendaPorSku[it.sku]||0)/days
+            // ⚠️ Velocidade dos 14 dias, vinda do backend — MESMA fonte do NEO.
+            // Era "unidades do período ÷ dias do período": no filtro "Hoje" isso é
+            // 1 dia, e às 9h a tela dizia "50 dias · Saudável" enquanto o NEO
+            // mandava push crítico de 5 dias pro MESMO SKU.
+            const vel=typeof it.velocidadeDia==='number'?it.velocidadeDia:(vendaPorSku[it.sku]||0)/days
             const cob = vel>0 ? Math.round(it.fulfillable/vel) : null
             const k = it.fulfillable<=0?'red':(cob!=null&&cob<10)?'red':(cob!=null&&cob>120)?'gold':'grn'
             const lbl = it.fulfillable<=0?'Ruptura':(cob!=null&&cob<10)?'Baixo':(cob!=null&&cob>120)?'Excesso':'Saudável'
