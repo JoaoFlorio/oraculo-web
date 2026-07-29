@@ -313,9 +313,25 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
       <Row label="Tarifa FBA" val={L.fba} sign="-" color={t.red}/>
       {L.armazenagem>0 && <Row label="Armazenagem" val={L.armazenagem} sign="-" color={t.red}/>}
       <Row label="Assinatura" val={L.assinatura} sign="-" color={t.red}/>
+      {/* Reembolso de estoque perdido/danificado pelo FBA e correções do repasse.
+          Estes eventos NÃO eram lidos por ninguém — dinheiro entrando e saindo
+          fora da DRE. Positivo = a favor do seller. */}
+      {Math.abs(L.ajustes||0)>0.005 && <Row label={(L.ajustes||0)>0?'Reembolsos e ajustes da Amazon':'Ajustes e dívida cobrada'} val={Math.abs(L.ajustes)} sign={(L.ajustes||0)>0?'=':'-'} color={(L.ajustes||0)>0?t.grn:t.red}/>}
       <Row label="Líq. do Marketplace" val={data.liqMarketplace} sign="=" strong color={t.grn}/>
       <Row label={adsReal?.ready?'Ads (Advertising API)':'Ads (parcial)'} val={adsReal?.ready?(Number(adsReal.spend)||0):L.ads} sign="-" color={t.red}/>
       <FeesOrigem fees={data.fees}/>
+      {/* ⚠️ O backend corta a paginação da Finances em 12s no caminho da tela e
+          marca `extrasParciais`. Ninguém lia esse campo — devoluções, armazenagem
+          e taxas reais saíam SUBCONTADAS com cara de número final. */}
+      {data.extrasParciais && (
+        <div style={{display:'flex',gap:8,alignItems:'flex-start',background:t.dark?'rgba(255,183,3,0.07)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(255,183,3,0.25)':'#FDE68A'}`,borderRadius:10,padding:'9px 12px',marginTop:11}}>
+          <i className="ti ti-clock-exclamation" style={{fontSize:14,color:t.gold,marginTop:1}} aria-hidden="true"/>
+          <span style={{fontSize:11,color:t.t2,lineHeight:1.45}}>
+            <b style={{color:t.t1}}>Ainda somando o extrato deste período.</b> Devoluções, armazenagem e taxas podem estar <b>incompletas</b> — o cálculo completo está rodando no fundo e a tela se atualiza sozinha. Período longo demora mais.
+          </span>
+        </div>
+      )}
+      {Math.abs(L.ajustes||0)>0.005 && <div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Reembolsos/ajustes são da conta, não de um produto — não entram na margem de produto nenhum.</div>}
       <div style={{fontSize:10.5,color:t.t3,marginTop:10}}>{adsReal?.ready?'Ads real da Advertising API · CMV e despesas você informa em Gerenciamento.':'Ads completo virá da Advertising API · CMV e despesas você informa em Gerenciamento.'}</div>
     </div>
   )
