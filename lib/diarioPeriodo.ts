@@ -246,9 +246,14 @@ export function decompor(antes: SnapshotPeriodo, depois: SnapshotPeriodo): Decom
     põe(-v, {
       rotulo: semVendaNova ? `${nome} real substituiu a estimativa` : `${nome} mudou`, autor: 'amazon',
       explicacao: explTarifa,
+      // ⚠️ O NÚMERO DA FRASE É O EFEITO NO LUCRO, não a variação da tarifa.
+      // Mostrava `sinalBrl(v)` — a variação da TAXA — ao lado de uma seta vermelha
+      // pra baixo e de um total que fala de lucro: na tela do João saiu
+      // "+R$ 69,77" em vermelho descendo. Duas convenções de sinal na mesma lista
+      // é pedir pro leitor adivinhar qual delas vale em cada linha.
       frase: semVendaNova
-        ? `a ${curto} real substituiu a estimativa: ${sinalBrl(v)}`
-        : `${curto} ${v > 0 ? 'subiu' : 'caiu'} ${brl(v)}`,
+        ? `a ${curto} real substituiu a estimativa: ${sinalBrl(-v)}`
+        : `${curto} ${v > 0 ? 'subiu' : 'caiu'} ${brl(v)} — ${sinalBrl(-v)} no lucro`,
     })
   }
   tarifa('comissao', 'Comissão', 'comissão')

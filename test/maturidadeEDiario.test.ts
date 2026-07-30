@@ -76,6 +76,9 @@ test('⭐ o caso que fazia a precisão parecer defeito', () => {
   const frases = d!.causas.map(c => c.frase).join(' | ')
   assert.match(frases, /189,00 de devolução/)
   assert.match(frases, /tarifa FBA real substituiu a estimativa/)
+  // ⭐ O sinal da frase é o efeito no LUCRO. A tarifa SUBIU 31, então tirou 31 —
+  // e mostrar "+31" ao lado de uma seta vermelha era o que confundia.
+  assert.match(frases, /tarifa FBA real substituiu a estimativa: −R\$ 31,00/)
   assert.ok(d!.causas.every(l => l.valor < 0))
 })
 
