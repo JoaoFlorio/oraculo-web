@@ -1207,6 +1207,14 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
               então produto parado paga sem ter vendido. É o ponto todo. */}
           {M.armazenagem!==null && <Row label="Armazenagem deste produto" val={M.armazenagem} sign="-" color={t.red} hide={hide}
                nota={armFonte?.parcial?'medida por SKU no relatório mensal — proporcional aos dias do período':'medida por SKU no relatório mensal da Amazon'}/>}
+          {/* ⭐ ISENTA. O relatório mede o que ele PAGARIA; o repasse não cobra nada
+              porque a campanha isenta. Mostrar R$0,00 e calar seria jogar fora a
+              única informação que este caso tem: quanto o benefício vale por
+              produto — e é esse o número que vira prejuízo no dia em que ele cair. */}
+          {M.armazenagem===null && armFonte?.isenta && (armFonte?.estimadaPorSku?.[produto.sku]||0)>0.005 && (
+            <Row label="Armazenagem deste produto" val={0} color={t.grn} hide={hide}
+                 nota={`ISENTA pela campanha — sem ela seriam ${brl2(armFonte.estimadaPorSku[produto.sku])} neste produto`}/>
+          )}
           {imposto>0 && <Row label={`Imposto (${pc(imposto)})`} val={M.imposto} sign="-" color={t.red} hide={hide}/>}
           <Row label={`Custo do produto (CMV${M.devolucaoUnits>0?`, ${M.unitsLiquidas} un.`:''})`} val={M.cmv} sign="-" color={temCusto?t.red:t.t3} hide={hide}/>
           {M.credito>0.005 && <Row label="Créditos extras lançados" val={M.credito} color={t.grn} hide={hide} nota="lançados em pedidos deste produto, na aba Vendas"/>}
@@ -2167,8 +2175,12 @@ function ArmazenagemAdmin({fonte}:{fonte?:any}){
       </div>
       {/* Estado atual, direto do payload da DRE: diz se a Gestão está medindo. */}
       {fonte && (
-        <div style={{fontSize:11,color:t.t2,lineHeight:1.6,marginBottom:11,paddingLeft:10,borderLeft:`2px solid ${fonte.medido?t.grn:t.line2}`}}>
-          {fonte.medido
+        <div style={{fontSize:11,color:t.t2,lineHeight:1.6,marginBottom:11,paddingLeft:10,borderLeft:`2px solid ${fonte.medido?t.grn:fonte.isenta?t.gold:t.line2}`}}>
+          {fonte.isenta
+            ? <>No período que está na tela: <b style={{color:t.gold}}>armazenagem ISENTA</b> — o repasse não cobra nada.
+                O relatório mede <b>{brl2(fonte.economiaNoPeriodo||0)}</b> que você deixou de pagar.
+                <br/><span style={{color:t.t3}}>{fonte.motivo}</span></>
+            : fonte.medido
             ? <>No período que está na tela: <b style={{color:t.grn}}>medindo</b> · {brl2(fonte.total||0)} no total,
                 {' '}{brl2(fonte.atribuido||0)} atribuídos a produtos{(fonte.naoAtribuido||0)>0.005?<>, {brl2(fonte.naoAtribuido)} sem dono</>:null}
                 {fonte.parcial?<> · <b>proporcional aos dias</b> (o período não cobre o mês inteiro)</>:null}
