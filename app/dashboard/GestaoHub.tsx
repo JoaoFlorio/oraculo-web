@@ -2204,8 +2204,29 @@ function ArmazenagemAdmin({fonte}:{fonte?:any}){
             </div>
           ) : (
             <div style={{padding:'10px 12px',borderRadius:9,background:t.dark?'rgba(255,255,255,0.04)':'#F1F5F9',color:t.t2}}>
-              Nenhuma linha de armazenagem no período. <b>Não é erro:</b> ou a conta não teve estoque FBA nesses meses,
-              ou a Amazon ainda não fechou o relatório do mês corrente (ela publica alguns dias depois da virada).
+              Nenhuma linha de armazenagem gravada. Veja abaixo o que a Amazon respondeu em cada tentativa —
+              <b> cancelado</b> significa janela sem dado (é resposta dela, não falha nossa).
+            </div>
+          )}
+          {/* ⚠️ O DIAGNÓSTICO APARECE SEMPRE. Antes os erros por mês morriam num
+              console.warn do servidor e a resposta trazia só `linhas: 0`, que a tela
+              traduzia como "não é erro" — quatro falhas da Amazon viravam uma frase
+              tranquilizadora. O que ela respondeu tem que chegar em quem decide. */}
+          {Array.isArray(d.diagnostico) && d.diagnostico.length>0 && (
+            <div style={{marginTop:10,border:`1px solid ${t.line}`,borderRadius:9,overflow:'hidden'}}>
+              {d.diagnostico.map((x:any,i:number)=>{
+                const cor = x.status==='ok'?t.grn : x.status==='erro'?t.red : x.status==='nao-reconhecido'?t.gold : t.t3
+                return(
+                  <div key={i} style={{padding:'7px 11px',borderTop:i?`1px solid ${t.line}`:'none',display:'flex',gap:9,alignItems:'baseline',flexWrap:'wrap' as const}}>
+                    <span style={{fontFamily:'ui-monospace,monospace',fontSize:10.5,color:t.t2,minWidth:150}}>{x.via}</span>
+                    <b style={{fontSize:10.5,color:cor,textTransform:'uppercase' as const,letterSpacing:.3}}>{x.status}</b>
+                    {x.linhasGravadas>0 && <span style={{fontSize:10.5,color:t.t2}}>{x.linhasGravadas} gravada(s)</span>}
+                    {x.linhasBrutas!==undefined && <span style={{fontSize:10.5,color:t.t3}}>{x.linhasBrutas} linha(s) brutas</span>}
+                    {x.detalhe && <span style={{fontSize:10.5,color:t.t3,flex:1,minWidth:200,wordBreak:'break-word' as const}}>{x.detalhe}</span>}
+                    {Array.isArray(x.colunas)&&x.colunas.length>0 && <span style={{fontSize:10,color:t.gold,fontFamily:'ui-monospace,monospace',flex:1,minWidth:200,wordBreak:'break-all' as const}}>{x.colunas.join(' · ')}</span>}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
