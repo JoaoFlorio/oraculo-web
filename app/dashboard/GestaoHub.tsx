@@ -349,12 +349,27 @@ function ReconciliacaoCard({rec,hide}:{rec:Reconciliacao;hide:boolean}){
               </div>
             </div>
           )}
-          {rec.fecha && rec.causas.length>0 && (
-            <div style={{marginTop:11,paddingTop:9,borderTop:`1px solid ${t.line}`,display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}}>
-              <span style={{fontSize:11.5,color:t.t2}}>Soma das causas</span>
-              <b style={{fontFamily:FG,fontSize:13,color:piorou?t.red:t.grn}}>{v(rec.diferenca)}</b>
-            </div>
-          )}
+          {/* ⚠️ Isto mostrava `rec.diferenca` com o rótulo "Soma das causas" — na tela
+              do João saiu R$ 45,58 ao lado de linhas que somavam R$ 45,12. Quem
+              confere na calculadora acha os 46 centavos, e a partir dali desconfia
+              de tudo. O rótulo agora diz a verdade: é a soma, e o arredondamento
+              que sobra aparece em linha própria. */}
+          {rec.causas.length>0 && (()=>{
+            const soma=Math.round(rec.causas.reduce((s2,c)=>s2+c.valor,0)*100)/100
+            const sobra=Math.round((rec.diferenca-soma)*100)/100
+            return(<>
+              <div style={{marginTop:11,paddingTop:9,borderTop:`1px solid ${t.line}`,display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}}>
+                <span style={{fontSize:11.5,color:t.t2}}>Soma das causas</span>
+                <b style={{fontFamily:FG,fontSize:13,color:soma<0?t.red:t.grn}}>{v(soma)}</b>
+              </div>
+              {Math.abs(sobra)>=0.01 && (
+                <div style={{marginTop:5,display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}}>
+                  <span style={{fontSize:11,color:t.t3}}>{Math.abs(sobra)<0.5?'Arredondamento':'Ainda não explicado'}</span>
+                  <b style={{fontFamily:FG,fontSize:12,color:Math.abs(sobra)<0.5?t.t3:t.gold}}>{v(sobra)}</b>
+                </div>
+              )}
+            </>)
+          })()}
         </div>
       )}
     </div>
@@ -2161,7 +2176,14 @@ function ArmazenagemAdmin({fonte}:{fonte?:any}){
                 {Array.isArray(fonte.asinsAmbiguos)&&fonte.asinsAmbiguos.length
                   ? <><br/><span style={{color:t.gold}}>{fonte.asinsAmbiguos.length===1?'1 ASIN com SKU duplicado ficou fora':`${fonte.asinsAmbiguos.length} ASINs com SKU duplicado ficaram fora`}</span> — dividir seria rateio, atribuir aos dois contaria a mesma tarifa duas vezes.</>
                   : null}</>
-            : <>No período que está na tela: <b>sem medição</b> — a armazenagem segue como custo fixo. Rode o sync abaixo.</>}
+            : <>No período que está na tela: <b>sem medição</b> — a armazenagem segue como custo fixo.
+                {/* O motivo importa: "sem medição" por falta de sync e "sem medição"
+                    porque o repasse do período não cobrou armazenagem são coisas
+                    diferentes, e a segunda não se resolve sincronizando. */}
+                {fonte.motivo
+                  ? <><br/><span style={{color:t.t3}}>{fonte.motivo}</span>
+                      {(fonte.totalMedidoNoRelatorio||0)>0 && <><br/><span style={{color:t.t3}}>O relatório tem {brl2(fonte.totalMedidoNoRelatorio)} medidos nos meses deste período — o que falta é a cobrança aparecer no repasse.</span></>}</>
+                  : <> Rode o sync abaixo.</>}</>}
         </div>
       )}
       <div style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const}}>
