@@ -10,7 +10,7 @@ import { adsDoProduto, temAdsPorSku, adsSemVenda } from '@/lib/adsProduto'
 import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, lucroDoPeriodo, ajustesDoPedido, ajustesDoProduto, type AjustePedido } from '@/lib/margemProduto'
 import { impactoTarifaAgo26, type ProdutoTarifa } from '@/lib/tarifaFbaAgo26'
 import { maturidadeDoPeriodo, type SeloMaturidade } from '@/lib/maturidadePeriodo'
-import { snapshotDoPeriodo, narrarMudancas, chaveDoPeriodo, type SnapshotPeriodo, type Diario } from '@/lib/diarioPeriodo'
+import { snapshotDoPeriodo, narrarMudancas, reconciliar, normalizarMarcos, chaveDoPeriodo, type SnapshotPeriodo, type MarcosPeriodo, type Diario, type Reconciliacao } from '@/lib/diarioPeriodo'
 
 const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#888'}}>Carregando DRE…</div>})
 
@@ -222,9 +222,9 @@ function SeloEDiario({selo,diario,hide}:{selo:SeloMaturidade;diario:Diario|null;
         {diario && (
           <span style={{fontSize:11.5,color:t.t2}}>
             mudou desde {quando(diario.desde)}
-            {diario.deltaLucro!==null && Math.abs(diario.deltaLucro)>0.5 && (
-              <b style={{color:diario.deltaLucro>0?t.grn:t.red,marginLeft:5}}>
-                {diario.deltaLucro>0?'+':'−'}{hide?'•••':brl2(Math.abs(diario.deltaLucro))} de lucro
+            {diario.diferenca!==null && Math.abs(diario.diferenca)>0.5 && (
+              <b style={{color:diario.diferenca>0?t.grn:t.red,marginLeft:5}}>
+                {diario.diferenca>0?'+':'−'}{hide?'•••':brl2(Math.abs(diario.diferenca))} de lucro
               </b>
             )}
           </span>
@@ -241,16 +241,120 @@ function SeloEDiario({selo,diario,hide}:{selo:SeloMaturidade;diario:Diario|null;
           <div style={{fontSize:11,fontWeight:700,color:t.t3,letterSpacing:.3,textTransform:'uppercase' as const,marginBottom:7}}>
             O que mudou desde {quando(diario.desde)}
           </div>
-          {diario.linhas.map((l,i)=>(
+          {diario.causas.map((c,i)=>(
             <div key={i} style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:11.5,color:t.t2,lineHeight:1.6,marginTop:i?4:0}}>
-              <i className={`ti ti-arrow-${l.sinal==='sobe'?'up':l.sinal==='desce'?'down':'right'}`}
-                style={{fontSize:14,marginTop:1,flexShrink:0,color:l.sinal==='sobe'?t.grn:l.sinal==='desce'?t.red:t.t3}} aria-hidden="true"/>
-              <span>{hide?'•••':l.texto}</span>
+              <i className={`ti ti-arrow-${c.valor>0?'up':'down'}`}
+                style={{fontSize:14,marginTop:1,flexShrink:0,color:c.valor>0?t.grn:t.red}} aria-hidden="true"/>
+              <span>{hide?'•••':c.frase}</span>
             </div>
           ))}
+          {/* ⚠️ O resíduo aparece AQUI também. A primeira versão deste bloco
+              anunciava a variação do lucro inteira e listava só 4 das 12 parcelas:
+              o seller lia "−R$1.089" ao lado de causas que somavam −165. */}
+          {!diario.fecha && (
+            <div style={{display:'flex',alignItems:'flex-start',gap:7,fontSize:11.5,color:t.gold,lineHeight:1.6,marginTop:4}}>
+              <i className="ti ti-help-circle" style={{fontSize:14,marginTop:1,flexShrink:0}} aria-hidden="true"/>
+              <span>ainda não explicado: {hide?'•••':brl2(diario.residuo)}</span>
+            </div>
+          )}
           <div style={{fontSize:10.5,color:t.t3,marginTop:8,lineHeight:1.55}}>
             O Oráculo não congela o número velho pra parecer estável — ele mostra o valor certo de agora e conta o que mudou.
           </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ── RECONCILIAÇÃO ───────────────────────────────────────────────────────────
+   "Você estimou R$5.800 em junho. Fechou R$5.611. A diferença tem nome."
+
+   ⭐ A peça que ninguém tem. E ela só vale se FECHAR: se as causas não somam a
+   diferença, quem confere descobre dinheiro sem explicação e conclui que a
+   ferramenta esconde coisa — pior do que não ter mostrado nada. Por isso o resíduo
+   aparece DECLARADO quando existe, em vez de ser diluído numa das linhas. */
+function ReconciliacaoCard({rec,hide}:{rec:Reconciliacao;hide:boolean}){
+  const t=useT()
+  const [aberto,setAberto]=useState(false)
+  const piorou=rec.diferenca<0
+  const data=(iso:string)=>{ const d=new Date(iso); return isNaN(d.getTime())?'antes':d.toLocaleDateString('pt-BR',{day:'2-digit',month:'short'}) }
+  const daAmazon=rec.causas.filter(c=>c.autor==='amazon')
+  const suas=rec.causas.filter(c=>c.autor==='voce')
+  const soma=(l:typeof rec.causas)=>l.reduce((s,c)=>s+c.valor,0)
+  const v=(n:number)=>hide?'•••':`${n<0?'−':'+'}${brl2(Math.abs(n))}`
+  const Grupo=({titulo,itens,nota}:{titulo:string;itens:typeof rec.causas;nota:string})=>itens.length?(
+    <div style={{marginTop:12}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10,marginBottom:2}}>
+        <span style={{fontSize:11,fontWeight:700,color:t.t3,letterSpacing:.3,textTransform:'uppercase' as const}}>{titulo}</span>
+        <b style={{fontFamily:FG,fontSize:12.5,color:soma(itens)<0?t.red:t.grn}}>{v(soma(itens))}</b>
+      </div>
+      <div style={{fontSize:10.5,color:t.t3,marginBottom:7,lineHeight:1.5}}>{nota}</div>
+      {itens.map((c,i)=>(
+        <div key={i} style={{padding:'7px 0',borderTop:i?`1px solid ${t.line}`:'none'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}}>
+            <span style={{fontSize:12,color:t.t1}}>{c.rotulo}</span>
+            <b style={{fontFamily:FG,fontSize:12.5,color:c.valor<0?t.red:t.grn,whiteSpace:'nowrap' as const}}>{v(c.valor)}</b>
+          </div>
+          <div style={{fontSize:10.5,color:t.t3,lineHeight:1.5,marginTop:2}}>{c.explicacao}</div>
+        </div>
+      ))}
+    </div>
+  ):null
+  return(
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'14px 16px',marginBottom:16}}>
+      <div style={{display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap' as const}}>
+        <i className="ti ti-scale" style={{fontSize:18,color:t.gold,marginTop:1,flexShrink:0}} aria-hidden="true"/>
+        <div style={{flex:1,minWidth:220}}>
+          <div style={{fontSize:12.5,fontWeight:600,color:t.t1,marginBottom:4}}>Fechamento do período</div>
+          <div style={{fontSize:11.5,color:t.t2,lineHeight:1.6}}>
+            Em {data(rec.estimadoEm)} este período mostrava <b>{hide?'•••':brl2(rec.lucroEstimado)}</b> de lucro.
+            {' '}Fechou em <b style={{color:piorou?t.red:t.grn}}>{hide?'•••':brl2(rec.lucroAtual)}</b>
+            {Math.abs(rec.diferenca)<=0.5
+              ? <> — <b style={{color:t.grn}}>a estimativa se confirmou.</b></>
+              : <> — {piorou?'menos':'mais'} <b style={{color:piorou?t.red:t.grn}}>{hide?'•••':brl2(Math.abs(rec.diferenca))}</b>.
+                  {/* ⚠️ Sem causa nenhuma, "a diferença tem nome" é promessa falsa —
+                      e era o que a tela dizia, com o resíduo escondido atrás de um
+                      botão que nem era renderizado. */}
+                  {rec.causas.length>0
+                    ? ' E a diferença tem nome:'
+                    : ' E essa diferença o Oráculo ainda não consegue explicar — me mostre este período.'}</>}
+          </div>
+        </div>
+        {(rec.causas.length>0 || !rec.fecha) && (
+          <button onClick={()=>setAberto(a=>!a)}
+            style={{flexShrink:0,background:'transparent',color:t.t2,border:`1px solid ${t.line2}`,borderRadius:9,padding:'8px 13px',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+            {aberto?'Fechar':'Ver a conta'}
+          </button>
+        )}
+      </div>
+      {aberto && (
+        <div style={{marginTop:4}}>
+          <Grupo titulo="O que a Amazon mudou" itens={daAmazon}
+            nota="Devolução que chegou depois, e tarifa estimada dando lugar à que ela cobrou de fato quando o repasse fechou."/>
+          {/* Separado de propósito: se o lucro caiu porque o SELLER informou o custo
+              que faltava, chamar isso de "o repasse fechou menor" seria mentira. */}
+          <Grupo titulo="O que você mudou" itens={suas}
+            nota="Não é a Amazon: é a sua informação de custo, alíquota ou lançamento avulso ficando mais exata."/>
+          {/* O resíduo não some. Diluí-lo numa das linhas faria a conta "fechar" por
+              omissão — exatamente o que este card existe pra tornar impossível. */}
+          {!rec.fecha && (
+            <div style={{marginTop:12,paddingTop:10,borderTop:`1px solid ${t.line}`}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}}>
+                <span style={{fontSize:12,color:t.gold,fontWeight:600}}>Ainda não explicado</span>
+                <b style={{fontFamily:FG,fontSize:12.5,color:t.gold}}>{v(rec.residuo)}</b>
+              </div>
+              <div style={{fontSize:10.5,color:t.t3,lineHeight:1.55,marginTop:3}}>
+                Esta parte da diferença o Oráculo não conseguiu atribuir a uma causa. Fica declarada aqui em vez de ser diluída nas linhas acima —
+                a conta tem que fechar de verdade, não por omissão. Se aparecer com valor alto, me mostre: é sinal de linha de repasse que ainda não estamos lendo.
+              </div>
+            </div>
+          )}
+          {rec.fecha && rec.causas.length>0 && (
+            <div style={{marginTop:11,paddingTop:9,borderTop:`1px solid ${t.line}`,display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10}}>
+              <span style={{fontSize:11.5,color:t.t2}}>Soma das causas</span>
+              <b style={{fontFamily:FG,fontSize:13,color:piorou?t.red:t.grn}}>{v(rec.diferenca)}</b>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -429,7 +533,7 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
   while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
   return out
 }
-function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail,selo,diario}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;credito?:number;custoEventual?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void;selo?:SeloMaturidade;diario?:Diario|null}){
+function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail,selo,diario,recon}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;credito?:number;custoEventual?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void;selo?:SeloMaturidade;diario?:Diario|null;recon?:Reconciliacao|null}){
   const t=useT()
   // (Removidos os KPIs/composição MOCK com deltas fabricados "+12,4%" etc. — eram
   // código morto: o render usa só RK.kpis (real), loadingKpis ou emptyKpis.)
@@ -543,6 +647,9 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
     {/* 0) Qual relógio está na tela, e o que mudou desde a última visita. Vem
         ANTES dos KPIs de propósito: é a legenda deles. */}
     {realDre && selo && <SeloEDiario selo={selo} diario={diario||null} hide={hide}/>}
+    {/* A reconciliação só existe quando há uma estimativa antiga pra comparar —
+        e é ela que responde "por que o número que eu vi não é o que fechou". */}
+    {realDre && recon && <ReconciliacaoCard rec={recon} hide={hide}/>}
     {/* 1) KPIs — cards estilo Gestor, 4 por linha */}
     <div className="ora-kpis" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:13,marginBottom:16}}>
       {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
@@ -2561,10 +2668,11 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
      a cura é narrar. */
   const selo = useMemo(()=>maturidadeDoPeriodo(realDre?.period),[realDre?.period?.from,realDre?.period?.to])
   const [diario,setDiario]=useState<Diario|null>(null)
-  const snapsRef=useRef<Record<string,SnapshotPeriodo>|null>(null)
+  const [recon,setRecon]=useState<Reconciliacao|null>(null)
+  const snapsRef=useRef<Record<string,MarcosPeriodo>|null>(null)
   const narradoRef=useRef<string>('')
   useEffect(()=>{ fetch('/api/user/metadata?key=gestao_snapshots').then(r=>r.json())
-    .then(d=>{ snapsRef.current = (d?.value && typeof d.value==='object') ? d.value : {} }).catch(()=>{ snapsRef.current={} }) },[])
+    .then(d=>{ snapsRef.current = normalizarMarcos(d?.value) }).catch(()=>{ snapsRef.current={} }) },[])
   useEffect(()=>{
     if(!realDre || snapsRef.current===null) return
     const L=realDre.linhas||{}
@@ -2572,26 +2680,37 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
     // Um período só se narra uma vez por visita: sem isto, cada revalidação de 90s
     // reescreveria a referência e o diário nunca teria o que contar.
     if(narradoRef.current===chave) return
+    // TODAS as parcelas do lucro, porque a reconciliação decompõe a diferença nelas
+    // — parcela que falta é diferença atribuída ao motivo errado.
     const atual=snapshotDoPeriodo(realDre.period,{
-      faturamento:L.receitaBruta||0, devolucoes:L.devolucoes||0, comissao:L.comissao||0, fba:L.fba||0,
+      receitaBruta:L.receitaBruta||0, devolucoes:L.devolucoes||0,
+      comissao:L.comissao||0, fba:L.fba||0, taxaPrograma:L.taxaPrograma||0,
+      armazenagem:L.armazenagem||0, assinatura:L.assinatura||0, outrasTaxas:L.outrasTaxas||0,
+      cmv, imposto:totais.imposto, credito:totais.credito, custoEventual:totais.custoEventual,
       unidades:realDre.unidades||0,
       lucro:cmv>0?lucroDoPeriodo(realDre.liqMarketplace||0,{cmv,imposto:totais.imposto,credito:totais.credito,custoEventual:totais.custoEventual}):null,
-    })
-    const anterior=snapsRef.current[chave]||null
-    const d=narrarMudancas(anterior,atual)
+    },selo.nivel)
+    const marcos=snapsRef.current[chave]||null
+    const d=narrarMudancas(marcos?.ultimo,atual)
+    // A reconciliação usa o marco MAIS ANTIGO — a promessa que a ferramenta fez
+    // enquanto o período ainda estava aberto. Comparar com a última visita
+    // responderia "mudou desde ontem", que é o diário, não o fechamento.
+    const r=reconciliar(marcos?.primeiro,atual)
     narradoRef.current=chave
-    setDiario(d)
+    setDiario(d); setRecon(r)
     // Só move a régua quando há novidade: um F5 dois minutos depois não pode
     // apagar o ponto de comparação e deixar o seller sem a explicação.
-    if(anterior && !d) return
+    if(marcos && !d) return
+    // ⚠️ `primeiro` NUNCA é sobrescrito: é a estimativa original. Sobrescrever
+    // apagaria justamente a promessa contra a qual o fechamento se compara.
+    const novo={...snapsRef.current,[chave]:{primeiro:marcos?.primeiro||atual,ultimo:atual}}
     // Guarda os 20 períodos mais recentes — o metadata não é lugar de histórico.
-    const novo={...snapsRef.current,[chave]:atual}
-    const chaves=Object.keys(novo).sort((a,b)=>Date.parse(novo[b].visto)-Date.parse(novo[a].visto)).slice(0,20)
-    const podado:Record<string,SnapshotPeriodo>={}; for(const k of chaves) podado[k]=novo[k]
+    const chaves=Object.keys(novo).sort((a,b)=>Date.parse(novo[b].ultimo.visto)-Date.parse(novo[a].ultimo.visto)).slice(0,20)
+    const podado:Record<string,MarcosPeriodo>={}; for(const k of chaves) podado[k]=novo[k]
     snapsRef.current=podado
     fetch('/api/user/metadata',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({key:'gestao_snapshots',value:podado})}).catch(()=>{})
-  },[realDre,cmv,totais])
+  },[realDre,cmv,totais,selo.nivel])
 
   const realAbcData = realM ? realAbc(realM) : null
   useEffect(()=>{
@@ -2759,7 +2878,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         )}
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} selo={selo} diario={diario} cmv={cmv} impostoTotal={totais.imposto} credito={totais.credito} custoEventual={totais.custoEventual} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} selo={selo} diario={diario} recon={recon} cmv={cmv} impostoTotal={totais.imposto} credito={totais.credito} custoEventual={totais.custoEventual} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail} ajustes={ajustes} onAddAjuste={addAjuste} onRemoverAjuste={removeAjuste}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto} ajustes={ajustes} onDetail={setDetail}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
