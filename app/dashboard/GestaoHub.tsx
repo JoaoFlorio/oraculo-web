@@ -2120,6 +2120,100 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds}:{m:Produ
     {isAdmin && <AdsAdmin margem={margemAds}/>}
   </>)
 }
+/* ── ADMIN · ARMAZENAGEM POR SKU ─────────────────────────────────────────────
+   O relatório mensal da Amazon é a fonte da armazenagem por produto, e ele chega
+   com o cabeçalho que a Amazon quiser: hífen, underscore ou traduzido. Um botão
+   aqui vale mais que uma linha de curl porque a informação que importa —
+   `colunasNaoReconhecidas` — é justamente a que não aparece em log nenhum sem
+   alguém ir olhar. É o antídoto do `ship-price`, que zerou 24 meses de frete em
+   silêncio por uma chave com o nome errado. */
+function ArmazenagemAdmin({fonte}:{fonte?:any}){
+  const t=useT()
+  const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
+  const [meses,setMeses]=useState(3)
+  async function rodar(){
+    setSt({loading:true,data:null})
+    try{
+      const r=await fetch(`/api/amazon/storage-sync?meses=${meses}`,{method:'POST'})
+      setSt({loading:false,data:await r.json()})
+    }catch{ setSt({loading:false,data:{ok:false,erro:'sem resposta do servidor'}}) }
+  }
+  const d=st?.data
+  const naoReconhecidas:string[]=Array.isArray(d?.colunasNaoReconhecidas)?d.colunasNaoReconhecidas:[]
+  return(
+    <div style={{marginTop:22,padding:'14px 16px',borderRadius:12,border:`1px dashed ${t.line2}`,background:t.dark?'rgba(255,255,255,0.02)':'#FAFAFA'}}>
+      <div style={{fontSize:10.5,fontWeight:700,color:t.t3,letterSpacing:.4,textTransform:'uppercase' as const,marginBottom:8}}>
+        Admin · Armazenagem por SKU
+      </div>
+      <div style={{fontSize:11.5,color:t.t2,lineHeight:1.6,marginBottom:11}}>
+        Baixa o relatório mensal de tarifa de armazenagem da Amazon e grava por produto. A tarifa é mensal —
+        o Oráculo já faz isso 1x por dia sozinho. Este botão serve pra rodar agora e, principalmente, pra
+        conferir se o <b>nome da coluna</b> do relatório foi reconhecido.
+      </div>
+      {/* Estado atual, direto do payload da DRE: diz se a Gestão está medindo. */}
+      {fonte && (
+        <div style={{fontSize:11,color:t.t2,lineHeight:1.6,marginBottom:11,paddingLeft:10,borderLeft:`2px solid ${fonte.medido?t.grn:t.line2}`}}>
+          {fonte.medido
+            ? <>No período que está na tela: <b style={{color:t.grn}}>medindo</b> · {brl2(fonte.total||0)} no total,
+                {' '}{brl2(fonte.atribuido||0)} atribuídos a produtos{(fonte.naoAtribuido||0)>0.005?<>, {brl2(fonte.naoAtribuido)} sem dono</>:null}
+                {fonte.parcial?<> · <b>proporcional aos dias</b> (o período não cobre o mês inteiro)</>:null}
+                {Array.isArray(fonte.meses)&&fonte.meses.length?<> · meses: {fonte.meses.join(', ')}</>:null}
+                {Array.isArray(fonte.asinsAmbiguos)&&fonte.asinsAmbiguos.length
+                  ? <><br/><span style={{color:t.gold}}>{fonte.asinsAmbiguos.length===1?'1 ASIN com SKU duplicado ficou fora':`${fonte.asinsAmbiguos.length} ASINs com SKU duplicado ficaram fora`}</span> — dividir seria rateio, atribuir aos dois contaria a mesma tarifa duas vezes.</>
+                  : null}</>
+            : <>No período que está na tela: <b>sem medição</b> — a armazenagem segue como custo fixo. Rode o sync abaixo.</>}
+        </div>
+      )}
+      <div style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const}}>
+        <button onClick={rodar} disabled={st?.loading}
+          style={{background:t.gold,color:t.dark?'#1c1606':'#3a2a05',border:'none',borderRadius:9,padding:'9px 14px',fontSize:12,fontWeight:700,cursor:st?.loading?'wait':'pointer',fontFamily:'inherit',opacity:st?.loading?.6:1}}>
+          {st?.loading?'Baixando o relatório…':'Sincronizar agora'}
+        </button>
+        <label style={{fontSize:11.5,color:t.t2,display:'flex',alignItems:'center',gap:6}}>
+          meses
+          <input type="number" min={0} max={12} value={meses} onChange={e=>setMeses(Math.max(0,Math.min(12,parseInt(e.target.value)||0)))}
+            style={{width:56,padding:'6px 8px',borderRadius:7,border:`1px solid ${t.line2}`,background:'transparent',color:t.t1,fontFamily:'inherit',fontSize:12}}/>
+        </label>
+        {st?.loading && <span style={{fontSize:11,color:t.t3}}>a Amazon leva de segundos a alguns minutos por mês pedido</span>}
+      </div>
+      {d && (
+        <div style={{marginTop:12,fontSize:11.5,lineHeight:1.6}}>
+          {/* ⭐ O caso que este botão existe pra revelar. */}
+          {naoReconhecidas.length>0 ? (
+            <div style={{padding:'10px 12px',borderRadius:9,background:'rgba(248,113,113,0.10)',color:t.red}}>
+              <b>O relatório veio com dados e nenhuma coluna de tarifa foi reconhecida.</b><br/>
+              <span style={{color:t.t2}}>Manda esta lista pro suporte — o nome real da coluna está aqui:</span>
+              <div style={{marginTop:7,fontFamily:'ui-monospace,monospace',fontSize:10.5,color:t.t1,wordBreak:'break-all' as const}}>
+                {naoReconhecidas.join(' · ')}
+              </div>
+            </div>
+          /* ⚠️ SUCESSO NÃO SE PRESUME. Este ramo era `d.ok===false || d.erro`, e o
+             proxy responde `{error}` (não `erro`) em 401/403/500 — então uma falha
+             de autorização caía no ramo de baixo e a tela dizia "nenhuma linha, NÃO
+             É ERRO". Tranquilizar o dono sobre uma chamada que falhou é a mesma
+             doença do `ship-price` com outra roupa: só que aqui eu mesmo escrevi a
+             frase que mentia. Agora só é sucesso o que se declara sucesso. */
+          ) : (d.ok!==true || d.error || d.erro) ? (
+            <div style={{padding:'10px 12px',borderRadius:9,background:'rgba(248,113,113,0.10)',color:t.red}}>
+              <b>A chamada não completou.</b> <span style={{color:t.t2}}>{String(d.error||d.erro||'resposta inesperada do servidor')}</span>
+            </div>
+          ) : (d.linhas||0)>0 ? (
+            <div style={{padding:'10px 12px',borderRadius:9,background:'rgba(52,211,153,0.10)',color:t.grn}}>
+              <b>{d.linhas} linha(s) gravada(s)</b>{Array.isArray(d.meses)&&d.meses.length?<span style={{color:t.t2}}> · meses: {d.meses.join(', ')}</span>:null}
+              <div style={{color:t.t2,marginTop:4}}>Recarregue a Gestão pra ver a armazenagem no card de cada produto.</div>
+            </div>
+          ) : (
+            <div style={{padding:'10px 12px',borderRadius:9,background:t.dark?'rgba(255,255,255,0.04)':'#F1F5F9',color:t.t2}}>
+              Nenhuma linha de armazenagem no período. <b>Não é erro:</b> ou a conta não teve estoque FBA nesses meses,
+              ou a Amazon ainda não fechou o relatório do mês corrente (ela publica alguns dias depois da virada).
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Analitico({realDre,hide,connected,mockM,costs={},imposto=0,adsReal}:{realDre?:any;hide:boolean;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;imposto?:number;adsReal?:any}){
   const t=useT()
   if(connected && !realDre) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Carregando dados da Amazon…</div>
@@ -2223,7 +2317,7 @@ function Analitico({realDre,hide,connected,mockM,costs={},imposto=0,adsReal}:{re
   void mockM
   return <ConnectEmpty/>   // não conectado → vazio (sem mock)
 }
-function Gerenciamento({realDre,inv,costs,extras,onCost,onExtra,mockM,hide,connected,imposto=0,onImposto}:{realDre?:any;inv?:any;costs:Record<string,number>;extras:Record<string,number>;onCost:(sku:string,v:number)=>void;onExtra:(sku:string,v:number)=>void;mockM:ProductMetrics[];hide:boolean;connected?:boolean|null;imposto?:number;onImposto?:(v:number)=>void}){
+function Gerenciamento({realDre,inv,costs,extras,onCost,onExtra,mockM,hide,connected,imposto=0,onImposto,isAdmin}:{realDre?:any;inv?:any;costs:Record<string,number>;extras:Record<string,number>;onCost:(sku:string,v:number)=>void;onExtra:(sku:string,v:number)=>void;mockM:ProductMetrics[];hide:boolean;connected?:boolean|null;imposto?:number;onImposto?:(v:number)=>void;isAdmin?:boolean}){
   const t=useT()
   void mockM
   if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon para informar o custo dos seus produtos."/>
@@ -2297,6 +2391,7 @@ function Gerenciamento({realDre,inv,costs,extras,onCost,onExtra,mockM,hide,conne
       <span style={{color:t.gold,fontWeight:700,fontFamily:FG,filter:hide?'blur(6px)':'none'}}>{brl2(cmvTotal)}</span>
     </div>
     <div style={{fontSize:11,color:t.t3,marginTop:8}}>Salvo automaticamente · <b>Custo unit. + Custos extras</b> entram juntos no lucro, margem, ROI, MPA, Curva ABC e no capital em estoque · volte ao Resumo pra ver os números reais.</div>
+    {isAdmin && <ArmazenagemAdmin fonte={realDre?.armazenagemFonte}/>}
   </>)
 }
 function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realDre?:any;connected?:boolean|null;mockM?:ProductMetrics[];costs?:Record<string,number>;hide:boolean}){
@@ -2892,7 +2987,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto} ajustes={ajustes} onDetail={setDetail}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto} adsReal={adsData}/>}
-        {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto}/>}
+        {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto} isAdmin={isAdmin}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
         {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={custoUnit} adsReal={adsData}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
