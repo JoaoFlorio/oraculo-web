@@ -249,3 +249,80 @@ test('produto que some do payload não explode', () => {
   assert.equal(d.margem, null)
   assert.equal(d.lucro, null)
 })
+
+/* ═══ ARMAZENAGEM MEDIDA POR SKU ══════════════════════════════════════════════
+   Ela deixou de ser custo fixo porque deixou de ser não-medível. O risco novo é
+   DUPLA CONTAGEM: o mesmo valor no card do produto e no bloco de custo fixo. */
+
+const L_ARM = {
+  receitaBruta: 1000, devolucoes: 0, comissao: 120, fba: 60, taxaPrograma: 10,
+  armazenagem: 80, assinatura: 19, outrasTaxas: 5, outrasConta: 5,
+}
+
+test('armazenagem medida desce no lucro do produto', () => {
+  const semArm = margemDoProduto({ linhas: L_ARM, produto: DONUTS, imposto: 0, custoUnit: 10 })
+  const comArm = margemDoProduto({ linhas: L_ARM, produto: { ...DONUTS, armazenagem: 30 }, imposto: 0, custoUnit: 10 })
+  assert.equal(comArm.armazenagem, 30)
+  assert.equal(semArm.armazenagem, null, 'não medida é null, nunca zero')
+  perto(comArm.lucroAntesAds! - semArm.lucroAntesAds!, -30)
+})
+
+test('⭐ o que foi atribuído SAI do custo fixo — sem dupla contagem', () => {
+  // 80 de armazenagem, 50 atribuídos a produtos: sobram 30 no bloco fixo.
+  assert.equal(custosFixosDoPeriodo(L_ARM), 80 + 19 + 5)
+  assert.equal(custosFixosDoPeriodo({ ...L_ARM, armazenagemAtribuida: 50 }), 30 + 19 + 5)
+  // Atribuiu tudo: o bloco fica só com assinatura e taxa de conta.
+  assert.equal(custosFixosDoPeriodo({ ...L_ARM, armazenagemAtribuida: 80 }), 19 + 5)
+})
+
+test('atribuído acima do total não vira custo fixo NEGATIVO', () => {
+  // Um valor absurdo não pode virar crédito e inflar o lucro do período.
+  assert.equal(custosFixosDoPeriodo({ ...L_ARM, armazenagemAtribuida: 500 }), 19 + 5)
+})
+
+test('⭐⭐ A IDENTIDADE: total = soma dos produtos − custos fixos', () => {
+  // É esta conta que a dupla contagem quebraria.
+  //
+  // ⚠️ A identidade só existe quando as taxas MEDIDAS por produto somam as linhas
+  // da conta — que é o caso real com DRE_REAL_FEES, porque as duas saem do mesmo
+  // repasse. O fixture do topo deste arquivo NÃO serve aqui: ele tem comissão de
+  // 120 na conta e 80 somando os produtos, de propósito, pra exercitar o rateio.
+  const LINHAS_C = {
+    receitaBruta: 800, devolucoes: 0, comissao: 80, fba: 60, taxaPrograma: 8,
+    armazenagem: 80, assinatura: 19, outrasTaxas: 5, outrasConta: 5,
+    armazenagemAtribuida: 50,
+  }
+  const D = { sku: 'DONUTS', units: 5, receita: 400, comissao: 48, fba: 55, taxaPrograma: 4, outrasTaxas: 0, feeMedido: true, armazenagem: 35 }
+  const M = { sku: 'MEIAS', units: 5, receita: 400, comissao: 32, fba: 5, taxaPrograma: 4, outrasTaxas: 0, feeMedido: true, armazenagem: 15 }
+  const custoUnit = { DONUTS: 20, MEIAS: 15 }
+  const imposto = 8
+
+  const somaProdutos = [D, M].reduce((acc, p) => {
+    const R = margemDoProduto({ linhas: LINHAS_C, produto: p, imposto, custoUnit: custoUnit[p.sku as 'DONUTS' | 'MEIAS'] })
+    return acc + (R.lucroAntesAds || 0)
+  }, 0)
+
+  // Como o backend calcula o líquido do PERÍODO: desconta a armazenagem INTEIRA.
+  const liqTotal = 800 - 80 - 8 - 60 - 80 - 19 - 5
+  const T = totaisDoPeriodo(LINHAS_C, [D, M], undefined, custoUnit, imposto)
+  const totalAgregado = liqTotal - T.cmv - T.imposto
+
+  assert.ok(Math.abs(totalAgregado - (somaProdutos - custosFixosDoPeriodo(LINHAS_C))) < 0.011,
+    `dupla contagem: agregado ${totalAgregado} vs produtos-fixos ${somaProdutos - custosFixosDoPeriodo(LINHAS_C)}`)
+
+  // E o mesmo cenário SEM armazenagem medida tem que fechar igual — a mudança não
+  // pode valer só quando a medição existe.
+  const semMedir = { ...LINHAS_C, armazenagemAtribuida: 0 }
+  const somaSem = [{ ...D, armazenagem: undefined }, { ...M, armazenagem: undefined }].reduce((acc, p) => {
+    const R = margemDoProduto({ linhas: semMedir, produto: p, imposto, custoUnit: custoUnit[p.sku as 'DONUTS' | 'MEIAS'] })
+    return acc + (R.lucroAntesAds || 0)
+  }, 0)
+  assert.ok(Math.abs(totalAgregado - (somaSem - custosFixosDoPeriodo(semMedir))) < 0.011,
+    'a identidade tem que valer com e sem medição')
+})
+
+test('armazenagem medida em ZERO é resposta, não ausência', () => {
+  // Produto que entrou e saiu no mesmo mês pode ter tarifa zero de verdade.
+  const M = margemDoProduto({ linhas: L_ARM, produto: { ...DONUTS, armazenagem: 0 }, imposto: 0, custoUnit: 10 })
+  assert.equal(M.armazenagem, 0)
+})

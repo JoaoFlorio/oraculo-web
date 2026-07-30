@@ -1140,6 +1140,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
   const temCusto=M.temCusto
   const lucroExib=M.lucro??M.lucroAntesAds     // sem ads mostra o de antes; sem taxa medida, "—"
   const custosFixos=custosFixosDoPeriodo(L)
+  const armFonte=realDre?.armazenagemFonte
   // Base pra distribuir os custos do produto entre os pedidos dele.
   const precoMedio=units>0?M.receitaBruta/units:0
   const feesProduto=M.feeMedido?(M.comissao as number)+(M.fba as number)+M.taxaPrograma+M.outrasTaxas:null
@@ -1185,6 +1186,12 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
           <Row label="Líq. do Marketplace" val={M.liqMarketplace} sign="=" strong color={t.grn} hide={hide}/>
           <Row label="Ads deste produto" val={M.ads} sign="-" color={t.red} hide={hide}
                nota={semAds?'gasto por produto ainda sincronizando — não rateamos o total da conta':undefined}/>
+          {/* ⭐ Armazenagem MEDIDA deste produto (relatório mensal da Amazon). Só
+              aparece quando existe medição — não medida fica no custo fixo, e a
+              nota abaixo diz isso. ⚠️ É custo de ESTOQUE: não escala com venda,
+              então produto parado paga sem ter vendido. É o ponto todo. */}
+          {M.armazenagem!==null && <Row label="Armazenagem deste produto" val={M.armazenagem} sign="-" color={t.red} hide={hide}
+               nota={armFonte?.parcial?'medida por SKU no relatório mensal — proporcional aos dias do período':'medida por SKU no relatório mensal da Amazon'}/>}
           {imposto>0 && <Row label={`Imposto (${pc(imposto)})`} val={M.imposto} sign="-" color={t.red} hide={hide}/>}
           <Row label={`Custo do produto (CMV${M.devolucaoUnits>0?`, ${M.unitsLiquidas} un.`:''})`} val={M.cmv} sign="-" color={temCusto?t.red:t.t3} hide={hide}/>
           {M.credito>0.005 && <Row label="Créditos extras lançados" val={M.credito} color={t.grn} hide={hide} nota="lançados em pedidos deste produto, na aba Vendas"/>}
@@ -1202,7 +1209,9 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
         </div>
         {custosFixos>0.005 && <div style={{fontSize:10.5,color:t.t3,marginBottom:14,display:'flex',gap:6}}>
           <i className="ti ti-info-circle" style={{fontSize:12,marginTop:1}} aria-hidden="true"/>
-          <span>Assinatura e armazenagem do período ({brl2(custosFixos)}) são custo fixo da conta e <b>não entram na margem de produto nenhum</b> — se entrassem, a margem deste produto mudaria conforme o dia que você escolhesse no filtro.</span>
+          <span>{M.armazenagem!==null
+            ? <>A armazenagem <b>deste</b> produto já está descontada acima, medida por SKU. O que sobra em custo fixo ({brl2(custosFixos)}) é a assinatura e a armazenagem que <b>não</b> tem dono — de produto que não vendeu no período, ou de ASIN com SKU duplicado, que não dá pra atribuir sem virar rateio.</>
+            : <>Assinatura e armazenagem do período ({brl2(custosFixos)}) são custo fixo da conta e <b>não entram na margem de produto nenhum</b> — se entrassem, a margem deste produto mudaria conforme o dia que você escolhesse no filtro.</>}</span>
         </div>}
         {!temCusto && <div style={{fontSize:10.5,color:t.t3,marginBottom:14}}>Informe o custo (CMV) deste produto na aba <b>Gerenciamento</b> pra ver o lucro e a margem finais.</div>}
 

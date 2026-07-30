@@ -13,11 +13,17 @@
       nenhuma relação com preço: uma máquina de donuts e um par de meias de
       R$79,90 recebiam a MESMA tarifa.
 
-   2. CUSTO FIXO NÃO É CUSTO DE PRODUTO. Assinatura (~R$19/mês) e armazenagem
-      são do PERÍODO. Rateá-las por faturamento fazia a margem do produto mudar
-      conforme o dia que o usuário escolhia no filtro — se a mensalidade caiu
-      naquele dia, o produto absorvia a mensalidade inteira. Ficam fora, e a tela
-      as mostra como custo fixo do período.
+   2. CUSTO FIXO NÃO É CUSTO DE PRODUTO. Assinatura (~R$19/mês) é do PERÍODO.
+      Rateá-la por faturamento fazia a margem do produto mudar conforme o dia que
+      o usuário escolhia no filtro — se a mensalidade caiu naquele dia, o produto
+      absorvia a mensalidade inteira. Fica fora, e a tela a mostra como custo fixo.
+
+      ⭐ A ARMAZENAGEM SAIU DESSA REGRA: ela é MEDIDA por produto pelo relatório
+      mensal da Amazon (ver backend `lib/storageFees.ts`). Deixou de ser custo
+      fixo porque deixou de ser não-medível — e a diferença importa: armazenagem
+      é custo de ESTOQUE, não de venda, então o produto que dorme no armazém é
+      quem mais paga. Como custo fixo, ele saía de graça e a conta caía em cima
+      de quem gira rápido. O que NÃO for medido continua fora do produto.
 
    3. "NÃO MEDIDO" ≠ ZERO. Quando a Fees API não responde, o backend manda
       `feeMedido:false`. Aqui isso vira `null` e a tela mostra "—". Zero medido é
@@ -30,6 +36,12 @@ export interface LinhasDre {
   taxaPrograma?: number; armazenagem?: number; assinatura?: number; outrasTaxas?: number
   /** Parte de `outrasTaxas` que é taxa de SERVIÇO da conta (sem pedido/SKU). */
   outrasConta?: number
+  /**
+   * Quanto da `armazenagem` já foi atribuído a produtos (medido por SKU).
+   * ⚠️ É o que impede a DUPLA CONTAGEM: sem isto, o valor entraria no card do
+   * produto E no custo fixo do período, e o lucro sairia menor que o real.
+   */
+  armazenagemAtribuida?: number
   /** Desconto concedido pelo seller no período (cupom/promoção/frete grátis). */
   promocoes?: number
   /** Receita de embrulho para presente, que o comprador paga. */
@@ -40,6 +52,12 @@ export interface ProdutoDre {
   comissao?: number | null; fba?: number | null
   taxaPrograma?: number | null; outrasTaxas?: number | null
   feeMedido?: boolean
+  /**
+   * Armazenagem MEDIDA deste produto no período (relatório mensal da Amazon).
+   * `null`/ausente = não medida → não entra no produto e continua custo fixo.
+   * Nunca rateio: ver `atribuirArmazenagem` no backend.
+   */
+  armazenagem?: number | null
   /** Desconto que o SELLER concedeu (cupom/promoção). Já está fora da `receita`. */
   promo?: number
 }
@@ -99,6 +117,8 @@ export interface MargemProduto {
   liqMarketplace: number | null
   ads: number | null
   imposto: number
+  /** Armazenagem MEDIDA deste produto no período. `null` = não medida (fica no custo fixo). */
+  armazenagem: number | null
   unitsLiquidas: number; cmv: number; temCusto: boolean
   /** Crédito extra e custo eventual lançados nos pedidos deste SKU no período. */
   credito: number; custoEventual: number
@@ -186,9 +206,16 @@ export function lucroDoPeriodo(
 
 /** Custos do PERÍODO que não pertencem a produto nenhum. A tela mostra separado.
  *  Inclui a taxa de SERVIÇO da conta (`outrasConta`): ela vem do
- *  ServiceFeeEventList, sem pedido nem SKU atrelado — não há a quem atribuir. */
+ *  ServiceFeeEventList, sem pedido nem SKU atrelado — não há a quem atribuir.
+ *
+ *  ⚠️ A armazenagem entra aqui só na parte que NÃO foi atribuída a produto.
+ *  Somar o total faria a parte medida ser cobrada duas vezes: uma no card do
+ *  produto e outra aqui. E é justamente o resto que pertence a este bloco —
+ *  armazenagem de produto que não vendeu no período, ou de ASIN com SKU
+ *  duplicado, que não tem a quem ser atribuída sem virar rateio. */
 export function custosFixosDoPeriodo(linhas: LinhasDre): number {
-  return (linhas?.armazenagem || 0) + (linhas?.assinatura || 0) + (linhas?.outrasConta || 0)
+  const armazenagemSobrando = Math.max(0, (linhas?.armazenagem || 0) - (linhas?.armazenagemAtribuida || 0))
+  return armazenagemSobrando + (linhas?.assinatura || 0) + (linhas?.outrasConta || 0)
 }
 
 export function margemDoProduto(e: EntradaMargem): MargemProduto {
@@ -238,13 +265,19 @@ export function margemDoProduto(e: EntradaMargem): MargemProduto {
   const cmv = custoUnit * unitsLiquidas
   const temCusto = custoUnit > 0
 
+  // Armazenagem MEDIDA do produto. ⚠️ Custo de ESTOQUE, não de venda: não escala
+  // com unidade vendida, e é isso que faz o produto parado finalmente aparecer
+  // como o que ele é. Não medida → null → segue como custo fixo do período.
+  const armazenagem = (p?.armazenagem === undefined || p?.armazenagem === null) ? null : Number(p.armazenagem)
+
   const ads = e.ads ?? null
   // Lançamentos avulsos do pedido entram DEPOIS do CMV, em linha própria. É
   // dinheiro real do período; ficar de fora faria a soma dos pedidos não bater
   // com o card do produto — o defeito que essa base inteira existe pra impedir.
   const credito = Number(e.ajustes?.credito) || 0
   const custoEventual = Number(e.ajustes?.custo) || 0
-  const lucroAntesAds = liqMarketplace === null ? null : liqMarketplace - imposto - cmv + credito - custoEventual
+  const lucroAntesAds = liqMarketplace === null ? null
+    : liqMarketplace - imposto - cmv - (armazenagem || 0) + credito - custoEventual
   const lucro = (lucroAntesAds === null || ads === null) ? null : lucroAntesAds - ads
   const base = lucro ?? lucroAntesAds
   const margem = (base !== null && receitaLiquida > 0) ? base / receitaLiquida * 100 : null
@@ -252,7 +285,7 @@ export function margemDoProduto(e: EntradaMargem): MargemProduto {
   return {
     receitaBruta, devolucaoValor, devolucaoUnits, receitaLiquida,
     comissao, fba, taxaPrograma, outrasTaxas, taxasMedidas: medePrograma && medeOutras, feeMedido,
-    liqMarketplace, ads, imposto, unitsLiquidas, cmv, temCusto, credito, custoEventual,
+    liqMarketplace, ads, imposto, armazenagem, unitsLiquidas, cmv, temCusto, credito, custoEventual,
     lucroAntesAds, lucro, margem,
     completo: feeMedido && ads !== null,
   }
