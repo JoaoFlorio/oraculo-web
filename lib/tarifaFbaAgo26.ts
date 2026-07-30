@@ -64,6 +64,14 @@ export interface ImpactoProduto {
    * Não é `+R$6`: sobre o aumento incidem comissão e imposto, então parte do
    * reajuste volta pra Amazon e pro fisco. `null` quando comissão + imposto
    * passam de 100% e não existe preço que resolva.
+   *
+   * ⭐ DECISÃO DO JOÃO (29/07/2026): a régua é o LUCRO EM REAIS, não a margem %.
+   * Manter a margem percentual pediria um reajuste MAIOR — a margem é uma razão,
+   * e quando o preço sobe o denominador sobe com ele, então recuperar o percentual
+   * exige subir mais do que o custo que apareceu. Isso empurra o seller a aumentar
+   * preço além do necessário pra defender um indicador, e preço é a variável que
+   * ele tem menos liberdade pra mexer sem perder Buy Box e conversão.
+   * ⚠️ NÃO "corrigir" isto pra margem % achando que é descuido.
    */
   reajusteSugerido: number | null
   precoSugerido: number | null
