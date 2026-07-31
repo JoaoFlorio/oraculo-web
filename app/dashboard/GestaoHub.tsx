@@ -2606,8 +2606,21 @@ function Repasses({connected}:{connected?:boolean|null}){
   // mostrando tudo. Dado que existe e não aparece é o pior desfecho possível aqui.
   const comValor=reps.filter(r=>Math.abs(r.valorTransferido||0)>0.005||r.ehPagamento)
   const achouPagamento=reps.some(r=>r.ehPagamento)
-  const pagamentos=achouPagamento?reps.filter(r=>r.ehPagamento):comValor
+  const base=achouPagamento?reps.filter(r=>r.ehPagamento):comValor
+  // ⚠️ MOEDA. A conta tem grupos em mais de uma moeda e eu formatava TUDO com brl2:
+  // um repasse de US$1.170,73 aparecia como "R$ 1.170,73" ao lado do repasse
+  // brasileiro. Era isso que fazia o ciclo 23–30/jul mostrar quatro linhas quando o
+  // Seller Central mostra uma — as outras três nunca foram reais.
+  const moedas=[...new Set(base.map(r=>String(r.moeda||'BRL')))]
+  const pagamentos=moedas.length>1?base.filter(r=>String(r.moeda||'BRL')==='BRL'):base
+  const emOutraMoeda=moedas.length>1?base.filter(r=>String(r.moeda||'BRL')!=='BRL'):[]
   const outros=achouPagamento?reps.filter(r=>!r.ehPagamento&&Math.abs(r.valorTransferido||0)>0.005):[]
+  // Formata na moeda do grupo — nunca assume real.
+  const dinheiro=(v:number,moeda?:string)=>{
+    const m=String(moeda||'BRL')
+    if(m==='BRL') return brl2(v)
+    try{ return v.toLocaleString('pt-BR',{style:'currency',currency:m}) }catch{ return `${m} ${v.toFixed(2)}` }
+  }
   const confs:any[]=Array.isArray(d.conferencias)?d.conferencias:[]
   const confDe=(id:string)=>confs.find(c=>c?.repasse?.id===id)
   // ⚠️ timeZone UTC de propósito. As datas do repasse são MARCOS de período, não
@@ -2644,10 +2657,10 @@ function Repasses({connected}:{connected?:boolean|null}){
             {/* É por este número que o seller acha a linha no Seller Central —
                 o id da API é um hash e não aparece na tela da Amazon. */}
             <td style={{padding:'9px 10px',fontSize:11,color:t.t2,fontFamily:'ui-monospace,monospace'}}>{r.numeroLiquidacao||'—'}</td>
-            <NumTd hide={false} strong>{aberto?'—':brl2(r.valorTransferido)}</NumTd>
+            <NumTd hide={false} strong>{aberto?'—':dinheiro(r.valorTransferido,r.moeda)}</NumTd>
             <NumTd hide={false}>{data(r.dataTransferencia)}</NumTd>
             <NumTd hide={false}>{r.contaFinal?`•••${r.contaFinal}`:'—'}</NumTd>
-            <NumTd hide={false}>{c?.leitura?brl2(c.esperado):'—'}</NumTd>
+            <NumTd hide={false}>{c?.leitura?dinheiro(c.esperado,r.moeda):'—'}</NumTd>
             <td style={{padding:'9px 10px',textAlign:'right' as const,fontSize:12.5,fontFamily:FG,whiteSpace:'nowrap' as const}}>
               {!c ? <span style={{color:t.t3}}>—</span>
                 : c.erro ? <span style={{color:t.red,fontSize:11}}>{String(c.erro).slice(0,40)}</span>
@@ -2667,6 +2680,27 @@ function Repasses({connected}:{connected?:boolean|null}){
     </div>
     {/* Os grupos sem transferência existem e somam dinheiro, mas não são pagamentos:
         escondê-los seria omitir, misturá-los seria confundir. Ficam num recolhido. */}
+    {/* Repasse em outra moeda não é do marketplace brasileiro e não aparece no
+        extrato que o seller compara. Fica separado, com a moeda dita. */}
+    {emOutraMoeda.length>0 && (
+      <details style={{marginTop:12}}>
+        <summary style={{fontSize:11.5,color:t.t2,cursor:'pointer'}}>
+          {emOutraMoeda.length} repasse{emOutraMoeda.length>1?'s':''} em outra moeda ({[...new Set(emOutraMoeda.map(r=>r.moeda))].join(', ')})
+        </summary>
+        <div style={{fontSize:11,color:t.t3,lineHeight:1.6,margin:'8px 0 10px'}}>
+          Estes vêm de outro marketplace da sua conta e não entram no extrato brasileiro que você está conferindo.
+        </div>
+        <Table minWidth={520} head={[{label:'Período'},{label:'Valor',right:true},{label:'Pago em',right:true}]}>
+          {emOutraMoeda.map(r=>(
+            <tr key={r.id}>
+              <td style={{padding:'8px 10px',fontSize:11.5,color:t.t2}}>{data(r.inicio)} — {data(r.fim)}</td>
+              <NumTd hide={false}>{dinheiro(r.valorTransferido||0,r.moeda)}</NumTd>
+              <NumTd hide={false}>{data(r.dataTransferencia)}</NumTd>
+            </tr>
+          ))}
+        </Table>
+      </details>
+    )}
     {outros.length>0 && (
       <details style={{marginTop:12}}>
         <summary style={{fontSize:11.5,color:t.t2,cursor:'pointer'}}>
@@ -2680,7 +2714,7 @@ function Repasses({connected}:{connected?:boolean|null}){
           {outros.map(r=>(
             <tr key={r.id}>
               <td style={{padding:'8px 10px',fontSize:11.5,color:t.t2}}>{data(r.inicio)} — {data(r.fim)}</td>
-              <NumTd hide={false}>{brl2(r.valorTransferido||0)}</NumTd>
+              <NumTd hide={false}>{dinheiro(r.valorTransferido||0,r.moeda)}</NumTd>
               <NumTd hide={false}>{r.status||'—'}</NumTd>
             </tr>
           ))}
