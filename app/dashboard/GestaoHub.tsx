@@ -2599,8 +2599,15 @@ function Repasses({connected}:{connected?:boolean|null}){
   const d=st.data||{}
   if(d.erro||d.error) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:22,color:t.red,fontSize:12.5}}>{String(d.erro||d.error)}</div>
   const reps:any[]=Array.isArray(d.repasses)?d.repasses:[]
-  const pagamentos=reps.filter(r=>r.ehPagamento)
-  const outros=reps.filter(r=>!r.ehPagamento&&Math.abs(r.valorTransferido||0)>0.005)
+  // ⚠️ FILTRO NUNCA ESVAZIA A TELA. A primeira versão exigia dois campos da Amazon
+  // que a conta do João não devolve, e o resultado foi "Nenhum pagamento nos últimos
+  // 3 meses" com 10 repasses no payload — a tela mentindo por causa de um filtro meu.
+  // Se o critério não achar ninguém, mostra tudo que tem valor e diz que está
+  // mostrando tudo. Dado que existe e não aparece é o pior desfecho possível aqui.
+  const comValor=reps.filter(r=>Math.abs(r.valorTransferido||0)>0.005||r.ehPagamento)
+  const achouPagamento=reps.some(r=>r.ehPagamento)
+  const pagamentos=achouPagamento?reps.filter(r=>r.ehPagamento):comValor
+  const outros=achouPagamento?reps.filter(r=>!r.ehPagamento&&Math.abs(r.valorTransferido||0)>0.005):[]
   const confs:any[]=Array.isArray(d.conferencias)?d.conferencias:[]
   const confDe=(id:string)=>confs.find(c=>c?.repasse?.id===id)
   // ⚠️ timeZone UTC de propósito. As datas do repasse são MARCOS de período, não
@@ -2654,7 +2661,9 @@ function Repasses({connected}:{connected?:boolean|null}){
     </Table>
     {!pagamentos.length && <div style={{fontSize:12,color:t.t3,marginTop:12}}>Nenhum pagamento nos últimos 3 meses.</div>}
     <div style={{fontSize:10.5,color:t.t3,marginTop:9,lineHeight:1.6}}>
-      O <b>Grupo de liquidação</b> é o mesmo número que aparece no Seller Central em <b>Pagamentos → Todos os extratos</b> — é por ele que você casa cada linha daqui com a de lá.
+      {achouPagamento
+        ? <>O <b>Grupo de liquidação</b> é o mesmo número que aparece no Seller Central em <b>Pagamentos → Todos os extratos</b> — é por ele que você casa cada linha daqui com a de lá. Quando a Amazon não informa esse número, a coluna fica em “—” e você casa pela <b>data e pelo valor</b>.</>
+        : <>A Amazon não marcou nenhum destes lançamentos como transferência bancária, então estamos mostrando <b>todos os que têm valor</b> — case pela <b>data e pelo valor</b> com o Seller Central em <b>Pagamentos → Todos os extratos</b>.</>}
     </div>
     {/* Os grupos sem transferência existem e somam dinheiro, mas não são pagamentos:
         escondê-los seria omitir, misturá-los seria confundir. Ficam num recolhido. */}
