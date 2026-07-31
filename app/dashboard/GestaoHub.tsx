@@ -2673,6 +2673,15 @@ function Repasses({connected}:{connected?:boolean|null}){
       })}
     </Table>
     {!pagamentos.length && <div style={{fontSize:12,color:t.t3,marginTop:12}}>Nenhum pagamento nos últimos 3 meses.</div>}
+    {/* ⚠️ Corte declarado. Sem isto, "—" na coluna Diferença parece "não fecha" —
+        e a tela passa a acusar um furo que é só o meu limite de conferência. */}
+    {d.conferido && (d.naoConferidos||0)>0 && (
+      <div style={{fontSize:11,color:t.t3,marginTop:9,lineHeight:1.6}}>
+        Conferi os <b>{d.limiteConferencia||8}</b> repasses mais recentes. Os outros <b>{d.naoConferidos}</b> aparecem com “—” na
+        coluna Diferença porque <b>não foram conferidos</b> — não porque não fecham. Cada conferência baixa os lançamentos daquele
+        repasse na Amazon, então o teto existe pra a tela não travar.
+      </div>
+    )}
     <div style={{fontSize:10.5,color:t.t3,marginTop:9,lineHeight:1.6}}>
       {achouPagamento
         ? <>O <b>Grupo de liquidação</b> é o mesmo número que aparece no Seller Central em <b>Pagamentos → Todos os extratos</b> — é por ele que você casa cada linha daqui com a de lá. Quando a Amazon não informa esse número, a coluna fica em “—” e você casa pela <b>data e pelo valor</b>.</>
