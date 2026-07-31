@@ -2569,6 +2569,145 @@ function Relatorio({realDre,inv,costs={},adsReal}:{realDre?:any;inv?:any;costs?:
 }
 
 /* ── Hub ─────────────────────────────────────────────────────────────────── */
+/* ── REPASSES — "quanto a Amazon me pagou" ───────────────────────────────────
+   A terceira pergunta da Gestão. Vendas diz o que está acontecendo agora; o Resumo
+   diz se está ganhando dinheiro; isto diz quanto CAIU NA CONTA.
+
+   ⭐ E é a única tela conferível do produto. O repasse traz o saldo inicial e o
+   valor transferido: se a soma dos eventos que o Oráculo lê der esse valor, nada
+   está sendo perdido na leitura. É o critério de pronto adotado em 27/07 — fechar
+   com o "Valor a ser transferido", e não com a ferramenta do concorrente.
+
+   ⚠️ A conferência é opt-in porque custa paginação por repasse. */
+function Repasses({connected}:{connected?:boolean|null}){
+  const t=useT()
+  const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
+  const [conferindo,setConferindo]=useState(false)
+
+  const carregar=async(conferir=false)=>{
+    conferir?setConferindo(true):setSt({loading:true,data:null})
+    try{
+      const r=await fetch(`/api/amazon/repasses?meses=3${conferir?'&conferir=1':''}`)
+      setSt({loading:false,data:await r.json()})
+    }catch{ setSt({loading:false,data:{erro:'sem resposta do servidor'}}) }
+    setConferindo(false)
+  }
+  useEffect(()=>{ if(connected) carregar(false) },[connected])
+
+  if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon pra ver os repasses."/>
+  if(!st||st.loading) return <LoadingBox/>
+  const d=st.data||{}
+  if(d.erro||d.error) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:22,color:t.red,fontSize:12.5}}>{String(d.erro||d.error)}</div>
+  const reps:any[]=Array.isArray(d.repasses)?d.repasses:[]
+  const confs:any[]=Array.isArray(d.conferencias)?d.conferencias:[]
+  const confDe=(id:string)=>confs.find(c=>c?.repasse?.id===id)
+  // ⚠️ timeZone UTC de propósito. As datas do repasse são MARCOS de período, não
+  // instantes: `2026-07-16T00:00:00Z` formatado no fuso de SP vira "15 de jul." —
+  // um dia a menos. Numa tela feita pra conferir contra o extrato da Amazon, um dia
+  // de diferença faz o seller procurar o repasse errado.
+  const data=(iso:string|null)=>{ if(!iso) return '—'; const x=new Date(iso); return isNaN(x.getTime())?'—':x.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',timeZone:'UTC'}) }
+
+  return(<>
+    <Hint>Cada repasse é um fechamento da Amazon: o que ela juntou no período e transferiu pra sua conta. <b>Esta é a tela que fecha com o banco</b> — a Gestão conta por data do pedido, o repasse conta por data do lançamento.</Hint>
+
+    <div style={{display:'flex',alignItems:'center',gap:10,margin:'12px 0 14px',flexWrap:'wrap' as const}}>
+      <button onClick={()=>carregar(true)} disabled={conferindo}
+        style={{background:conferindo?'transparent':t.gold,color:conferindo?t.t2:(t.dark?'#1c1606':'#3a2a05'),border:`1px solid ${conferindo?t.line2:t.gold}`,borderRadius:9,padding:'9px 14px',fontSize:12,fontWeight:700,cursor:conferindo?'wait':'pointer',fontFamily:'inherit'}}>
+        {conferindo?'Conferindo com a Amazon…':'Conferir se o Oráculo lê tudo'}
+      </button>
+      <span style={{fontSize:11,color:t.t3,flex:1,minWidth:240,lineHeight:1.5}}>
+        Soma os lançamentos de cada repasse fechado e compara com o valor transferido. Bateu = nenhuma linha está passando batido.
+      </span>
+    </div>
+
+    <Table minWidth={860} head={[{label:'Período do repasse',w:'26%'},{label:'Status'},{label:'Transferido',right:true},
+      {label:'Pago em',right:true},{label:'Conta',right:true},{label:'O Oráculo leu',right:true},{label:'Diferença',right:true}]}>
+      {reps.map(r=>{
+        const c=confDe(r.id)
+        const aberto=r.valorTransferido===null
+        return(
+          <tr key={r.id}>
+            <td style={{padding:'9px 10px',fontSize:12,color:t.t1}}>
+              {data(r.inicio)} — {data(r.fim)}
+              <div style={{fontSize:10,color:t.t3,fontFamily:'ui-monospace,monospace'}}>{String(r.id).slice(0,18)}</div>
+            </td>
+            <PillTd><Pill kind={aberto?'gold':'grn'}>{aberto?'Aberto':'Fechado'}</Pill></PillTd>
+            <NumTd hide={false} strong>{aberto?'—':brl2(r.valorTransferido)}</NumTd>
+            <NumTd hide={false}>{data(r.dataTransferencia)}</NumTd>
+            <NumTd hide={false}>{r.contaFinal?`•••${r.contaFinal}`:'—'}</NumTd>
+            <NumTd hide={false}>{c?.leitura?brl2(c.esperado):'—'}</NumTd>
+            <td style={{padding:'9px 10px',textAlign:'right' as const,fontSize:12.5,fontFamily:FG,whiteSpace:'nowrap' as const}}>
+              {!c ? <span style={{color:t.t3}}>—</span>
+                : c.erro ? <span style={{color:t.red,fontSize:11}}>{String(c.erro).slice(0,40)}</span>
+                : c.truncado ? <span style={{color:t.gold,fontSize:11}}>soma parcial</span>
+                : c.fecha ? <span style={{color:t.grn,fontWeight:700}}>fecha ✓</span>
+                : <span style={{color:t.red,fontWeight:700}}>{c.diferenca>0?'+':'−'}{brl2(Math.abs(c.diferenca||0))}</span>}
+            </td>
+          </tr>
+        )
+      })}
+    </Table>
+    {!reps.length && <div style={{fontSize:12,color:t.t3,marginTop:12}}>Nenhum repasse nos últimos 3 meses.</div>}
+
+    {/* ⚠️ Categoria que a Amazon manda e o Oráculo ainda não lê aparece com o NOME
+        dela. Sem isso, ela vira só um número solto na diferença — foi assim que a
+        "Taxa Amazon pra Todos" ficou zerada enquanto cobrava R$152 por mês. */}
+    {confs.some(c=>c?.leitura?.listasNaoLidas?.length>0) && (
+      <div style={{marginTop:16,padding:'13px 15px',borderRadius:12,background:t.dark?'rgba(240,180,41,0.07)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(240,180,41,0.3)':'#FDE68A'}`}}>
+        <div style={{fontSize:12.5,fontWeight:600,color:t.t1,marginBottom:5}}>Lançamentos que o Oráculo ainda não lê</div>
+        <div style={{fontSize:11.5,color:t.t2,lineHeight:1.6}}>
+          A Amazon mandou estas categorias nos seus repasses e nós ainda não sabemos interpretá-las. Elas explicam parte da diferença acima —
+          e aparecem aqui com o nome dela justamente pra não virarem número sem dono:
+          <div style={{marginTop:7,fontFamily:'ui-monospace,monospace',fontSize:10.5,color:t.gold}}>
+            {[...new Set(confs.flatMap(c=>(c?.leitura?.listasNaoLidas||[]).map((l:any)=>`${l.lista} (${l.eventos})`)))].join(' · ')}
+          </div>
+        </div>
+      </div>
+    )}
+
+    {confs.length>0 && (
+      <div style={{marginTop:16}}>
+        <div style={{fontSize:11,fontWeight:700,color:t.t3,letterSpacing:.4,textTransform:'uppercase' as const,marginBottom:9}}>Como cada repasse foi somado</div>
+        {confs.filter(c=>c?.leitura).map((c,i)=>(
+          <div key={i} style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'12px 14px',marginBottom:10}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10,marginBottom:8,flexWrap:'wrap' as const}}>
+              <span style={{fontSize:12,color:t.t1}}>{data(c.repasse.inicio)} — {data(c.repasse.fim)}</span>
+              <b style={{fontFamily:FG,fontSize:13,color:c.fecha?t.grn:t.red}}>
+                {c.fecha?'a leitura fecha com o valor transferido':`diferença de ${brl2(Math.abs(c.diferenca||0))}`}
+              </b>
+            </div>
+            {[['Vendas','vendas'],['Devoluções','devolucoes'],['Taxas de venda','taxasDeVenda'],['Serviços (assinatura, armazenagem)','servicos'],['Ads','ads'],['Ajustes e remoções','ajustes']].map(([rot,k])=>{
+              const v=Number(c.leitura[k as string])||0
+              if(Math.abs(v)<0.005) return null
+              return(
+                <div key={k as string} style={{display:'flex',justifyContent:'space-between',gap:10,padding:'4px 0',fontSize:11.5}}>
+                  <span style={{color:t.t2}}>{rot}</span>
+                  <b style={{fontFamily:FG,color:v<0?t.red:t.grn}}>{v<0?'−':'+'}{brl2(Math.abs(v))}</b>
+                </div>
+              )
+            })}
+            <div style={{marginTop:7,paddingTop:7,borderTop:`1px solid ${t.line}`,display:'flex',justifyContent:'space-between',gap:10,fontSize:11.5}}>
+              <span style={{color:t.t2}}>Saldo que veio do repasse anterior</span>
+              <b style={{fontFamily:FG,color:t.t2}}>{brl2(c.repasse.saldoInicial)}</b>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',gap:10,fontSize:12.5,marginTop:4}}>
+              <b style={{color:t.t1}}>Deveria ter sido transferido</b>
+              <b style={{fontFamily:FG,color:t.t1}}>{brl2(c.esperado)}</b>
+            </div>
+            <div style={{display:'flex',justifyContent:'space-between',gap:10,fontSize:12.5,marginTop:2}}>
+              <b style={{color:t.t1}}>A Amazon transferiu</b>
+              <b style={{fontFamily:FG,color:t.grn}}>{brl2(c.repasse.valorTransferido||0)}</b>
+            </div>
+            {c.truncado && <div style={{fontSize:10.5,color:t.gold,marginTop:7,lineHeight:1.5}}>
+              ⚠️ Este repasse tem lançamentos demais e a leitura foi cortada no meio — a soma acima está incompleta, então a diferença não significa nada aqui.
+            </div>}
+          </div>
+        ))}
+      </div>
+    )}
+  </>)
+}
+
 const TABS = [
   {id:'resumo',label:'Resumo',icon:'ti-layout-dashboard'},
   {id:'vendas',label:'Vendas',icon:'ti-cash'},
@@ -2578,6 +2717,7 @@ const TABS = [
   {id:'gerenc',label:'Gerenciamento',icon:'ti-adjustments'},
   {id:'fulfil',label:'Estoque FBA',icon:'ti-truck-delivery'},
   {id:'relat',label:'Relatório',icon:'ti-file-text'},
+  {id:'repasse',label:'Repasses',icon:'ti-arrow-bar-to-down'},
   {id:'dre',label:'DRE',icon:'ti-building-bank'},
 ]
 const THEME_KEY='oraculo_theme'
@@ -3045,6 +3185,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto} isAdmin={isAdmin}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
         {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={custoUnit} adsReal={adsData}/>}
+        {tab==='repasse'&& <Repasses connected={amazonConnected}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
 
         {/* Modal de detalhamento (lupinha) — sobre qualquer aba */}
