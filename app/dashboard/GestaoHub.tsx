@@ -2655,7 +2655,13 @@ function Repasses({connected}:{connected?:boolean|null}){
       // os grupos do mesmo ciclo em horários diferentes.
       const k=r.ciclo||`${String(r.inicio||'').slice(0,10)}|${String(r.fim||'').slice(0,10)}`
       const g=m.get(k)||{inicio:r.inicio,fim:r.fim,itens:[] as any[],total:0,pago:r.dataTransferencia}
-      g.itens.push(r); g.total=Math.round((g.total+(r.valorTransferido||0))*100)/100
+      g.itens.push(r)
+      // ⚠️ SÓ O QUE FOI TRANSFERIDO ENTRA NO TOTAL. Grupo com FundTransferStatus
+      // "Unknown" é saldo que não saiu — normalmente negativo — e rola pro ciclo
+      // seguinte como saldo inicial. Somá-lo fazia o total discordar do Seller
+      // Central por exatamente o valor dele: 23–30/jul dá R$4.111,03 nos cards da
+      // Amazon e a tela mostrava R$4.107,47, os R$3,56 do grupo não transferido.
+      if(r.foiTransferido!==false) g.total=Math.round((g.total+(r.valorTransferido||0))*100)/100
       if(!g.pago&&r.dataTransferencia) g.pago=r.dataTransferencia
       m.set(k,g)
     }
@@ -2700,7 +2706,11 @@ function Repasses({connected}:{connected?:boolean|null}){
               {g.itens.length} {g.itens.length===1?'liquidação':'liquidações'}{g.pago?` · pago em ${data(g.pago)}`:''}
             </span>
           </div>
-          <b style={{fontFamily:FG,fontSize:15,color:t.grn}}>{brl2(g.total)}</b>
+          <div style={{textAlign:'right' as const}}>
+            <b style={{fontFamily:FG,fontSize:15,color:t.grn}}>{brl2(g.total)}</b>
+            {g.itens.some((x:any)=>x.foiTransferido===false) &&
+              <div style={{fontSize:10,color:t.t3}}>só o que foi transferido</div>}
+          </div>
         </div>
         <Table minWidth={720} head={[{label:'Grupo de liquidação',w:'26%'},{label:'Transferido',right:true},
           {label:'Pago em',right:true},{label:'O Oráculo leu',right:true},{label:'Diferença',right:true}]}>
@@ -2712,12 +2722,16 @@ function Repasses({connected}:{connected?:boolean|null}){
             const aberto=r.valorTransferido==null
             return(
               <tr key={r.id}>
-                <td style={{padding:'8px 10px',fontSize:11,color:t.t2,fontFamily:'ui-monospace,monospace'}}>{r.numeroLiquidacao||String(r.id).slice(0,14)}</td>
+                <td style={{padding:'8px 10px',fontSize:11,color:t.t2,fontFamily:'ui-monospace,monospace'}}>
+                  {r.numeroLiquidacao||String(r.id).slice(0,14)}
+                  {r.foiTransferido===false && <div style={{fontSize:10,color:t.gold,fontFamily:'inherit'}}>não transferido · rola pro próximo ciclo</div>}
+                </td>
                 <NumTd hide={false} strong>{aberto?'—':brl2(r.valorTransferido)}</NumTd>
                 <NumTd hide={false}>{data(r.dataTransferencia)}</NumTd>
                 <NumTd hide={false}>{c?.leitura?brl2(c.esperado):'—'}</NumTd>
                 <td style={{padding:'8px 10px',textAlign:'right' as const,fontSize:12,fontFamily:FG,whiteSpace:'nowrap' as const}}>
-                  {!c ? <span style={{color:t.t3}}>—</span>
+                  {/* ⚠️ "—" aqui parecia leitura falhando. É só o limite de conferência. */}
+                  {!c ? <span style={{color:t.t3,fontSize:10.5}}>não conferido</span>
                     : c.erro ? <span style={{color:t.red,fontSize:11}}>{String(c.erro).slice(0,40)}</span>
                     : c.truncado ? <span style={{color:t.gold,fontSize:11}}>soma parcial</span>
                     : c.fecha ? <span style={{color:t.grn,fontWeight:700}}>fecha ✓</span>
