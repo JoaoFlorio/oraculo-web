@@ -452,11 +452,34 @@ function LoadingBox(){
 /* ── KPI ─────────────────────────────────────────────────────────────────── */
 // Card de KPI no estilo Gestor Seller: centralizado, valor grande (Poppins),
 // borda de acento colorida, ícone de info no canto. (delta/icon ignorados — layout limpo.)
-function KPI({label,value,color,hide}:{label:string;value:string;delta?:string;up?:boolean;icon?:string;color:string;hide:boolean}){
+function KPI({label,value,color,hide,tip}:{label:string;value:string;delta?:string;up?:boolean;icon?:string;color:string;hide:boolean;tip?:string}){
   const t=useT()
+  /* ⚠️ O ⓘ era um ENFEITE — aria-hidden, sem handler. A primeira cliente clicou
+     esperando a explicação ("vi que o i ainda não está funcionando") e comparou
+     com o concorrente, onde ele abre o detalhamento. Ícone que parece botão e não
+     faz nada é pior que ícone nenhum: vira promessa quebrada na cara do cliente.
+     Clique (não hover) de propósito: no celular hover não existe. */
+  const [aberto,setAberto]=useState(false)
+  useEffect(()=>{
+    if(!aberto) return
+    const fechar=()=>setAberto(false)
+    document.addEventListener('click',fechar)
+    return ()=>document.removeEventListener('click',fechar)
+  },[aberto])
   return(
     <div style={{background:t.card,border:`1.5px solid ${color}`,borderRadius:14,padding:'16px 14px 18px',textAlign:'center' as const,position:'relative' as const,minHeight:96,display:'flex',flexDirection:'column' as const,justifyContent:'center',boxShadow:'var(--elev1)'}}>
-      <i className="ti ti-info-circle" style={{position:'absolute' as const,top:9,right:11,fontSize:14,color:t.t3,opacity:0.7}} aria-hidden="true"/>
+      {tip
+        ? <button aria-label={`O que é ${label}`} onClick={e=>{e.stopPropagation();setAberto(v=>!v)}}
+            style={{position:'absolute' as const,top:5,right:6,background:'transparent',border:'none',cursor:'pointer',padding:4,lineHeight:1}}>
+            <i className="ti ti-info-circle" style={{fontSize:14,color:aberto?t.gold:t.t3,opacity:aberto?1:0.7}} aria-hidden="true"/>
+          </button>
+        : <i className="ti ti-info-circle" style={{position:'absolute' as const,top:9,right:11,fontSize:14,color:t.t3,opacity:0.35}} aria-hidden="true"/>}
+      {aberto&&tip&&(
+        <div onClick={e=>e.stopPropagation()}
+          style={{position:'absolute' as const,top:30,right:6,left:6,zIndex:30,background:t.dark?'#1c1e26':'#fff',border:`1px solid ${t.line2}`,borderRadius:10,padding:'10px 12px',fontSize:11,color:t.t2,lineHeight:1.55,textAlign:'left' as const,boxShadow:'0 8px 24px rgba(0,0,0,0.35)',whiteSpace:'pre-line' as const}}>
+          {tip}
+        </div>
+      )}
       <div style={{fontFamily:FG,fontSize:12.5,color:t.t2,fontWeight:500,marginBottom:9,lineHeight:1.25}}>{label}</div>
       <div style={{fontFamily:FG,fontWeight:700,fontSize:25,letterSpacing:'-0.01em',color:t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}}>{value}</div>
     </div>
@@ -567,6 +590,14 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
     // produtos somados em qualquer período com devolução.
     const base=(L.receitaLiquida ?? fat) || 0
     const vendas=realDre.vendas||0, unidades=realDre.unidades||0
+    /* ⭐ UNIDADES LÍQUIDAS NO CARD. A primeira cliente pegou na primeira semana: o
+       card dizia 23 com 1 reembolso, e o concorrente dizia 22. E a nossa própria
+       conta já era líquida por dentro — o CMV cobra unitsLiquidas desde 28/07 —
+       então o card mostrava um número que o resto da tela não usava. O detalhe
+       (brutas/reembolsadas) vai no ⓘ, que agora abre de verdade. */
+    const unidadesReemb=(realDre.reembolsos||[]).reduce((s2:number,r2:any)=>s2+Math.abs(Number(r2.units)||0),0)
+    const unidadesLiq=Math.max(0,unidades-unidadesReemb)
+    const devolucoesVal=L.devolucoes||0
     const ticket=vendas>0?fat/vendas:0
     const tacos=(ads!==null&&base>0)?ads/base*100:null
     // ⚠️ O IMPOSTO ENTRA AQUI. Ficava de fora e o "Lucro Bruto" da capa saía maior
@@ -585,19 +616,33 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
     const mpa=(lucroPosAds!==null&&base>0)?lucroPosAds/base*100:null
     const cm=cmv>0, dash='—'
     return {
+      // ⓘ de cada card: rótulo, o PORQUÊ e o detalhe dinâmico — a regra 6 do vault
+      // (rótulo + porquê + ação) aplicada aos KPIs.
       kpis:[
-        {label:'Faturamento',value:brl2(fat),icon:'ti-cash',color:t.vio},
-        {label:'Líq. do Marketplace',value:brl2(liq),icon:'ti-building-bank',color:t.blue},
-        {label:'Lucro Bruto',value:cm?brl2(lucroBruto):dash,icon:'ti-trending-up',color:t.grn},
-        {label:'Margem',value:cm?pc(margem):dash,icon:'ti-percentage',color:t.grn},
-        {label:'Número de Vendas',value:String(vendas),icon:'ti-shopping-cart',color:t.blue},
-        {label:'Número de Unidades Vendidas',value:String(unidades),icon:'ti-package',color:t.blue},
-        {label:'Ticket Médio',value:brl2(ticket),icon:'ti-receipt',color:t.grn},
-        {label:'Retorno Sobre Investimento',value:cm?pc(roi):dash,icon:'ti-rotate-clockwise',color:t.grn},
-        {label:'Valor em Ads',value:adsPending?'…':(ads===null?dash:brl2(ads)),icon:'ti-speakerphone',color:t.grn},
-        {label:'TACOS',value:adsPending?'…':(tacos===null?dash:pc(tacos)),icon:'ti-target',color:t.grn},
-        {label:'Lucro bruto pós ADS',value:adsPending?'…':((cm&&lucroPosAds!==null)?brl2(lucroPosAds):dash),icon:'ti-coin',color:t.grn},
-        {label:'MPA',value:adsPending?'…':((cm&&mpa!==null)?pc(mpa):dash),icon:'ti-chart-pie',color:t.grn},
+        {label:'Faturamento',value:brl2(fat),icon:'ti-cash',color:t.vio,
+          tip:`Tudo que você vendeu no período, já líquido de cupom/desconto concedido.${devolucoesVal>0.005?`\nDevoluções: −${brl2(devolucoesVal)} → líquido de devolução: ${brl2(Math.max(0,fat-devolucoesVal))}.`:''}\nA devolução aparece como linha própria e já desconta do Lucro — aqui fica o bruto pra você ver o volume real de venda.`},
+        {label:'Líq. do Marketplace',value:brl2(liq),icon:'ti-building-bank',color:t.blue,
+          tip:'O que sobra DA VENDA depois da parte da Amazon: comissão, tarifa FBA, Taxa Amazon pra Todos, armazenagem, assinatura e devoluções. Ainda não desconta seu custo de produto, imposto nem ads.'},
+        {label:'Lucro Bruto',value:cm?brl2(lucroBruto):dash,icon:'ti-trending-up',color:t.grn,
+          tip:'Líq. do Marketplace − custo dos produtos (CMV das unidades líquidas) − imposto + lançamentos avulsos. É o lucro ANTES do anúncio.'},
+        {label:'Margem',value:cm?pc(margem):dash,icon:'ti-percentage',color:t.grn,
+          tip:'Lucro Bruto ÷ receita líquida de devolução. Mesma régua usada no card de cada produto — capa e detalhe não têm como discordar.'},
+        {label:'Número de Vendas',value:String(vendas),icon:'ti-shopping-cart',color:t.blue,
+          tip:'Pedidos que caíram no período (cancelados ficam de fora). Pedido devolvido depois CONTA como venda — a devolução desconta no Faturamento e no Lucro, não aqui.'},
+        {label:'Número de Unidades Vendidas',value:String(unidadesLiq),icon:'ti-package',color:t.blue,
+          tip:`Unidades LÍQUIDAS — as que ficaram vendidas de verdade.${unidadesReemb>0?`\n${unidades} vendidas − ${unidadesReemb} reembolsada${unidadesReemb>1?'s':''} = ${unidadesLiq}.`:`\n${unidades} vendidas, nenhuma reembolsada no período.`}\nÉ a mesma contagem que o CMV usa: unidade devolvida não cobra custo.`},
+        {label:'Ticket Médio',value:brl2(ticket),icon:'ti-receipt',color:t.grn,
+          tip:'Faturamento ÷ número de vendas.'},
+        {label:'Retorno Sobre Investimento',value:cm?pc(roi):dash,icon:'ti-rotate-clockwise',color:t.grn,
+          tip:'Lucro Bruto ÷ custo dos produtos vendidos (CMV). Quanto cada real investido em mercadoria devolveu no período.'},
+        {label:'Valor em Ads',value:adsPending?'…':(ads===null?dash:brl2(ads)),icon:'ti-speakerphone',color:t.grn,
+          tip:'Gasto REAL de anúncio no período (relatório da Advertising API), não estimativa.'},
+        {label:'TACOS',value:adsPending?'…':(tacos===null?dash:pc(tacos)),icon:'ti-target',color:t.grn,
+          tip:'Ads ÷ receita total. Quanto do seu faturamento o anúncio consome — TACOS subindo com faturamento parado é sinal de dependência.'},
+        {label:'Lucro bruto pós ADS',value:adsPending?'…':((cm&&lucroPosAds!==null)?brl2(lucroPosAds):dash),icon:'ti-coin',color:t.grn,
+          tip:'Lucro Bruto − gasto de anúncio. É o que de fato sobrou no período.'},
+        {label:'MPA',value:adsPending?'…':((cm&&mpa!==null)?pc(mpa):dash),icon:'ti-chart-pie',color:t.grn,
+          tip:'Margem Pós-Anúncio: lucro pós ads ÷ receita líquida. A margem final da operação.'},
       ],
       comp:[
         {name:'Lucro líquido',value:Math.max(0,Math.round(lucroPosAds??lucroBruto)),color:t.grn},
