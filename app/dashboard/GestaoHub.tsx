@@ -2651,7 +2651,9 @@ function Repasses({connected}:{connected?:boolean|null}){
   const ciclos=(()=>{
     const m=new Map<string,{inicio:string|null;fim:string|null;itens:any[];total:number;pago:string|null}>()
     for(const r of comValor){
-      const k=r.ciclo||`${r.inicio||''}|${r.fim||''}`
+      // Mesma regra do backend: agrupa pela DATA, não pelo timestamp. A Amazon abre
+      // os grupos do mesmo ciclo em horários diferentes.
+      const k=r.ciclo||`${String(r.inicio||'').slice(0,10)}|${String(r.fim||'').slice(0,10)}`
       const g=m.get(k)||{inicio:r.inicio,fim:r.fim,itens:[] as any[],total:0,pago:r.dataTransferencia}
       g.itens.push(r); g.total=Math.round((g.total+(r.valorTransferido||0))*100)/100
       if(!g.pago&&r.dataTransferencia) g.pago=r.dataTransferencia
