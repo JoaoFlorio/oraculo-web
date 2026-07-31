@@ -2691,13 +2691,23 @@ function Repasses({connected}:{connected?:boolean|null}){
      como moeda — três hipóteses, três erros. Eram todas pagamentos de verdade. O
      que faltava não era filtro: era AGRUPAR POR CICLO e dizer o porquê. */
   const comValor=reps.filter(r=>Math.abs(r.valorTransferido||0)>0.005||r.ehPagamento)
+  // ⚠️ Cada valor na moeda do PRÓPRIO grupo. Na conta do João é tudo BRL, mas a
+  // Finances devolve a conta INTEIRA da região — um cliente com venda nos EUA
+  // receberia grupos em USD, e formatá-los com "R$" seria o número errado na tela
+  // que existe pra conferir com o banco. Moeda entra na chave do ciclo: bloco de
+  // dólar não se mistura com bloco de real.
+  const dinheiro=(v:number,m?:string)=>{
+    const mo=String(m||'BRL')
+    if(mo==='BRL') return brl2(v)
+    try{ return v.toLocaleString('pt-BR',{style:'currency',currency:mo}) }catch{ return `${mo} ${v.toFixed(2)}` }
+  }
   const ciclos=(()=>{
-    const m=new Map<string,{inicio:string|null;fim:string|null;itens:any[];total:number;pago:string|null}>()
+    const m=new Map<string,{inicio:string|null;fim:string|null;itens:any[];total:number;pago:string|null;moeda:string}>()
     for(const r of comValor){
       // Mesma regra do backend: agrupa pela DATA, não pelo timestamp. A Amazon abre
       // os grupos do mesmo ciclo em horários diferentes.
-      const k=r.ciclo||`${String(r.inicio||'').slice(0,10)}|${String(r.fim||'').slice(0,10)}`
-      const g=m.get(k)||{inicio:r.inicio,fim:r.fim,itens:[] as any[],total:0,pago:r.dataTransferencia}
+      const k=(r.ciclo||`${String(r.inicio||'').slice(0,10)}|${String(r.fim||'').slice(0,10)}`)+'|'+String(r.moeda||'BRL')
+      const g=m.get(k)||{inicio:r.inicio,fim:r.fim,itens:[] as any[],total:0,pago:r.dataTransferencia,moeda:String(r.moeda||'BRL')}
       g.itens.push(r)
       // ⚠️ SÓ O QUE FOI TRANSFERIDO ENTRA NO TOTAL. Grupo com FundTransferStatus
       // "Unknown" é saldo que não saiu — normalmente negativo — e rola pro ciclo
@@ -2710,12 +2720,6 @@ function Repasses({connected}:{connected?:boolean|null}){
     }
     return [...m.values()].sort((a,b)=>Date.parse(b.inicio||'')-Date.parse(a.inicio||''))
   })()
-  // Formata na moeda do grupo — nunca assume real.
-  const dinheiro=(v:number,moeda?:string)=>{
-    const m=String(moeda||'BRL')
-    if(m==='BRL') return brl2(v)
-    try{ return v.toLocaleString('pt-BR',{style:'currency',currency:m}) }catch{ return `${m} ${v.toFixed(2)}` }
-  }
   const confs:any[]=Array.isArray(d.conferencias)?d.conferencias:[]
   const confDe=(id:string)=>confs.find(c=>c?.repasse?.id===id)
   // ⚠️ timeZone UTC de propósito. As datas do repasse são MARCOS de período, não
@@ -2749,10 +2753,11 @@ function Repasses({connected}:{connected?:boolean|null}){
             <b style={{fontSize:13,color:t.t1}}>{data(g.inicio)} — {data(g.fim)}</b>
             <span style={{fontSize:11,color:t.t3,marginLeft:8}}>
               {g.itens.length} {g.itens.length===1?'liquidação':'liquidações'}{g.pago?` · pago em ${data(g.pago)}`:''}
+              {g.moeda!=='BRL'&&<b style={{color:t.gold,marginLeft:6}}>{g.moeda} · outro marketplace</b>}
             </span>
           </div>
           <div style={{textAlign:'right' as const}}>
-            <b style={{fontFamily:FG,fontSize:15,color:t.grn}}>{brl2(g.total)}</b>
+            <b style={{fontFamily:FG,fontSize:15,color:t.grn}}>{dinheiro(g.total,g.moeda)}</b>
             {g.itens.some((x:any)=>x.foiTransferido===false) &&
               <div style={{fontSize:10,color:t.t3}}>só o que foi transferido</div>}
           </div>
@@ -2771,9 +2776,9 @@ function Repasses({connected}:{connected?:boolean|null}){
                   {r.numeroLiquidacao||String(r.id).slice(0,14)}
                   {r.foiTransferido===false && <div style={{fontSize:10,color:t.gold,fontFamily:'inherit'}}>não transferido · rola pro próximo ciclo</div>}
                 </td>
-                <NumTd hide={false} strong>{aberto?'—':brl2(r.valorTransferido)}</NumTd>
+                <NumTd hide={false} strong>{aberto?'—':dinheiro(r.valorTransferido,r.moeda)}</NumTd>
                 <NumTd hide={false}>{data(r.dataTransferencia)}</NumTd>
-                <NumTd hide={false}>{c?.leitura?brl2(c.esperado):'—'}</NumTd>
+                <NumTd hide={false}>{c?.leitura?dinheiro(c.esperado,r.moeda):'—'}</NumTd>
                 <td style={{padding:'8px 10px',textAlign:'right' as const,fontSize:12,fontFamily:FG,whiteSpace:'nowrap' as const}}>
                   {/* ⚠️ "—" aqui parecia leitura falhando. É só o limite de conferência. */}
                   {!c ? <span style={{color:t.t3,fontSize:10.5}}>não conferido</span>

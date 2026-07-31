@@ -18,6 +18,10 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const url = new URL(req.url)
+  // ⭐ Admin pode olhar a conta de OUTRO cliente (suporte no lançamento: o cliente
+  // manda print de um repasse vermelho e o João investiga da sessão dele). Pra
+  // todo mundo mais, o e-mail continua vindo só da sessão.
+  const alvo = (url.searchParams.get('email') || '').trim().toLowerCase()
   const meses = Math.min(12, Math.max(1, Number(url.searchParams.get('meses') ?? 3) || 3))
   const conferir = url.searchParams.get('conferir') === '1' ? '&conferir=1' : ''
   // Diagnóstico: campos crus do grupo. Só admin — é dado de depuração, não de tela.
@@ -25,7 +29,7 @@ export async function GET(req: Request) {
 
   try {
     const res = await fetch(
-      `${BACKEND}/api/amazon/repasses?email=${encodeURIComponent(user.email)}&meses=${meses}${conferir}${cru}`,
+      `${BACKEND}/api/amazon/repasses?email=${encodeURIComponent((alvo && user.role==='admin') ? alvo : user.email)}&meses=${meses}${conferir}${cru}`,
       { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } },
     )
     return NextResponse.json(await res.json(), { status: res.status })

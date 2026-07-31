@@ -16,12 +16,16 @@ export async function GET(req: Request) {
   if (user.role !== 'admin') return NextResponse.json({ error: 'Só admin' }, { status: 403 })
 
   const url = new URL(req.url)
+  // ⭐ Admin pode olhar a conta de OUTRO cliente (suporte no lançamento: o cliente
+  // manda print de um repasse vermelho e o João investiga da sessão dele). Pra
+  // todo mundo mais, o e-mail continua vindo só da sessão.
+  const alvo = (url.searchParams.get('email') || '').trim().toLowerCase()
   const groupId = (url.searchParams.get('groupId') || '').trim()
   if (!groupId) return NextResponse.json({ error: 'groupId obrigatório' }, { status: 400 })
 
   try {
     const res = await fetch(
-      `${BACKEND}/api/amazon/repasse-caminhos?email=${encodeURIComponent(user.email)}&groupId=${encodeURIComponent(groupId)}`,
+      `${BACKEND}/api/amazon/repasse-caminhos?email=${encodeURIComponent((alvo && user.role==='admin') ? alvo : user.email)}&groupId=${encodeURIComponent(groupId)}`,
       { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } },
     )
     return NextResponse.json(await res.json(), { status: res.status })
