@@ -2583,6 +2583,8 @@ function Repasses({connected}:{connected?:boolean|null}){
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
   const [conferindo,setConferindo]=useState(false)
+  const [cru,setCru]=useState<any[]|null>(null)
+  const [buscandoCru,setBuscandoCru]=useState(false)
 
   const carregar=async(conferir=false)=>{
     conferir?setConferindo(true):setSt({loading:true,data:null})
@@ -2591,6 +2593,41 @@ function Repasses({connected}:{connected?:boolean|null}){
       setSt({loading:false,data:await r.json()})
     }catch{ setSt({loading:false,data:{erro:'sem resposta do servidor'}}) }
     setConferindo(false)
+  }
+
+  /* ⭐ DIAGNÓSTICO: o que SEPARA duas liquidações do mesmo ciclo?
+     A Amazon paga por bandeira e eu ainda não sei qual campo carrega isso — três
+     chutes meus já falharam. Em vez de despejar o JSON inteiro, isto compara os
+     grupos do MESMO ciclo e mostra só os campos cujos valores DIFEREM: o campo da
+     bandeira é, por definição, um deles. Perguntar ao dado custa uma rodada;
+     adivinhar custou três. */
+  const descobrir=async()=>{
+    setBuscandoCru(true)
+    try{
+      const r=await fetch('/api/amazon/repasses?meses=3&cru=1')
+      const d=await r.json()
+      const porCiclo=new Map<string,any[]>()
+      for(const rep of (d?.repasses||[])){
+        if(!rep?.cru) continue
+        const k=rep.ciclo||''
+        porCiclo.set(k,[...(porCiclo.get(k)||[]),rep])
+      }
+      const achados:any[]=[]
+      for(const [k,grupos] of porCiclo){
+        if(grupos.length<2) continue   // sem dois pra comparar, não há o que separar
+        const chaves=[...new Set(grupos.flatMap((g:any)=>Object.keys(g.cru||{})))]
+        const diferentes=chaves.map(c=>{
+          const vals=grupos.map((g:any)=>{
+            const v=(g.cru||{})[c]
+            return v&&typeof v==='object'?JSON.stringify(v):String(v??'—')
+          })
+          return {campo:c,valores:vals,difere:new Set(vals).size>1}
+        }).filter(x=>x.difere)
+        achados.push({ciclo:k,inicio:grupos[0].inicio,fim:grupos[0].fim,qtd:grupos.length,diferentes})
+      }
+      setCru(achados)
+    }catch{ setCru([]) }
+    setBuscandoCru(false)
   }
   useEffect(()=>{ if(connected) carregar(false) },[connected])
 
@@ -2703,6 +2740,31 @@ function Repasses({connected}:{connected?:boolean|null}){
         <br/><br/>
         No Seller Central você vê <b>um por vez</b>: é o seletor <b>“Tipo de conta”</b> em Pagamentos → Todos os extratos que troca
         entre eles. Aqui os dois níveis aparecem juntos — o <b>total do ciclo</b> em cima e cada liquidação embaixo.
+      </div>
+      {/* Só admin: procura, nos campos crus da Amazon, qual deles identifica a
+          bandeira. Mostra apenas o que DIFERE entre liquidações do mesmo ciclo. */}
+      <div style={{marginTop:11,paddingTop:10,borderTop:`1px dashed ${t.line2}`}}>
+        <button onClick={descobrir} disabled={buscandoCru}
+          style={{background:'transparent',color:t.t2,border:`1px dashed ${t.line2}`,borderRadius:8,padding:'7px 12px',fontSize:11.5,cursor:buscandoCru?'wait':'pointer',fontFamily:'inherit'}}>
+          {buscandoCru?'Perguntando à Amazon…':'Admin · descobrir o que separa as liquidações'}
+        </button>
+        {cru!==null && (
+          <div style={{marginTop:10}}>
+            {!cru.length && <div style={{fontSize:11.5,color:t.t3}}>Nenhum ciclo com duas ou mais liquidações pra comparar.</div>}
+            {cru.map((a:any,i:number)=>(
+              <div key={i} style={{marginTop:9,padding:'10px 12px',borderRadius:9,background:t.dark?'rgba(255,255,255,0.03)':'#F4F4F5'}}>
+                <div style={{fontSize:11.5,fontWeight:700,color:t.t1,marginBottom:6}}>
+                  {data(a.inicio)} — {data(a.fim)} · {a.qtd} liquidações · {a.diferentes.length} campo(s) diferem
+                </div>
+                {a.diferentes.map((x:any,j:number)=>(
+                  <div key={j} style={{fontSize:10.5,fontFamily:'ui-monospace,monospace',color:t.t2,lineHeight:1.7,wordBreak:'break-all' as const}}>
+                    <b style={{color:t.gold}}>{x.campo}</b>: {x.valores.join('  |  ')}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
 
