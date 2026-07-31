@@ -2740,6 +2740,15 @@ function Repasses({connected}:{connected?:boolean|null}){
         <br/><br/>
         No Seller Central você vê <b>um por vez</b>: é o seletor <b>“Tipo de conta”</b> em Pagamentos → Todos os extratos que troca
         entre eles. Aqui os dois níveis aparecem juntos — o <b>total do ciclo</b> em cima e cada liquidação embaixo.
+        <br/><br/>
+        {/* ⚠️ Verificado nos campos crus da conta real: os únicos que diferem entre
+            liquidações do mesmo ciclo são id, valor, status da transferência e o
+            final da conta. Não existe campo de bandeira. Dizer isso é melhor que
+            rotular por dedução e errar — e melhor que deixar o seller achando que
+            é omissão nossa. */}
+        <b style={{color:t.t2}}>A Amazon não informa a bandeira pela API</b> — só o final da conta que recebeu, quando existe.
+        Pra saber qual liquidação é de qual meio de pagamento, troque o <b>Tipo de conta</b> no Seller Central: o <b>valor e a data</b> casam
+        exatamente com as linhas acima. O número do grupo de liquidação também não vem pela API, então ele aparece em “—” quando a Amazon não manda.
       </div>
       {/* Só admin: procura, nos campos crus da Amazon, qual deles identifica a
           bandeira. Mostra apenas o que DIFERE entre liquidações do mesmo ciclo. */}
