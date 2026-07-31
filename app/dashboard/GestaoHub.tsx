@@ -12,6 +12,7 @@ import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, lucroDoPeriodo,
 import { impactoTarifaAgo26, type ProdutoTarifa } from '@/lib/tarifaFbaAgo26'
 import { maturidadeDoPeriodo, type SeloMaturidade } from '@/lib/maturidadePeriodo'
 import { snapshotDoPeriodo, narrarMudancas, reconciliar, normalizarMarcos, chaveDoPeriodo, type SnapshotPeriodo, type MarcosPeriodo, type Diario, type Reconciliacao } from '@/lib/diarioPeriodo'
+import { GRUPOS, TELA_INICIAL, grupoDaTab, grupoPorId, telaAoEntrarNoGrupo, tabPorId } from '@/lib/navegacaoGestao'
 
 const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#888'}}>Carregando DRE…</div>})
 
@@ -198,11 +199,18 @@ function realAbc(metrics:ProductMetrics[]){
    Responde as duas perguntas que o número que se mexe levanta: "dá pra confiar
    nisto agora?" e "por que mudou desde ontem?". Sem elas, exatidão sobre um
    período inacabado é lida como imprecisão. */
+/* Cor e ponto do selo — UMA vez. O selo aparece em dois lugares (na barra de
+   grupos, como legenda antes do clique; e aqui dentro, clicável e explicado), e
+   duas expressões pra pintar o mesmo estado divergem na primeira mudança. */
+function visualDoSelo(t:Theme,selo:SeloMaturidade){
+  return selo.nivel==='fechado'    ? {cor:t.grn, ponto:'🟢', curto:'fechado'}
+       : selo.nivel==='liquidando' ? {cor:t.gold,ponto:'🟠', curto:'em liquidação'}
+       :                             {cor:t.blue,ponto:'🟡', curto:'em aberto'}
+}
 function SeloEDiario({selo,diario,hide}:{selo:SeloMaturidade;diario:Diario|null;hide:boolean}){
   const t=useT()
   const [aberto,setAberto]=useState(false)
-  const cor=selo.nivel==='fechado'?t.grn:selo.nivel==='liquidando'?t.gold:t.blue
-  const ponto=selo.nivel==='fechado'?'🟢':selo.nivel==='liquidando'?'🟠':'🟡'
+  const {cor,ponto}=visualDoSelo(t,selo)
   const quando=(iso:string)=>{
     const d=new Date(iso); if(isNaN(d.getTime())) return 'a última vez'
     const h=Math.floor((Date.now()-d.getTime())/3600000)
@@ -829,7 +837,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
             </div>
           </div>
         )}
-        <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Informe o custo (CMV) na aba Gerenciamento para ver lucro, margem e MPA. Comissão e FBA rateados por faturamento. {adsReal_?'Ads = gasto REAL de cada produto (relatório da Amazon).':'O gasto de ads por produto ainda está sincronizando — as colunas de Ads ficam vazias até chegar. Não rateamos o total da conta: isso faria a margem de um produto depender do que os outros gastaram.'}</div>
+        <div style={{fontFamily:FG,fontSize:10.5,color:t.t3,marginTop:8}}>Informe o custo (CMV) em Ajustes → Gerenciamento para ver lucro, margem e MPA. Comissão e FBA rateados por faturamento. {adsReal_?'Ads = gasto REAL de cada produto (relatório da Amazon).':'O gasto de ads por produto ainda está sincronizando — as colunas de Ads ficam vazias até chegar. Não rateamos o total da conta: isso faria a margem de um produto depender do que os outros gastaram.'}</div>
       </div>
     )}
   </>)
@@ -1298,8 +1306,8 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
           )}
           {imposto>0 && <Row label={`Imposto (${pc(imposto)})`} val={M.imposto} sign="-" color={t.red} hide={hide}/>}
           <Row label={`Custo do produto (CMV${M.devolucaoUnits>0?`, ${M.unitsLiquidas} un.`:''})`} val={M.cmv} sign="-" color={temCusto?t.red:t.t3} hide={hide}/>
-          {M.credito>0.005 && <Row label="Créditos extras lançados" val={M.credito} color={t.grn} hide={hide} nota="lançados em pedidos deste produto, na aba Vendas"/>}
-          {M.custoEventual>0.005 && <Row label="Custos eventuais lançados" val={M.custoEventual} sign="-" color={t.red} hide={hide} nota="lançados em pedidos deste produto, na aba Vendas"/>}
+          {M.credito>0.005 && <Row label="Créditos extras lançados" val={M.credito} color={t.grn} hide={hide} nota="lançados em pedidos deste produto, em Vendas → Pedidos"/>}
+          {M.custoEventual>0.005 && <Row label="Custos eventuais lançados" val={M.custoEventual} sign="-" color={t.red} hide={hide} nota="lançados em pedidos deste produto, em Vendas → Pedidos"/>}
           <div style={{height:1,background:t.line,margin:'8px 0'}}/>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
             <span style={{fontSize:13.5,fontWeight:700,color:t.t1}}>{!M.feeMedido?'Lucro do período':semAds?'Lucro antes do Ads':'Lucro do período'}</span>
@@ -1317,7 +1325,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
             ? <>A armazenagem <b>deste</b> produto já está descontada acima, medida por SKU. O que sobra em custo fixo ({brl2(custosFixos)}) é a assinatura e a armazenagem que <b>não</b> tem dono — de produto que não vendeu no período, ou de ASIN com SKU duplicado, que não dá pra atribuir sem virar rateio.</>
             : <>Assinatura e armazenagem do período ({brl2(custosFixos)}) são custo fixo da conta e <b>não entram na margem de produto nenhum</b> — se entrassem, a margem deste produto mudaria conforme o dia que você escolhesse no filtro.</>}</span>
         </div>}
-        {!temCusto && <div style={{fontSize:10.5,color:t.t3,marginBottom:14}}>Informe o custo (CMV) deste produto na aba <b>Gerenciamento</b> pra ver o lucro e a margem finais.</div>}
+        {!temCusto && <div style={{fontSize:10.5,color:t.t3,marginBottom:14}}>Informe o custo (CMV) deste produto em <b>Ajustes → Gerenciamento</b> pra ver o lucro e a margem finais.</div>}
 
         {/* Lista de pedidos do produto (Espelho Local) */}
         <div style={{fontSize:12.5,fontWeight:600,color:t.t1,marginBottom:8}}>Pedidos deste produto</div>
@@ -1446,7 +1454,7 @@ const DIAG:Record<DiagABC,{rotulo:string;kind:'grn'|'gold'|'red'|'cinza';motivo:
     acao:'Não é urgente nem é campeão. Se quiser mexer, veja preço e custo — mas priorize os de volume antes deste.'},
   incerto:{rotulo:'Informe o custo',kind:'cinza',
     motivo:'Sem o custo (CMV) cadastrado não dá pra saber se esse produto dá dinheiro.',
-    acao:'Informe o custo dele na aba Gerenciamento — é o que falta pro Oráculo classificar.'},
+    acao:'Informe o custo dele em Ajustes → Gerenciamento — é o que falta pro Oráculo classificar.'},
 }
 const RESUMO_DIAG:Record<DiagABC,string>={
   chefe:'vende muito · margem acima da média',
@@ -2130,7 +2138,7 @@ function AdsAdmin({margem}:{margem?:number|null}){
           <div style={{fontSize:10,color:t.t3,marginTop:9,lineHeight:1.5}}>
             {margem!=null
               ? <>Régua: sua <b>margem é {margem.toFixed(0)}%</b> — ACOS acima disso vende no prejuízo. Reduzir o orçamento é alternativa mais branda que pausar.</>
-              : <>⚠️ <b>Cadastre o custo (CMV) na aba Gerenciamento</b> — sem ele não dá pra saber sua margem, e ACOS só faz sentido comparado a ela. Enquanto isso uso a régua genérica ({ACOS_ATENCAO_SEM_MARGEM}% atenção, {ACOS_CRITICO_SEM_MARGEM}% prejuízo), que pode errar pro seu produto.</>}
+              : <>⚠️ <b>Cadastre o custo (CMV) em Ajustes → Gerenciamento</b> — sem ele não dá pra saber sua margem, e ACOS só faz sentido comparado a ela. Enquanto isso uso a régua genérica ({ACOS_ATENCAO_SEM_MARGEM}% atenção, {ACOS_CRITICO_SEM_MARGEM}% prejuízo), que pode errar pro seu produto.</>}
             {' '}Campanha com menos de {brl2(GASTO_MINIMO_P_OPINAR)} gastos fica de fora — ainda não deu pra saber.
           </div>
         </div>
@@ -3009,22 +3017,100 @@ function Repasses({connected}:{connected?:boolean|null}){
   </>)
 }
 
-const TABS = [
-  {id:'resumo',label:'Resumo',icon:'ti-layout-dashboard'},
-  {id:'vendas',label:'Vendas',icon:'ti-cash'},
-  {id:'abc',label:'Curva ABC',icon:'ti-chart-bar'},
-  {id:'ads',label:'Ads',icon:'ti-speakerphone'},
-  {id:'analit',label:'Analítico',icon:'ti-chart-dots'},
-  {id:'gerenc',label:'Gerenciamento',icon:'ti-adjustments'},
-  {id:'fulfil',label:'Estoque FBA',icon:'ti-truck-delivery'},
-  {id:'relat',label:'Relatório',icon:'ti-file-text'},
-  {id:'repasse',label:'Repasses',icon:'ti-arrow-bar-to-down'},
-  {id:'dre',label:'DRE',icon:'ti-building-bank'},
-]
+/* ── NAVEGAÇÃO: GRUPO (relógio) → TELA ───────────────────────────────────────
+   Dez telas numa fila só faziam o seller comparar "Resumo" (lucro estimado, que
+   muda) com "Repasses" (dinheiro pago, que não muda) como se fossem a mesma
+   pergunta — e concluir que uma das duas estava errada, quando as duas estavam
+   certas. ⭐ Agora o relógio de cada grupo aparece ANTES do clique.
+
+   O corte e os nomes vivem em lib/navegacaoGestao.ts, com teste que trava tela
+   órfã (sem grupo, ela sumiria da navegação sem erro nenhum).
+
+   Componente separado de propósito: dá pra montar sozinho numa página local
+   descartável e conferir todos os estados (cada grupo ativo, os três selos, com
+   e sem conta conectada, claro/escuro, 360px). Foi assim que apareceram os dois
+   defeitos que o `tsc` e o `npm test` não pegam: os quatro grupos NÃO cabiam
+   numa linha de 360px, e o ponto do semáforo sumia sobre o dourado do ativo. */
+export function BarraGestao({grupo,tab,selo,temDre,semCusto,onGrupo,onTab}:{
+  grupo:string; tab:string; selo:SeloMaturidade; temDre:boolean; semCusto:number
+  onGrupo:(id:string)=>void; onTab:(id:string)=>void
+}){
+  const t=useT()
+  const g=grupoPorId(grupo)!
+  const vs=visualDoSelo(t,selo)
+  return(<>
+    {/* ⚠️ WRAP, não scroll horizontal. Trocar dez pílulas que rolam por quatro
+        que rolam não resolveria nada: em 360px os quatro grupos não cabem numa
+        linha. Com wrap eles viram 2×2 sozinhos no celular e seguem em fila no
+        desktop — sem media query e sem esconder o relógio de ninguém. */}
+    <div style={{display:'flex',gap:7,flexWrap:'wrap' as const,marginBottom:11}}>
+      {GRUPOS.map(gr=>{
+        const on=grupo===gr.id
+        // ⭐ Semáforo só em quem tem número que ainda se mexe (`usaSelo`).
+        // Sem dado ainda, o grupo não afirma maturidade nenhuma — diz "estimado".
+        // ⚠️ O ponto colorido só aparece no grupo INATIVO: sobre o dourado do
+        // ativo, o 🟡 e o 🟠 somem — e um grupo com selo é sempre o que abre.
+        // Quem está nele já tem o selo inteiro, colorido e clicável, logo abaixo.
+        const rel = gr.relogio ?? (gr.usaSelo ? (temDre?(on?vs.curto:`${vs.ponto} ${vs.curto}`):'estimado') : null)
+        const corRel = !on && gr.usaSelo && temDre ? vs.cor : undefined
+        // O contador de produtos sem custo mora no Gerenciamento, que agora vive
+        // dentro de Ajustes: sem repetir aqui, o aviso ficaria escondido atrás de
+        // um clique — e é ele que destrava Lucro, Margem, ROI e MPA.
+        const badge = gr.tabs.includes('gerenc') && semCusto>0 ? semCusto : null
+        return(
+          <button key={gr.id} onClick={()=>onGrupo(gr.id)} aria-current={on?'page':undefined}
+            title={gr.pergunta}
+            style={{display:'flex',flexDirection:'column' as const,alignItems:'flex-start',gap:1,
+              padding:'8px 14px',borderRadius:11,cursor:'pointer',fontFamily:'inherit',flexShrink:0,
+              border:`1px solid ${on?t.gold:t.line}`,background:on?t.gold:t.card,
+              color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2,textAlign:'left' as const}}>
+            <span style={{display:'flex',alignItems:'center',gap:7,fontSize:13,fontWeight:on?700:600,whiteSpace:'nowrap' as const}}>
+              <i className={`ti ${gr.icon}`} style={{fontSize:15}} aria-hidden="true"/>{gr.label}
+              {badge!==null && (
+                <span style={{background:on?'rgba(0,0,0,0.22)':t.pillGold[0],color:on?'inherit':t.pillGold[1],fontSize:9.5,fontWeight:700,minWidth:17,height:16,padding:'0 5px',borderRadius:99,display:'flex',alignItems:'center',justifyContent:'center'}}>{badge}</span>
+              )}
+            </span>
+            {rel && <span style={{fontSize:10,fontWeight:600,whiteSpace:'nowrap' as const,
+              color:on?'inherit':(corRel||t.t3),opacity:on?0.72:1}}>{rel}</span>}
+          </button>
+        )
+      })}
+    </div>
+
+    {/* A pergunta que o grupo responde. Rótulo que classifica sem dizer o porquê
+        vira desconfiança — mesma regra do diagnóstico da Curva ABC. */}
+    <div style={{fontSize:11.5,color:t.t3,marginBottom:g.tabs.length>1?9:0,lineHeight:1.5}}>{g.pergunta}</div>
+
+    {/* Telas do grupo. Some quando o grupo tem uma só (Repasses): aba sozinha é
+        ruído que finge que existe escolha. */}
+    {g.tabs.length>1 && (
+      <div style={{display:'flex',gap:4,flexWrap:'wrap' as const,marginBottom:2}}>
+        {g.tabs.map(id=>{
+          const tb=tabPorId(id)!
+          const on=tab===id
+          return(
+            <button key={id} onClick={()=>onTab(id)} aria-current={on?'page':undefined}
+              style={{display:'flex',alignItems:'center',gap:6,fontSize:12.5,whiteSpace:'nowrap' as const,
+                padding:'7px 11px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',border:'1px solid transparent',
+                background:on?(t.dark?'rgba(240,180,41,0.13)':'rgba(240,180,41,0.16)'):'transparent',
+                color:on?t.goldText:t.t2,fontWeight:on?700:500,flexShrink:0}}>
+              <i className={`ti ${tb.icon}`} style={{fontSize:14}} aria-hidden="true"/>{tb.label}
+              {id==='gerenc' && semCusto>0 && (
+                <span style={{background:t.pillGold[0],color:t.pillGold[1],fontSize:9.5,fontWeight:700,minWidth:17,height:16,padding:'0 5px',borderRadius:99,display:'flex',alignItems:'center',justifyContent:'center'}}>{semCusto}</span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    )}
+    <div style={{borderBottom:`1px solid ${t.line}`,marginBottom:18,paddingTop:9}}/>
+  </>)
+}
+
 const THEME_KEY='oraculo_theme'
 
 export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmin=false}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null;userEmail?:string;theme?:'dark'|'light';isAdmin?:boolean}){
-  const [tab,setTab]=useState('resumo')
+  const [tab,setTab]=useState<string>(TELA_INICIAL)
   const [hide,setHide]=useState(false)
   const [themeKey,setThemeKey]=useState('dark')
   const [amazonConnected,setAmazonConnected]=useState<boolean|null>(null)
@@ -3035,6 +3121,16 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   // Curva ABC abre em 30 dias (ABC de 1 dia não faz sentido), mas isso NÃO deve
   // vazar para as outras abas: guardamos o período anterior e restauramos ao sair.
   const prePeriodRef=useRef<{period:string;custom:{from:Date;to:Date}|null}|null>(null)
+  /* ── NAVEGAÇÃO EM DOIS NÍVEIS ───────────────────────────────────────────────
+     O grupo é DERIVADO da tela aberta — não existe estado "grupo ativo". Dois
+     estados pra dizer a mesma coisa dessincronizam, e a barra passaria a mentir
+     em que lugar o cliente está. Mesma regra que vale pro dinheiro daqui.
+
+     `ultimaDoGrupoRef` guarda só a memória de navegação: quem estava mexendo em
+     Ads, foi conferir um pedido e voltou pro Resultado cai de volta no Ads, não
+     no Resumo. É preferência de uso, não número — pode viver num ref. */
+  const grupo = grupoDaTab(tab)
+  const ultimaDoGrupoRef = useRef<Record<string,string>>({})
   function goTab(id:string){
     const enteringAbc = id==='abc' && tab!=='abc'
     const leavingAbc  = tab==='abc' && id!=='abc'
@@ -3046,7 +3142,12 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
       setCustomRange(prePeriodRef.current.custom)
       prePeriodRef.current=null
     }
+    ultimaDoGrupoRef.current[grupoDaTab(id)]=id
     setTab(id)
+  }
+  function goGrupo(gid:string){
+    if(gid===grupo) return                       // já está aqui: clique não sacode a tela
+    goTab(telaAoEntrarNoGrupo(gid,ultimaDoGrupoRef.current))
   }
   useEffect(()=>{
     let alive=true
@@ -3386,23 +3487,8 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
           </div>
         )}
 
-        {/* Sub-tabs */}
-        <div style={{display:'flex',gap:6,overflowX:'auto' as const,borderBottom:`1px solid ${t.line}`,paddingBottom:11,marginBottom:18}}>
-          {TABS.map(tb=>{
-            const on=tab===tb.id
-            return(
-              <button key={tb.id} onClick={()=>goTab(tb.id)}
-                style={{display:'flex',alignItems:'center',gap:6,fontSize:12.5,whiteSpace:'nowrap' as const,padding:'7px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',border:'1px solid transparent',
-                  background:on?t.gold:'transparent',color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2,fontWeight:on?600:500}}>
-                <i className={`ti ${tb.icon}`} style={{fontSize:14}} aria-hidden="true"/>{tb.label}
-                {/* Contador de produtos sem custo na aba Gerenciamento */}
-                {tb.id==='gerenc' && semCusto.length>0 && (
-                  <span style={{background:on?'rgba(0,0,0,0.22)':t.pillGold[0],color:on?'inherit':t.pillGold[1],fontSize:9.5,fontWeight:700,minWidth:17,height:16,padding:'0 5px',borderRadius:99,display:'flex',alignItems:'center',justifyContent:'center'}}>{semCusto.length}</span>
-                )}
-              </button>
-            )
-          })}
-        </div>
+        <BarraGestao grupo={grupo} tab={tab} selo={selo} temDre={!!realDre}
+          semCusto={semCusto.length} onGrupo={goGrupo} onTab={goTab}/>
 
         {/* ⭐ TARIFA FBA — 01/08/2026. Não é reajuste: é uma isenção que acaba.
             Quem vende acima de R$100 pagava ZERO e passa a pagar R$6 por unidade.

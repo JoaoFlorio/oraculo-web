@@ -284,7 +284,7 @@ export function decompor(antes: SnapshotPeriodo, depois: SnapshotPeriodo): Decom
   if (dCmv !== null && Math.abs(dCmv) > RUIDO) {
     põe(-dCmv, {
       rotulo: dCmv > 0 ? 'Custo do produto que você informou' : 'Custo do produto que você reduziu', autor: 'voce',
-      explicacao: 'O CMV cadastrado na aba Gerenciamento mudou. Não é a Amazon: é a sua informação de custo ficando mais exata.',
+      explicacao: 'O CMV cadastrado em Ajustes → Gerenciamento mudou. Não é a Amazon: é a sua informação de custo ficando mais exata.',
       frase: `você ${dCmv > 0 ? 'informou' : 'reduziu'} custo de produto: ${sinalBrl(-dCmv)} no lucro`,
     })
   }
@@ -297,13 +297,13 @@ export function decompor(antes: SnapshotPeriodo, depois: SnapshotPeriodo): Decom
   const dCred = d('credito')
   põe(dCred, {
     rotulo: 'Crédito extra que você lançou', autor: 'voce',
-    explicacao: 'Lançamento avulso de pedido, na aba Vendas.',
+    explicacao: 'Lançamento avulso de pedido, em Vendas → Pedidos.',
     frase: `crédito extra que você lançou: ${sinalBrl(dCred || 0)}`,
   })
   const dCev = d('custoEventual')
   põe(dCev === null ? null : -dCev, {
     rotulo: 'Custo eventual que você lançou', autor: 'voce',
-    explicacao: 'Lançamento avulso de pedido, na aba Vendas: frete de devolução, reembalagem, avaria.',
+    explicacao: 'Lançamento avulso de pedido, em Vendas → Pedidos: frete de devolução, reembalagem, avaria.',
     frase: `custo eventual que você lançou: ${sinalBrl(dCev === null ? 0 : -dCev)}`,
   })
 
