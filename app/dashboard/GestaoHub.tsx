@@ -2687,7 +2687,9 @@ function Repasses({connected}:{connected?:boolean|null}){
     <div style={{display:'flex',alignItems:'center',gap:10,margin:'12px 0 14px',flexWrap:'wrap' as const}}>
       <button onClick={()=>carregar(true)} disabled={conferindo}
         style={{background:conferindo?'transparent':t.gold,color:conferindo?t.t2:(t.dark?'#1c1606':'#3a2a05'),border:`1px solid ${conferindo?t.line2:t.gold}`,borderRadius:9,padding:'9px 14px',fontSize:12,fontWeight:700,cursor:conferindo?'wait':'pointer',fontFamily:'inherit'}}>
-        {conferindo?'Conferindo com a Amazon…':'Conferir se o Oráculo lê tudo'}
+        {conferindo?'Conferindo com a Amazon…'
+          :(d.naoConferidos||0)>0&&confs.length>0?`Conferir as próximas ${Math.min(d.limiteConferencia||8,d.naoConferidos)}`
+          :'Conferir se o Oráculo lê tudo'}
       </button>
       <span style={{fontSize:11,color:t.t3,flex:1,minWidth:240,lineHeight:1.5}}>
         Soma os lançamentos de cada repasse fechado e compara com o valor transferido. Bateu = nenhuma linha está passando batido.
@@ -2744,6 +2746,21 @@ function Repasses({connected}:{connected?:boolean|null}){
       </div>
     ))}
     {!ciclos.length && <div style={{fontSize:12,color:t.t3,marginTop:12}}>Nenhum repasse nos últimos 3 meses.</div>}
+
+    {/* ⭐ O progresso ACUMULA: repasse fechado é imutável, então cada conferência
+        fica guardada no servidor pra sempre. "Não conferido" é fila, não falha —
+        e a fila só anda pra frente. */}
+    {(d.naoConferidos||0)>0 ? (
+      <div style={{fontSize:11,color:t.t3,marginTop:9,lineHeight:1.6}}>
+        <b style={{color:t.t2}}>{confs.length}</b> conferida{confs.length===1?'':'s'} · <b style={{color:t.gold}}>{d.naoConferidos}</b> na fila.
+        Cada clique confere até {d.limiteConferencia||8} e o resultado fica <b>guardado</b> — repasse fechado não muda nunca,
+        então conferiu uma vez, ficou verde pra sempre. Clique de novo até zerar a fila.
+      </div>
+    ) : confs.length>0 ? (
+      <div style={{fontSize:11,color:t.grn,marginTop:9,lineHeight:1.6}}>
+        ✓ Todas as liquidações pagas foram conferidas — e os resultados ficam guardados.
+      </div>
+    ) : null}
 
     {/* ⭐ A EXPLICAÇÃO QUE FALTAVA. Sem ela, ver quatro linhas no mesmo ciclo parece
         erro do Oráculo — e foi o que me fez caçar defeito onde não havia. */}
