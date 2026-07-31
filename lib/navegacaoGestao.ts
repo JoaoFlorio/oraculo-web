@@ -1,31 +1,25 @@
 /* ─────────────────────────────────────────────────────────────────────────────
    OS TRÊS RELÓGIOS DA GESTÃO, NA BARRA DE NAVEGAÇÃO.
 
-   A Gestão responde três perguntas diferentes, cada uma com o SEU relógio:
+   ⚠️ Até aqui as dez telas viviam numa FILA SÓ, com scroll horizontal: dez
+   pílulas iguais, sem hierarquia, metade delas fora da tela no celular.
 
-     · VENDAS    — "como está indo". Relógio da operação (data da compra). Abre
-                   no Resumo, que é a capa da Gestão, e segue nos pedidos um a um
-                   e no estoque. Carrega o SELO DE MATURIDADE por causa do Resumo.
-     · RESULTADO — "quais produtos rendem". Mesmo relógio, olhado por produto:
-                   Curva ABC, Ads e Analítico. Também provisório, também com selo.
-     · REPASSES  — "quanto caiu na conta". Data do lançamento, ~6 dias de atraso,
-                   final. É o único que fecha com o extrato do banco.
+   Agora são quatro grupos, cada um com uma pergunta:
 
-   ⭐ O contraste que resolve a confusão do seller é ESTIMADO × BANCO. Vendas e
-   Resultado dividem o mesmo relógio e o dizem com o mesmo selo; Repasses é o
-   que se compara com o extrato — e é por isso que ele vive sozinho.
+     · VENDAS    — "como está indo". Abre no Resumo, que é a capa da Gestão, e
+                   segue nos pedidos um a um e no estoque.
+     · RESULTADO — "o que sobrou". Curva ABC e Analítico (o período por produto)
+                   mais os Repasses (o que a Amazon depositou de fato).
+     · ADS       — tela única, de propósito: o anúncio é frente de trabalho
+                   própria e vai crescer. Enterrá-lo como quarta sub-aba de
+                   Resultado esconderia justamente o que mais vai mudar.
+     · AJUSTES   — onde se INFORMA em vez de consultar: custo, CSV, planilha.
 
-   ⚠️ Até aqui as dez telas viviam numa fila só. O seller via "Resumo" (lucro
-   estimado, que muda) e "Repasses" (dinheiro pago, que não muda) como dois
-   botões idênticos lado a lado, comparava os dois, achava números diferentes e
-   concluía que um estava errado — quando os dois estavam certos, respondendo
-   perguntas diferentes. `lib/maturidadePeriodo.ts` já dizia isso DENTRO da tela;
-   a barra continuava dizendo que tudo ali era a mesma coisa.
-
-   ⭐ Agora o relógio aparece ANTES do clique.
-
-   AJUSTES é o quarto grupo e de propósito NÃO tem relógio: ali não se consulta
-   número nenhum — se informa custo, se exporta CSV, se sobe planilha.
+   ⚠️ A barra mostra só os NOMES. A maturidade do período (🟡 aberto · 🟠 em
+   liquidação · 🟢 fechado) continua viva onde ela explica o que significa: no
+   selo do Resumo, clicável, com o motivo e o que dá pra fazer com o número.
+   Repetir o rótulo em dois botões da barra virava ruído — dizia "em liquidação"
+   duas vezes lado a lado sem nunca dizer o que isso quer dizer.
    ───────────────────────────────────────────────────────────────────────────── */
 
 /** As telas. A ordem aqui é a ordem dentro do grupo. */
@@ -48,12 +42,6 @@ export interface GrupoGestao {
   id: string
   label: string
   icon: string
-  /** Legenda fixa do relógio, quando ele não depende do período. */
-  relogio: string | null
-  /** O grupo mostra o SELO do período (número que ainda se mexe)?
-   *  ⚠️ Flag, não `id==='result'` chumbado na tela: mover uma tela de grupo já
-   *  mudou quem carrega número estimado uma vez, e a barra tem que acompanhar. */
-  usaSelo: boolean
   /** Uma frase: o que se responde aqui. Aparece abaixo da barra. */
   pergunta: string
   /** ⭐ O tipo TabId faz o compilador recusar id que não existe em TABS. */
@@ -63,28 +51,24 @@ export interface GrupoGestao {
 export const GRUPOS: GrupoGestao[] = [
   {
     id: 'venda', label: 'Vendas', icon: 'ti-shopping-cart',
-    // O Resumo mora aqui: é a capa da Gestão e a tela que abre. Como ele traz
-    // lucro estimado, o grupo carrega o selo — dizer "tempo real" com o Resumo
-    // dentro seria a barra mentindo sobre o próprio conteúdo.
-    relogio: null, usaSelo: true,
+    // O Resumo mora aqui: é a capa da Gestão e a tela que abre.
     pergunta: 'Como está indo: o panorama do período, os pedidos um a um e o estoque.',
     tabs: ['resumo', 'vendas', 'fulfil'],
   },
   {
     id: 'result', label: 'Resultado', icon: 'ti-chart-pie',
-    relogio: null, usaSelo: true,
-    pergunta: 'Quais produtos rendem de verdade — e quais só parecem render.',
-    tabs: ['abc', 'ads', 'analit'],
+    pergunta: 'Quais produtos rendem de verdade — e quanto a Amazon depositou.',
+    tabs: ['abc', 'analit', 'repasse'],
   },
   {
-    id: 'banco', label: 'Repasses', icon: 'ti-building-bank',
-    relogio: 'fecha com o banco', usaSelo: false,
-    pergunta: 'Quanto a Amazon realmente depositou, por repasse.',
-    tabs: ['repasse'],
+    // ⚠️ id 'anuncio', não 'ads': 'ads' já é o id da TELA, e grupo com o mesmo
+    // id de uma tela confunde quem for ler o `goTab(x)` da próxima vez.
+    id: 'anuncio', label: 'Ads', icon: 'ti-speakerphone',
+    pergunta: 'Quanto o anúncio custou e o que ele trouxe de volta.',
+    tabs: ['ads'],
   },
   {
     id: 'ajuste', label: 'Ajustes', icon: 'ti-settings',
-    relogio: null, usaSelo: false,
     pergunta: 'Seus custos, suas exportações e a DRE por planilha.',
     tabs: ['gerenc', 'relat', 'dre'],
   },

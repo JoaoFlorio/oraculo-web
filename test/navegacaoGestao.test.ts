@@ -58,16 +58,16 @@ test('sem memória, o grupo abre na primeira tela', () => {
 })
 
 test('com memória, volta pra onde o cliente estava', () => {
-  assert.equal(telaAoEntrarNoGrupo('result', { result: 'ads' }), 'ads')
+  assert.equal(telaAoEntrarNoGrupo('result', { result: 'repasse' }), 'repasse')
   assert.equal(telaAoEntrarNoGrupo('venda', { venda: 'fulfil' }), 'fulfil')
 })
 
 test('memória de OUTRO grupo não vaza', () => {
-  // Lembrar "ads" no grupo Vendas abriria uma tela do Resultado — e como o grupo
-  // é DERIVADO da tela, a barra acenderia "Resultado" logo após o clique em
+  // Lembrar "ads" no grupo Vendas abriria uma tela de outro grupo — e como o
+  // grupo é DERIVADO da tela, a barra acenderia "Ads" logo após o clique em
   // "Vendas". Guardar posição não pode virar autoridade sobre onde a tela mora.
   assert.equal(telaAoEntrarNoGrupo('venda', { venda: 'ads' }), 'resumo')
-  assert.equal(telaAoEntrarNoGrupo('result', { result: 'repasse' }), 'abc')
+  assert.equal(telaAoEntrarNoGrupo('result', { result: 'gerenc' }), 'abc')
 })
 
 test('tela que não existe mais na memória não trava a navegação', () => {
@@ -83,34 +83,29 @@ test('a Gestão abre no Resumo, e o Resumo está no primeiro grupo', () => {
   assert.equal(primeiraDoGrupo(GRUPOS[0].id), TELA_INICIAL)
 })
 
-/* ⭐ O CORTE É POR RELÓGIO, e o teste guarda essa decisão contra o próximo que
-   for "só arrumar a ordem": Repasses é o único que fecha com o banco e não pode
-   dividir grupo com número estimado — foi exatamente essa vizinhança que fazia o
-   seller comparar duas respostas certas e concluir que uma estava errada. */
-test('Repasses não divide grupo com número estimado', () => {
-  const banco = GRUPOS.find(g => g.id === 'banco')!
-  assert.deepEqual(banco.tabs, ['repasse'])
+/* ⭐ ADS SOZINHO É DECISÃO, NÃO SOBRA. É frente de trabalho própria e vai
+   crescer; como quarta sub-aba de Resultado, ficaria escondido justamente o que
+   mais vai mudar. O teste guarda isso do próximo que for "só juntar o que ficou
+   solto" — se um dia entrar Keywords ou Campanhas, entram AQUI. */
+test('Ads é grupo de primeiro nível', () => {
+  const anuncio = GRUPOS.find(g => g.id === 'anuncio')!
+  assert.deepEqual(anuncio.tabs, ['ads'])
+  assert.equal(grupoDaTab('ads'), 'anuncio', 'Ads não pode voltar pra dentro de outro grupo')
 })
 
-test('quem tem número estimado mostra o selo; quem não tem, não finge que tem', () => {
-  // As telas que carregam lucro/margem estimados, uma a uma. Toda tela dessa
-  // lista tem que viver num grupo com selo — senão a barra anuncia um relógio
-  // que a tela de dentro desmente.
-  const ESTIMAM = ['resumo', 'abc', 'ads', 'analit']
-  for (const id of ESTIMAM) {
-    const g = GRUPOS.find(x => (x.tabs as readonly string[]).includes(id))!
-    assert.equal(g.usaSelo, true, `"${id}" estima lucro mas o grupo "${g.label}" não mostra o selo`)
-  }
-  // Repasse é medido, não estimado: selo ali sugeriria que o número ainda muda.
-  assert.equal(GRUPOS.find(g => g.id === 'banco')!.usaSelo, false)
-  assert.equal(GRUPOS.find(g => g.id === 'banco')!.relogio, 'fecha com o banco')
-  // Ajustes não consulta número nenhum — relógio ali seria decoração.
-  assert.equal(GRUPOS.find(g => g.id === 'ajuste')!.usaSelo, false)
-  assert.equal(GRUPOS.find(g => g.id === 'ajuste')!.relogio, null)
+test('Repasses mora no Resultado', () => {
+  assert.equal(grupoDaTab('repasse'), 'result')
 })
 
-test('grupo com selo não declara relógio fixo — os dois brigariam', () => {
+/* ⚠️ A barra mostra só NOMES. A maturidade do período continua existindo — no
+   selo do Resumo, que explica o que ela significa e o que dá pra fazer com o
+   número. Repetir "em liquidação" em dois botões da barra dizia duas vezes uma
+   coisa que nenhuma das duas explicava. Este teste existe pra que "colocar uma
+   legendinha no grupo" volte como decisão, não por descuido. */
+test('grupo carrega nome, ícone e a pergunta — nada de rótulo de estado', () => {
   for (const g of GRUPOS) {
-    if (g.usaSelo) assert.equal(g.relogio, null, `"${g.label}" tem selo E texto fixo`)
+    assert.deepEqual(Object.keys(g).sort(), ['icon', 'id', 'label', 'pergunta', 'tabs'],
+      `grupo "${g.label}" ganhou campo novo — se for rótulo de estado, ele pertence à TELA`)
+    assert.ok(g.pergunta.length > 20, `"${g.label}" precisa dizer o que se responde ali`)
   }
 })

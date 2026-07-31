@@ -199,13 +199,13 @@ function realAbc(metrics:ProductMetrics[]){
    Responde as duas perguntas que o número que se mexe levanta: "dá pra confiar
    nisto agora?" e "por que mudou desde ontem?". Sem elas, exatidão sobre um
    período inacabado é lida como imprecisão. */
-/* Cor e ponto do selo — UMA vez. O selo aparece em dois lugares (na barra de
-   grupos, como legenda antes do clique; e aqui dentro, clicável e explicado), e
-   duas expressões pra pintar o mesmo estado divergem na primeira mudança. */
+/* Cor e ponto do selo — UMA vez, com nome. Se um dia a maturidade aparecer em
+   outra tela, ela sai daqui: duas expressões pra pintar o mesmo estado divergem
+   na primeira mudança. */
 function visualDoSelo(t:Theme,selo:SeloMaturidade){
-  return selo.nivel==='fechado'    ? {cor:t.grn, ponto:'🟢', curto:'fechado'}
-       : selo.nivel==='liquidando' ? {cor:t.gold,ponto:'🟠', curto:'em liquidação'}
-       :                             {cor:t.blue,ponto:'🟡', curto:'em aberto'}
+  return selo.nivel==='fechado'    ? {cor:t.grn, ponto:'🟢'}
+       : selo.nivel==='liquidando' ? {cor:t.gold,ponto:'🟠'}
+       :                             {cor:t.blue,ponto:'🟡'}
 }
 function SeloEDiario({selo,diario,hide}:{selo:SeloMaturidade;diario:Diario|null;hide:boolean}){
   const t=useT()
@@ -3031,28 +3031,20 @@ function Repasses({connected}:{connected?:boolean|null}){
    e sem conta conectada, claro/escuro, 360px). Foi assim que apareceram os dois
    defeitos que o `tsc` e o `npm test` não pegam: os quatro grupos NÃO cabiam
    numa linha de 360px, e o ponto do semáforo sumia sobre o dourado do ativo. */
-export function BarraGestao({grupo,tab,selo,temDre,semCusto,onGrupo,onTab}:{
-  grupo:string; tab:string; selo:SeloMaturidade; temDre:boolean; semCusto:number
+export function BarraGestao({grupo,tab,semCusto,onGrupo,onTab}:{
+  grupo:string; tab:string; semCusto:number
   onGrupo:(id:string)=>void; onTab:(id:string)=>void
 }){
   const t=useT()
   const g=grupoPorId(grupo)!
-  const vs=visualDoSelo(t,selo)
   return(<>
     {/* ⚠️ WRAP, não scroll horizontal. Trocar dez pílulas que rolam por quatro
         que rolam não resolveria nada: em 360px os quatro grupos não cabem numa
         linha. Com wrap eles viram 2×2 sozinhos no celular e seguem em fila no
-        desktop — sem media query e sem esconder o relógio de ninguém. */}
+        desktop — sem media query e sem esconder nada de ninguém. */}
     <div style={{display:'flex',gap:7,flexWrap:'wrap' as const,marginBottom:11}}>
       {GRUPOS.map(gr=>{
         const on=grupo===gr.id
-        // ⭐ Semáforo só em quem tem número que ainda se mexe (`usaSelo`).
-        // Sem dado ainda, o grupo não afirma maturidade nenhuma — diz "estimado".
-        // ⚠️ O ponto colorido só aparece no grupo INATIVO: sobre o dourado do
-        // ativo, o 🟡 e o 🟠 somem — e um grupo com selo é sempre o que abre.
-        // Quem está nele já tem o selo inteiro, colorido e clicável, logo abaixo.
-        const rel = gr.relogio ?? (gr.usaSelo ? (temDre?(on?vs.curto:`${vs.ponto} ${vs.curto}`):'estimado') : null)
-        const corRel = !on && gr.usaSelo && temDre ? vs.cor : undefined
         // O contador de produtos sem custo mora no Gerenciamento, que agora vive
         // dentro de Ajustes: sem repetir aqui, o aviso ficaria escondido atrás de
         // um clique — e é ele que destrava Lucro, Margem, ROI e MPA.
@@ -3060,18 +3052,15 @@ export function BarraGestao({grupo,tab,selo,temDre,semCusto,onGrupo,onTab}:{
         return(
           <button key={gr.id} onClick={()=>onGrupo(gr.id)} aria-current={on?'page':undefined}
             title={gr.pergunta}
-            style={{display:'flex',flexDirection:'column' as const,alignItems:'flex-start',gap:1,
-              padding:'8px 14px',borderRadius:11,cursor:'pointer',fontFamily:'inherit',flexShrink:0,
+            style={{display:'flex',alignItems:'center',gap:7,
+              padding:'9px 15px',borderRadius:11,cursor:'pointer',fontFamily:'inherit',flexShrink:0,
+              fontSize:13,fontWeight:on?700:600,whiteSpace:'nowrap' as const,
               border:`1px solid ${on?t.gold:t.line}`,background:on?t.gold:t.card,
-              color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2,textAlign:'left' as const}}>
-            <span style={{display:'flex',alignItems:'center',gap:7,fontSize:13,fontWeight:on?700:600,whiteSpace:'nowrap' as const}}>
-              <i className={`ti ${gr.icon}`} style={{fontSize:15}} aria-hidden="true"/>{gr.label}
-              {badge!==null && (
-                <span style={{background:on?'rgba(0,0,0,0.22)':t.pillGold[0],color:on?'inherit':t.pillGold[1],fontSize:9.5,fontWeight:700,minWidth:17,height:16,padding:'0 5px',borderRadius:99,display:'flex',alignItems:'center',justifyContent:'center'}}>{badge}</span>
-              )}
-            </span>
-            {rel && <span style={{fontSize:10,fontWeight:600,whiteSpace:'nowrap' as const,
-              color:on?'inherit':(corRel||t.t3),opacity:on?0.72:1}}>{rel}</span>}
+              color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2}}>
+            <i className={`ti ${gr.icon}`} style={{fontSize:15}} aria-hidden="true"/>{gr.label}
+            {badge!==null && (
+              <span style={{background:on?'rgba(0,0,0,0.22)':t.pillGold[0],color:on?'inherit':t.pillGold[1],fontSize:9.5,fontWeight:700,minWidth:17,height:16,padding:'0 5px',borderRadius:99,display:'flex',alignItems:'center',justifyContent:'center'}}>{badge}</span>
+            )}
           </button>
         )
       })}
@@ -3487,8 +3476,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
           </div>
         )}
 
-        <BarraGestao grupo={grupo} tab={tab} selo={selo} temDre={!!realDre}
-          semCusto={semCusto.length} onGrupo={goGrupo} onTab={goTab}/>
+        <BarraGestao grupo={grupo} tab={tab} semCusto={semCusto.length} onGrupo={goGrupo} onTab={goTab}/>
 
         {/* ⭐ TARIFA FBA — 01/08/2026. Não é reajuste: é uma isenção que acaba.
             Quem vende acima de R$100 pagava ZERO e passa a pagar R$6 por unidade.
