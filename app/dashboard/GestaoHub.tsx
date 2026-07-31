@@ -1333,7 +1333,19 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
             })}
           </Table>
         )}
-        <div style={{fontSize:10,color:t.t3,marginTop:10}}>Comissão e Taxa FBA são as <b>deste produto</b> (tarifa da Amazon por ASIN), não um rateio do total da conta. {semAds?<>O gasto de ads <b>deste</b> produto ainda não chegou — e não rateamos o total, porque isso faria a margem dele cair só porque OUTRO produto gastou.</>:<><b>Ads é o gasto medido deste produto</b> (relatório de produto anunciado da Amazon).</>} Pedido <b>Pendente</b> entra pelo preço do anúncio, marcado como provisório — a Amazon só libera o valor ao faturar. {M.devolucaoValor>0.005&&<>As devoluções entram no cálculo acima e <b>não</b> são distribuídas por pedido (a Amazon informa o estorno por produto, não por pedido), então a soma da tabela fecha com o <b>Faturado</b>, não com o lucro final. </>}Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
+        <div style={{fontSize:10,color:t.t3,marginTop:10}}>Comissão e Taxa FBA são as <b>deste produto</b> (tarifa da Amazon por ASIN), não um rateio do total da conta. {semAds?<>O gasto de ads <b>deste</b> produto ainda não chegou — e não rateamos o total, porque isso faria a margem dele cair só porque OUTRO produto gastou.</>:<><b>Ads é o gasto medido deste produto</b> (relatório de produto anunciado da Amazon).</>} {/* ⭐ A CONTA DA ESTIMATIVA, com números. "Preço totalmente diferente do
+            produto" quase sempre é cupom embutido — R$47,99 de anúncio com 25% de
+            cupom É R$35,99. Sem mostrar a decomposição, o cliente compara com o
+            preço de tabela e conclui que o Oráculo errou. */}
+        {p?.estimativa && (p?.unitsEstimadas||0)>0
+          ? <>Pedido <b>Pendente</b> entra por estimativa: {
+              p.estimativa.fonte==='anuncio-com-desconto'
+                ? <>anúncio atual ({brl2(p.estimativa.base||0)}) − <b>{p.estimativa.descontoPct}% de desconto</b> observado nas suas vendas recentes (cupom/oferta embutidos) = <b>{brl2(p.estimativa.unit||0)}</b> por unidade</>
+                : p.estimativa.fonte==='anuncio'
+                ? <>preço atual do anúncio ({brl2(p.estimativa.unit||0)}) — suas vendas recentes não tiveram desconto</>
+                : <>última venda real deste SKU ({brl2(p.estimativa.unit||0)}), já líquida de desconto</>
+            }. Provisório: quando a Amazon faturar, o valor real substitui sozinho. </>
+          : <>Pedido <b>Pendente</b> entra por estimativa (anúncio atual − desconto das suas vendas recentes), marcado como provisório — a Amazon substitui pelo valor real ao faturar. </>}{M.devolucaoValor>0.005&&<>As devoluções entram no cálculo acima e <b>não</b> são distribuídas por pedido (a Amazon informa o estorno por produto, não por pedido), então a soma da tabela fecha com o <b>Faturado</b>, não com o lucro final. </>}Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
       </div>
     </div>
   )
