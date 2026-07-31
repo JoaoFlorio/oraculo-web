@@ -2579,6 +2579,49 @@ function Relatorio({realDre,inv,costs={},adsReal}:{realDre?:any;inv?:any;costs?:
    com o "Valor a ser transferido", e não com a ferramenta do concorrente.
 
    ⚠️ A conferência é opt-in porque custa paginação por repasse. */
+/* ── INVESTIGAR UM REPASSE QUE NÃO FECHA ─────────────────────────────────────
+   ⭐ O mapa do dinheiro: cada campo monetário que a Amazon mandou naquele grupo,
+   somado pelo caminho, com ✓ nos que a conferência já lê. A diferença mora, por
+   construção, numa linha com ✗ — o culpado aparece com nome e valor, em vez de
+   virar a quarta rodada de chute. */
+function InvestigarRepasse({id}:{id:string}){
+  const t=useT()
+  const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
+  const rodar=async()=>{
+    setSt({loading:true,data:null})
+    try{
+      const r=await fetch(`/api/amazon/repasse-caminhos?groupId=${encodeURIComponent(id)}`)
+      setSt({loading:false,data:await r.json()})
+    }catch{ setSt({loading:false,data:{error:'sem resposta do servidor'}}) }
+  }
+  const d=st?.data
+  const caminhos:any[]=Array.isArray(d?.caminhos)?d.caminhos:[]
+  return(
+    <div style={{marginTop:10,paddingTop:9,borderTop:`1px dashed ${t.line2}`}}>
+      <button onClick={rodar} disabled={st?.loading}
+        style={{background:'transparent',color:t.t2,border:`1px dashed ${t.line2}`,borderRadius:8,padding:'7px 12px',fontSize:11.5,cursor:st?.loading?'wait':'pointer',fontFamily:'inherit'}}>
+        {st?.loading?'Perguntando à Amazon…':'Admin · ver cada linha de dinheiro deste repasse'}
+      </button>
+      {d&&(d.error||d.erro)&&<div style={{marginTop:8,fontSize:11.5,color:t.red}}>{String(d.error||d.erro)}</div>}
+      {caminhos.length>0&&(
+        <div style={{marginTop:9}}>
+          {caminhos.map((c:any,i:number)=>(
+            <div key={i} style={{display:'flex',justifyContent:'space-between',gap:10,padding:'3px 0',fontSize:10.5,fontFamily:'ui-monospace,monospace',color:c.lido?t.t3:t.gold,lineHeight:1.5}}>
+              <span style={{wordBreak:'break-all' as const}}>{c.lido?'✓':'✗'} {c.caminho} <span style={{opacity:.7}}>·{c.eventos}×</span></span>
+              <b style={{whiteSpace:'nowrap' as const}}>{c.soma<0?'−':'+'}{brl2(Math.abs(c.soma))}</b>
+            </div>
+          ))}
+          <div style={{fontSize:10.5,color:t.t3,marginTop:7,lineHeight:1.55}}>
+            <b style={{color:t.gold}}>✗</b> = caminho que a conferência ainda não lê — a diferença mora numa dessas linhas.
+            Algumas são detalhamento de valores já contados (por isso isto é diagnóstico, não uma segunda conta).
+            {d.truncado&&<> <b style={{color:t.gold}}>⚠️ Leitura cortada no meio</b> — as somas estão incompletas.</>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Repasses({connected}:{connected?:boolean|null}){
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
@@ -2859,6 +2902,8 @@ function Repasses({connected}:{connected?:boolean|null}){
             {c.truncado && <div style={{fontSize:10.5,color:t.gold,marginTop:7,lineHeight:1.5}}>
               ⚠️ Este repasse tem lançamentos demais e a leitura foi cortada no meio — a soma acima está incompleta, então a diferença não significa nada aqui.
             </div>}
+            {/* Só quando NÃO fecha: repasse verde não tem diferença pra caçar. */}
+            {!c.fecha && !c.truncado && !c.erro && <InvestigarRepasse id={String(c.repasse?.id||'')}/>}
           </div>
         ))}
       </div>
