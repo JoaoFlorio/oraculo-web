@@ -1,5 +1,6 @@
 'use client'
 import React, { useState, useMemo, useEffect, useRef, useContext, createContext } from 'react'
+import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -373,6 +374,38 @@ function ReconciliacaoCard({rec,hide}:{rec:Reconciliacao;hide:boolean}){
         </div>
       )}
     </div>
+  )
+}
+
+/* ── OVERLAY DE MODAL ────────────────────────────────────────────────────────
+   ⭐ PORTAL NO BODY, e não é preciosismo: o `<main>` do dashboard tem `animation`
+   com transform e é o container que ROLA. Qualquer ancestral com transform,
+   filter, animation ou backdrop-filter vira containing block e faz o
+   `position:fixed` do filho se ancorar NELE em vez do viewport — o modal abria no
+   topo do documento e o cliente tinha que rolar pra cima pra ver o que acabou de
+   clicar. Caçar qual ancestral é resolve hoje e volta amanhã, porque qualquer
+   animação nova recria o problema. O portal escapa da árvore inteira, pra sempre.
+
+   ⚠️ `alignItems:flex-start` + `margin:auto` no card: centraliza quando cabe na
+   tela e permite ROLAR quando não cabe. Com `alignItems:center` puro, um modal
+   mais alto que a tela tem o topo cortado e sem como alcançá-lo. */
+function ModalOverlay({onClose,zIndex=60,children}:{onClose:()=>void;zIndex?:number;children:React.ReactNode}){
+  // Trava a rolagem do fundo enquanto o modal está aberto — sem isso o gesto de
+  // rolar no celular move a página atrás e o modal "foge" da mão.
+  useEffect(()=>{
+    const antes=document.body.style.overflow
+    document.body.style.overflow='hidden'
+    return ()=>{ document.body.style.overflow=antes }
+  },[])
+  if(typeof document==='undefined') return null
+  return createPortal(
+    <div onClick={onClose} role="dialog" aria-modal="true"
+      style={{position:'fixed',inset:0,zIndex,background:'rgba(0,0,0,0.55)',display:'flex',
+        alignItems:'flex-start',justifyContent:'center',padding:'clamp(10px,4vh,40px) clamp(8px,3vw,16px)',
+        overflowY:'auto',backdropFilter:'blur(2px)',overscrollBehavior:'contain' as const}}>
+      {children}
+    </div>,
+    document.body,
   )
 }
 
@@ -1090,8 +1123,8 @@ function ModalLancamento({t,tipo,itens,nomeDe,onCancel,onSalvar}:{t:Theme;tipo:'
     document.addEventListener('keydown',esc); return ()=>document.removeEventListener('keydown',esc)
   },[onCancel])
   return(
-    <div onClick={onCancel} style={{position:'fixed',inset:0,zIndex:70,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'8vh 14px',backdropFilter:'blur(2px)'}}>
-      <div onClick={e=>e.stopPropagation()} style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:16,width:'min(560px,96vw)',boxShadow:'0 24px 70px rgba(0,0,0,0.35)'}}>
+    <ModalOverlay onClose={onCancel} zIndex={70}>
+      <div onClick={e=>e.stopPropagation()} style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:16,width:'min(560px,96vw)',margin:'auto',boxShadow:'0 24px 70px rgba(0,0,0,0.35)'}}>
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px',borderBottom:`1px solid ${t.line}`}}>
           <span style={{fontSize:15,fontWeight:700,color:t.t1}}>{tipo==='credito'?'Adicionar crédito extra':'Adicionar custo eventual'}</span>
           <button onClick={onCancel} style={{background:'none',border:'none',color:t.t3,fontSize:22,cursor:'pointer',lineHeight:1,padding:0}}>×</button>
@@ -1126,7 +1159,7 @@ function ModalLancamento({t,tipo,itens,nomeDe,onCancel,onSalvar}:{t:Theme;tipo:'
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 function CaixaInfo({t,rotulo,valor,custom}:{t:Theme;rotulo:string;valor:string;custom?:React.ReactNode}){
@@ -1212,9 +1245,12 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
       <span style={{color:val===null?t.t3:(color||t.t1),fontWeight:strong?700:500,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide&&val!==null?'blur(6px)':'none',whiteSpace:'nowrap'}}>{val===null?'—':brl2(val||0)}</span>
     </div>
   )
-  const card:React.CSSProperties={background:t.card,border:`1px solid ${t.line}`,borderRadius:16,width:'min(760px,96vw)',maxHeight:'92vh',overflowY:'auto',padding:'20px 22px',boxShadow:'0 24px 70px rgba(0,0,0,0.35)'}
+  // `margin:auto` centraliza quando cabe e deixa rolar quando não cabe (ver
+  // ModalOverlay). Padding menor no celular — 22px de cada lado num aparelho de
+  // 360px come 12% da largura útil da tabela de pedidos.
+  const card:React.CSSProperties={background:t.card,border:`1px solid ${t.line}`,borderRadius:16,width:'min(760px,96vw)',margin:'auto',padding:'clamp(14px,3.5vw,22px)',boxShadow:'0 24px 70px rgba(0,0,0,0.35)'}
   return(
-    <div onClick={onClose} style={{position:'fixed',inset:0,zIndex:60,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'flex-start',justifyContent:'center',padding:'4vh 12px',backdropFilter:'blur(2px)'}}>
+    <ModalOverlay onClose={onClose} zIndex={60}>
       <div onClick={e=>e.stopPropagation()} style={card}>
         {/* Header */}
         <div style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:16}}>
@@ -1347,7 +1383,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
             }. Provisório: quando a Amazon faturar, o valor real substitui sozinho. </>
           : <>Pedido <b>Pendente</b> entra por estimativa (anúncio atual − desconto das suas vendas recentes), marcado como provisório — a Amazon substitui pelo valor real ao faturar. </>}{M.devolucaoValor>0.005&&<>As devoluções entram no cálculo acima e <b>não</b> são distribuídas por pedido (a Amazon informa o estorno por produto, não por pedido), então a soma da tabela fecha com o <b>Faturado</b>, não com o lucro final. </>}Imposto e custo (CMV) conforme o que você informou em Gerenciamento.</div>
       </div>
-    </div>
+    </ModalOverlay>
   )
 }
 
