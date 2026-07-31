@@ -2743,18 +2743,47 @@ const STATUS_REPASSE:Record<string,{rotulo:string;cor:(t:Theme)=>string;fundo:(t
 }
 const POR_PAGINA = 25
 
-function CardTotal({label,valor,cor,hide,sub}:{label:string;valor:string;cor?:string;hide:boolean;sub?:string}){
+/* Cartão de KPI no formato do Gestor Seller: rótulo em cima com a bolinha do
+   status, número grande embaixo, tudo centralizado, e a BORDA na cor do status —
+   é ela que faz a linha inteira se ler de relance, sem depender do texto.
+   A paleta continua a do Oráculo (o dourado é a marca); o que vem de lá é a
+   estrutura e o semáforo, que são vocabulário de mercado, não identidade. */
+function CardTotal({label,valor,cor,hide,sub,ponto,grande}:{
+  label:string;valor:string;cor?:string;hide:boolean;sub?:string;ponto?:string;grande?:boolean
+}){
   const t=useT()
   return(
-    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:13,padding:'15px 17px',flex:'1 1 180px',minWidth:0}}>
-      <div style={{fontSize:11,color:t.t3,fontFamily:FG,fontWeight:600,marginBottom:5}}>{label}</div>
-      <div style={{fontSize:20,fontWeight:700,fontFamily:FG,color:cor||t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}}>{valor}</div>
-      {sub && <div style={{fontSize:10.5,color:t.t3,marginTop:4,lineHeight:1.45}}>{sub}</div>}
+    <div style={{background:t.card,border:`1px solid ${ponto?ponto+(t.dark?'55':'66'):t.line}`,borderRadius:13,
+      padding:grande?'17px 18px':'14px 16px',flex:grande?'1 1 260px':'1 1 165px',minWidth:0,
+      display:'flex',flexDirection:'column' as const,alignItems:'center',gap:5,textAlign:'center' as const}}>
+      <div style={{fontSize:11.5,color:t.t2,fontFamily:FG,fontWeight:600,display:'flex',alignItems:'center',gap:6,justifyContent:'center'}}>
+        {ponto && <Ponto cor={ponto}/>}{label}
+      </div>
+      <div style={{fontSize:grande?25:20,fontWeight:700,fontFamily:FG,color:cor||t.t1,
+        letterSpacing:'-0.01em',fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}}>{valor}</div>
+      {sub && <div style={{fontSize:10.5,color:t.t3,lineHeight:1.45}}>{sub}</div>}
     </div>
   )
 }
 function Ponto({cor}:{cor:string}){
   return <span style={{width:7,height:7,borderRadius:99,background:cor,display:'inline-block',flexShrink:0}}/>
+}
+/* Linha "rótulo … valor" do comparativo. ⚠️ `null` sai como "—", nunca R$ 0,00:
+   a mesma regra da coluna Diferença, e pelo mesmo motivo. */
+function LinhaCmp({label,val,cor,strong,hide,comSinal}:{
+  label:string;val:number|null;cor?:string;strong?:boolean;hide:boolean;comSinal?:boolean
+}){
+  const t=useT()
+  const sinal = comSinal && val!==null ? (val>0.005?'+':val<-0.005?'−':'') : ''
+  return(
+    <div style={{display:'flex',alignItems:'center',gap:10,fontSize:12.5,color:t.t2,padding:'4px 0'}}>
+      <span style={{flex:1}}>{label}</span>
+      <span style={{fontWeight:strong?700:600,color:val===null?t.t3:(cor||t.t1),fontFamily:FG,
+        fontVariantNumeric:'tabular-nums',filter:hide&&val!==null?'blur(6px)':'none'}}>
+        {val===null?'—':`${sinal}${brl2(comSinal?Math.abs(val):val)}`}
+      </span>
+    </div>
+  )
 }
 
 function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from:string;to:string};hide:boolean}){
@@ -2763,17 +2792,37 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const [busca,setBusca]=useState('')
   const [filtro,setFiltro]=useState<'todos'|'pago'|'agendado'|'nao_liquidado'|'divergente'>('todos')
   const [pagina,setPagina]=useState(0)
+  const [lendo,setLendo]=useState(false)
+  const [detalhe,setDetalhe]=useState<any>(null)
 
+  const carregar=async()=>{
+    const r=await fetch(`/api/amazon/conciliacao?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`)
+    return await r.json()
+  }
   useEffect(()=>{
     if(!connected) return
     let alive=true
     setSt({loading:true,data:null})
-    fetch(`/api/amazon/conciliacao?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`)
-      .then(r=>r.json()).then(d=>{ if(alive) setSt({loading:false,data:d}) })
+    carregar().then(d=>{ if(alive) setSt({loading:false,data:d}) })
       .catch(()=>{ if(alive) setSt({loading:false,data:{erro:'sem resposta do servidor'}}) })
     return ()=>{ alive=false }
   },[connected,range.from,range.to])
   useEffect(()=>{ setPagina(0) },[busca,filtro,range.from,range.to])
+
+  /* ⭐ O BOTÃO DE LER OS REPASSES MORA AQUI TAMBÉM.
+     Ele existia só na visão Por repasse, e o cliente que entra direto nesta não
+     tem como adivinhar que precisa clicar em outra tela pra esta funcionar. Tela
+     que depende de uma ação escondida em outro lugar não é "opt-in": é uma tela
+     quebrada com instrução ausente. Mesma rota, mesmo lote, mesmo resultado
+     guardado — muda só o lugar de onde se pede. */
+  const lerRepasses=async()=>{
+    setLendo(true)
+    try{
+      await fetch('/api/amazon/repasses?meses=3&conferir=1')
+      setSt({loading:false,data:await carregar()})
+    }catch{/* o banner segue com a contagem antiga; nada se perde */}
+    setLendo(false)
+  }
 
   if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon pra conciliar os pedidos."/>
   if(!st||st.loading) return <LoadingBox/>
@@ -2799,6 +2848,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   // Colunas que só existem quando há o que mostrar (ver a nota na tabela).
   const temOutras=linhas.some(l=>Math.abs(l.outrasTaxas||0)>0.005)
   const temDevolucao=linhas.some(l=>Math.abs(l.devolucao||0)>0.005)
+  const temImposto=linhas.some(l=>Math.abs(l.imposto||0)>0.005)
 
   const dt=(iso:string|null)=>{ if(!iso) return '—'; const x=new Date(iso); return isNaN(x.getTime())?'—':x.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',timeZone:'UTC'}) }
   // ⚠️ null NUNCA vira R$ 0,00. Zero diz "medi e deu zero"; traço diz "não tenho".
@@ -2823,30 +2873,53 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
         conferido aparece como "não liquidado" e a tela acusa a Amazon de não ter
         pago — quando quem não leu fomos nós. */}
     {faltamConferir>0 && (
-      <div style={{display:'flex',alignItems:'flex-start',gap:11,background:t.dark?'rgba(240,180,41,0.07)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(240,180,41,0.3)':'#FDE68A'}`,borderRadius:12,padding:'12px 14px',marginBottom:14}}>
-        <i className="ti ti-alert-triangle" style={{fontSize:16,color:t.gold,marginTop:1,flexShrink:0}} aria-hidden="true"/>
-        <div style={{fontSize:11.5,color:t.t2,lineHeight:1.55}}>
-          <b style={{color:t.t1}}>{conferidos} de {totalReps} repasses lidos.</b> Os pedidos dos {faltamConferir} que faltam ainda aparecem como <b>não liquidados</b> — não porque a Amazon não pagou, mas porque ainda não abrimos aquele repasse.
-          {' '}Vá em <b>Por repasse</b> e clique em <b>Conferir se o Oráculo lê tudo</b>: cada clique lê mais um lote, e o que foi lido vale pra sempre.
+      <div style={{background:t.dark?'rgba(240,180,41,0.07)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(240,180,41,0.3)':'#FDE68A'}`,borderRadius:12,padding:'13px 15px',marginBottom:14,
+        display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap' as const}}>
+        <i className="ti ti-alert-triangle" style={{fontSize:17,color:t.gold,marginTop:1,flexShrink:0}} aria-hidden="true"/>
+        <div style={{flex:1,minWidth:210,fontSize:11.5,color:t.t2,lineHeight:1.55}}>
+          <div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:3}}>
+            {conferidos===0
+              // Primeira vez: não dá pra falar de "os que faltam" pra quem ainda
+              // não viu nada funcionar. A frase tem que dizer o que fazer.
+              ? 'Falta 1 passo: ler os seus repasses'
+              : `${conferidos} de ${totalReps} repasses lidos`}
+          </div>
+          {conferidos===0
+            ? <>Os pedidos abaixo aparecem como <b>não liquidados</b> até o Oráculo abrir os repasses da sua conta e ver o que a Amazon já pagou em cada um. É só clicar no botão — leva alguns segundos por lote e <b>o que for lido vale pra sempre</b>.</>
+            : <>Os pedidos dos <b>{faltamConferir}</b> que faltam ainda aparecem como <b>não liquidados</b> — não porque a Amazon não pagou, mas porque ainda não abrimos aquele repasse. Cada clique lê mais um lote.</>}
         </div>
+        <button onClick={lerRepasses} disabled={lendo}
+          style={{flexShrink:0,background:lendo?'transparent':t.gold,color:lendo?t.t2:(t.dark?'#1c1606':'#3a2a05'),
+            border:`1px solid ${lendo?t.line2:t.gold}`,borderRadius:9,padding:'10px 15px',fontSize:12,fontWeight:700,
+            cursor:lendo?'default':'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:7}}>
+          <i className={`ti ${lendo?'ti-loader-2':'ti-refresh'}`} style={{fontSize:15,animation:lendo?'ora-spin 1s linear infinite':'none'}} aria-hidden="true"/>
+          {lendo?'Lendo os repasses…':conferidos===0?'Ler meus repasses':'Ler os que faltam'}
+        </button>
+        <style>{`@keyframes ora-spin{to{transform:rotate(360deg)}}`}</style>
       </div>
     )}
 
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
-      <CardTotal label="Total bruto vendido" valor={brl2(R.totalBruto||0)} hide={hide}/>
-      <CardTotal label="Já caiu na conta" valor={brl2(R.recebido||0)} cor={t.grn} hide={hide}
+      <CardTotal grande label="Total bruto vendido" valor={brl2(R.totalBruto||0)} hide={hide}/>
+      <CardTotal grande label="Já caiu na conta" valor={brl2(R.recebido||0)} cor={t.grn} ponto={t.grn} hide={hide}
         sub="líquido dos repasses transferidos"/>
     </div>
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
-      <CardTotal label="🟡 Agendado" valor={brl2(R.agendado||0)} cor={t.gold} hide={hide} sub="em repasse aberto, ainda não transferido"/>
-      <CardTotal label="⚪ Não liquidado (bruto)" valor={brl2(R.naoLiquidadoBruto||0)} hide={hide}
+      <CardTotal label="Agendado" ponto={t.gold} valor={brl2(R.agendado||0)} cor={t.gold} hide={hide} sub="em repasse aberto, ainda não transferido"/>
+      <CardTotal label="Não liquidado (bruto)" ponto={t.t3} valor={brl2(R.naoLiquidadoBruto||0)} hide={hide}
         sub="vendeu e a Amazon ainda não lançou. É bruto: sem lançamento não existe taxa medida"/>
       {/* Mesmo tratamento de sinal da coluna Diferença — "R$ -47,36" no card e
           "−R$ 49,90" na tabela seriam duas grandezas para o mesmo olho. */}
-      <CardTotal label="Diferença apurada"
+      <CardTotal label="Diferença apurada" ponto={Math.abs(R.diferencaTotal||0)<=0.01?t.grn:t.red}
         valor={`${(R.diferencaTotal||0)>0.005?'+':(R.diferencaTotal||0)<-0.005?'−':''}${brl2(Math.abs(R.diferencaTotal||0))}`}
         cor={Math.abs(R.diferencaTotal||0)<=0.01?t.grn:t.red} hide={hide}
         sub={`sobre ${(R.conciliados||0)+(R.recebeuAMenos||0)+(R.recebeuAMais||0)} pedidos com os dois lados`}/>
+    </div>
+    <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:14}}>
+      <CardTotal label="Conciliados" ponto={t.grn} valor={String(R.conciliados||0)} cor={t.grn} hide={false} sub="o depósito bateu com a venda"/>
+      <CardTotal label="Recebeu a menos" ponto={t.red} valor={String(R.recebeuAMenos||0)} cor={(R.recebeuAMenos||0)>0?t.red:undefined} hide={false} sub="caiu menos do que a venda"/>
+      <CardTotal label="Recebeu a mais" ponto={t.blue} valor={String(R.recebeuAMais||0)} cor={(R.recebeuAMais||0)>0?t.blue:undefined} hide={false} sub="caiu mais do que a venda"/>
+      <CardTotal label="Sem comparação" ponto={t.t3} valor={String(R.semComparacao||0)} hide={false} sub="ainda não dá pra conferir"/>
     </div>
 
     <div style={{display:'flex',gap:7,flexWrap:'wrap' as const,marginBottom:12,alignItems:'center'}}>
@@ -2855,9 +2928,12 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       {chip('agendado','Agendado',linhas.filter(l=>l.statusRepasse==='agendado').length,t.gold)}
       {chip('nao_liquidado','Não liquidado',linhas.filter(l=>l.statusRepasse==='nao_liquidado').length,t.t3)}
       {chip('divergente','Divergentes',(R.recebeuAMenos||0)+(R.recebeuAMais||0),t.red)}
-      <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar por pedido ou SKU"
-        style={{marginLeft:'auto',background:t.card,border:`1px solid ${t.line}`,borderRadius:9,padding:'7px 12px',
-          fontSize:12,color:t.t1,fontFamily:'inherit',minWidth:180,flex:'0 1 240px',outline:'none'}}/>
+      <div style={{marginLeft:'auto',position:'relative' as const,flex:'0 1 250px',minWidth:180,display:'flex',alignItems:'center'}}>
+        <i className="ti ti-search" style={{position:'absolute',left:11,fontSize:14,color:t.t3,pointerEvents:'none'}} aria-hidden="true"/>
+        <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar por pedido ou SKU"
+          style={{width:'100%',background:t.card,border:`1px solid ${t.line}`,borderRadius:20,padding:'8px 12px 8px 32px',
+            fontSize:12,color:t.t1,fontFamily:'inherit',outline:'none'}}/>
+      </div>
     </div>
 
     {/* ⭐ O que NÃO dá pra comparar é declarado, não escondido num "0 divergências". */}
@@ -2888,8 +2964,14 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
           Logística 5,00 e Líquido −5,00: o seller soma, dá 38,91, e conclui que a
           ferramenta erra. Elas só aparecem quando existem — coluna sempre visível
           e sempre zerada é ruído, mas coluna ausente com valor é a conta mentindo. */}
-      <Table minWidth={temOutras||temDevolucao?1180:1020} head={[{label:'Pedido',w:'16%'},{label:'SKU',w:'14%'},
-        {label:'Bruto',right:true},{label:'Comissão',right:true},{label:'Logística',right:true},
+      {/* A base é o mínimo pra tabela não espremer; cada coluna condicional soma o
+          que ela ocupa. ⚠️ Diferença é a ÚLTIMA e a mais importante — 60px a mais
+          na base a empurravam pra fora da tela em laptop com o menu aberto. */}
+      <Table minWidth={950+(temOutras?80:0)+(temDevolucao?90:0)+(temImposto?80:0)}
+        head={[{label:'Pedido',w:'16%'},{label:'SKU',w:'13%'},
+        {label:'Bruto',right:true},
+        ...(temImposto?[{label:'Imposto',right:true}]:[]),
+        {label:'Comissão',right:true},{label:'Logística',right:true},
         ...(temOutras?[{label:'Outras',right:true}]:[]),
         ...(temDevolucao?[{label:'Devolução',right:true}]:[]),
         {label:'Líquido',right:true},{label:'Venda',right:true},{label:'Depósito',right:true},
@@ -2904,6 +2986,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
               <td style={{padding:'9px 10px',fontSize:11.5,color:t.t2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}
                 title={(l.skus||[]).join(' · ')}>{(l.skus||[]).join(' · ')||'—'}</td>
               <NumTd hide={hide}>{val(l.bruto ?? l.brutoVenda)}</NumTd>
+              {temImposto && <NumTd hide={hide}>{val(l.imposto)}</NumTd>}
               <NumTd hide={hide}>{val(l.comissao,t.red)}</NumTd>
               <NumTd hide={hide}>{val(l.logistica,t.red)}</NumTd>
               {temOutras && <NumTd hide={hide}>{val(l.outrasTaxas,t.red)}</NumTd>}
@@ -2923,7 +3006,14 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
                   : divergente
                     // Sinal ANTES do R$, e o mesmo para os dois lados: "R$ -49,90"
                     // ao lado de "+R$ 2,54" faz o olho ler duas grandezas diferentes.
-                    ? <span style={{filter:hide?'blur(6px)':'none'}}>{l.diferenca>0?'+':'−'}{brl2(Math.abs(l.diferenca))}</span>
+                    // ⭐ E é CLICÁVEL: valor sozinho diz quanto divergiu e deixa o
+                    // seller sem saber o que fazer com a informação.
+                    ? <button onClick={()=>setDetalhe(l)} title="Ver por que divergiu"
+                        style={{background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit',
+                          fontSize:'inherit',fontWeight:'inherit',color:'inherit',textDecoration:'underline',
+                          textDecorationStyle:'dotted' as const,textUnderlineOffset:3,filter:hide?'blur(6px)':'none'}}>
+                        {l.diferenca>0?'+':'−'}{brl2(Math.abs(l.diferenca))}
+                      </button>
                     // ⭐ Zero MEDIDO merece o símbolo de conferido: é o oposto do
                     // traço da linha acima, e essa diferença é o produto.
                     : <span style={{color:t.grn,fontWeight:700}} title="O que a Amazon depositou bate com a venda.">✓</span>}
@@ -2948,6 +3038,78 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
         )}
       </div>
     </>)}
+
+    {/* ⭐ POR QUE DIVERGIU — as causas SOMAM a diferença, e o que sobra aparece
+        como resíduo DECLARADO. Foi a lição da reconciliação do período em 29/07:
+        anunciar um total e explicar um pedaço é PIOR que não explicar nada —
+        quem confere descobre dinheiro sem explicação e conclui que a ferramenta
+        esconde algo. Aqui vale linha a linha. */}
+    {detalhe && (
+      <ModalOverlay onClose={()=>setDetalhe(null)} zIndex={70}>
+        {/* ⚠️ O ModalOverlay é SÓ o fundo — o card (largura, fundo, padding e o
+            stopPropagation que impede o clique de fechar) é do filho. Sem ele o
+            conteúdo se espalha pelo overlay inteiro: título quebrado, blocos
+            lado a lado, rodapé no topo. Mesmo `card` do ProdutoDetalhe:
+            `margin:auto` centraliza quando cabe e deixa ROLAR quando não cabe. */}
+        <div onClick={e=>e.stopPropagation()} style={{background:t.card,border:`1px solid ${t.line}`,
+          borderRadius:16,width:'min(560px,96vw)',margin:'auto',padding:'clamp(14px,3.5vw,22px)',
+          boxShadow:'0 24px 70px rgba(0,0,0,0.35)'}}>
+        <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:4}}>
+          <div>
+            <div style={{fontSize:15,fontWeight:700,color:t.t1,fontFamily:FG}}>Por que este pedido divergiu</div>
+            <div style={{fontSize:11.5,color:t.t3,fontVariantNumeric:'tabular-nums',marginTop:2}}>
+              {detalhe.orderId}{(detalhe.skus||[]).length?` · ${detalhe.skus.join(' · ')}`:''}
+            </div>
+          </div>
+          <button onClick={()=>setDetalhe(null)} style={{background:'none',border:'none',color:t.t3,cursor:'pointer',fontSize:20,lineHeight:1,padding:0,fontFamily:'inherit'}} aria-label="Fechar">×</button>
+        </div>
+
+        <div style={{margin:'14px 0 4px',padding:'12px 14px',borderRadius:11,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.02)':'#FAFAFA'}}>
+          <LinhaCmp label="A venda registrou" val={detalhe.brutoVenda} hide={hide}/>
+          <LinhaCmp label="A Amazon pagou" val={detalhe.bruto} hide={hide}/>
+          <div style={{height:1,background:t.line,margin:'8px 0'}}/>
+          <LinhaCmp label="Diferença" val={detalhe.diferenca} strong comSinal
+            cor={Math.abs(detalhe.diferenca||0)<=0.005?t.grn:(detalhe.diferenca||0)<0?t.red:t.blue} hide={hide}/>
+        </div>
+
+        {detalhe.causas?.length>0 ? (
+          <div style={{marginTop:14}}>
+            <div style={{fontSize:11,fontWeight:700,color:t.t3,letterSpacing:.3,textTransform:'uppercase' as const,marginBottom:8}}>E a diferença tem nome</div>
+            {detalhe.causas.map((c:any,i:number)=>(
+              <div key={i} style={{display:'flex',alignItems:'center',gap:9,fontSize:12.5,color:t.t2,padding:'7px 0',borderTop:i?`1px solid ${t.line}`:'none'}}>
+                <i className={`ti ti-arrow-${c.valor>0?'up':'down'}`} style={{fontSize:15,flexShrink:0,color:c.valor>0?t.grn:t.red}} aria-hidden="true"/>
+                <span style={{flex:1}}>{c.rotulo}</span>
+                <span style={{fontWeight:700,color:c.valor>0?t.grn:t.red,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide?'blur(6px)':'none'}}>
+                  {c.valor>0?'+':'−'}{brl2(Math.abs(c.valor))}
+                </span>
+              </div>
+            ))}
+            {/* ⚠️ O resíduo aparece DECLARADO quando existe, nunca diluído numa
+                das causas. É a diferença entre explicar e parecer explicar. */}
+            {Math.abs(detalhe.residuo||0)>0.005 && (
+              <div style={{display:'flex',alignItems:'center',gap:9,fontSize:12.5,color:t.gold,padding:'7px 0',borderTop:`1px solid ${t.line}`}}>
+                <i className="ti ti-help-circle" style={{fontSize:15,flexShrink:0}} aria-hidden="true"/>
+                <span style={{flex:1}}>Ainda sem explicação</span>
+                <span style={{fontWeight:700,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide?'blur(6px)':'none'}}>
+                  {(detalhe.residuo||0)>0?'+':'−'}{brl2(Math.abs(detalhe.residuo||0))}
+                </span>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{marginTop:14,fontSize:11.5,color:t.t3,lineHeight:1.6}}>
+            Ainda não dá pra dizer <b>por que</b> divergiu: o histórico deste pedido não tem o detalhe do preço, do frete e do desconto separados —
+            só o total. Sem os dois lados abertos, apontar uma causa seria adivinhar.
+          </div>
+        )}
+
+        <div style={{marginTop:16,fontSize:10.5,color:t.t3,lineHeight:1.6}}>
+          As causas comparam <b>parcela a parcela</b>: preço, frete, embrulho e desconto, do jeito que a venda registrou contra o jeito que a Amazon pagou.
+          {detalhe.numeroLiquidacao && <> Liquidação <b>{detalhe.numeroLiquidacao}</b>{detalhe.depositoEm?<>, depositada em <b>{dt(detalhe.depositoEm)}</b></>:null}.</>}
+        </div>
+        </div>
+      </ModalOverlay>
+    )}
   </>)
 }
 
