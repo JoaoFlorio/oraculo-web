@@ -2599,22 +2599,29 @@ function Repasses({connected}:{connected?:boolean|null}){
   const d=st.data||{}
   if(d.erro||d.error) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:22,color:t.red,fontSize:12.5}}>{String(d.erro||d.error)}</div>
   const reps:any[]=Array.isArray(d.repasses)?d.repasses:[]
-  // ⚠️ FILTRO NUNCA ESVAZIA A TELA. A primeira versão exigia dois campos da Amazon
-  // que a conta do João não devolve, e o resultado foi "Nenhum pagamento nos últimos
-  // 3 meses" com 10 repasses no payload — a tela mentindo por causa de um filtro meu.
-  // Se o critério não achar ninguém, mostra tudo que tem valor e diz que está
-  // mostrando tudo. Dado que existe e não aparece é o pior desfecho possível aqui.
+  /* ⭐ A AMAZON BR LIQUIDA POR MEIO DE PAGAMENTO DO COMPRADOR.
+     Boleto, Visa, Mastercard, Elo, Amex, Diners, débito — cada bandeira tem prazo
+     próprio, então o MESMO ciclo de 14 dias gera VÁRIOS grupos de liquidação. O
+     Seller Central mostra um por vez: o seletor "Tipo de conta" troca entre eles.
+
+     Conferido na conta real: 23–30/jul tinha R$1.170,73 no Boleto, R$921,16 no Visa
+     e R$2.019,14 no Mastercard. Os três legítimos, os três no extrato dela.
+
+     ⚠️ Eu tratei essas linhas como ruído, depois como problema de TraceId, depois
+     como moeda — três hipóteses, três erros. Eram todas pagamentos de verdade. O
+     que faltava não era filtro: era AGRUPAR POR CICLO e dizer o porquê. */
   const comValor=reps.filter(r=>Math.abs(r.valorTransferido||0)>0.005||r.ehPagamento)
-  const achouPagamento=reps.some(r=>r.ehPagamento)
-  const base=achouPagamento?reps.filter(r=>r.ehPagamento):comValor
-  // ⚠️ MOEDA. A conta tem grupos em mais de uma moeda e eu formatava TUDO com brl2:
-  // um repasse de US$1.170,73 aparecia como "R$ 1.170,73" ao lado do repasse
-  // brasileiro. Era isso que fazia o ciclo 23–30/jul mostrar quatro linhas quando o
-  // Seller Central mostra uma — as outras três nunca foram reais.
-  const moedas=[...new Set(base.map(r=>String(r.moeda||'BRL')))]
-  const pagamentos=moedas.length>1?base.filter(r=>String(r.moeda||'BRL')==='BRL'):base
-  const emOutraMoeda=moedas.length>1?base.filter(r=>String(r.moeda||'BRL')!=='BRL'):[]
-  const outros=achouPagamento?reps.filter(r=>!r.ehPagamento&&Math.abs(r.valorTransferido||0)>0.005):[]
+  const ciclos=(()=>{
+    const m=new Map<string,{inicio:string|null;fim:string|null;itens:any[];total:number;pago:string|null}>()
+    for(const r of comValor){
+      const k=r.ciclo||`${r.inicio||''}|${r.fim||''}`
+      const g=m.get(k)||{inicio:r.inicio,fim:r.fim,itens:[] as any[],total:0,pago:r.dataTransferencia}
+      g.itens.push(r); g.total=Math.round((g.total+(r.valorTransferido||0))*100)/100
+      if(!g.pago&&r.dataTransferencia) g.pago=r.dataTransferencia
+      m.set(k,g)
+    }
+    return [...m.values()].sort((a,b)=>Date.parse(b.inicio||'')-Date.parse(a.inicio||''))
+  })()
   // Formata na moeda do grupo — nunca assume real.
   const dinheiro=(v:number,moeda?:string)=>{
     const m=String(moeda||'BRL')
@@ -2642,98 +2649,63 @@ function Repasses({connected}:{connected?:boolean|null}){
       </span>
     </div>
 
-    {/* ⚠️ SÓ OS PAGAMENTOS. A API devolve vários grupos por ciclo e o Seller Central
-        mostra UM — o que saiu pra conta. Na conta real, o ciclo 23–30/jul tinha
-        quatro grupos e a Amazon exibia só um deles: listar todos fazia o valor
-        certo aparecer afogado em ruído, numa tela cujo propósito é CONFERIR. */}
-    <Table minWidth={880} head={[{label:'Período do repasse',w:'24%'},{label:'Grupo de liquidação',w:'16%'},{label:'Transferido',right:true},
-      {label:'Pago em',right:true},{label:'Conta',right:true},{label:'O Oráculo leu',right:true},{label:'Diferença',right:true}]}>
-      {pagamentos.map(r=>{
-        const c=confDe(r.id)
-        const aberto=r.valorTransferido===null
-        return(
-          <tr key={r.id}>
-            <td style={{padding:'9px 10px',fontSize:12,color:t.t1}}>{data(r.inicio)} — {data(r.fim)}</td>
-            {/* É por este número que o seller acha a linha no Seller Central —
-                o id da API é um hash e não aparece na tela da Amazon. */}
-            <td style={{padding:'9px 10px',fontSize:11,color:t.t2,fontFamily:'ui-monospace,monospace'}}>{r.numeroLiquidacao||'—'}</td>
-            <NumTd hide={false} strong>{aberto?'—':dinheiro(r.valorTransferido,r.moeda)}</NumTd>
-            <NumTd hide={false}>{data(r.dataTransferencia)}</NumTd>
-            <NumTd hide={false}>{r.contaFinal?`•••${r.contaFinal}`:'—'}</NumTd>
-            <NumTd hide={false}>{c?.leitura?dinheiro(c.esperado,r.moeda):'—'}</NumTd>
-            <td style={{padding:'9px 10px',textAlign:'right' as const,fontSize:12.5,fontFamily:FG,whiteSpace:'nowrap' as const}}>
-              {!c ? <span style={{color:t.t3}}>—</span>
-                : c.erro ? <span style={{color:t.red,fontSize:11}}>{String(c.erro).slice(0,40)}</span>
-                : c.truncado ? <span style={{color:t.gold,fontSize:11}}>soma parcial</span>
-                : c.fecha ? <span style={{color:t.grn,fontWeight:700}}>fecha ✓</span>
-                : <span style={{color:t.red,fontWeight:700}}>{c.diferenca>0?'+':'−'}{brl2(Math.abs(c.diferenca||0))}</span>}
-            </td>
-          </tr>
-        )
-      })}
-    </Table>
-    {!pagamentos.length && <div style={{fontSize:12,color:t.t3,marginTop:12}}>Nenhum pagamento nos últimos 3 meses.</div>}
-    {/* ⚠️ Corte declarado. Sem isto, "—" na coluna Diferença parece "não fecha" —
-        e a tela passa a acusar um furo que é só o meu limite de conferência. */}
-    {d.conferido && (d.naoConferidos||0)>0 && (
-      <div style={{fontSize:11,color:t.t3,marginTop:9,lineHeight:1.6}}>
-        Conferi os <b>{d.limiteConferencia||8}</b> repasses mais recentes. Os outros <b>{d.naoConferidos}</b> aparecem com “—” na
-        coluna Diferença porque <b>não foram conferidos</b> — não porque não fecham. Cada conferência baixa os lançamentos daquele
-        repasse na Amazon, então o teto existe pra a tela não travar.
+    {/* Uma linha por CICLO, com o total, e dentro dela cada meio de pagamento. É
+        assim que a tela bate com o Seller Central: lá o seletor "Tipo de conta"
+        mostra um por vez; aqui os dois níveis aparecem juntos. */}
+    {ciclos.map((g,gi)=>(
+      <div key={gi} style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,marginBottom:10,overflow:'hidden'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:12,padding:'11px 14px',flexWrap:'wrap' as const,borderBottom:`1px solid ${t.line}`}}>
+          <div>
+            <b style={{fontSize:13,color:t.t1}}>{data(g.inicio)} — {data(g.fim)}</b>
+            <span style={{fontSize:11,color:t.t3,marginLeft:8}}>
+              {g.itens.length} {g.itens.length===1?'liquidação':'liquidações'}{g.pago?` · pago em ${data(g.pago)}`:''}
+            </span>
+          </div>
+          <b style={{fontFamily:FG,fontSize:15,color:t.grn}}>{brl2(g.total)}</b>
+        </div>
+        <Table minWidth={720} head={[{label:'Grupo de liquidação',w:'26%'},{label:'Transferido',right:true},
+          {label:'Pago em',right:true},{label:'O Oráculo leu',right:true},{label:'Diferença',right:true}]}>
+          {g.itens.map((r:any)=>{
+            const c=confDe(r.id)
+            // ⚠️ `== null` pega null E undefined. Com `=== null`, um campo ausente
+            // passava direto pro brl2 e derrubava a ABA INTEIRA com "O Oráculo teve
+            // um soluço". Campo que a Amazon não mandou não pode virar tela de erro.
+            const aberto=r.valorTransferido==null
+            return(
+              <tr key={r.id}>
+                <td style={{padding:'8px 10px',fontSize:11,color:t.t2,fontFamily:'ui-monospace,monospace'}}>{r.numeroLiquidacao||String(r.id).slice(0,14)}</td>
+                <NumTd hide={false} strong>{aberto?'—':brl2(r.valorTransferido)}</NumTd>
+                <NumTd hide={false}>{data(r.dataTransferencia)}</NumTd>
+                <NumTd hide={false}>{c?.leitura?brl2(c.esperado):'—'}</NumTd>
+                <td style={{padding:'8px 10px',textAlign:'right' as const,fontSize:12,fontFamily:FG,whiteSpace:'nowrap' as const}}>
+                  {!c ? <span style={{color:t.t3}}>—</span>
+                    : c.erro ? <span style={{color:t.red,fontSize:11}}>{String(c.erro).slice(0,40)}</span>
+                    : c.truncado ? <span style={{color:t.gold,fontSize:11}}>soma parcial</span>
+                    : c.fecha ? <span style={{color:t.grn,fontWeight:700}}>fecha ✓</span>
+                    : <span style={{color:t.red,fontWeight:700}}>{c.diferenca>0?'+':'−'}{brl2(Math.abs(c.diferenca||0))}</span>}
+                </td>
+              </tr>
+            )
+          })}
+        </Table>
       </div>
-    )}
-    <div style={{fontSize:10.5,color:t.t3,marginTop:9,lineHeight:1.6}}>
-      {achouPagamento
-        ? <>O <b>Grupo de liquidação</b> é o mesmo número que aparece no Seller Central em <b>Pagamentos → Todos os extratos</b> — é por ele que você casa cada linha daqui com a de lá. Quando a Amazon não informa esse número, a coluna fica em “—” e você casa pela <b>data e pelo valor</b>.</>
-        : <>A Amazon não marcou nenhum destes lançamentos como transferência bancária, então estamos mostrando <b>todos os que têm valor</b> — case pela <b>data e pelo valor</b> com o Seller Central em <b>Pagamentos → Todos os extratos</b>.</>}
-    </div>
-    {/* Os grupos sem transferência existem e somam dinheiro, mas não são pagamentos:
-        escondê-los seria omitir, misturá-los seria confundir. Ficam num recolhido. */}
-    {/* Repasse em outra moeda não é do marketplace brasileiro e não aparece no
-        extrato que o seller compara. Fica separado, com a moeda dita. */}
-    {emOutraMoeda.length>0 && (
-      <details style={{marginTop:12}}>
-        <summary style={{fontSize:11.5,color:t.t2,cursor:'pointer'}}>
-          {emOutraMoeda.length} repasse{emOutraMoeda.length>1?'s':''} em outra moeda ({[...new Set(emOutraMoeda.map(r=>r.moeda))].join(', ')})
-        </summary>
-        <div style={{fontSize:11,color:t.t3,lineHeight:1.6,margin:'8px 0 10px'}}>
-          Estes vêm de outro marketplace da sua conta e não entram no extrato brasileiro que você está conferindo.
-        </div>
-        <Table minWidth={520} head={[{label:'Período'},{label:'Valor',right:true},{label:'Pago em',right:true}]}>
-          {emOutraMoeda.map(r=>(
-            <tr key={r.id}>
-              <td style={{padding:'8px 10px',fontSize:11.5,color:t.t2}}>{data(r.inicio)} — {data(r.fim)}</td>
-              <NumTd hide={false}>{dinheiro(r.valorTransferido||0,r.moeda)}</NumTd>
-              <NumTd hide={false}>{data(r.dataTransferencia)}</NumTd>
-            </tr>
-          ))}
-        </Table>
-      </details>
-    )}
-    {outros.length>0 && (
-      <details style={{marginTop:12}}>
-        <summary style={{fontSize:11.5,color:t.t2,cursor:'pointer'}}>
-          {outros.length} lançamento{outros.length>1?'s':''} da Amazon sem transferência bancária
-        </summary>
-        <div style={{fontSize:11,color:t.t3,lineHeight:1.6,margin:'8px 0 10px'}}>
-          A Amazon abre grupos que não viram pagamento — reservas, correções e saldos que entram no ciclo seguinte.
-          Eles não aparecem no seu extrato de pagamentos e por isso não disputam espaço com o que caiu na conta.
-        </div>
-        <Table minWidth={520} head={[{label:'Período'},{label:'Valor',right:true},{label:'Status',right:true}]}>
-          {outros.map(r=>(
-            <tr key={r.id}>
-              <td style={{padding:'8px 10px',fontSize:11.5,color:t.t2}}>{data(r.inicio)} — {data(r.fim)}</td>
-              <NumTd hide={false}>{dinheiro(r.valorTransferido||0,r.moeda)}</NumTd>
-              <NumTd hide={false}>{r.status||'—'}</NumTd>
-            </tr>
-          ))}
-        </Table>
-      </details>
-    )}
+    ))}
+    {!ciclos.length && <div style={{fontSize:12,color:t.t3,marginTop:12}}>Nenhum repasse nos últimos 3 meses.</div>}
 
-    {/* ⚠️ Categoria que a Amazon manda e o Oráculo ainda não lê aparece com o NOME
-        dela. Sem isso, ela vira só um número solto na diferença — foi assim que a
-        "Taxa Amazon pra Todos" ficou zerada enquanto cobrava R$152 por mês. */}
+    {/* ⭐ A EXPLICAÇÃO QUE FALTAVA. Sem ela, ver quatro linhas no mesmo ciclo parece
+        erro do Oráculo — e foi o que me fez caçar defeito onde não havia. */}
+    <div style={{marginTop:14,padding:'12px 14px',borderRadius:11,background:t.dark?'rgba(255,255,255,0.02)':'#FAFAFA',border:`1px solid ${t.line}`}}>
+      <div style={{fontSize:12,fontWeight:600,color:t.t1,marginBottom:4}}>Por que um período tem várias liquidações</div>
+      <div style={{fontSize:11.5,color:t.t2,lineHeight:1.6}}>
+        A Amazon paga <b>separado por meio de pagamento do comprador</b> — boleto, Visa, Mastercard, Elo, Amex, Diners, débito.
+        Cada bandeira tem prazo próprio, então o mesmo ciclo de 14 dias vira <b>vários</b> grupos de liquidação (e o Amex costuma
+        levar meses, o que explica um período longo aparecer no meio da lista).
+        <br/><br/>
+        No Seller Central você vê <b>um por vez</b>: é o seletor <b>“Tipo de conta”</b> em Pagamentos → Todos os extratos que troca
+        entre eles. Aqui os dois níveis aparecem juntos — o <b>total do ciclo</b> em cima e cada liquidação embaixo.
+      </div>
+    </div>
+
     {confs.some(c=>c?.leitura?.listasNaoLidas?.length>0) && (
       <div style={{marginTop:16,padding:'13px 15px',borderRadius:12,background:t.dark?'rgba(240,180,41,0.07)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(240,180,41,0.3)':'#FDE68A'}`}}>
         <div style={{fontSize:12.5,fontWeight:600,color:t.t1,marginBottom:5}}>Lançamentos que o Oráculo ainda não lê</div>
@@ -2753,9 +2725,9 @@ function Repasses({connected}:{connected?:boolean|null}){
         {confs.filter(c=>c?.leitura).map((c,i)=>(
           <div key={i} style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'12px 14px',marginBottom:10}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:10,marginBottom:8,flexWrap:'wrap' as const}}>
-              <span style={{fontSize:12,color:t.t1}}>{data(c.repasse.inicio)} — {data(c.repasse.fim)}</span>
+              <span style={{fontSize:12,color:t.t1}}>{data(c.repasse?.inicio)} — {data(c.repasse?.fim)}</span>
               <b style={{fontFamily:FG,fontSize:13,color:c.fecha?t.grn:t.red}}>
-                {c.fecha?'a leitura fecha com o valor transferido':`diferença de ${brl2(Math.abs(c.diferenca||0))}`}
+                {c.fecha?'a leitura fecha com o valor transferido':`diferença de ${brl2(Math.abs(c.diferenca??0))}`}
               </b>
             </div>
             {[['Vendas','vendas'],['Devoluções','devolucoes'],['Taxas de venda','taxasDeVenda'],['Serviços (assinatura, armazenagem)','servicos'],['Ads','ads'],['Ajustes e remoções','ajustes']].map(([rot,k])=>{

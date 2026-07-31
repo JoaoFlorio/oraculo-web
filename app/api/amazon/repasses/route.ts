@@ -20,10 +20,12 @@ export async function GET(req: Request) {
   const url = new URL(req.url)
   const meses = Math.min(12, Math.max(1, Number(url.searchParams.get('meses') ?? 3) || 3))
   const conferir = url.searchParams.get('conferir') === '1' ? '&conferir=1' : ''
+  // Diagnóstico: campos crus do grupo. Só admin — é dado de depuração, não de tela.
+  const cru = (url.searchParams.get('cru') === '1' && user.role === 'admin') ? '&cru=1' : ''
 
   try {
     const res = await fetch(
-      `${BACKEND}/api/amazon/repasses?email=${encodeURIComponent(user.email)}&meses=${meses}${conferir}`,
+      `${BACKEND}/api/amazon/repasses?email=${encodeURIComponent(user.email)}&meses=${meses}${conferir}${cru}`,
       { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } },
     )
     return NextResponse.json(await res.json(), { status: res.status })
