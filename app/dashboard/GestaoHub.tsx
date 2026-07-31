@@ -2599,6 +2599,8 @@ function Repasses({connected}:{connected?:boolean|null}){
   const d=st.data||{}
   if(d.erro||d.error) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:22,color:t.red,fontSize:12.5}}>{String(d.erro||d.error)}</div>
   const reps:any[]=Array.isArray(d.repasses)?d.repasses:[]
+  const pagamentos=reps.filter(r=>r.ehPagamento)
+  const outros=reps.filter(r=>!r.ehPagamento&&Math.abs(r.valorTransferido||0)>0.005)
   const confs:any[]=Array.isArray(d.conferencias)?d.conferencias:[]
   const confDe=(id:string)=>confs.find(c=>c?.repasse?.id===id)
   // ⚠️ timeZone UTC de propósito. As datas do repasse são MARCOS de período, não
@@ -2620,18 +2622,21 @@ function Repasses({connected}:{connected?:boolean|null}){
       </span>
     </div>
 
-    <Table minWidth={860} head={[{label:'Período do repasse',w:'26%'},{label:'Status'},{label:'Transferido',right:true},
+    {/* ⚠️ SÓ OS PAGAMENTOS. A API devolve vários grupos por ciclo e o Seller Central
+        mostra UM — o que saiu pra conta. Na conta real, o ciclo 23–30/jul tinha
+        quatro grupos e a Amazon exibia só um deles: listar todos fazia o valor
+        certo aparecer afogado em ruído, numa tela cujo propósito é CONFERIR. */}
+    <Table minWidth={880} head={[{label:'Período do repasse',w:'24%'},{label:'Grupo de liquidação',w:'16%'},{label:'Transferido',right:true},
       {label:'Pago em',right:true},{label:'Conta',right:true},{label:'O Oráculo leu',right:true},{label:'Diferença',right:true}]}>
-      {reps.map(r=>{
+      {pagamentos.map(r=>{
         const c=confDe(r.id)
         const aberto=r.valorTransferido===null
         return(
           <tr key={r.id}>
-            <td style={{padding:'9px 10px',fontSize:12,color:t.t1}}>
-              {data(r.inicio)} — {data(r.fim)}
-              <div style={{fontSize:10,color:t.t3,fontFamily:'ui-monospace,monospace'}}>{String(r.id).slice(0,18)}</div>
-            </td>
-            <PillTd><Pill kind={aberto?'gold':'grn'}>{aberto?'Aberto':'Fechado'}</Pill></PillTd>
+            <td style={{padding:'9px 10px',fontSize:12,color:t.t1}}>{data(r.inicio)} — {data(r.fim)}</td>
+            {/* É por este número que o seller acha a linha no Seller Central —
+                o id da API é um hash e não aparece na tela da Amazon. */}
+            <td style={{padding:'9px 10px',fontSize:11,color:t.t2,fontFamily:'ui-monospace,monospace'}}>{r.numeroLiquidacao||'—'}</td>
             <NumTd hide={false} strong>{aberto?'—':brl2(r.valorTransferido)}</NumTd>
             <NumTd hide={false}>{data(r.dataTransferencia)}</NumTd>
             <NumTd hide={false}>{r.contaFinal?`•••${r.contaFinal}`:'—'}</NumTd>
@@ -2647,7 +2652,32 @@ function Repasses({connected}:{connected?:boolean|null}){
         )
       })}
     </Table>
-    {!reps.length && <div style={{fontSize:12,color:t.t3,marginTop:12}}>Nenhum repasse nos últimos 3 meses.</div>}
+    {!pagamentos.length && <div style={{fontSize:12,color:t.t3,marginTop:12}}>Nenhum pagamento nos últimos 3 meses.</div>}
+    <div style={{fontSize:10.5,color:t.t3,marginTop:9,lineHeight:1.6}}>
+      O <b>Grupo de liquidação</b> é o mesmo número que aparece no Seller Central em <b>Pagamentos → Todos os extratos</b> — é por ele que você casa cada linha daqui com a de lá.
+    </div>
+    {/* Os grupos sem transferência existem e somam dinheiro, mas não são pagamentos:
+        escondê-los seria omitir, misturá-los seria confundir. Ficam num recolhido. */}
+    {outros.length>0 && (
+      <details style={{marginTop:12}}>
+        <summary style={{fontSize:11.5,color:t.t2,cursor:'pointer'}}>
+          {outros.length} lançamento{outros.length>1?'s':''} da Amazon sem transferência bancária
+        </summary>
+        <div style={{fontSize:11,color:t.t3,lineHeight:1.6,margin:'8px 0 10px'}}>
+          A Amazon abre grupos que não viram pagamento — reservas, correções e saldos que entram no ciclo seguinte.
+          Eles não aparecem no seu extrato de pagamentos e por isso não disputam espaço com o que caiu na conta.
+        </div>
+        <Table minWidth={520} head={[{label:'Período'},{label:'Valor',right:true},{label:'Status',right:true}]}>
+          {outros.map(r=>(
+            <tr key={r.id}>
+              <td style={{padding:'8px 10px',fontSize:11.5,color:t.t2}}>{data(r.inicio)} — {data(r.fim)}</td>
+              <NumTd hide={false}>{brl2(r.valorTransferido||0)}</NumTd>
+              <NumTd hide={false}>{r.status||'—'}</NumTd>
+            </tr>
+          ))}
+        </Table>
+      </details>
+    )}
 
     {/* ⚠️ Categoria que a Amazon manda e o Oráculo ainda não lê aparece com o NOME
         dela. Sem isso, ela vira só um número solto na diferença — foi assim que a
