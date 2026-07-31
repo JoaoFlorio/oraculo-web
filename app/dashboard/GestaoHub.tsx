@@ -2723,6 +2723,266 @@ function InvestigarRepasse({id}:{id:string}){
   )
 }
 
+/* ── CONCILIAÇÃO PEDIDO A PEDIDO ─────────────────────────────────────────────
+   "Este pedido já me pagou? Pagou o quanto eu esperava?"
+
+   A visão por ciclo responde ao contador: quanto caiu em cada liquidação e se a
+   nossa leitura fecha com o extrato. Esta responde ao seller olhando UM pedido.
+
+   ⭐ Não custa chamada de API: as linhas por pedido saem das conferências já
+   guardadas — o mesmo clique de "Conferir se o Oráculo lê tudo" que já baixava
+   os eventos agora guarda também a quebra por pedido.
+
+   ⚠️ E é por isso que a cobertura tem que ser DITA na tela. Pedido de repasse
+   não conferido apareceria como "não liquidado" — a tela estaria acusando a
+   Amazon de não ter pago quando quem não leu fomos nós. */
+const STATUS_REPASSE:Record<string,{rotulo:string;cor:(t:Theme)=>string;fundo:(t:Theme)=>[string,string]}> = {
+  pago:          {rotulo:'Pago',          cor:t=>t.grn,  fundo:t=>t.pillGrn},
+  agendado:      {rotulo:'Agendado',      cor:t=>t.gold, fundo:t=>t.pillGold},
+  nao_liquidado: {rotulo:'Não liquidado', cor:t=>t.t3,   fundo:t=>[t.dark?'rgba(255,255,255,0.05)':'#F1F5F9', t.t3]},
+}
+const POR_PAGINA = 25
+
+function CardTotal({label,valor,cor,hide,sub}:{label:string;valor:string;cor?:string;hide:boolean;sub?:string}){
+  const t=useT()
+  return(
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:13,padding:'15px 17px',flex:'1 1 180px',minWidth:0}}>
+      <div style={{fontSize:11,color:t.t3,fontFamily:FG,fontWeight:600,marginBottom:5}}>{label}</div>
+      <div style={{fontSize:20,fontWeight:700,fontFamily:FG,color:cor||t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}}>{valor}</div>
+      {sub && <div style={{fontSize:10.5,color:t.t3,marginTop:4,lineHeight:1.45}}>{sub}</div>}
+    </div>
+  )
+}
+function Ponto({cor}:{cor:string}){
+  return <span style={{width:7,height:7,borderRadius:99,background:cor,display:'inline-block',flexShrink:0}}/>
+}
+
+function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from:string;to:string};hide:boolean}){
+  const t=useT()
+  const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
+  const [busca,setBusca]=useState('')
+  const [filtro,setFiltro]=useState<'todos'|'pago'|'agendado'|'nao_liquidado'|'divergente'>('todos')
+  const [pagina,setPagina]=useState(0)
+
+  useEffect(()=>{
+    if(!connected) return
+    let alive=true
+    setSt({loading:true,data:null})
+    fetch(`/api/amazon/conciliacao?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`)
+      .then(r=>r.json()).then(d=>{ if(alive) setSt({loading:false,data:d}) })
+      .catch(()=>{ if(alive) setSt({loading:false,data:{erro:'sem resposta do servidor'}}) })
+    return ()=>{ alive=false }
+  },[connected,range.from,range.to])
+  useEffect(()=>{ setPagina(0) },[busca,filtro,range.from,range.to])
+
+  if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon pra conciliar os pedidos."/>
+  if(!st||st.loading) return <LoadingBox/>
+  const d=st.data||{}
+  if(d.erro||d.error) return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:22,color:t.red,fontSize:12.5}}>{String(d.erro||d.error)}</div>
+
+  const linhas:any[]=Array.isArray(d.linhas)?d.linhas:[]
+  const R=d.resumo||{}
+  const conferidos=Number(d.repassesConferidos||0), totalReps=Number(d.repassesTotal||0)
+  const faltamConferir=Math.max(0,totalReps-conferidos)
+
+  const filtradas=linhas.filter(l=>{
+    if(filtro==='divergente'){ if(l.diferenca===null||Math.abs(l.diferenca)<=0.005) return false }
+    else if(filtro!=='todos' && l.statusRepasse!==filtro) return false
+    const q=busca.trim().toLowerCase()
+    if(!q) return true
+    return String(l.orderId||'').toLowerCase().includes(q) || (l.skus||[]).some((s:string)=>s.toLowerCase().includes(q))
+  })
+  const paginas=Math.max(1,Math.ceil(filtradas.length/POR_PAGINA))
+  const pag=Math.min(pagina,paginas-1)
+  const visiveis=filtradas.slice(pag*POR_PAGINA,(pag+1)*POR_PAGINA)
+
+  // Colunas que só existem quando há o que mostrar (ver a nota na tabela).
+  const temOutras=linhas.some(l=>Math.abs(l.outrasTaxas||0)>0.005)
+  const temDevolucao=linhas.some(l=>Math.abs(l.devolucao||0)>0.005)
+
+  const dt=(iso:string|null)=>{ if(!iso) return '—'; const x=new Date(iso); return isNaN(x.getTime())?'—':x.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',timeZone:'UTC'}) }
+  // ⚠️ null NUNCA vira R$ 0,00. Zero diz "medi e deu zero"; traço diz "não tenho".
+  // Nesta tela a distinção é o produto: a linha sem medida é a que o seller usa
+  // pra cobrar o que ainda não caiu.
+  const val=(v:number|null,cor?:string)=>v===null
+    ? <span style={{color:t.t3}}>—</span>
+    : <span style={{color:cor||t.t1,filter:hide?'blur(6px)':'none'}}>{brl2(v)}</span>
+
+  const chip=(k:typeof filtro,label:string,n:number,cor?:string)=>(
+    <button key={k} onClick={()=>setFiltro(k)}
+      style={{display:'flex',alignItems:'center',gap:6,padding:'6px 11px',borderRadius:20,cursor:'pointer',fontFamily:'inherit',
+        fontSize:11.5,fontWeight:filtro===k?700:500,whiteSpace:'nowrap' as const,
+        border:`1px solid ${filtro===k?t.gold:t.line}`,background:filtro===k?t.pillGold[0]:'transparent',
+        color:filtro===k?t.goldText:t.t2}}>
+      {cor && <Ponto cor={cor}/>}{label}<span style={{color:t.t3,fontWeight:500}}>{n}</span>
+    </button>
+  )
+
+  return(<>
+    {/* ⭐ A COBERTURA VEM ANTES DOS NÚMEROS. Sem isto, pedido de repasse ainda não
+        conferido aparece como "não liquidado" e a tela acusa a Amazon de não ter
+        pago — quando quem não leu fomos nós. */}
+    {faltamConferir>0 && (
+      <div style={{display:'flex',alignItems:'flex-start',gap:11,background:t.dark?'rgba(240,180,41,0.07)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(240,180,41,0.3)':'#FDE68A'}`,borderRadius:12,padding:'12px 14px',marginBottom:14}}>
+        <i className="ti ti-alert-triangle" style={{fontSize:16,color:t.gold,marginTop:1,flexShrink:0}} aria-hidden="true"/>
+        <div style={{fontSize:11.5,color:t.t2,lineHeight:1.55}}>
+          <b style={{color:t.t1}}>{conferidos} de {totalReps} repasses lidos.</b> Os pedidos dos {faltamConferir} que faltam ainda aparecem como <b>não liquidados</b> — não porque a Amazon não pagou, mas porque ainda não abrimos aquele repasse.
+          {' '}Vá em <b>Por repasse</b> e clique em <b>Conferir se o Oráculo lê tudo</b>: cada clique lê mais um lote, e o que foi lido vale pra sempre.
+        </div>
+      </div>
+    )}
+
+    <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
+      <CardTotal label="Total bruto vendido" valor={brl2(R.totalBruto||0)} hide={hide}/>
+      <CardTotal label="Já caiu na conta" valor={brl2(R.recebido||0)} cor={t.grn} hide={hide}
+        sub="líquido dos repasses transferidos"/>
+    </div>
+    <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
+      <CardTotal label="🟡 Agendado" valor={brl2(R.agendado||0)} cor={t.gold} hide={hide} sub="em repasse aberto, ainda não transferido"/>
+      <CardTotal label="⚪ Não liquidado (bruto)" valor={brl2(R.naoLiquidadoBruto||0)} hide={hide}
+        sub="vendeu e a Amazon ainda não lançou. É bruto: sem lançamento não existe taxa medida"/>
+      {/* Mesmo tratamento de sinal da coluna Diferença — "R$ -47,36" no card e
+          "−R$ 49,90" na tabela seriam duas grandezas para o mesmo olho. */}
+      <CardTotal label="Diferença apurada"
+        valor={`${(R.diferencaTotal||0)>0.005?'+':(R.diferencaTotal||0)<-0.005?'−':''}${brl2(Math.abs(R.diferencaTotal||0))}`}
+        cor={Math.abs(R.diferencaTotal||0)<=0.01?t.grn:t.red} hide={hide}
+        sub={`sobre ${(R.conciliados||0)+(R.recebeuAMenos||0)+(R.recebeuAMais||0)} pedidos com os dois lados`}/>
+    </div>
+
+    <div style={{display:'flex',gap:7,flexWrap:'wrap' as const,marginBottom:12,alignItems:'center'}}>
+      {chip('todos','Todos',linhas.length)}
+      {chip('pago','Pago',linhas.filter(l=>l.statusRepasse==='pago').length,t.grn)}
+      {chip('agendado','Agendado',linhas.filter(l=>l.statusRepasse==='agendado').length,t.gold)}
+      {chip('nao_liquidado','Não liquidado',linhas.filter(l=>l.statusRepasse==='nao_liquidado').length,t.t3)}
+      {chip('divergente','Divergentes',(R.recebeuAMenos||0)+(R.recebeuAMais||0),t.red)}
+      <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar por pedido ou SKU"
+        style={{marginLeft:'auto',background:t.card,border:`1px solid ${t.line}`,borderRadius:9,padding:'7px 12px',
+          fontSize:12,color:t.t1,fontFamily:'inherit',minWidth:180,flex:'0 1 240px',outline:'none'}}/>
+    </div>
+
+    {/* ⭐ O que NÃO dá pra comparar é declarado, não escondido num "0 divergências". */}
+    {(R.semComparacao||0)>0 && filtro==='todos' && (
+      <div style={{fontSize:11,color:t.t3,marginBottom:9,lineHeight:1.5}}>
+        <b>{R.semComparacao} pedido{(R.semComparacao)>1?'s':''} sem os dois lados</b> — ou a Amazon ainda não lançou, ou a venda é anterior ao histórico que temos. Eles não entram na diferença apurada: sem os dois lados, comparar seria inventar.
+      </div>
+    )}
+
+    {!linhas.length ? (
+      <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:22,textAlign:'center' as const,color:t.t3,fontSize:12.5}}>
+        Nenhum pedido no período selecionado.
+      </div>
+    ) : !filtradas.length ? (
+      /* ⚠️ Tabela vazia sem frase é lida como defeito. "Não achei o que você
+         pediu" e "não há nada aqui" são respostas diferentes. */
+      <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:22,textAlign:'center' as const,color:t.t3,fontSize:12.5}}>
+        Nenhum pedido {busca.trim()?<>com <b style={{color:t.t2}}>{busca.trim()}</b></>:'neste filtro'}
+        {' '}entre os {linhas.length} do período.{' '}
+        <button onClick={()=>{ setBusca(''); setFiltro('todos') }}
+          style={{background:'none',border:'none',color:t.goldText,cursor:'pointer',fontFamily:'inherit',fontSize:12.5,textDecoration:'underline',padding:0}}>
+          limpar
+        </button>
+      </div>
+    ) : (<>
+      {/* ⭐ A LINHA TEM QUE FECHAR COM ELA MESMA. Sem as colunas de devolução e
+          outras taxas, um pedido devolvido mostrava Bruto 49,90 − Comissão 5,99 −
+          Logística 5,00 e Líquido −5,00: o seller soma, dá 38,91, e conclui que a
+          ferramenta erra. Elas só aparecem quando existem — coluna sempre visível
+          e sempre zerada é ruído, mas coluna ausente com valor é a conta mentindo. */}
+      <Table minWidth={temOutras||temDevolucao?1180:1020} head={[{label:'Pedido',w:'16%'},{label:'SKU',w:'14%'},
+        {label:'Bruto',right:true},{label:'Comissão',right:true},{label:'Logística',right:true},
+        ...(temOutras?[{label:'Outras',right:true}]:[]),
+        ...(temDevolucao?[{label:'Devolução',right:true}]:[]),
+        {label:'Líquido',right:true},{label:'Venda',right:true},{label:'Depósito',right:true},
+        {label:'Repasse'},{label:'Diferença',right:true}]}>
+        {visiveis.map(l=>{
+          const S=STATUS_REPASSE[l.statusRepasse]||STATUS_REPASSE.nao_liquidado
+          const [bg,fg]=S.fundo(t)
+          const divergente=l.diferenca!==null&&Math.abs(l.diferenca)>0.005
+          return(
+            <tr key={l.orderId}>
+              <td style={{padding:'9px 10px',fontSize:11.5,color:t.t1,fontFamily:FG,fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap' as const}}>{l.orderId}</td>
+              <td style={{padding:'9px 10px',fontSize:11.5,color:t.t2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}
+                title={(l.skus||[]).join(' · ')}>{(l.skus||[]).join(' · ')||'—'}</td>
+              <NumTd hide={hide}>{val(l.bruto ?? l.brutoVenda)}</NumTd>
+              <NumTd hide={hide}>{val(l.comissao,t.red)}</NumTd>
+              <NumTd hide={hide}>{val(l.logistica,t.red)}</NumTd>
+              {temOutras && <NumTd hide={hide}>{val(l.outrasTaxas,t.red)}</NumTd>}
+              {temDevolucao && <NumTd hide={hide}>{val(l.devolucao,t.red)}</NumTd>}
+              <NumTd hide={hide} strong>{val(l.liquido)}</NumTd>
+              <NumTd hide={hide}>{dt(l.vendaEm)}</NumTd>
+              <NumTd hide={hide}>{dt(l.depositoEm)}</NumTd>
+              <PillTd>
+                <span title={l.numeroLiquidacao?`Liquidação ${l.numeroLiquidacao}`:undefined}
+                  style={{display:'inline-flex',alignItems:'center',gap:5,background:bg,color:fg,fontSize:10.5,fontWeight:700,padding:'3px 9px',borderRadius:20,whiteSpace:'nowrap' as const}}>
+                  <Ponto cor={S.cor(t)}/>{S.rotulo}
+                </span>
+              </PillTd>
+              <NumTd hide={hide} color={divergente?t.red:undefined} strong={divergente}>
+                {l.diferenca===null
+                  ? <span style={{color:t.t3}} title="A Amazon ainda não liquidou este pedido — não há o que comparar. Zero aqui diria &quot;conferi e bateu&quot;.">—</span>
+                  : divergente
+                    // Sinal ANTES do R$, e o mesmo para os dois lados: "R$ -49,90"
+                    // ao lado de "+R$ 2,54" faz o olho ler duas grandezas diferentes.
+                    ? <span style={{filter:hide?'blur(6px)':'none'}}>{l.diferenca>0?'+':'−'}{brl2(Math.abs(l.diferenca))}</span>
+                    // ⭐ Zero MEDIDO merece o símbolo de conferido: é o oposto do
+                    // traço da linha acima, e essa diferença é o produto.
+                    : <span style={{color:t.grn,fontWeight:700}} title="O que a Amazon depositou bate com a venda.">✓</span>}
+              </NumTd>
+            </tr>
+          )
+        })}
+      </Table>
+
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginTop:12}}>
+        <span style={{fontSize:11.5,color:t.t3}}>
+          {filtradas.length} pedido{filtradas.length===1?'':'s'}{filtradas.length!==linhas.length&&` de ${linhas.length}`}
+        </span>
+        {paginas>1 && (
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <button onClick={()=>setPagina(p=>Math.max(0,p-1))} disabled={pag===0}
+              style={{background:'none',border:`1px solid ${t.line}`,borderRadius:8,padding:'6px 10px',cursor:pag===0?'default':'pointer',color:pag===0?t.t3:t.t2,fontFamily:'inherit',fontSize:12,opacity:pag===0?.5:1}}>‹</button>
+            <span style={{fontSize:11.5,color:t.t2,fontVariantNumeric:'tabular-nums'}}>{pag+1} / {paginas}</span>
+            <button onClick={()=>setPagina(p=>Math.min(paginas-1,p+1))} disabled={pag>=paginas-1}
+              style={{background:'none',border:`1px solid ${t.line}`,borderRadius:8,padding:'6px 10px',cursor:pag>=paginas-1?'default':'pointer',color:pag>=paginas-1?t.t3:t.t2,fontFamily:'inherit',fontSize:12,opacity:pag>=paginas-1?.5:1}}>›</button>
+          </div>
+        )}
+      </div>
+    </>)}
+  </>)
+}
+
+/* Duas perguntas sobre o mesmo dinheiro, e as duas precisam existir:
+
+     · POR PEDIDO  — "este pedido já me pagou?". É a do seller, todo dia.
+     · POR REPASSE — "o depósito de sexta fecha com o extrato?". É a do contador,
+       e é a que PROVA que a leitura não perde nada. Sem ela, a de cima seria só
+       mais uma tela bonita cheia de número que ninguém verificou.
+
+   Abre em Por pedido porque é a pergunta mais frequente — e o aviso de cobertura
+   leva pra outra quando falta conferência. */
+function RepassesHub({connected,range,hide}:{connected?:boolean|null;range:{from:string;to:string};hide:boolean}){
+  const t=useT()
+  const [vista,setVista]=useState<'pedido'|'repasse'>('pedido')
+  const bt=(k:'pedido'|'repasse',icone:string,label:string)=>(
+    <button onClick={()=>setVista(k)} aria-current={vista===k?'page':undefined}
+      style={{display:'flex',alignItems:'center',gap:6,padding:'7px 13px',borderRadius:9,cursor:'pointer',fontFamily:'inherit',
+        fontSize:12.5,fontWeight:vista===k?700:500,whiteSpace:'nowrap' as const,
+        border:`1px solid ${vista===k?t.gold:t.line}`,background:vista===k?t.pillGold[0]:'transparent',
+        color:vista===k?t.goldText:t.t2}}>
+      <i className={`ti ${icone}`} style={{fontSize:14}} aria-hidden="true"/>{label}
+    </button>
+  )
+  return(<>
+    <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:13}}>
+      {bt('pedido','ti-list-check','Por pedido')}
+      {bt('repasse','ti-building-bank','Por repasse')}
+    </div>
+    {vista==='pedido'
+      ? <Conciliacao connected={connected} range={range} hide={hide}/>
+      : <Repasses connected={connected}/>}
+  </>)
+}
+
 function Repasses({connected}:{connected?:boolean|null}){
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
@@ -3560,7 +3820,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto} isAdmin={isAdmin}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
         {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={custoUnit} adsReal={adsData}/>}
-        {tab==='repasse'&& <Repasses connected={amazonConnected}/>}
+        {tab==='repasse'&& <RepassesHub connected={amazonConnected} range={range} hide={hide}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
 
         {/* Modal de detalhamento (lupinha) — sobre qualquer aba */}
