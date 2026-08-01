@@ -2885,10 +2885,21 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     // o explicado é cupom/frete legítimo. Misturá-los foi o que gerou o susto.
     const furos=linhas.filter(l=>['menos','mais'].includes(estadoDif(l)))
     const explic=linhas.filter(l=>estadoDif(l)==='explicado')
+    /* ⚠️ O diagnóstico mostra os MESMOS números da tela. Ele ficou lendo os
+       campos antigos (`recebido`, que soma órfão; `naoLiquidadoBruto`, que é
+       bruto) enquanto os cards já mostravam a partição — dizia "já caiu
+       17.743,79" ao lado de um card escrito "Recebido 10.959,61". Dois números
+       pra mesma coisa é a doença-mãe deste projeto, e num texto feito pra
+       investigar defeito ela é pior: manda o suporte caçar o fantasma errado. */
+    const soma=(r:any)=>Math.round(((r.recebidoDeVendas||0)+(r.agendadoDeVendas||0)+(r.naoLiquidadoLiquido||0))*100)/100
     const bloco=[
       'ORÁCULO · Conciliação — diagnóstico',
       `período ${range.from.slice(0,10)} → ${range.to.slice(0,10)} · ${conferidos}/${totalReps} repasses lidos`,
-      `total vendido ${f(R.totalBruto)} · já caiu ${f(R.recebido)} · não liquidado ${f(R.naoLiquidadoBruto)}`,
+      `total bruto ${f(R.totalBruto)} · a receber ${R.aReceberCompleto===false?'≥':''}${f(R.totalAReceber)}` +
+        (R.taxaLiquida?` (taxa medida ${Math.round((R.taxaLiquida.fator||0)*100)}% em ${R.taxaLiquida.amostra} pedidos)`:' (sem taxa medida)'),
+      `  partição: recebido ${f(R.recebidoDeVendas)} + agendado ${f(R.agendadoDeVendas)} + não liquidado ≈${f(R.naoLiquidadoLiquido)} = ${f(soma(R))}` +
+        (Math.abs(soma(R)-(R.totalAReceber||0))>0.02?`  ⚠️ NÃO FECHA (total diz ${f(R.totalAReceber)})`:'  ✓ fecha'),
+      `  fora da partição: ${f(R.recebidoDeVendasAnteriores)} recebido de ${R.orfaos||0} venda(s) anterior(es) · ${R.semEstimativa||0} pedido(s) sem como estimar`,
       `conciliados ${R.conciliados||0} (${R.explicados||0} via cupom/frete) · a menos ${R.recebeuAMenos||0} · a mais ${R.recebeuAMais||0} · aguardando ${(R.semComparacao||0)+(R.parciais||0)} · apurado ${f(R.diferencaTotal)}`,
       '',
       `FUROS — resíduo sem explicação (${furos.length}):`,
