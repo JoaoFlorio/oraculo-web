@@ -2739,7 +2739,16 @@ function InvestigarRepasse({id}:{id:string}){
 const STATUS_REPASSE:Record<string,{rotulo:string;cor:(t:Theme)=>string;fundo:(t:Theme)=>[string,string]}> = {
   pago:          {rotulo:'Pago',          cor:t=>t.grn,  fundo:t=>t.pillGrn},
   agendado:      {rotulo:'Agendado',      cor:t=>t.gold, fundo:t=>t.pillGold},
-  nao_liquidado: {rotulo:'Não liquidado', cor:t=>t.t3,   fundo:t=>[t.dark?'rgba(255,255,255,0.05)':'#F1F5F9', t.t3]},
+  // Vermelho como no Gestor: é o vocabulário que o seller já lê ("Não pago").
+  nao_liquidado: {rotulo:'Não liquidado', cor:t=>t.red,  fundo:t=>t.pillRed},
+}
+/** Status do PEDIDO (relógio da operação) — coluna própria, como no Gestor.
+ *  É outra pergunta que o status do repasse: "enviou?" ≠ "pagou?". */
+function statusDoPedido(t:Theme,s:string){
+  if(/partial/i.test(s)) return {txt:'Envio parcial',cor:t.gold}
+  if(/pend/i.test(s))    return {txt:'Pendente',     cor:t.gold}
+  if(/ship/i.test(s))    return {txt:'Enviado',      cor:t.grn}
+  return {txt:s||'—',cor:t.t3}
 }
 const POR_PAGINA = 25
 
@@ -2900,33 +2909,35 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     )}
 
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
-      <CardTotal grande label="Total bruto vendido" valor={brl2(R.totalBruto||0)} hide={hide}/>
+      <CardTotal grande label="Total bruto vendido" valor={brl2(R.totalBruto||0)} hide={hide}
+        sub="vendas do período com valor confirmado pela Amazon"/>
       <CardTotal grande label="Já caiu na conta" valor={brl2(R.recebido||0)} cor={t.grn} ponto={t.grn} hide={hide}
-        sub="líquido dos repasses transferidos"/>
+        sub="líquido dos repasses transferidos — inclui vendas anteriores pagas agora"/>
     </div>
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
       <CardTotal label="Agendado" ponto={t.gold} valor={brl2(R.agendado||0)} cor={t.gold} hide={hide} sub="em repasse aberto, ainda não transferido"/>
-      <CardTotal label="Não liquidado (bruto)" ponto={t.t3} valor={brl2(R.naoLiquidadoBruto||0)} hide={hide}
+      <CardTotal label="Não liquidado (bruto)" ponto={t.red} valor={brl2(R.naoLiquidadoBruto||0)} hide={hide}
         sub="vendeu e a Amazon ainda não lançou. É bruto: sem lançamento não existe taxa medida"/>
       {/* Mesmo tratamento de sinal da coluna Diferença — "R$ -47,36" no card e
           "−R$ 49,90" na tabela seriam duas grandezas para o mesmo olho. */}
       <CardTotal label="Diferença apurada" ponto={Math.abs(R.diferencaTotal||0)<=0.01?t.grn:t.red}
         valor={`${(R.diferencaTotal||0)>0.005?'+':(R.diferencaTotal||0)<-0.005?'−':''}${brl2(Math.abs(R.diferencaTotal||0))}`}
         cor={Math.abs(R.diferencaTotal||0)<=0.01?t.grn:t.red} hide={hide}
-        sub={`sobre ${(R.conciliados||0)+(R.recebeuAMenos||0)+(R.recebeuAMais||0)} pedidos com os dois lados`}/>
+        sub={`sobre ${(R.conciliados||0)+(R.recebeuAMenos||0)+(R.recebeuAMais||0)} pedidos com pagamento completo`}/>
     </div>
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:14}}>
       <CardTotal label="Conciliados" ponto={t.grn} valor={String(R.conciliados||0)} cor={t.grn} hide={false} sub="o depósito bateu com a venda"/>
       <CardTotal label="Recebeu a menos" ponto={t.red} valor={String(R.recebeuAMenos||0)} cor={(R.recebeuAMenos||0)>0?t.red:undefined} hide={false} sub="caiu menos do que a venda"/>
       <CardTotal label="Recebeu a mais" ponto={t.blue} valor={String(R.recebeuAMais||0)} cor={(R.recebeuAMais||0)>0?t.blue:undefined} hide={false} sub="caiu mais do que a venda"/>
-      <CardTotal label="Sem comparação" ponto={t.t3} valor={String(R.semComparacao||0)} hide={false} sub="ainda não dá pra conferir"/>
+      <CardTotal label="Aguardando" ponto={t.t3} valor={String((R.semComparacao||0)+(R.parciais||0))} hide={false}
+        sub="a faturar · repasse não lido · pagamento parcial"/>
     </div>
 
     <div style={{display:'flex',gap:7,flexWrap:'wrap' as const,marginBottom:12,alignItems:'center'}}>
       {chip('todos','Todos',linhas.length)}
       {chip('pago','Pago',linhas.filter(l=>l.statusRepasse==='pago').length,t.grn)}
       {chip('agendado','Agendado',linhas.filter(l=>l.statusRepasse==='agendado').length,t.gold)}
-      {chip('nao_liquidado','Não liquidado',linhas.filter(l=>l.statusRepasse==='nao_liquidado').length,t.t3)}
+      {chip('nao_liquidado','Não liquidado',linhas.filter(l=>l.statusRepasse==='nao_liquidado').length,t.red)}
       {chip('divergente','Divergentes',(R.recebeuAMenos||0)+(R.recebeuAMais||0),t.red)}
       <div style={{marginLeft:'auto',position:'relative' as const,flex:'0 1 250px',minWidth:180,display:'flex',alignItems:'center'}}>
         <i className="ti ti-search" style={{position:'absolute',left:11,fontSize:14,color:t.t3,pointerEvents:'none'}} aria-hidden="true"/>
@@ -2937,13 +2948,9 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     </div>
 
     {/* ⭐ O que NÃO dá pra comparar é declarado, não escondido num "0 divergências". */}
-    {(R.semComparacao||0)>0 && filtro==='todos' && (
+    {((R.semComparacao||0)+(R.parciais||0))>0 && filtro==='todos' && (
       <div style={{fontSize:11,color:t.t3,marginBottom:9,lineHeight:1.5}}>
-        <b>{R.semComparacao} pedido{(R.semComparacao)>1?'s':''} sem os dois lados</b> —
-        {linhas.some(l=>l.precoPendente)
-          ? <> ou o pedido ainda está <b>a faturar</b> (a Amazon só informa o valor da venda depois disso), ou ela ainda não lançou o repasse, ou a venda é anterior ao histórico que temos.</>
-          : <> ou a Amazon ainda não lançou, ou a venda é anterior ao histórico que temos.</>}
-        {' '}Eles não entram na diferença apurada: sem os dois lados, comparar seria inventar.
+        <b>{(R.semComparacao||0)+(R.parciais||0)} pedido{((R.semComparacao||0)+(R.parciais||0))>1?'s':''} aguardando</b> — ainda <b>a faturar</b> (valores com ≈ são estimativa pela sua última venda), com o repasse por lançar, com <b>pagamento parcial</b> (parte das unidades ainda não liquidou), ou de venda anterior ao histórico. Nenhum deles entra na diferença apurada: comparar pagamento incompleto acusaria a Amazon do que ela ainda vai pagar.
       </div>
     )}
 
@@ -2971,29 +2978,42 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       {/* A base é o mínimo pra tabela não espremer; cada coluna condicional soma o
           que ela ocupa. ⚠️ Diferença é a ÚLTIMA e a mais importante — 60px a mais
           na base a empurravam pra fora da tela em laptop com o menu aberto. */}
-      <Table minWidth={950+(temOutras?80:0)+(temDevolucao?90:0)+(temImposto?80:0)}
-        head={[{label:'Pedido',w:'16%'},{label:'SKU',w:'13%'},
+      <Table minWidth={1040+(temOutras?80:0)+(temDevolucao?90:0)+(temImposto?80:0)}
+        head={[{label:'Pedido',w:'16%'},{label:'SKU',w:'12%'},
         {label:'Bruto',right:true},
         ...(temImposto?[{label:'Imposto',right:true}]:[]),
         {label:'Comissão',right:true},{label:'Logística',right:true},
         ...(temOutras?[{label:'Outras',right:true}]:[]),
         ...(temDevolucao?[{label:'Devolução',right:true}]:[]),
         {label:'Líquido',right:true},{label:'Venda',right:true},{label:'Depósito',right:true},
-        {label:'Repasse'},{label:'Diferença',right:true}]}>
-        {visiveis.map(l=>{
+        {label:'Status'},{label:'Repasse'},{label:'Diferença',right:true}]}>
+        {visiveis.map((l,i)=>{
           const S=STATUS_REPASSE[l.statusRepasse]||STATUS_REPASSE.nao_liquidado
           const [bg,fg]=S.fundo(t)
+          const P=statusDoPedido(t,l.statusPedido)
           const divergente=l.diferenca!==null&&Math.abs(l.diferenca)>0.005
           return(
-            <tr key={l.orderId}>
-              <td style={{padding:'9px 10px',fontSize:11.5,color:t.t1,fontFamily:FG,fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap' as const}}>{l.orderId}</td>
-              <td style={{padding:'9px 10px',fontSize:11.5,color:t.t2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}
+            // Zebra: metade das linhas com fundo sutil — é o que faz a tabela do
+            // Gestor parecer "arrumada". Sutileza importa: forte demais compete
+            // com o vermelho das taxas.
+            <tr key={l.orderId} style={{background:i%2?(t.dark?'rgba(255,255,255,0.022)':'#F8FAFC'):'transparent'}}>
+              <td style={{padding:'10px 10px',fontSize:11.5,color:t.t1,fontFamily:FG,fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap' as const}}>
+                <span style={{display:'inline-flex',alignItems:'center',gap:7}}>
+                  <i className="ti ti-brand-amazon" style={{fontSize:15,color:'#FF9900',flexShrink:0}} aria-hidden="true" title="Amazon"/>
+                  {l.orderId}
+                </span>
+              </td>
+              <td style={{padding:'10px 10px',fontSize:11.5,color:t.t2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}
                 title={(l.skus||[]).join(' · ')}>{(l.skus||[]).join(' · ')||'—'}</td>
-              {/* ⚠️ Pedido pendente não tem preço até a Amazon faturar. "—" com o
-                  porquê, nunca R$ 0,00: zero diria que a venda foi de graça. */}
+              {/* ⚠️ Pendente não tem preço até a Amazon faturar. Mostramos a
+                  ESTIMATIVA da última venda real, com ≈ — número informativo em
+                  vez de célula vazia. Nunca entra em soma nem em comparação. */}
               <NumTd hide={hide}>
                 {(l.bruto ?? l.brutoVenda)===null && l.precoPendente
-                  ? <span style={{color:t.t3}} title="Pedido ainda pendente — a Amazon só informa o valor da venda ao faturar.">a faturar</span>
+                  ? (l.estimadoBruto>0
+                      ? <span style={{color:t.t3,fontStyle:'italic'}} title="Estimativa pela sua última venda real deste produto — a Amazon confirma o valor ao faturar. Não entra em nenhuma soma."
+                          >≈ <span style={{filter:hide?'blur(6px)':'none'}}>{brl2(l.estimadoBruto)}</span></span>
+                      : <span style={{color:t.t3}} title="Pedido ainda pendente — a Amazon só informa o valor da venda ao faturar.">a faturar</span>)
                   : val(l.bruto ?? l.brutoVenda)}
               </NumTd>
               {temImposto && <NumTd hide={hide}>{val(l.imposto)}</NumTd>}
@@ -3004,6 +3024,13 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
               <NumTd hide={hide} strong>{val(l.liquido)}</NumTd>
               <NumTd hide={hide}>{dt(l.vendaEm)}</NumTd>
               <NumTd hide={hide}>{dt(l.depositoEm)}</NumTd>
+              {/* "Enviou?" e "pagou?" são perguntas diferentes — duas colunas,
+                  como no Gestor. Status do pedido é ponto+texto; repasse é pill. */}
+              <PillTd>
+                <span style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:11,fontWeight:600,color:P.cor,whiteSpace:'nowrap' as const}}>
+                  <Ponto cor={P.cor}/>{P.txt}
+                </span>
+              </PillTd>
               <PillTd>
                 <span title={l.numeroLiquidacao?`Liquidação ${l.numeroLiquidacao}`:undefined}
                   style={{display:'inline-flex',alignItems:'center',gap:5,background:bg,color:fg,fontSize:10.5,fontWeight:700,padding:'3px 9px',borderRadius:20,whiteSpace:'nowrap' as const}}>
@@ -3012,7 +3039,12 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
               </PillTd>
               <NumTd hide={hide} color={divergente?t.red:undefined} strong={divergente}>
                 {l.diferenca===null
-                  ? <span style={{color:t.t3}} title="A Amazon ainda não liquidou este pedido — não há o que comparar. Zero aqui diria &quot;conferi e bateu&quot;.">—</span>
+                  ? l.parcial
+                    // ⭐ Parcial ≠ sem dado: os dois lados existem, o pagamento é
+                    // que não terminou. Rotulado, com a conta no tooltip.
+                    ? <span style={{color:t.gold,fontSize:11,fontWeight:600}}
+                        title={`${l.unidadesPagas??'?'} de ${l.unidadesVendidas??'?'} unidades liquidadas — a comparação fecha quando o resto cair.`}>parcial</span>
+                    : <span style={{color:t.t3}} title="A Amazon ainda não liquidou este pedido — não há o que comparar. Zero aqui diria &quot;conferi e bateu&quot;.">—</span>
                   : divergente
                     // Sinal ANTES do R$, e o mesmo para os dois lados: "R$ -49,90"
                     // ao lado de "+R$ 2,54" faz o olho ler duas grandezas diferentes.
