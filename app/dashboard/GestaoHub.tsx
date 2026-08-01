@@ -2752,6 +2752,19 @@ function statusDoPedido(t:Theme,s:string){
 }
 const POR_PAGINA = 25
 
+/* ⭐ O ESTADO DA LINHA É PELO RESÍDUO, não pela diferença crua. Cupom e frete
+   são explicação, não furo — o cliente pagou menos porque VOCÊ deu o cupom, e o
+   dinheiro está reconciliado. Foi o dado do João (37 cupons, 0 resíduos) que
+   provou: comparar a diferença crua nos dava 37 "divergências"; o Gestor, que
+   ignora cupom, dava ~2. */
+type EstadoDif = 'exato' | 'explicado' | 'menos' | 'mais' | 'parcial' | 'aguardando'
+function estadoDif(l:any):EstadoDif{
+  if(l.diferenca===null) return l.parcial?'parcial':'aguardando'
+  const resid = l.residuo ?? l.diferenca
+  if(Math.abs(resid)>0.005) return resid<0?'menos':'mais'
+  return Math.abs(l.diferenca)>0.005?'explicado':'exato'
+}
+
 /** Copia texto pra área de transferência. Fallback pro textarea porque
  *  navigator.clipboard falha fora de contexto seguro / em alguns webviews. */
 function copiarTexto(txt:string):boolean{
@@ -2810,7 +2823,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
   const [busca,setBusca]=useState('')
-  const [filtro,setFiltro]=useState<'todos'|'pago'|'agendado'|'nao_liquidado'|'divergente'>('todos')
+  const [filtro,setFiltro]=useState<'todos'|'pago'|'agendado'|'nao_liquidado'|'divergente'|'explicado'>('todos')
   const [pagina,setPagina]=useState(0)
   const [lendo,setLendo]=useState(false)
   const [detalhe,setDetalhe]=useState<any>(null)
@@ -2862,26 +2875,37 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
      dado na mão em vez de chutar de novo. */
   const copiarDiag=()=>{
     const f=(n:number|null|undefined)=>n==null?'—':Number(n).toFixed(2)
-    const divs=linhas.filter(l=>l.diferenca!==null&&Math.abs(l.diferenca)>0.005)
+    const linha=(l:any)=>{
+      const causas=(l.causas||[]).map((c:any)=>`${c.rotulo} ${c.valor>0?'+':''}${f(c.valor)}`).join(' · ')||'(sem causa)'
+      const resid=Math.abs(l.residuo||0)>0.005?` · RESÍDUO ${f(l.residuo)}`:''
+      const un=l.unidadesVendidas!=null?` · un ${l.unidadesPagas??'?'}/${l.unidadesVendidas}`:''
+      return `• ${l.orderId} [${(l.skus||[]).join(',')}] venda ${f(l.brutoVenda)} → pago ${f(l.bruto)} = dif ${l.diferenca>0?'+':''}${f(l.diferenca)}${un} | ${causas}${resid}`
+    }
+    // ⭐ FUROS separados de EXPLICADOS: o furo (resíduo) é o que vale investigar;
+    // o explicado é cupom/frete legítimo. Misturá-los foi o que gerou o susto.
+    const furos=linhas.filter(l=>['menos','mais'].includes(estadoDif(l)))
+    const explic=linhas.filter(l=>estadoDif(l)==='explicado')
     const bloco=[
       'ORÁCULO · Conciliação — diagnóstico',
       `período ${range.from.slice(0,10)} → ${range.to.slice(0,10)} · ${conferidos}/${totalReps} repasses lidos`,
       `total vendido ${f(R.totalBruto)} · já caiu ${f(R.recebido)} · não liquidado ${f(R.naoLiquidadoBruto)}`,
-      `conciliados ${R.conciliados||0} · a menos ${R.recebeuAMenos||0} · a mais ${R.recebeuAMais||0} · aguardando ${(R.semComparacao||0)+(R.parciais||0)} · dif total ${f(R.diferencaTotal)}`,
+      `conciliados ${R.conciliados||0} (${R.explicados||0} via cupom/frete) · a menos ${R.recebeuAMenos||0} · a mais ${R.recebeuAMais||0} · aguardando ${(R.semComparacao||0)+(R.parciais||0)} · apurado ${f(R.diferencaTotal)}`,
       '',
-      `DIVERGENTES (${divs.length}):`,
-      ...divs.map(l=>{
-        const causas=(l.causas||[]).map((c:any)=>`${c.rotulo} ${c.valor>0?'+':''}${f(c.valor)}`).join(' · ')||'(sem causa decomposta)'
-        const resid=Math.abs(l.residuo||0)>0.005?` · RESÍDUO ${f(l.residuo)}`:''
-        const un=l.unidadesVendidas!=null?` · un ${l.unidadesPagas??'?'}/${l.unidadesVendidas}`:''
-        return `• ${l.orderId} [${(l.skus||[]).join(',')}] venda ${f(l.brutoVenda)} → pago ${f(l.bruto)} = dif ${l.diferenca>0?'+':''}${f(l.diferenca)}${un} | ${causas}${resid}`
-      }),
+      `FUROS — resíduo sem explicação (${furos.length}):`,
+      ...(furos.length?furos.map(linha):['(nenhum — tudo que diverge é cupom/frete)']),
+      '',
+      `EXPLICADOS — cupom/frete, já reconciliados (${explic.length}):`,
+      ...explic.slice(0,40).map(linha),
+      ...(explic.length>40?[`… e mais ${explic.length-40}`]:[]),
     ].join('\n')
     if(copiarTexto(bloco)){ setCopiado(true); setTimeout(()=>setCopiado(false),2200) }
   }
 
   const filtradas=linhas.filter(l=>{
-    if(filtro==='divergente'){ if(l.diferenca===null||Math.abs(l.diferenca)<=0.005) return false }
+    // ⭐ "Divergentes" = FUROS (resíduo), não diferença crua. Cupom vai no filtro
+    // próprio "Com cupom/frete".
+    if(filtro==='divergente'){ const e=estadoDif(l); if(e!=='menos'&&e!=='mais') return false }
+    else if(filtro==='explicado'){ if(estadoDif(l)!=='explicado') return false }
     else if(filtro!=='todos' && l.statusRepasse!==filtro) return false
     const q=busca.trim().toLowerCase()
     if(!q) return true
@@ -2960,12 +2984,15 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       <CardTotal label="Diferença apurada" ponto={Math.abs(R.diferencaTotal||0)<=0.01?t.grn:t.red}
         valor={`${(R.diferencaTotal||0)>0.005?'+':(R.diferencaTotal||0)<-0.005?'−':''}${brl2(Math.abs(R.diferencaTotal||0))}`}
         cor={Math.abs(R.diferencaTotal||0)<=0.01?t.grn:t.red} hide={hide}
-        sub={`sobre ${(R.conciliados||0)+(R.recebeuAMenos||0)+(R.recebeuAMais||0)} pedidos com pagamento completo`}/>
+        sub="só o que a Amazon pagou diferente SEM explicação — cupom e frete já descontados"/>
     </div>
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:14}}>
-      <CardTotal label="Conciliados" ponto={t.grn} valor={String(R.conciliados||0)} cor={t.grn} hide={false} sub="o depósito bateu com a venda"/>
-      <CardTotal label="Recebeu a menos" ponto={t.red} valor={String(R.recebeuAMenos||0)} cor={(R.recebeuAMenos||0)>0?t.red:undefined} hide={false} sub="caiu menos do que a venda"/>
-      <CardTotal label="Recebeu a mais" ponto={t.blue} valor={String(R.recebeuAMais||0)} cor={(R.recebeuAMais||0)>0?t.blue:undefined} hide={false} sub="caiu mais do que a venda"/>
+      <CardTotal label="Conciliados" ponto={t.grn} valor={String(R.conciliados||0)} cor={t.grn} hide={false}
+        sub={(R.explicados||0)>0
+          ? `${(R.conciliados||0)-(R.explicados||0)} exatos · ${R.explicados} via cupom/frete`
+          : 'o depósito bateu com a venda'}/>
+      <CardTotal label="Recebeu a menos" ponto={t.red} valor={String(R.recebeuAMenos||0)} cor={(R.recebeuAMenos||0)>0?t.red:undefined} hide={false} sub="caiu menos SEM explicação — é o que vale cobrar"/>
+      <CardTotal label="Recebeu a mais" ponto={t.blue} valor={String(R.recebeuAMais||0)} cor={(R.recebeuAMais||0)>0?t.blue:undefined} hide={false} sub="caiu mais do que o esperado"/>
       <CardTotal label="Aguardando" ponto={t.t3} valor={String((R.semComparacao||0)+(R.parciais||0))} hide={false}
         sub="a faturar · repasse não lido · pagamento parcial"/>
     </div>
@@ -2976,15 +3003,16 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       {chip('agendado','Agendado',linhas.filter(l=>l.statusRepasse==='agendado').length,t.gold)}
       {chip('nao_liquidado','Não liquidado',linhas.filter(l=>l.statusRepasse==='nao_liquidado').length,t.red)}
       {chip('divergente','Divergentes',(R.recebeuAMenos||0)+(R.recebeuAMais||0),t.red)}
+      {(R.explicados||0)>0 && chip('explicado','Com cupom/frete',R.explicados,t.gold)}
       <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center',justifyContent:'flex-end',flex:'1 1 auto',flexWrap:'wrap' as const}}>
-        {/* Só aparece quando há divergência real pra investigar. */}
-        {((R.recebeuAMenos||0)+(R.recebeuAMais||0))>0 && (
+        {/* Aparece quando há QUALQUER diferença a explicar (furo ou cupom). */}
+        {((R.recebeuAMenos||0)+(R.recebeuAMais||0)+(R.explicados||0))>0 && (
           <button onClick={copiarDiag}
-            title="Copia um resumo das divergências (com os dois lados e as causas) pra você colar no suporte — sem precisar de print."
+            title="Copia um resumo das diferenças (furos e cupons, com os dois lados e as causas) pra você colar no suporte — sem precisar de print."
             style={{display:'inline-flex',alignItems:'center',gap:6,padding:'8px 12px',borderRadius:20,cursor:'pointer',fontFamily:'inherit',
               fontSize:11.5,fontWeight:600,whiteSpace:'nowrap' as const,border:`1px solid ${copiado?t.grn:t.line}`,background:t.card,color:copiado?t.grn:t.t2}}>
             <i className={`ti ${copiado?'ti-check':'ti-clipboard-text'}`} style={{fontSize:14}} aria-hidden="true"/>
-            {copiado?'Copiado — cole no suporte':'Copiar divergências'}
+            {copiado?'Copiado — cole no suporte':'Copiar diferenças'}
           </button>
         )}
         <div style={{position:'relative' as const,flex:'0 1 240px',minWidth:160,display:'flex',alignItems:'center'}}>
@@ -3040,7 +3068,8 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
           const S=STATUS_REPASSE[l.statusRepasse]||STATUS_REPASSE.nao_liquidado
           const [bg,fg]=S.fundo(t)
           const P=statusDoPedido(t,l.statusPedido)
-          const divergente=l.diferenca!==null&&Math.abs(l.diferenca)>0.005
+          const est=estadoDif(l)
+          const furo=est==='menos'||est==='mais'
           return(
             // Zebra: metade das linhas com fundo sutil — é o que faz a tabela do
             // Gestor parecer "arrumada". Sutileza importa: forte demais compete
@@ -3086,28 +3115,33 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
                   <Ponto cor={S.cor(t)}/>{S.rotulo}
                 </span>
               </PillTd>
-              <NumTd hide={hide} color={divergente?t.red:undefined} strong={divergente}>
-                {l.diferenca===null
-                  ? l.parcial
+              <NumTd hide={hide} color={furo?(est==='menos'?t.red:t.blue):undefined} strong={furo}>
+                {est==='aguardando'
+                  ? <span style={{color:t.t3}} title="A Amazon ainda não liquidou este pedido — não há o que comparar. Zero aqui diria &quot;conferi e bateu&quot;.">—</span>
+                  : est==='parcial'
                     // ⭐ Parcial ≠ sem dado: os dois lados existem, o pagamento é
                     // que não terminou. Rotulado, com a conta no tooltip.
                     ? <span style={{color:t.gold,fontSize:11,fontWeight:600}}
                         title={`${l.unidadesPagas??'?'} de ${l.unidadesVendidas??'?'} unidades liquidadas — a comparação fecha quando o resto cair.`}>parcial</span>
-                    : <span style={{color:t.t3}} title="A Amazon ainda não liquidou este pedido — não há o que comparar. Zero aqui diria &quot;conferi e bateu&quot;.">—</span>
-                  : divergente
-                    // Sinal ANTES do R$, e o mesmo para os dois lados: "R$ -49,90"
-                    // ao lado de "+R$ 2,54" faz o olho ler duas grandezas diferentes.
-                    // ⭐ E é CLICÁVEL: valor sozinho diz quanto divergiu e deixa o
-                    // seller sem saber o que fazer com a informação.
-                    ? <button onClick={()=>setDetalhe(l)} title="Ver por que divergiu"
+                  : est==='exato'
+                    // ⭐ Zero MEDIDO merece o símbolo de conferido.
+                    ? <span style={{color:t.grn,fontWeight:700}} title="O que a Amazon depositou bate com a venda.">✓</span>
+                  : est==='explicado'
+                    // ⭐ CUPOM/FRETE NÃO É VERMELHO. O dinheiro bateu — a diferença é
+                    // desconto seu, não furo da Amazon. Dourado suave, clicável pra
+                    // ver a conta. Vermelho aqui era o susto que gerava "não bate".
+                    ? <button onClick={()=>setDetalhe(l)} title="Bateu — a diferença é cupom/frete seu. Clique pra ver a conta."
                         style={{background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit',
-                          fontSize:'inherit',fontWeight:'inherit',color:'inherit',textDecoration:'underline',
-                          textDecorationStyle:'dotted' as const,textUnderlineOffset:3,filter:hide?'blur(6px)':'none'}}>
-                        {l.diferenca>0?'+':'−'}{brl2(Math.abs(l.diferenca))}
+                          fontSize:11,fontWeight:600,color:t.gold,display:'inline-flex',alignItems:'center',gap:4,filter:hide?'blur(6px)':'none'}}>
+                        <i className="ti ti-discount-2" style={{fontSize:13}} aria-hidden="true"/>cupom
                       </button>
-                    // ⭐ Zero MEDIDO merece o símbolo de conferido: é o oposto do
-                    // traço da linha acima, e essa diferença é o produto.
-                    : <span style={{color:t.grn,fontWeight:700}} title="O que a Amazon depositou bate com a venda.">✓</span>}
+                  // Furo de verdade: valor clicável, vermelho (a menos) ou azul (a mais).
+                  : <button onClick={()=>setDetalhe(l)} title="Diferença SEM explicação — clique pra ver"
+                      style={{background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit',
+                        fontSize:'inherit',fontWeight:'inherit',color:'inherit',textDecoration:'underline',
+                        textDecorationStyle:'dotted' as const,textUnderlineOffset:3,filter:hide?'blur(6px)':'none'}}>
+                      {(l.residuo??l.diferenca)>0?'+':'−'}{brl2(Math.abs(l.residuo??l.diferenca))}
+                    </button>}
               </NumTd>
             </tr>
           )
@@ -3145,9 +3179,13 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
         <div onClick={e=>e.stopPropagation()} style={{background:t.card,border:`1px solid ${t.line}`,
           borderRadius:16,width:'min(560px,96vw)',margin:'auto',padding:'clamp(14px,3.5vw,22px)',
           boxShadow:'0 24px 70px rgba(0,0,0,0.35)'}}>
+        {(()=>{ const est=estadoDif(detalhe); const furo=est==='menos'||est==='mais'
+        return(<>
         <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12,marginBottom:4}}>
           <div>
-            <div style={{fontSize:15,fontWeight:700,color:t.t1,fontFamily:FG}}>Por que este pedido divergiu</div>
+            <div style={{fontSize:15,fontWeight:700,color:t.t1,fontFamily:FG}}>
+              {furo?'Por que este pedido divergiu':'Como este pedido fechou'}
+            </div>
             <div style={{fontSize:11.5,color:t.t3,fontVariantNumeric:'tabular-nums',marginTop:2}}>
               {detalhe.orderId}{(detalhe.skus||[]).length?` · ${detalhe.skus.join(' · ')}`:''}
             </div>
@@ -3155,13 +3193,24 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
           <button onClick={()=>setDetalhe(null)} style={{background:'none',border:'none',color:t.t3,cursor:'pointer',fontSize:20,lineHeight:1,padding:0,fontFamily:'inherit'}} aria-label="Fechar">×</button>
         </div>
 
-        <div style={{margin:'14px 0 4px',padding:'12px 14px',borderRadius:11,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.02)':'#FAFAFA'}}>
+        {/* ⭐ O VEREDITO EM UMA FRASE, antes dos números. É o que o seller quer
+            saber: "a Amazon me deu golpe ou fui eu que dei desconto?" */}
+        <div style={{margin:'12px 0 2px',padding:'10px 13px',borderRadius:10,fontSize:12,lineHeight:1.5,
+          background:furo?(t.dark?'rgba(248,113,113,0.08)':'#FEF2F2'):(t.dark?'rgba(34,197,94,0.08)':'#F0FDF4'),
+          border:`1px solid ${furo?(t.dark?'rgba(248,113,113,0.3)':'#FECACA'):(t.dark?'rgba(34,197,94,0.3)':'#BBF7D0')}`,
+          color:furo?t.red:t.grn,fontWeight:600}}>
+          {furo
+            ? <>Sobrou <b>{brl2(Math.abs(detalhe.residuo||0))}</b> {est==='menos'?'que a Amazon pagou a MENOS':'que a Amazon pagou a MAIS'} sem explicação — é isto que vale conferir com ela.</>
+            : <>✓ Bateu. A diferença é <b>cupom/frete que você mesmo deu</b>, não erro da Amazon — o dinheiro está todo reconciliado.</>}
+        </div>
+
+        <div style={{margin:'12px 0 4px',padding:'12px 14px',borderRadius:11,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.02)':'#FAFAFA'}}>
           <LinhaCmp label="A venda registrou" val={detalhe.brutoVenda} hide={hide}/>
           <LinhaCmp label="A Amazon pagou" val={detalhe.bruto} hide={hide}/>
           <div style={{height:1,background:t.line,margin:'8px 0'}}/>
           <LinhaCmp label="Diferença" val={detalhe.diferenca} strong comSinal
-            cor={Math.abs(detalhe.diferenca||0)<=0.005?t.grn:(detalhe.diferenca||0)<0?t.red:t.blue} hide={hide}/>
-        </div>
+            cor={Math.abs(detalhe.diferenca||0)<=0.005?t.grn:furo?(est==='menos'?t.red:t.blue):t.gold} hide={hide}/>
+        </div></>)})()}
 
         {detalhe.causas?.length>0 ? (
           <div style={{marginTop:14}}>
