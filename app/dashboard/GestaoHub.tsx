@@ -2895,7 +2895,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     const bloco=[
       'ORÁCULO · Conciliação — diagnóstico',
       `período ${range.from.slice(0,10)} → ${range.to.slice(0,10)} · ${conferidos}/${totalReps} repasses lidos`,
-      `total bruto ${f(R.totalBruto)} · a receber ${R.aReceberCompleto===false?'≥':''}${f(R.totalAReceber)}` +
+      `total bruto ${f(R.totalBruto)}${(R.totalBrutoEstimado||0)>0.005?` (${f(R.totalBrutoEstimado)} ≈ a faturar)`:''} · a receber ${R.aReceberCompleto===false?'≥':''}${f(R.totalAReceber)}` +
         (R.taxaLiquida?` (taxa medida ${Math.round((R.taxaLiquida.fator||0)*100)}% em ${R.taxaLiquida.amostra} pedidos)`:' (sem taxa medida)'),
       `  partição: recebido ${f(R.recebidoDeVendas)} + agendado ${f(R.agendadoDeVendas)} + não liquidado ≈${f(R.naoLiquidadoLiquido)} = ${f(soma(R))}` +
         (Math.abs(soma(R)-(R.totalAReceber||0))>0.02?`  ⚠️ NÃO FECHA (total diz ${f(R.totalAReceber)})`:'  ✓ fecha'),
@@ -3007,9 +3007,14 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
         R$17.743 contra R$13.232 do concorrente, e "não liquidado" dava R$8.510
         em bruto contra R$7.385 em líquido. */}
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
+      {/* ⚠️ "≈" quando parte do total é estimativa de pendente. O pendente entra
+          aqui E no "a receber" — contá-lo de um lado só fazia a tabela exibir
+          "≈ R$499,99" numa linha que o total de cima ignorava. */}
       <CardTotal grande label="Total bruto" ponto={t.blue}
-        valor={brl2(R.totalBruto||0)} hide={hide}
-        sub="o que o comprador pagou nas vendas do período"/>
+        valor={`${(R.totalBrutoEstimado||0)>0.005?'≈ ':''}${brl2(R.totalBruto||0)}`} hide={hide}
+        sub={(R.totalBrutoEstimado||0)>0.005
+          ? `o que o comprador pagou · inclui ${brl2(R.totalBrutoEstimado)} ainda a faturar (≈)`
+          : 'o que o comprador pagou nas vendas do período'}/>
       <CardTotal grande label="Total a receber dos marketplaces" ponto={t.grn}
         // ⚠️ "≥" quando há pedido sem estimativa: o total vira PISO, e omitir
         // isso seria anunciar como completo um número que não é.
