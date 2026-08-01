@@ -2942,7 +2942,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     {/* ⭐ A COBERTURA VEM ANTES DOS NÚMEROS. Sem isto, pedido de repasse ainda não
         conferido aparece como "não liquidado" e a tela acusa a Amazon de não ter
         pago — quando quem não leu fomos nós. */}
-    {faltamConferir>0 && (
+    {faltamConferir>0 ? (
       <div style={{background:t.dark?'rgba(240,180,41,0.07)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(240,180,41,0.3)':'#FDE68A'}`,borderRadius:12,padding:'13px 15px',marginBottom:14,
         display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap' as const}}>
         <i className="ti ti-alert-triangle" style={{fontSize:17,color:t.gold,marginTop:1,flexShrink:0}} aria-hidden="true"/>
@@ -2964,6 +2964,25 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
             cursor:lendo?'default':'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:7}}>
           <i className={`ti ${lendo?'ti-loader-2':'ti-refresh'}`} style={{fontSize:15,animation:lendo?'ora-spin 1s linear infinite':'none'}} aria-hidden="true"/>
           {lendo?'Lendo os repasses…':conferidos===0?'Ler meus repasses':'Ler os que faltam'}
+        </button>
+        <style>{`@keyframes ora-spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    ) : totalReps>0 && (
+      /* ⭐ TUDO LIDO ≠ SEM BOTÃO. Quando não falta repasse o banner de aviso some
+         (é sucesso), mas o seller ficava sem NENHUM jeito de reconferir — e
+         repasse novo aparece a cada ~2 semanas. Aqui fica um confirmador discreto
+         com "Atualizar", que relê e pega repasse novo se surgiu. */
+      <div style={{background:t.dark?'rgba(34,197,94,0.06)':'#F0FDF4',border:`1px solid ${t.dark?'rgba(34,197,94,0.25)':'#BBF7D0'}`,borderRadius:12,padding:'10px 14px',marginBottom:14,
+        display:'flex',alignItems:'center',gap:11,flexWrap:'wrap' as const}}>
+        <i className="ti ti-circle-check" style={{fontSize:16,color:t.grn,flexShrink:0}} aria-hidden="true"/>
+        <div style={{flex:1,minWidth:180,fontSize:11.5,color:t.t2,lineHeight:1.5}}>
+          <b style={{color:t.t1}}>Todos os {totalReps} repasses lidos.</b> A conciliação está completa — o que a Amazon pagou já foi conferido em cada pedido. Repasse novo chega a cada ~2 semanas; clique em atualizar pra pegar.
+        </div>
+        <button onClick={lerRepasses} disabled={lendo}
+          style={{flexShrink:0,background:'transparent',color:lendo?t.t3:t.grn,border:`1px solid ${lendo?t.line2:(t.dark?'rgba(34,197,94,0.4)':'#86EFAC')}`,
+            borderRadius:9,padding:'8px 13px',fontSize:11.5,fontWeight:700,cursor:lendo?'default':'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6}}>
+          <i className={`ti ${lendo?'ti-loader-2':'ti-refresh'}`} style={{fontSize:14,animation:lendo?'ora-spin 1s linear infinite':'none'}} aria-hidden="true"/>
+          {lendo?'Atualizando…':'Atualizar'}
         </button>
         <style>{`@keyframes ora-spin{to{transform:rotate(360deg)}}`}</style>
       </div>
