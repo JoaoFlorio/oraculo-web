@@ -2939,7 +2939,11 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     {/* ⭐ O que NÃO dá pra comparar é declarado, não escondido num "0 divergências". */}
     {(R.semComparacao||0)>0 && filtro==='todos' && (
       <div style={{fontSize:11,color:t.t3,marginBottom:9,lineHeight:1.5}}>
-        <b>{R.semComparacao} pedido{(R.semComparacao)>1?'s':''} sem os dois lados</b> — ou a Amazon ainda não lançou, ou a venda é anterior ao histórico que temos. Eles não entram na diferença apurada: sem os dois lados, comparar seria inventar.
+        <b>{R.semComparacao} pedido{(R.semComparacao)>1?'s':''} sem os dois lados</b> —
+        {linhas.some(l=>l.precoPendente)
+          ? <> ou o pedido ainda está <b>a faturar</b> (a Amazon só informa o valor da venda depois disso), ou ela ainda não lançou o repasse, ou a venda é anterior ao histórico que temos.</>
+          : <> ou a Amazon ainda não lançou, ou a venda é anterior ao histórico que temos.</>}
+        {' '}Eles não entram na diferença apurada: sem os dois lados, comparar seria inventar.
       </div>
     )}
 
@@ -2985,7 +2989,13 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
               <td style={{padding:'9px 10px',fontSize:11.5,color:t.t1,fontFamily:FG,fontVariantNumeric:'tabular-nums',whiteSpace:'nowrap' as const}}>{l.orderId}</td>
               <td style={{padding:'9px 10px',fontSize:11.5,color:t.t2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}
                 title={(l.skus||[]).join(' · ')}>{(l.skus||[]).join(' · ')||'—'}</td>
-              <NumTd hide={hide}>{val(l.bruto ?? l.brutoVenda)}</NumTd>
+              {/* ⚠️ Pedido pendente não tem preço até a Amazon faturar. "—" com o
+                  porquê, nunca R$ 0,00: zero diria que a venda foi de graça. */}
+              <NumTd hide={hide}>
+                {(l.bruto ?? l.brutoVenda)===null && l.precoPendente
+                  ? <span style={{color:t.t3}} title="Pedido ainda pendente — a Amazon só informa o valor da venda ao faturar.">a faturar</span>
+                  : val(l.bruto ?? l.brutoVenda)}
+              </NumTd>
               {temImposto && <NumTd hide={hide}>{val(l.imposto)}</NumTd>}
               <NumTd hide={hide}>{val(l.comissao,t.red)}</NumTd>
               <NumTd hide={hide}>{val(l.logistica,t.red)}</NumTd>
@@ -3542,13 +3552,21 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
      no Resumo. É preferência de uso, não número — pode viver num ref. */
   const grupo = grupoDaTab(tab)
   const ultimaDoGrupoRef = useRef<Record<string,string>>({})
+  /* ⚠️ TELAS QUE NÃO FAZEM SENTIDO EM 1 DIA.
+     A Curva ABC de "Hoje" classifica a conta inteira por uma manhã de vendas.
+     Repasses é pior: a Amazon liquida com ~6 dias de atraso, então em "Hoje" o
+     espelho traz os pedidos de hoje e NENHUM deles foi pago ainda — a tela
+     mostrava 199 pedidos e 199 "sem comparação", zero conciliados, e parecia
+     defeito quando era só a janela errada. Ambas entram em 30 dias e devolvem o
+     período de antes ao sair: o filtro do cliente não se perde. */
+  const MIN_30_DIAS = new Set(['abc','repasse'])
   function goTab(id:string){
-    const enteringAbc = id==='abc' && tab!=='abc'
-    const leavingAbc  = tab==='abc' && id!=='abc'
-    if(enteringAbc){
+    const entrando = MIN_30_DIAS.has(id) && !MIN_30_DIAS.has(tab)
+    const saindo   = MIN_30_DIAS.has(tab) && !MIN_30_DIAS.has(id)
+    if(entrando){
       prePeriodRef.current={period,custom:customRange}
       if(period==='hoje'||period==='ontem'){ setPeriod('30d'); setCustomRange(null) }
-    } else if(leavingAbc && prePeriodRef.current){
+    } else if(saindo && prePeriodRef.current){
       setPeriod(prePeriodRef.current.period)
       setCustomRange(prePeriodRef.current.custom)
       prePeriodRef.current=null
