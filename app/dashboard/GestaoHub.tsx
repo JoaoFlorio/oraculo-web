@@ -2988,30 +2988,57 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       </div>
     )}
 
+    {/* ═══ A PARTIÇÃO, no formato do Gestor Seller ═══════════════════════════
+        Recebido + Agendado + Não liquidado = Total a receber, SEMPRE.
+        Os três são LÍQUIDO e falam das VENDAS DO PERÍODO. Antes a tela misturava
+        dois domínios (venda do período × dinheiro que caiu no período) e duas
+        grandezas (bruto × líquido) nos mesmos cards — por isso "já caiu" dava
+        R$17.743 contra R$13.232 do concorrente, e "não liquidado" dava R$8.510
+        em bruto contra R$7.385 em líquido. */}
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
-      <CardTotal grande label="Total bruto vendido" valor={brl2(R.totalBruto||0)} hide={hide}
-        sub="vendas do período com valor confirmado pela Amazon"/>
-      <CardTotal grande label="Já caiu na conta" valor={brl2(R.recebido||0)} cor={t.grn} ponto={t.grn} hide={hide}
-        sub="líquido dos repasses transferidos — inclui vendas anteriores pagas agora"/>
+      <CardTotal grande label="Total bruto" ponto={t.blue}
+        valor={brl2(R.totalBruto||0)} hide={hide}
+        sub="o que o comprador pagou nas vendas do período"/>
+      <CardTotal grande label="Total a receber dos marketplaces" ponto={t.grn}
+        // ⚠️ "≥" quando há pedido sem estimativa: o total vira PISO, e omitir
+        // isso seria anunciar como completo um número que não é.
+        valor={`${R.aReceberCompleto===false?'≥ ':''}${brl2(R.totalAReceber||0)}`}
+        cor={t.grn} hide={hide}
+        sub={R.taxaLiquida
+          ? `líquido após as taxas · sobram ${Math.round((R.taxaLiquida.fator||0)*100)}% de cada R$1 vendido (medido na sua conta)`
+          : 'líquido esperado após as taxas da Amazon'}/>
     </div>
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
-      <CardTotal label="Agendado" ponto={t.gold} valor={brl2(R.agendado||0)} cor={t.gold} hide={hide} sub="em repasse aberto, ainda não transferido"/>
-      <CardTotal label="Não liquidado (bruto)" ponto={t.red} valor={brl2(R.naoLiquidadoBruto||0)} hide={hide}
-        sub="vendeu e a Amazon ainda não lançou. É bruto: sem lançamento não existe taxa medida"/>
+      <CardTotal label="Recebido" ponto={t.grn} valor={brl2(R.recebidoDeVendas||0)} cor={t.grn} hide={hide}
+        sub={(R.recebidoDeVendasAnteriores||0)>0.005
+          ? `já transferido · +${brl2(R.recebidoDeVendasAnteriores)} de vendas anteriores, fora deste total`
+          : 'já transferido pra sua conta'}/>
+      <CardTotal label="Agendado" ponto={t.gold} valor={brl2(R.agendadoDeVendas||0)} cor={t.gold} hide={hide}
+        sub="em repasse aberto, ainda não transferido"/>
+      {/* ⭐ LÍQUIDO estimado, não bruto — é o que faz os três somarem. A taxa
+          vem MEDIDA da própria conta; marcada ≈ e nunca entra em comparação. */}
+      <CardTotal label="Não liquidado" ponto={t.t3}
+        valor={`${(R.naoLiquidadoLiquido||0)>0.005?'≈ ':''}${brl2(R.naoLiquidadoLiquido||0)}`} hide={hide}
+        sub={(R.semEstimativa||0)>0
+          ? `líquido ≈ estimado · ${R.semEstimativa} pedido${R.semEstimativa>1?'s':''} sem como estimar, fora da conta`
+          : 'vendeu e a Amazon ainda não lançou — líquido ≈ estimado pela taxa da sua conta'}/>
+    </div>
+    {/* Terceira faixa, na ordem do Gestor: Diferença · a menos · a mais ·
+        Conciliados. O "Aguardando" é nosso e fica no fim — é o que o
+        concorrente não declara, e a honestidade dele vale a coluna a mais. */}
+    <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:14}}>
       {/* Mesmo tratamento de sinal da coluna Diferença — "R$ -47,36" no card e
           "−R$ 49,90" na tabela seriam duas grandezas para o mesmo olho. */}
-      <CardTotal label="Diferença apurada" ponto={Math.abs(R.diferencaTotal||0)<=0.01?t.grn:t.red}
+      <CardTotal label="Diferença total" ponto={t.blue}
         valor={`${(R.diferencaTotal||0)>0.005?'+':(R.diferencaTotal||0)<-0.005?'−':''}${brl2(Math.abs(R.diferencaTotal||0))}`}
         cor={Math.abs(R.diferencaTotal||0)<=0.01?t.grn:t.red} hide={hide}
-        sub="só o que a Amazon pagou diferente SEM explicação — cupom e frete já descontados"/>
-    </div>
-    <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:14}}>
+        sub="o que a Amazon pagou diferente SEM explicação — cupom e frete já descontados"/>
+      <CardTotal label="Recebeu a menos pela venda" ponto={t.red} valor={String(R.recebeuAMenos||0)} cor={(R.recebeuAMenos||0)>0?t.red:undefined} hide={false} sub="caiu menos SEM explicação — é o que vale cobrar"/>
+      <CardTotal label="Recebeu a mais pela venda" ponto={t.blue} valor={String(R.recebeuAMais||0)} cor={(R.recebeuAMais||0)>0?t.blue:undefined} hide={false} sub="caiu mais do que o esperado"/>
       <CardTotal label="Conciliados" ponto={t.grn} valor={String(R.conciliados||0)} cor={t.grn} hide={false}
         sub={(R.explicados||0)>0
           ? `${(R.conciliados||0)-(R.explicados||0)} exatos · ${R.explicados} via cupom/frete`
           : 'o depósito bateu com a venda'}/>
-      <CardTotal label="Recebeu a menos" ponto={t.red} valor={String(R.recebeuAMenos||0)} cor={(R.recebeuAMenos||0)>0?t.red:undefined} hide={false} sub="caiu menos SEM explicação — é o que vale cobrar"/>
-      <CardTotal label="Recebeu a mais" ponto={t.blue} valor={String(R.recebeuAMais||0)} cor={(R.recebeuAMais||0)>0?t.blue:undefined} hide={false} sub="caiu mais do que o esperado"/>
       <CardTotal label="Aguardando" ponto={t.t3} valor={String((R.semComparacao||0)+(R.parciais||0))} hide={false}
         sub="a faturar · repasse não lido · pagamento parcial"/>
     </div>
