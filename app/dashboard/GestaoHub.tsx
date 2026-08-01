@@ -2752,6 +2752,17 @@ function statusDoPedido(t:Theme,s:string){
 }
 const POR_PAGINA = 25
 
+/** Copia texto pra área de transferência. Fallback pro textarea porque
+ *  navigator.clipboard falha fora de contexto seguro / em alguns webviews. */
+function copiarTexto(txt:string):boolean{
+  try{ if(navigator?.clipboard){ navigator.clipboard.writeText(txt); return true } }catch{}
+  try{
+    const ta=document.createElement('textarea'); ta.value=txt
+    ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta)
+    ta.select(); document.execCommand('copy'); document.body.removeChild(ta); return true
+  }catch{ return false }
+}
+
 /* Cartão de KPI no formato do Gestor Seller: rótulo em cima com a bolinha do
    status, número grande embaixo, tudo centralizado, e a BORDA na cor do status —
    é ela que faz a linha inteira se ler de relance, sem depender do texto.
@@ -2803,6 +2814,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const [pagina,setPagina]=useState(0)
   const [lendo,setLendo]=useState(false)
   const [detalhe,setDetalhe]=useState<any>(null)
+  const [copiado,setCopiado]=useState(false)
 
   const carregar=async()=>{
     const r=await fetch(`/api/amazon/conciliacao?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`)
@@ -2842,6 +2854,31 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const R=d.resumo||{}
   const conferidos=Number(d.repassesConferidos||0), totalReps=Number(d.repassesTotal||0)
   const faltamConferir=Math.max(0,totalReps-conferidos)
+
+  /* ⭐ DIAGNÓSTICO PRA MANDAR PRO SUPORTE — sem screenshot, com os números
+     exatos. Cada divergente sai com os DOIS lados e as causas já decompostas,
+     que é o que decide se "recebeu a menos" é cupom legítimo (causa nomeada,
+     resíduo 0) ou furo de verdade (resíduo). É o que me deixa consertar com o
+     dado na mão em vez de chutar de novo. */
+  const copiarDiag=()=>{
+    const f=(n:number|null|undefined)=>n==null?'—':Number(n).toFixed(2)
+    const divs=linhas.filter(l=>l.diferenca!==null&&Math.abs(l.diferenca)>0.005)
+    const bloco=[
+      'ORÁCULO · Conciliação — diagnóstico',
+      `período ${range.from.slice(0,10)} → ${range.to.slice(0,10)} · ${conferidos}/${totalReps} repasses lidos`,
+      `total vendido ${f(R.totalBruto)} · já caiu ${f(R.recebido)} · não liquidado ${f(R.naoLiquidadoBruto)}`,
+      `conciliados ${R.conciliados||0} · a menos ${R.recebeuAMenos||0} · a mais ${R.recebeuAMais||0} · aguardando ${(R.semComparacao||0)+(R.parciais||0)} · dif total ${f(R.diferencaTotal)}`,
+      '',
+      `DIVERGENTES (${divs.length}):`,
+      ...divs.map(l=>{
+        const causas=(l.causas||[]).map((c:any)=>`${c.rotulo} ${c.valor>0?'+':''}${f(c.valor)}`).join(' · ')||'(sem causa decomposta)'
+        const resid=Math.abs(l.residuo||0)>0.005?` · RESÍDUO ${f(l.residuo)}`:''
+        const un=l.unidadesVendidas!=null?` · un ${l.unidadesPagas??'?'}/${l.unidadesVendidas}`:''
+        return `• ${l.orderId} [${(l.skus||[]).join(',')}] venda ${f(l.brutoVenda)} → pago ${f(l.bruto)} = dif ${l.diferenca>0?'+':''}${f(l.diferenca)}${un} | ${causas}${resid}`
+      }),
+    ].join('\n')
+    if(copiarTexto(bloco)){ setCopiado(true); setTimeout(()=>setCopiado(false),2200) }
+  }
 
   const filtradas=linhas.filter(l=>{
     if(filtro==='divergente'){ if(l.diferenca===null||Math.abs(l.diferenca)<=0.005) return false }
@@ -2939,11 +2976,23 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       {chip('agendado','Agendado',linhas.filter(l=>l.statusRepasse==='agendado').length,t.gold)}
       {chip('nao_liquidado','Não liquidado',linhas.filter(l=>l.statusRepasse==='nao_liquidado').length,t.red)}
       {chip('divergente','Divergentes',(R.recebeuAMenos||0)+(R.recebeuAMais||0),t.red)}
-      <div style={{marginLeft:'auto',position:'relative' as const,flex:'0 1 250px',minWidth:180,display:'flex',alignItems:'center'}}>
-        <i className="ti ti-search" style={{position:'absolute',left:11,fontSize:14,color:t.t3,pointerEvents:'none'}} aria-hidden="true"/>
-        <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar por pedido ou SKU"
-          style={{width:'100%',background:t.card,border:`1px solid ${t.line}`,borderRadius:20,padding:'8px 12px 8px 32px',
-            fontSize:12,color:t.t1,fontFamily:'inherit',outline:'none'}}/>
+      <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center',justifyContent:'flex-end',flex:'1 1 auto',flexWrap:'wrap' as const}}>
+        {/* Só aparece quando há divergência real pra investigar. */}
+        {((R.recebeuAMenos||0)+(R.recebeuAMais||0))>0 && (
+          <button onClick={copiarDiag}
+            title="Copia um resumo das divergências (com os dois lados e as causas) pra você colar no suporte — sem precisar de print."
+            style={{display:'inline-flex',alignItems:'center',gap:6,padding:'8px 12px',borderRadius:20,cursor:'pointer',fontFamily:'inherit',
+              fontSize:11.5,fontWeight:600,whiteSpace:'nowrap' as const,border:`1px solid ${copiado?t.grn:t.line}`,background:t.card,color:copiado?t.grn:t.t2}}>
+            <i className={`ti ${copiado?'ti-check':'ti-clipboard-text'}`} style={{fontSize:14}} aria-hidden="true"/>
+            {copiado?'Copiado — cole no suporte':'Copiar divergências'}
+          </button>
+        )}
+        <div style={{position:'relative' as const,flex:'0 1 240px',minWidth:160,display:'flex',alignItems:'center'}}>
+          <i className="ti ti-search" style={{position:'absolute',left:11,fontSize:14,color:t.t3,pointerEvents:'none'}} aria-hidden="true"/>
+          <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="Buscar por pedido ou SKU"
+            style={{width:'100%',background:t.card,border:`1px solid ${t.line}`,borderRadius:20,padding:'8px 12px 8px 32px',
+              fontSize:12,color:t.t1,fontFamily:'inherit',outline:'none'}}/>
+        </div>
       </div>
     </div>
 
