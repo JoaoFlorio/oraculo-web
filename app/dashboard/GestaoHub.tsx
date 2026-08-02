@@ -2822,7 +2822,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
   const [busca,setBusca]=useState('')
-  const [filtro,setFiltro]=useState<'todos'|'pago'|'agendado'|'nao_liquidado'|'divergente'|'explicado'>('todos')
+  const [filtro,setFiltro]=useState<'todos'|'pago'|'agendado'|'nao_liquidado'|'divergente'|'explicado'|'taxa'>('todos')
   const [pagina,setPagina]=useState(0)
   const [lendo,setLendo]=useState(false)
   const [detalhe,setDetalhe]=useState<any>(null)
@@ -2877,6 +2877,26 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     setReparando(false)
   }
 
+  /* ⭐ RECOMPLETAR O ESPELHO — sem apagar nada.
+     O desconto de FRETE só passou a ser gravado separado do desconto de item
+     agora; no pedido antigo os dois vêm somados e não dá pra saber quanto o
+     comprador pagou de frete de verdade. Sem esse dado a tela se RECUSA a
+     mostrar o bruto na régua do Gestor: mostrar seria chutar, e chutar aqui
+     inventa divergência. O sync incremental não conserta sozinho porque só
+     reprocessa pedido que MUDA — pedido antigo já entregue nunca mais muda.
+     ⚠️ Rota `mirror-refresh`, não `mirror-rebuild`: aquela apaga o espelho antes
+     e deixaria a Gestão em branco pelos ~25min do backfill. */
+  const [refazendo,setRefazendo]=useState(false)
+  const [refeito,setRefeito]=useState(false)
+  const refazerEspelho=async()=>{
+    setRefazendo(true)
+    try{
+      const r=await fetch('/api/amazon/mirror-refresh',{method:'POST'})
+      if((await r.json())?.ok) setRefeito(true)
+    }catch{/* silencioso: o aviso continua na tela, nada se perde */}
+    setRefazendo(false)
+  }
+
   if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon pra conciliar os pedidos."/>
   if(!st||st.loading) return <LoadingBox/>
   const d=st.data||{}
@@ -2904,6 +2924,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     // o explicado é cupom/frete legítimo. Misturá-los foi o que gerou o susto.
     const furos=linhas.filter(l=>['menos','mais'].includes(estadoDif(l)))
     const explic=linhas.filter(l=>estadoDif(l)==='explicado')
+    const taxaFora=linhas.filter(l=>(l.causasTaxa||[]).length>0)
     /* ⚠️ O diagnóstico mostra os MESMOS números da tela. Ele ficou lendo os
        campos antigos (`recebido`, que soma órfão; `naoLiquidadoBruto`, que é
        bruto) enquanto os cards já mostravam a partição — dizia "já caiu
@@ -2920,6 +2941,12 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
         (Math.abs(soma(R)-(R.totalAReceber||0))>0.02?`  ⚠️ NÃO FECHA (total diz ${f(R.totalAReceber)})`:'  ✓ fecha'),
       `  fora da partição: ${f(R.recebidoDeVendasAnteriores)} recebido de ${R.orfaos||0} venda(s) anterior(es) · ${R.semEstimativa||0} pedido(s) sem como estimar`,
       `conciliados ${R.conciliados||0} (${R.explicados||0} via cupom/frete) · a menos ${R.recebeuAMenos||0} · a mais ${R.recebeuAMais||0} · aguardando ${(R.semComparacao||0)+(R.parciais||0)} · apurado ${f(R.diferencaTotal)}`,
+      /* ⭐ AS TAXAS ENTRAM NO DIAGNÓSTICO, EM SEÇÃO PRÓPRIA. Misturá-las com os
+         furos de bruto mandaria o suporte investigar a coisa errada — foi
+         exatamente o defeito do diagnóstico em 01/08, que lia campos antigos e
+         apontava um fantasma. */
+      `taxas fora do padrão ${R.taxasDivergentes||0} em ${R.skusComBaseDeTaxa||0} produto(s) com base medida · ${f(R.diferencaTaxasTotal)}`,
+      ...(R.pedidosSemDadoDeFrete?[`⚠️ ${R.pedidosSemDadoDeFrete} pedido(s) sem o desconto de frete separado — bruto sem frete indisponível`]:[]),
       '',
       `FUROS — resíduo sem explicação (${furos.length}):`,
       ...(furos.length?furos.map(linha):['(nenhum — tudo que diverge é cupom/frete)']),
@@ -2927,6 +2954,13 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       `EXPLICADOS — cupom/frete, já reconciliados (${explic.length}):`,
       ...explic.slice(0,40).map(linha),
       ...(explic.length>40?[`… e mais ${explic.length-40}`]:[]),
+      '',
+      `TAXAS FORA DO PADRÃO — comissão/FBA vs a mediana do próprio SKU (${taxaFora.length}):`,
+      ...(taxaFora.length?taxaFora.slice(0,40).map((l:any)=>
+        `• ${l.orderId} [${(l.skus||[]).join(',')}] ` +
+        (l.causasTaxa||[]).map((c:any)=>`${c.rotulo} ${f(c.valor)}`).join(' · ') +
+        (l.comissaoEsperada!=null?` | esperado com ${f(l.comissaoEsperada)} / log ${f(l.logisticaEsperada)} · cobrado com ${f(l.comissao)} / log ${f(l.logistica)}`:'')
+      ):['(nenhuma — ou sem amostra por SKU pra afirmar)']),
     ].join('\n')
     if(copiarTexto(bloco)){ setCopiado(true); setTimeout(()=>setCopiado(false),2200) }
   }
@@ -2936,6 +2970,12 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     // próprio "Com cupom/frete".
     if(filtro==='divergente'){ const e=estadoDif(l); if(e!=='menos'&&e!=='mais') return false }
     else if(filtro==='explicado'){ if(estadoDif(l)!=='explicado') return false }
+    /* ⭐ SEGUNDA DIMENSÃO. "Divergente" fala do BRUTO (o comprador pagou o
+       combinado?); isto fala da TAXA (a Amazon cobrou deste pedido o que cobra
+       dos outros deste mesmo produto?). São perguntas diferentes e um pedido
+       pode estar perfeito numa e torto na outra — por isso filtro próprio, e não
+       um balde só chamado "problema". */
+    else if(filtro==='taxa'){ if(!(l.causasTaxa||[]).length) return false }
     else if(filtro!=='todos' && l.statusRepasse!==filtro) return false
     const q=busca.trim().toLowerCase()
     if(!q) return true
@@ -2952,6 +2992,11 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const temOutras=linhas.some(l=>Math.abs(l.outrasTaxas||0)>0.005)
   const temDevolucao=linhas.some(l=>Math.abs(l.devolucao||0)>0.005)
   const temImposto=linhas.some(l=>Math.abs(l.imposto||0)>0.005)
+  // ⭐ Frete que o comprador pagou de fato. Quando é 0 em todo mundo (FBA/Prime),
+  // a régua do Gestor e a nossa dão o MESMO número e não há nada a mostrar —
+  // linha extra sempre presente e sempre igual é ruído.
+  const temFrete=linhas.some(l=>(l.freteLiquidoVenda||0)>0.005)
+  const semDadoFrete=Number(R.pedidosSemDadoDeFrete||0)
 
   const dt=(iso:string|null)=>{ if(!iso) return '—'; const x=new Date(iso); return isNaN(x.getTime())?'—':x.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',timeZone:'UTC'}) }
   // ⚠️ null NUNCA vira R$ 0,00. Zero diz "medi e deu zero"; traço diz "não tenho".
@@ -2960,6 +3005,27 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const val=(v:number|null,cor?:string)=>v===null
     ? <span style={{color:t.t3}}>—</span>
     : <span style={{color:cor||t.t1,filter:hide?'blur(6px)':'none'}}>{brl2(v)}</span>
+
+  /* ⭐ MARCA A CÉLULA DA TAXA QUANDO ELA FOGE DO PADRÃO DO PRÓPRIO PRODUTO.
+     O valor continua sendo o MEDIDO — nada é substituído pelo esperado. O que
+     muda é só o aviso de "olhe aqui", com a conta no tooltip: o esperado, o
+     cobrado e a diferença. Sem o esperado ao lado, marcar a célula seria pedir
+     confiança cega. */
+  const marcaTaxa=(l:any,parcela:'comissao'|'logistica',dentro:React.ReactNode)=>{
+    const c=(l.causasTaxa||[]).find((x:any)=>x.parcela===parcela)
+    if(!c) return dentro
+    const esperado=parcela==='comissao'?l.comissaoEsperada:l.logisticaEsperada
+    const aMais=c.valor<0
+    return(
+      <button onClick={()=>setDetalhe(l)}
+        title={`Os outros pedidos deste produto pagam ${brl2(Math.abs(esperado||0))}; este pagou ${brl2(Math.abs(parcela==='comissao'?l.comissao:l.logistica))} — ${brl2(Math.abs(c.valor))} a ${aMais?'mais':'menos'}. Clique pra ver.`}
+        style={{background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit',fontSize:'inherit',
+          color:'inherit',textDecoration:'underline',textDecorationColor:'#A855F7',
+          textDecorationStyle:'wavy' as const,textUnderlineOffset:3}}>
+        {dentro}
+      </button>
+    )
+  }
 
   const chip=(k:typeof filtro,label:string,n:number,cor?:string)=>(
     <button key={k} onClick={()=>setFiltro(k)}
@@ -3066,15 +3132,60 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       </div>
     )}
 
+    {/* ⭐ O BURACO DO FRETE, DECLARADO — com o conserto ao lado.
+        Um total que subtrai o frete de alguns pedidos e não de outros produz um
+        número que PARECE comparável com o Gestor e não é. Preferimos mostrar "—"
+        e dizer por quê. */}
+    {semDadoFrete>0 && (
+      <div style={{background:t.dark?'rgba(168,85,247,0.07)':'#FAF5FF',border:`1px solid ${t.dark?'rgba(168,85,247,0.28)':'#E9D5FF'}`,
+        borderRadius:12,padding:'13px 15px',marginBottom:14,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const}}>
+        <i className="ti ti-truck-delivery" style={{fontSize:17,color:'#A855F7',flexShrink:0}} aria-hidden="true"/>
+        <div style={{flex:1,minWidth:230}}>
+          <div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:3}}>
+            {refeito
+              ? 'Recompletando o espelho em segundo plano'
+              : <>{semDadoFrete} pedido{semDadoFrete>1?'s':''} sem o dado do frete separado</>}
+          </div>
+          <div style={{fontSize:11.5,color:t.t2,lineHeight:1.55}}>
+            {refeito
+              ? <>Leva alguns minutos e roda sozinho. <b>Seus números continuam na tela o tempo todo</b> — nada é apagado. Volte aqui depois e a régua do Gestor aparece completa.</>
+              : <>No &ldquo;frete grátis&rdquo; a Amazon <b>cobra</b> o frete e devolve pelo desconto — os dois se anulam. Nestes pedidos os dois descontos foram gravados <b>somados</b>, então não dá pra saber quanto o comprador pagou de frete de verdade. Por isso o <b>bruto sem frete</b> aparece como &ldquo;—&rdquo; em vez de um chute: chutar aqui inventaria divergência. Recompletar o espelho busca o dado de novo na Amazon.</>}
+          </div>
+        </div>
+        {!refeito && (
+          <button onClick={refazerEspelho} disabled={refazendo}
+            style={{flexShrink:0,background:'transparent',color:refazendo?t.t3:'#A855F7',
+              border:`1px solid ${refazendo?t.line2:(t.dark?'rgba(168,85,247,0.4)':'#D8B4FE')}`,borderRadius:9,
+              padding:'9px 14px',fontSize:11.5,fontWeight:700,cursor:refazendo?'default':'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6}}>
+            <i className={`ti ${refazendo?'ti-loader-2':'ti-refresh'}`} style={{fontSize:14,animation:refazendo?'ora-spin 1s linear infinite':'none'}} aria-hidden="true"/>
+            {refazendo?'Pedindo…':'Recompletar o espelho'}
+          </button>
+        )}
+        <style>{`@keyframes ora-spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    )}
+
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
       {/* ⚠️ "≈" quando parte do total é estimativa de pendente. O pendente entra
           aqui E no "a receber" — contá-lo de um lado só fazia a tabela exibir
           "≈ R$499,99" numa linha que o total de cima ignorava. */}
+      {/* ⭐ A RÉGUA DO GESTOR VIVE NO SUBTÍTULO, NÃO NO VALOR.
+          O Gestor mostra o bruto SEM o frete (R$79,90 onde nós mostramos
+          R$88,80). Em 01/08 eu troquei a régua do valor principal e isso gerou
+          34 falsos "recebeu a mais" (+R$220,27) numa tela que estava com ZERO
+          divergências — porque a comparação com o repasse inclui frete dos dois
+          lados. Agora o número do Gestor é INFORMAÇÃO ao lado, e a régua que
+          concilia não se mexe. */}
       <CardTotal grande label="Total bruto" ponto={t.blue}
         valor={`${(R.totalBrutoEstimado||0)>0.005?'≈ ':''}${brl2(R.totalBruto||0)}`} hide={hide}
-        sub={(R.totalBrutoEstimado||0)>0.005
-          ? `o que o comprador pagou · inclui ${brl2(R.totalBrutoEstimado)} ainda a faturar (≈)`
-          : 'o que o comprador pagou nas vendas do período'}/>
+        sub={[
+          (R.totalBrutoEstimado||0)>0.005
+            ? `o que o comprador pagou · inclui ${brl2(R.totalBrutoEstimado)} ainda a faturar (≈)`
+            : 'o que o comprador pagou nas vendas do período',
+          R.totalBrutoSemFrete!=null && temFrete
+            ? `sem o frete: ${hide?'•••':brl2(R.totalBrutoSemFrete)} (a régua do Gestor Seller)`
+            : '',
+        ].filter(Boolean).join(' · ')}/>
       <CardTotal grande label="Total a receber dos marketplaces" ponto={t.grn}
         // ⚠️ "≥" quando há pedido sem estimativa: o total vira PISO, e omitir
         // isso seria anunciar como completo um número que não é.
@@ -3117,6 +3228,19 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
           : 'o depósito bateu com a venda'}/>
       <CardTotal label="Aguardando" ponto={t.t3} valor={String((R.semComparacao||0)+(R.parciais||0))} hide={false}
         sub="a faturar · repasse não lido · pagamento parcial"/>
+      {/* ⭐ AS TAXAS — card PRÓPRIO, de propósito. Ele não soma com os outros
+          quatro e não deve: aqueles falam do bruto (o comprador pagou o
+          combinado?), este fala da taxa (a Amazon cobrou o de sempre?). Um card,
+          um domínio. Só aparece quando há base medida — sem amostra a tela não
+          afirma nada, e dizer "0 divergências" sem ter conferido é pior que
+          não dizer. */}
+      {(R.skusComBaseDeTaxa||0)>0 && (
+        <CardTotal label="Taxas fora do padrão" ponto="#A855F7" valor={String(R.taxasDivergentes||0)}
+          cor={(R.taxasDivergentes||0)>0?'#A855F7':undefined} hide={false}
+          sub={(R.taxasDivergentes||0)>0
+            ? `${(R.diferencaTaxasTotal||0)<0?`${brl2(Math.abs(R.diferencaTaxasTotal||0))} a mais`:`${brl2(Math.abs(R.diferencaTaxasTotal||0))} a menos`} que o normal destes produtos`
+            : `comissão e FBA na régua da sua conta (${R.skusComBaseDeTaxa} produto${(R.skusComBaseDeTaxa||0)>1?'s':''} com base medida)`}/>
+      )}
     </div>
 
     <div style={{display:'flex',gap:7,flexWrap:'wrap' as const,marginBottom:12,alignItems:'center'}}>
@@ -3126,9 +3250,10 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       {chip('nao_liquidado','Não liquidado',linhas.filter(l=>l.statusRepasse==='nao_liquidado').length,t.red)}
       {chip('divergente','Divergentes',(R.recebeuAMenos||0)+(R.recebeuAMais||0),t.red)}
       {(R.explicados||0)>0 && chip('explicado','Com cupom/frete',R.explicados,t.gold)}
+      {(R.taxasDivergentes||0)>0 && chip('taxa','Taxa fora do padrão',R.taxasDivergentes,'#A855F7')}
       <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center',justifyContent:'flex-end',flex:'1 1 auto',flexWrap:'wrap' as const}}>
         {/* Aparece quando há QUALQUER diferença a explicar (furo ou cupom). */}
-        {((R.recebeuAMenos||0)+(R.recebeuAMais||0)+(R.explicados||0))>0 && (
+        {((R.recebeuAMenos||0)+(R.recebeuAMais||0)+(R.explicados||0)+(R.taxasDivergentes||0))>0 && (
           <button onClick={copiarDiag}
             title="Copia um resumo das diferenças (furos e cupons, com os dois lados e as causas) pra você colar no suporte — sem precisar de print."
             style={{display:'inline-flex',alignItems:'center',gap:6,padding:'8px 12px',borderRadius:20,cursor:'pointer',fontFamily:'inherit',
@@ -3177,7 +3302,11 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       {/* A base é o mínimo pra tabela não espremer; cada coluna condicional soma o
           que ela ocupa. ⚠️ Diferença é a ÚLTIMA e a mais importante — 60px a mais
           na base a empurravam pra fora da tela em laptop com o menu aberto. */}
-      <Table minWidth={1040+(temOutras?80:0)+(temDevolucao?90:0)+(temImposto?80:0)}
+      {/* ⚠️ `temFrete` soma largura porque a linha "s/ frete R$ 1.234,56" é mais
+          larga que o valor sozinho. Sem isso a coluna Diferença — a última e a
+          mais importante — é empurrada pra fora da tela, que foi o erro nº10 de
+          01/08 acontecendo de novo por outro caminho. */}
+      <Table minWidth={1040+(temOutras?80:0)+(temDevolucao?90:0)+(temImposto?80:0)+(temFrete?40:0)}
         head={[{label:'Pedido',w:'16%'},{label:'SKU',w:'12%'},
         {label:'Bruto',right:true},
         ...(temImposto?[{label:'Imposto',right:true}]:[]),
@@ -3215,10 +3344,33 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
                           >≈ <span style={{filter:hide?'blur(6px)':'none'}}>{brl2(l.estimadoBruto)}</span></span>
                       : <span style={{color:t.t3}} title="Pedido ainda pendente — a Amazon só informa o valor da venda ao faturar.">a faturar</span>)
                   : val(l.bruto ?? l.brutoVenda)}
+                {/* ⭐ A RÉGUA DO GESTOR, EMBAIXO DO NÚMERO — não no lugar dele.
+                    Era esta a queixa: o Gestor mostra R$79,90 onde mostramos
+                    R$88,80. Trocar o valor principal foi o que gerou 34 falsos
+                    "recebeu a mais" em 01/08, porque a comparação com o repasse
+                    inclui frete dos dois lados. Aqui o número dele aparece SEM
+                    mexer no que concilia. Só quando há frete de verdade: linha
+                    extra sempre igual ao de cima é ruído. */}
+                {temFrete && !l.ehOrfao && (
+                  (l.freteLiquidoVenda||0)>0.005
+                    ? <div style={{fontSize:10,color:t.t3,marginTop:2,whiteSpace:'nowrap' as const}}
+                        title={`O comprador pagou ${brl2(l.freteLiquidoVenda)} de frete. O Gestor Seller mostra o bruto sem ele.`}>
+                        s/ frete <span style={{filter:hide?'blur(6px)':'none'}}>{l.brutoVendaSemFrete!=null?brl2(l.brutoVendaSemFrete):'—'}</span>
+                      </div>
+                    : l.freteLiquidoVenda===null
+                      ? <div style={{fontSize:10,color:t.t3,marginTop:2,whiteSpace:'nowrap' as const}}
+                          title="Este pedido foi gravado antes de separarmos o desconto de frete do desconto de item — não dá pra saber quanto o comprador pagou de frete. Recompletar o espelho resolve.">s/ frete —</div>
+                      : null
+                )}
               </NumTd>
               {temImposto && <NumTd hide={hide}>{val(l.imposto)}</NumTd>}
-              <NumTd hide={hide}>{val(l.comissao,t.red)}</NumTd>
-              <NumTd hide={hide}>{val(l.logistica,t.red)}</NumTd>
+              {/* ⭐ TAXA FORA DO PADRÃO ganha marca própria (roxa, pontilhada), não
+                  vermelha: vermelho nesta tela significa "a Amazon te pagou a
+                  menos", que é outra acusação. Aqui é "cobrou diferente do que
+                  cobra nos outros pedidos deste produto" — vale olhar, não
+                  necessariamente cobrar. */}
+              <NumTd hide={hide}>{marcaTaxa(l,'comissao',val(l.comissao,t.red))}</NumTd>
+              <NumTd hide={hide}>{marcaTaxa(l,'logistica',val(l.logistica,t.red))}</NumTd>
               {temOutras && <NumTd hide={hide}>{val(l.outrasTaxas,t.red)}</NumTd>}
               {temDevolucao && <NumTd hide={hide}>{val(l.devolucao,t.red)}</NumTd>}
               <NumTd hide={hide} strong>{val(l.liquido)}</NumTd>
@@ -3362,6 +3514,82 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
           <div style={{marginTop:14,fontSize:11.5,color:t.t3,lineHeight:1.6}}>
             Ainda não dá pra dizer <b>por que</b> divergiu: o histórico deste pedido não tem o detalhe do preço, do frete e do desconto separados —
             só o total. Sem os dois lados abertos, apontar uma causa seria adivinhar.
+          </div>
+        )}
+
+        {/* ═══ AS TAXAS DESTE PEDIDO ═══════════════════════════════════════
+            ⭐ Bloco SEPARADO, embaixo da diferença, e nunca somado a ela. Em
+            cima está "o comprador pagou o combinado?"; aqui está "a Amazon
+            cobrou o de sempre?". São perguntas diferentes sobre o mesmo pedido —
+            juntá-las num número só é misturar duas grandezas, que é exatamente o
+            defeito que esta tela existe pra não cometer.
+
+            ⚠️ A referência é MEDIDA na própria conta (a mediana dos outros
+            pedidos deste mesmo SKU), nunca a tabela de categoria da Amazon.
+            Comparar o que ela cobrou com o que a gente ACHA que ela deveria
+            cobrar transforma todo erro nosso em acusação contra ela — foi assim
+            que 37 cupons viraram 37 "divergências" em 01/08. */}
+        {(detalhe.taxasDetalhe?.length>0 || detalhe.causasTaxa?.length>0) && (
+          <div style={{marginTop:16,paddingTop:14,borderTop:`1px dashed ${t.line}`}}>
+            <div style={{fontSize:11,fontWeight:700,color:t.t3,letterSpacing:.3,textTransform:'uppercase' as const,marginBottom:8}}>
+              O que a Amazon cobrou deste pedido
+            </div>
+            {(detalhe.taxasDetalhe||[]).map((tx:any,i:number)=>(
+              <div key={i} style={{display:'flex',alignItems:'center',gap:9,fontSize:12.5,color:t.t2,padding:'6px 0',borderTop:i?`1px solid ${t.line}`:'none'}}>
+                <span style={{flex:1}}>
+                  {tx.rotulo}
+                  {/* O nome CRU vai junto quando é diferente do rótulo: é o que
+                      o seller cola no chamado do suporte da Amazon. */}
+                  {tx.rotulo!==tx.tipo && <span style={{color:t.t3,fontSize:10.5}}> · {tx.tipo}</span>}
+                </span>
+                <span style={{fontWeight:600,color:t.red,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide?'blur(6px)':'none'}}>
+                  {brl2(tx.valor)}
+                </span>
+              </div>
+            ))}
+
+            {detalhe.causasTaxa?.length>0 ? (
+              <div style={{marginTop:11,padding:'11px 13px',borderRadius:10,
+                background:t.dark?'rgba(168,85,247,0.07)':'#FAF5FF',
+                border:`1px solid ${t.dark?'rgba(168,85,247,0.28)':'#E9D5FF'}`}}>
+                <div style={{fontSize:12,fontWeight:700,color:'#A855F7',marginBottom:7}}>
+                  Fora do padrão dos outros pedidos deste produto
+                </div>
+                {detalhe.causasTaxa.map((c:any,i:number)=>{
+                  const esp=c.parcela==='comissao'?detalhe.comissaoEsperada:c.parcela==='logistica'?detalhe.logisticaEsperada:null
+                  const real=c.parcela==='comissao'?detalhe.comissao:c.parcela==='logistica'?detalhe.logistica:null
+                  return(
+                    <div key={i} style={{fontSize:12,color:t.t2,padding:'5px 0',borderTop:i?`1px solid ${t.line}`:'none'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:9}}>
+                        <span style={{flex:1}}>{c.rotulo}</span>
+                        <span style={{fontWeight:700,color:c.valor<0?t.red:t.grn,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide?'blur(6px)':'none'}}>
+                          {brl2(Math.abs(c.valor))} a {c.valor<0?'mais':'menos'}
+                        </span>
+                      </div>
+                      {/* ⭐ O ESPERADO AO LADO DO COBRADO. Sem os dois números, a
+                          marca roxa seria "confie em mim". */}
+                      {esp!=null && real!=null && (
+                        <div style={{fontSize:10.5,color:t.t3,marginTop:2,filter:hide?'blur(6px)':'none'}}>
+                          os outros pedidos deste produto pagam {brl2(Math.abs(esp))} · este pagou {brl2(Math.abs(real))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                <div style={{fontSize:10.5,color:t.t3,marginTop:8,lineHeight:1.55}}>
+                  ⚠️ Isto <b>não entra</b> na diferença acima: lá é o que o comprador pagou, aqui é o que a Amazon cobrou. Taxa fora do padrão costuma ter causa legítima (mudança de faixa de preço, de peso ou de tabela) — é onde <b>olhar</b>, não uma cobrança pronta.
+                </div>
+              </div>
+            ) : detalhe.comissaoEsperada!=null ? (
+              <div style={{marginTop:10,fontSize:11,color:t.grn,display:'flex',alignItems:'center',gap:6}}>
+                <i className="ti ti-check" style={{fontSize:14}} aria-hidden="true"/>
+                Comissão e logística na régua dos outros pedidos deste produto.
+              </div>
+            ) : (
+              <div style={{marginTop:10,fontSize:10.5,color:t.t3,lineHeight:1.6}}>
+                Ainda <b>não dá pra dizer</b> se estas taxas estão fora do padrão: são precisos pelo menos 4 pedidos liquidados do mesmo produto (e de um SKU só) pra existir um padrão. Sem isso, qualquer comparação seria chute.
+              </div>
+            )}
           </div>
         )}
 
