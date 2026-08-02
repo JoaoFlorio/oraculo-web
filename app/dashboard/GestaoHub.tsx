@@ -9,7 +9,6 @@ import {
 import { getFinanceData, summary, productMetrics, abcCurve, type ProductMetrics } from './financeiroMock'
 import { adsDoProduto, temAdsPorSku, adsSemVenda } from '@/lib/adsProduto'
 import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, lucroDoPeriodo, ajustesDoPedido, ajustesDoProduto, type AjustePedido } from '@/lib/margemProduto'
-import { impactoTarifaAgo26, type ProdutoTarifa } from '@/lib/tarifaFbaAgo26'
 import { maturidadeDoPeriodo, type SeloMaturidade } from '@/lib/maturidadePeriodo'
 import { snapshotDoPeriodo, narrarMudancas, reconciliar, normalizarMarcos, chaveDoPeriodo, type SnapshotPeriodo, type MarcosPeriodo, type Diario, type Reconciliacao } from '@/lib/diarioPeriodo'
 import { GRUPOS, TELA_INICIAL, grupoDaTab, grupoPorId, telaAoEntrarNoGrupo, tabPorId } from '@/lib/navegacaoGestao'
@@ -2953,6 +2952,9 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const temOutras=linhas.some(l=>Math.abs(l.outrasTaxas||0)>0.005)
   const temDevolucao=linhas.some(l=>Math.abs(l.devolucao||0)>0.005)
   const temImposto=linhas.some(l=>Math.abs(l.imposto||0)>0.005)
+  // ⭐ Frete saiu do bruto (régua do Gestor) mas continua no líquido — precisa
+  // de coluna, senão a linha não fecha com ela mesma (régua nº29).
+  const temFrete=linhas.some(l=>Math.abs(l.frete||0)>0.005)
 
   const dt=(iso:string|null)=>{ if(!iso) return '—'; const x=new Date(iso); return isNaN(x.getTime())?'—':x.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',timeZone:'UTC'}) }
   // ⚠️ null NUNCA vira R$ 0,00. Zero diz "medi e deu zero"; traço diz "não tenho".
@@ -3071,8 +3073,8 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       <CardTotal grande label="Total bruto" ponto={t.blue}
         valor={`${(R.totalBrutoEstimado||0)>0.005?'≈ ':''}${brl2(R.totalBruto||0)}`} hide={hide}
         sub={(R.totalBrutoEstimado||0)>0.005
-          ? `o que o comprador pagou · inclui ${brl2(R.totalBrutoEstimado)} ainda a faturar (≈)`
-          : 'o que o comprador pagou nas vendas do período'}/>
+          ? `valor dos produtos vendidos · inclui ${brl2(R.totalBrutoEstimado)} ainda a faturar (≈)`
+          : 'valor dos produtos vendidos no período (sem o frete do comprador)'}/>
       <CardTotal grande label="Total a receber dos marketplaces" ponto={t.grn}
         // ⚠️ "≥" quando há pedido sem estimativa: o total vira PISO, e omitir
         // isso seria anunciar como completo um número que não é.
@@ -3175,9 +3177,10 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       {/* A base é o mínimo pra tabela não espremer; cada coluna condicional soma o
           que ela ocupa. ⚠️ Diferença é a ÚLTIMA e a mais importante — 60px a mais
           na base a empurravam pra fora da tela em laptop com o menu aberto. */}
-      <Table minWidth={1040+(temOutras?80:0)+(temDevolucao?90:0)+(temImposto?80:0)}
+      <Table minWidth={1040+(temOutras?80:0)+(temDevolucao?90:0)+(temImposto?80:0)+(temFrete?75:0)}
         head={[{label:'Pedido',w:'16%'},{label:'SKU',w:'12%'},
         {label:'Bruto',right:true},
+        ...(temFrete?[{label:'Frete',right:true}]:[]),
         ...(temImposto?[{label:'Imposto',right:true}]:[]),
         {label:'Comissão',right:true},{label:'Logística',right:true},
         ...(temOutras?[{label:'Outras',right:true}]:[]),
@@ -3214,6 +3217,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
                       : <span style={{color:t.t3}} title="Pedido ainda pendente — a Amazon só informa o valor da venda ao faturar.">a faturar</span>)
                   : val(l.bruto ?? l.brutoVenda)}
               </NumTd>
+              {temFrete && <NumTd hide={hide}>{val(l.frete)}</NumTd>}
               {temImposto && <NumTd hide={hide}>{val(l.imposto)}</NumTd>}
               <NumTd hide={hide}>{val(l.comissao,t.red)}</NumTd>
               <NumTd hide={hide}>{val(l.logistica,t.red)}</NumTd>
@@ -4018,27 +4022,6 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   // Oráculo não tem como calcular lucro/margem/ROI/MPA (mostra "—").
   const prodsComVenda = (realDre?.produtos||[]).filter((p:any)=>(p.units||0)>0).length
   const semCusto = (realDre?.produtos||[]).filter((p:any)=>(p.units||0)>0 && !((custoUnit[p.sku]||0)>0))
-  // ⭐ A tarifa FBA muda em 01/08/2026 e quem vende acima de R$100 sai de ISENTO
-  // pra R$6 por unidade. Quem está na campanha a gente não presume — LÊ da tarifa
-  // medida por produto no repasse (ver lib/tarifaFbaAgo26).
-  const impactoFba = useMemo(()=>{
-    const linhas=realDre?.linhas||{}
-    const lista:ProdutoTarifa[]=(realDre?.produtos||[]).map((p:any)=>{
-      const M=margemDoProduto({linhas,produto:p,reembolsos:realDre?.reembolsos,
-        custoUnit:custoUnit[p.sku]||0,imposto,ads:null,
-        ajustes:ajustesDoProduto(ajustes,p.sku,realDre?.period?.from,realDre?.period?.to)})
-      const un=M.unitsLiquidas
-      return {
-        sku:p.sku, nome:p.name||p.sku,
-        precoMedio:(p.units||0)>0?M.receitaBruta/p.units:0,
-        units:un,
-        fbaUnit:(M.fba===null||un<=0)?null:M.fba/un,
-        comissaoPct:(M.comissao!==null&&M.receitaLiquida>0)?M.comissao/M.receitaLiquida:0,
-      }
-    })
-    return impactoTarifaAgo26(lista,imposto)
-  },[realDre,custoUnit,imposto,ajustes])
-  const [verTarifa,setVerTarifa]=useState(false)
 
   /* ── SELO DE MATURIDADE + DIÁRIO ────────────────────────────────────────────
      A Gestão mistura o relógio da operação (data da compra, provisório) com o do
@@ -4168,57 +4151,14 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
 
         <BarraGestao grupo={grupo} tab={tab} semCusto={semCusto.length} onGrupo={goGrupo} onTab={goTab}/>
 
-        {/* ⭐ TARIFA FBA — 01/08/2026. Não é reajuste: é uma isenção que acaba.
-            Quem vende acima de R$100 pagava ZERO e passa a pagar R$6 por unidade.
-            O aviso só aparece pra quem É afetado, e o "é afetado" vem da tarifa
-            MEDIDA no repasse — não de presumir que todo cliente está na campanha.
-            Some sozinho em 31/08: aviso permanente vira paisagem. */}
-        {impactoFba.relevante && impactoFba.afetados.length>0 && (
-          <div style={{background:t.dark?'rgba(248,113,113,0.07)':'#FEF2F2',border:`1px solid ${t.dark?'rgba(248,113,113,0.3)':'#FECACA'}`,borderRadius:12,padding:'13px 15px',marginBottom:16}}>
-            <div style={{display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap' as const}}>
-              <i className="ti ti-calendar-exclamation" style={{fontSize:17,color:t.red,marginTop:1,flexShrink:0}} aria-hidden="true"/>
-              <div style={{flex:1,minWidth:200}}>
-                <div style={{fontSize:12.5,fontWeight:600,color:t.t1,marginBottom:3}}>
-                  {impactoFba.jaVirou
-                    ? `A tarifa FBA mudou em 01/08 e ${impactoFba.afetados.length} produto${impactoFba.afetados.length>1?'s seus perderam':' seu perdeu'} a isenção`
-                    : `Em 01/08 a tarifa FBA muda e ${impactoFba.afetados.length} produto${impactoFba.afetados.length>1?'s seus perdem':' seu perde'} a isenção`}
-                </div>
-                <div style={{fontSize:11.5,color:t.t2,lineHeight:1.55}}>
-                  A campanha deixa de isentar acima de R$100 e passa a cobrar <b>R$6 fixos por unidade a partir de R$79</b>.
-                  No volume deste período {impactoFba.jaVirou?'isso custou':'seriam'} <b style={{color:t.red}}>{brl2(impactoFba.totalPeriodo)}</b> em {impactoFba.unidadesAfetadas} unidade{impactoFba.unidadesAfetadas>1?'s':''} que {impactoFba.jaVirou?'antes eram':'hoje são'} isentas.
-                  {impactoFba.semMedicao>0 && <> · <span style={{color:t.t3}}>{impactoFba.semMedicao} produto{impactoFba.semMedicao>1?'s':''} sem tarifa medida no período — não dá pra dizer se mudam.</span></>}
-                </div>
-              </div>
-              <button onClick={()=>setVerTarifa(v=>!v)}
-                style={{flexShrink:0,background:verTarifa?'transparent':t.red,color:verTarifa?t.t2:'#fff',border:`1px solid ${verTarifa?t.line2:t.red}`,borderRadius:9,padding:'9px 14px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
-                {verTarifa?'Fechar':'Ver quais e quanto'}
-              </button>
-            </div>
-            {verTarifa && (
-              <div style={{marginTop:13}}>
-                <Table minWidth={720} head={[{label:'Produto',w:'34%'},{label:'Preço médio',right:true},{label:'Un.',right:true},
-                  {label:'Tarifa hoje',right:true},{label:'De 01/08',right:true},{label:'Impacto',right:true},{label:'Preço p/ manter o lucro',right:true}]}>
-                  {impactoFba.afetados.map(a=>(
-                    <tr key={a.sku}>
-                      <td style={{padding:'9px 10px',fontSize:12,color:t.t1}}>{a.nome}</td>
-                      <NumTd hide={hide}>{brl2(a.precoMedio)}</NumTd>
-                      <NumTd hide={hide}>{a.units}</NumTd>
-                      <NumTd hide={hide}>{brl2(a.fbaHoje)}</NumTd>
-                      <NumTd hide={hide} color={t.red}>{brl2(a.fbaDepois)}</NumTd>
-                      <NumTd hide={hide} color={t.red} strong>−{brl2(a.impactoPeriodo)}</NumTd>
-                      <NumTd hide={hide} color={t.grn}>{a.precoSugerido===null?'—':brl2(a.precoSugerido)}</NumTd>
-                    </tr>
-                  ))}
-                </Table>
-                <div style={{fontSize:11,color:t.t3,marginTop:9,lineHeight:1.6}}>
-                  <b>O preço sugerido não é o preço atual + R$6.</b> Sobre o aumento incidem comissão e imposto, então parte dele volta pra Amazon e pro fisco —
-                  repassar exatamente R$6 deixaria você no prejuízo achando que tinha repassado. O valor da coluna é o que devolve o <b>mesmo lucro em reais</b> que você tem hoje.
-                  {' '}Produtos abaixo de R$79 e os que já pagam tarifa cheia não aparecem aqui: pra eles não muda nada.
-                </div>
-              </div>
-            )}
-          </div>
-        )}
+        {/* O AVISO DA TARIFA FBA SAIU EM 01/08/2026, no dia da virada.
+            Ele existiu pra dar tempo de rever preço ANTES da mudança; a partir
+            do dia em que ela vale, repetir "vai mudar" só ocupa o topo da tela.
+            A regra nova (R$6 fixos a partir de R$79) já entra sozinha pela
+            VIGÊNCIA em calc.ts — `fbaPromoInfo` decide pela data, então a conta
+            de tarifa nem soube que este banner existia.
+            ⚠️ `lib/tarifaFbaAgo26.ts` FICA, com os testes: a campanha morre em
+            31/01/2027 e o aviso da próxima virada nasce dele. */}
 
         {/* ⚠️ Produtos vendidos SEM custo informado → Lucro/Margem/ROI/Lucro pós
             ADS/MPA aparecem como "—". Era a dúvida nº1 dos clientes ("os números
