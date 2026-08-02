@@ -2858,6 +2858,26 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
     setLendo(false)
   }
 
+  /* 🚨 PEDIDO SEM PREÇO NO ESPELHO. O backfill usa o relatório da Amazon, que
+     não traz o preço de pedido pendente; a Orders API traz, mas o sync só
+     reprocessa pedido que MUDA — então quem nasceu pendente fica sem preço.
+     Isso apareceu comparando com o concorrente: o mesmo pedido, com o mesmo
+     status Pendente nos dois, aparecia "a faturar" pra nós e com valor pra ele.
+     Este botão pergunta pra Amazon de novo. Não inventa: o que ela também não
+     tiver segue "a faturar". */
+  const [reparando,setReparando]=useState(false)
+  const [reparo,setReparo]=useState<any>(null)
+  const repararEspelho=async()=>{
+    setReparando(true); setReparo(null)
+    try{
+      const r=await fetch('/api/amazon/mirror-repair?limite=400',{method:'POST'})
+      const d=await r.json()
+      setReparo(d)
+      if(d?.corrigidos>0) setSt({loading:false,data:await carregar()})
+    }catch{ setReparo({ok:false,erro:'sem resposta do servidor'}) }
+    setReparando(false)
+  }
+
   if(connected===false) return <ConnectEmpty texto="Conecte sua conta Amazon pra conciliar os pedidos."/>
   if(!st||st.loading) return <LoadingBox/>
   const d=st.data||{}
@@ -2925,6 +2945,9 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const paginas=Math.max(1,Math.ceil(filtradas.length/POR_PAGINA))
   const pag=Math.min(pagina,paginas-1)
   const visiveis=filtradas.slice(pag*POR_PAGINA,(pag+1)*POR_PAGINA)
+
+  // Pedidos cujo preço da venda a Amazon ainda não informou (o "a faturar").
+  const semPreco=linhas.filter(l=>l.precoPendente && !l.ehOrfao).length
 
   // Colunas que só existem quando há o que mostrar (ver a nota na tabela).
   const temOutras=linhas.some(l=>Math.abs(l.outrasTaxas||0)>0.005)
@@ -3006,6 +3029,41 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
         grandezas (bruto × líquido) nos mesmos cards — por isso "já caiu" dava
         R$17.743 contra R$13.232 do concorrente, e "não liquidado" dava R$8.510
         em bruto contra R$7.385 em líquido. */}
+    {/* 🚨 PEDIDO SEM PREÇO: o "a faturar" da tabela. Enquanto existir, o Total
+        bruto está SUBESTIMADO — e é isso que fazia a nossa conta sair menor que
+        a do concorrente, que tem o preço desses pedidos. Não é venda a menos, é
+        preço que não sabemos. Aviso + botão que pergunta pra Amazon de novo. */}
+    {semPreco>0 && (
+      <div style={{background:t.dark?'rgba(59,130,246,0.07)':'#EFF6FF',border:`1px solid ${t.dark?'rgba(59,130,246,0.3)':'#BFDBFE'}`,borderRadius:12,padding:'12px 15px',marginBottom:12,
+        display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap' as const}}>
+        <i className="ti ti-receipt-off" style={{fontSize:17,color:t.blue,marginTop:1,flexShrink:0}} aria-hidden="true"/>
+        <div style={{flex:1,minWidth:220,fontSize:11.5,color:t.t2,lineHeight:1.55}}>
+          <div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:3}}>
+            {semPreco} pedido{semPreco>1?'s':''} sem o valor da venda
+          </div>
+          O relatório da Amazon só informa o preço quando o pedido é faturado, então estes entram no total <b>sem valor ou por estimativa (≈)</b> — o <b>Total bruto está subestimado</b> enquanto isso.
+          {' '}Dá pra perguntar de novo à Amazon: o que ela já souber entra na hora.
+          {reparo && (
+            <div style={{marginTop:7,fontSize:11.5,color:reparo.ok===false?t.red:t.grn,fontWeight:600}}>
+              {reparo.ok===false
+                ? `Não deu: ${reparo.erro||reparo.error||'erro'}`
+                : reparo.corrigidos>0
+                  ? `✓ ${reparo.corrigidos} pedido${reparo.corrigidos>1?'s':''} com preço recuperado (+${brl2(reparo.brutoRecuperado||0)})${reparo.semPrecoNaAmazon>0?` · ${reparo.semPrecoNaAmazon} a Amazon também ainda não tem`:''}`
+                  : `A Amazon ainda não tem o preço de ${reparo.semPrecoNaAmazon||reparo.candidatos||0} — eles só ficam completos ao faturar.`}
+            </div>
+          )}
+        </div>
+        <button onClick={repararEspelho} disabled={reparando}
+          style={{flexShrink:0,background:'transparent',color:reparando?t.t3:t.blue,
+            border:`1px solid ${reparando?t.line2:(t.dark?'rgba(59,130,246,0.4)':'#93C5FD')}`,borderRadius:9,
+            padding:'9px 14px',fontSize:11.5,fontWeight:700,cursor:reparando?'default':'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:6}}>
+          <i className={`ti ${reparando?'ti-loader-2':'ti-download'}`} style={{fontSize:14,animation:reparando?'ora-spin 1s linear infinite':'none'}} aria-hidden="true"/>
+          {reparando?'Buscando na Amazon…':'Buscar o valor na Amazon'}
+        </button>
+        <style>{`@keyframes ora-spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    )}
+
     <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
       {/* ⚠️ "≈" quando parte do total é estimativa de pendente. O pendente entra
           aqui E no "a receber" — contá-lo de um lado só fazia a tabela exibir
