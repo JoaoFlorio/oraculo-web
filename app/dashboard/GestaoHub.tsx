@@ -2952,9 +2952,6 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
   const temOutras=linhas.some(l=>Math.abs(l.outrasTaxas||0)>0.005)
   const temDevolucao=linhas.some(l=>Math.abs(l.devolucao||0)>0.005)
   const temImposto=linhas.some(l=>Math.abs(l.imposto||0)>0.005)
-  // ⭐ Frete saiu do bruto (régua do Gestor) mas continua no líquido — precisa
-  // de coluna, senão a linha não fecha com ela mesma (régua nº29).
-  const temFrete=linhas.some(l=>Math.abs(l.frete||0)>0.005)
 
   const dt=(iso:string|null)=>{ if(!iso) return '—'; const x=new Date(iso); return isNaN(x.getTime())?'—':x.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',timeZone:'UTC'}) }
   // ⚠️ null NUNCA vira R$ 0,00. Zero diz "medi e deu zero"; traço diz "não tenho".
@@ -3051,7 +3048,10 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
                 ? `Não deu: ${reparo.erro||reparo.error||'erro'}`
                 : reparo.corrigidos>0
                   ? `✓ ${reparo.corrigidos} pedido${reparo.corrigidos>1?'s':''} com preço recuperado (+${brl2(reparo.brutoRecuperado||0)})${reparo.semPrecoNaAmazon>0?` · ${reparo.semPrecoNaAmazon} a Amazon também ainda não tem`:''}`
-                  : `A Amazon ainda não tem o preço de ${reparo.semPrecoNaAmazon||reparo.candidatos||0} — eles só ficam completos ao faturar.`}
+                  /* ⚠️ "de N" e não "os N do período": o reparo varre a conta
+                     INTEIRA, então esse número é maior que o do título e
+                     confundia ("6 pedidos" em cima, "19" embaixo). */
+                  : `A Amazon ainda não tem o preço de nenhum deles — nem dos ${reparo.semPrecoNaAmazon||reparo.candidatos||0} pendentes de outros períodos. Só ficam completos ao faturar.`}
             </div>
           )}
         </div>
@@ -3073,8 +3073,8 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       <CardTotal grande label="Total bruto" ponto={t.blue}
         valor={`${(R.totalBrutoEstimado||0)>0.005?'≈ ':''}${brl2(R.totalBruto||0)}`} hide={hide}
         sub={(R.totalBrutoEstimado||0)>0.005
-          ? `valor dos produtos vendidos · inclui ${brl2(R.totalBrutoEstimado)} ainda a faturar (≈)`
-          : 'valor dos produtos vendidos no período (sem o frete do comprador)'}/>
+          ? `o que o comprador pagou · inclui ${brl2(R.totalBrutoEstimado)} ainda a faturar (≈)`
+          : 'o que o comprador pagou nas vendas do período'}/>
       <CardTotal grande label="Total a receber dos marketplaces" ponto={t.grn}
         // ⚠️ "≥" quando há pedido sem estimativa: o total vira PISO, e omitir
         // isso seria anunciar como completo um número que não é.
@@ -3177,10 +3177,9 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       {/* A base é o mínimo pra tabela não espremer; cada coluna condicional soma o
           que ela ocupa. ⚠️ Diferença é a ÚLTIMA e a mais importante — 60px a mais
           na base a empurravam pra fora da tela em laptop com o menu aberto. */}
-      <Table minWidth={1040+(temOutras?80:0)+(temDevolucao?90:0)+(temImposto?80:0)+(temFrete?75:0)}
+      <Table minWidth={1040+(temOutras?80:0)+(temDevolucao?90:0)+(temImposto?80:0)}
         head={[{label:'Pedido',w:'16%'},{label:'SKU',w:'12%'},
         {label:'Bruto',right:true},
-        ...(temFrete?[{label:'Frete',right:true}]:[]),
         ...(temImposto?[{label:'Imposto',right:true}]:[]),
         {label:'Comissão',right:true},{label:'Logística',right:true},
         ...(temOutras?[{label:'Outras',right:true}]:[]),
@@ -3217,7 +3216,6 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
                       : <span style={{color:t.t3}} title="Pedido ainda pendente — a Amazon só informa o valor da venda ao faturar.">a faturar</span>)
                   : val(l.bruto ?? l.brutoVenda)}
               </NumTd>
-              {temFrete && <NumTd hide={hide}>{val(l.frete)}</NumTd>}
               {temImposto && <NumTd hide={hide}>{val(l.imposto)}</NumTd>}
               <NumTd hide={hide}>{val(l.comissao,t.red)}</NumTd>
               <NumTd hide={hide}>{val(l.logistica,t.red)}</NumTd>
