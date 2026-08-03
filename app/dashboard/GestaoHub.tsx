@@ -1345,14 +1345,27 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
               no frete grátis a Amazon COBRA o frete do comprador e devolve pelo
               desconto — os dois se anulam e o líquido é ZERO. Somá-lo ao cupom
               mostraria um custo que não existe. Medido em 59 pedidos. */}
-          {(p?.descontoProduto||0)>0.005 && (
-            /* ⚠️ SEM % AQUI. Este card soma o PERÍODO, então qualquer razão vira
-               média ponderada: 100 unidades vendidas antes do cupom + 100 depois
-               mostrariam 2,5% onde o seller configurou 5%. A % exata aparece no
-               PEDIDO, onde é medida sobre uma venda só. */
-            <Row label="Cupom / oferta" val={p.descontoProduto} sign="-" color={t.gold} hide={hide}
+          {/* ⚠️ SEM % AQUI. Este card soma o PERÍODO, então qualquer razão vira
+              média ponderada: 100 unidades vendidas antes do cupom + 100 depois
+              mostrariam 2,5% onde o seller configurou 5%. A % exata aparece no
+              PEDIDO, onde é medida sobre uma venda só.
+              ⭐ E QUEBRADO POR TIPO quando o repasse já ensinou o que aquele
+              `PromotionId` é (Cupom, Oferta relâmpago…). O que ele ainda não
+              ensinou cai no "Cupom / oferta" genérico — rotular por descarte
+              seria chute sobre o dinheiro do seller. */}
+          {Object.entries(p?.descontoPorTipo||{}).map(([nome,v]:[string,any])=>(Number(v)>0.005)?(
+            <Row key={nome} label={nome} val={Number(v)} sign="-" color={t.gold} hide={hide}
                  nota="desconto que você concedeu — este dinheiro não entrou"/>
-          )}
+          ):null)}
+          {(()=>{
+            const classificado=Object.values(p?.descontoPorTipo||{}).reduce((a:number,b:any)=>a+(Number(b)||0),0)
+            const resto=Math.round(((p?.descontoProduto||0)-classificado)*100)/100
+            if(!(resto>0.005)) return null
+            return <Row label="Cupom / oferta" val={resto} sign="-" color={t.gold} hide={hide}
+                     nota={classificado>0.005
+                       ? 'o tipo destas ainda não veio no repasse'
+                       : 'desconto que você concedeu — este dinheiro não entrou'}/>
+          })()}
           {(p?.descontoFrete||0)>0.005 && (
             /* ⚠️ O texto AFIRMAVA "os dois se anulam, custo líquido zero" — e a
                tela nunca compara este valor com o frete que foi cobrado. Quando
