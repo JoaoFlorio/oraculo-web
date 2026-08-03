@@ -12,6 +12,7 @@ import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, lucroDoPeriodo,
 import { maturidadeDoPeriodo, type SeloMaturidade } from '@/lib/maturidadePeriodo'
 import { snapshotDoPeriodo, narrarMudancas, reconciliar, normalizarMarcos, chaveDoPeriodo, type SnapshotPeriodo, type MarcosPeriodo, type Diario, type Reconciliacao } from '@/lib/diarioPeriodo'
 import { GRUPOS, TELA_INICIAL, grupoDaTab, grupoPorId, telaAoEntrarNoGrupo, tabPorId } from '@/lib/navegacaoGestao'
+import { totaisDoEstoque, valorDeVenda, valorDeMercadoria } from '@/lib/estoqueFba'
 
 const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#888'}}>Carregando DRE…</div>})
 
@@ -2686,21 +2687,28 @@ function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realD
     for(const p of (realDre?.produtos||[])) vendaPorSku[p.sku]=p.units
     const from=realDre?.period?.from, to=realDre?.period?.to
     const days = from&&to ? Math.max(1,Math.round((Date.parse(to)-Date.parse(from))/86400000)) : 30
-    // ── KPIs do estoque (topo) — só dados reais: preço médio do período (realDre) e custo do Gerenciamento ──
-    const unidadesEstoque = itens.reduce((s,it)=>s+(it.fulfillable||0),0)
-    const precoPorSku:Record<string,number> = {}
-    for(const p of (realDre?.produtos||[])) if((p.units||0)>0 && (p.receita||0)>0) precoPorSku[p.sku]=p.receita/p.units
-    let vendaProj=0, semPreco=0
-    for(const it of itens){
-      const preco=precoPorSku[it.sku]
-      if(preco!=null) vendaProj+=(it.fulfillable||0)*preco
-      else if((it.fulfillable||0)>0) semPreco++   // sem venda no período → sem preço → fica fora (nada de preço inventado)
-    }
-    const capital = itens.reduce((s,it)=>s+(it.fulfillable||0)*(costs[it.sku]||0),0)
-    const temCusto = itens.some(it=>(costs[it.sku]||0)>0)
-    // SKUs com estoque mas SEM custo definido: o capital exibido é parcial — avisa
-    const semCusto = itens.filter(it=>(it.fulfillable||0)>0 && !((costs[it.sku]||0)>0)).length
+    /* ── KPIs do estoque (topo) ────────────────────────────────────────────────
+     *
+     * 🚨 A "Venda projetada" era o PREÇO MÉDIO DO PERÍODO (receita ÷ unidades da
+     * DRE) × unidades em estoque. Com o filtro em "Hoje" — que é o padrão da
+     * tela — só quem vendeu HOJE tinha preço, e todo o resto do estoque sumia da
+     * conta: a tela do João mostrava R$ 8.341 de um estoque de R$ 30.141, com
+     * "7 SKUs sem preço no período não somados" como se fosse detalhe. Não era
+     * detalhe: era quase todo o estoque. E o número que sobrava também não era o
+     * preço do produto, era a média de quanto ele saiu (com cupom, com frete
+     * grátis, com preço antigo) no recorte que o usuário clicou.
+     *
+     * Agora é o PREÇO DO ANÚNCIO × unidades disponíveis, que é a pergunta que a
+     * tela faz: "quanto vale o que eu tenho no armazém se vender pelo preço de
+     * hoje?". O preço vem da Listings API pelo backend e não depende de filtro
+     * nenhum — igual à cobertura, que já tinha saído do período pelo mesmo
+     * motivo. */
+    const {unidades:unidadesEstoque,custoTotal:capital,valorVenda:vendaProj,liquido,semPreco,semCusto}
+      = totaisDoEstoque(itens,costs,!!inv.taxasCompletas)
     const noteStyle:React.CSSProperties={fontSize:10,color:t.t3,marginTop:5,textAlign:'center' as const,fontFamily:FG,lineHeight:1.3}
+    // 9 colunas: sem min-width o `tableLayout:fixed` espreme tudo em tela média,
+    // como já aconteceu na Curva ABC. Com ele, a tabela ROLA em vez de esmagar.
+    const LARGURA_MIN=1020
     return(<>
       {!inv.error && (
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:13,marginBottom:16,alignItems:'start'}}>
@@ -2708,23 +2716,28 @@ function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realD
             <KPI label="Unidades em estoque" value={String(unidadesEstoque)} color={t.blue} hide={hide}/>
           </div>
           <div>
-            <KPI label="Venda projetada do estoque" value={brl2(vendaProj)} color={t.grn} hide={hide}/>
-            {semPreco>0 && <div style={noteStyle}>{semPreco} SKU{semPreco>1?'s':''} sem preço no período não somado{semPreco>1?'s':''}</div>}
+            <KPI label="Custo total em estoque" value={capital!=null?brl2(capital):'—'} color={t.gold} hide={hide}/>
+            {capital==null && <div style={noteStyle}>Defina os custos em Gerenciamento</div>}
+            {capital!=null && semCusto>0 && <div style={noteStyle}>{semCusto} SKU{semCusto>1?'s':''} sem custo não somado{semCusto>1?'s':''}</div>}
           </div>
           <div>
-            <KPI label="Capital em estoque (custo)" value={temCusto?brl2(capital):'—'} color={t.gold} hide={hide}/>
-            {!temCusto && <div style={noteStyle}>Defina os custos em Gerenciamento</div>}
-            {temCusto && semCusto>0 && <div style={noteStyle}>{semCusto} SKU{semCusto>1?'s':''} sem custo não somado{semCusto>1?'s':''}</div>}
+            <KPI label="Valor previsto de venda" value={vendaProj!=null?brl2(vendaProj):'—'} color={t.grn} hide={hide}/>
+            {vendaProj==null && <div style={noteStyle}>buscando o preço dos seus anúncios na Amazon</div>}
+            {vendaProj!=null && semPreco>0 && <div style={noteStyle}>{semPreco} SKU{semPreco>1?'s':''} sem anúncio ativo não somado{semPreco>1?'s':''}</div>}
+          </div>
+          <div>
+            <KPI label="Líq. Marketplace previsto" value={liquido!=null?brl2(liquido):'—'} color={t.blue} hide={hide}/>
+            <div style={noteStyle}>{liquido!=null?'já sem comissão e tarifa FBA da Amazon':'medindo a tarifa dos produtos — volte em alguns minutos'}</div>
           </div>
         </div>
       )}
-      <Hint>Estoque FBA real · cobertura estimada pela velocidade de venda · alerta de ruptura e excesso.</Hint>
+      <Hint>Estoque FBA real · <b>valor de venda</b> pelo preço do anúncio × disponíveis · <b>valor de mercadoria</b> pelo seu CMV × disponíveis · cobertura pela velocidade dos últimos 14 dias. Nenhum dos dois depende do período selecionado.</Hint>
       {inv.error ? (
         <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Estoque FBA temporariamente indisponível (verificando permissão da API).</div>
       ) : itens.length===0 ? (
         <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhum item em estoque FBA.</div>
       ) : (
-        <Table head={[{label:'Produto',w:'40%'},{label:'FBA disp.',right:true},{label:'A caminho',right:true},{label:'Reservado',right:true},{label:'Cobertura',right:true},{label:'Status',right:true}]}>
+        <Table minWidth={LARGURA_MIN} head={[{label:'Produto',w:'26%'},{label:'Valor de venda',right:true},{label:'Valor de mercadoria',right:true},{label:'Disponíveis',right:true},{label:'A caminho',right:true},{label:'Reservado',right:true},{label:'Impedidas',right:true},{label:'Cobertura',right:true},{label:'Status',right:true}]}>
           {itens.map((it,i)=>{
             // ⚠️ Velocidade dos 14 dias, vinda do backend — MESMA fonte do NEO.
             // Era "unidades do período ÷ dias do período": no filtro "Hoje" isso é
@@ -2734,11 +2747,18 @@ function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realD
             const cob = vel>0 ? Math.round(it.fulfillable/vel) : null
             const k = it.fulfillable<=0?'red':(cob!=null&&cob<10)?'red':(cob!=null&&cob>120)?'gold':'grn'
             const lbl = it.fulfillable<=0?'Ruptura':(cob!=null&&cob<10)?'Baixo':(cob!=null&&cob>120)?'Excesso':'Saudável'
+            // As duas colunas do topo, abertas por produto — MESMAS funções que
+            // somam os cards, pra tabela e card não poderem divergir.
+            const vVenda=valorDeVenda(it)
+            const vMerc=valorDeMercadoria(it,costs[it.sku]||0)
             return(<tr key={i}>
               <ProdCell p={{id:it.sku,image:it.image,name:it.name||it.sku,sku:it.sku}}/>
+              <NumTd color={t.grn} hide={hide}>{vVenda!=null?brl2(vVenda):'—'}</NumTd>
+              <NumTd color={t.gold} hide={hide}>{vMerc!=null?brl2(vMerc):'—'}</NumTd>
               <NumTd strong>{it.fulfillable}</NumTd>
               <NumTd color={t.t2}>{it.inbound}</NumTd>
               <NumTd color={t.t2}>{it.reserved}</NumTd>
+              <NumTd color={(it.unavailable||0)>0?t.red:t.t2}>{it.unavailable||0}</NumTd>
               <NumTd>{cob!=null?`${cob} dias`:'—'}</NumTd>
               <PillTd><Pill kind={k}>{lbl}</Pill></PillTd>
             </tr>)
