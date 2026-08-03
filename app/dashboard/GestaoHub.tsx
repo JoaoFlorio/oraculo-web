@@ -2955,11 +2955,12 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
       ...explic.slice(0,40).map(linha),
       ...(explic.length>40?[`… e mais ${explic.length-40}`]:[]),
       '',
-      `TAXAS FORA DO PADRÃO — comissão/FBA vs a mediana do próprio SKU (${taxaFora.length}):`,
+      `TAXAS FORA DO PADRÃO — tarifa FBA vs a mediana do próprio SKU/canal/qtd/tabela (${taxaFora.length}):`,
       ...(taxaFora.length?taxaFora.slice(0,40).map((l:any)=>
         `• ${l.orderId} [${(l.skus||[]).join(',')}] ` +
         (l.causasTaxa||[]).map((c:any)=>`${c.rotulo} ${f(c.valor)}`).join(' · ') +
-        (l.comissaoEsperada!=null?` | esperado com ${f(l.comissaoEsperada)} / log ${f(l.logisticaEsperada)} · cobrado com ${f(l.comissao)} / log ${f(l.logistica)}`:'')
+        // ⚠️ `logisticaFba` (tarifa sem o frete repassado) — é o que foi comparado.
+        (l.logisticaEsperada!=null?` | tarifa esperada ${f(l.logisticaEsperada)} · cobrada ${f(l.logisticaFba)}`:'')
       ):['(nenhuma — ou sem amostra por SKU pra afirmar)']),
     ].join('\n')
     if(copiarTexto(bloco)){ setCopiado(true); setTimeout(()=>setCopiado(false),2200) }
@@ -3011,14 +3012,18 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
      muda é só o aviso de "olhe aqui", com a conta no tooltip: o esperado, o
      cobrado e a diferença. Sem o esperado ao lado, marcar a célula seria pedir
      confiança cega. */
-  const marcaTaxa=(l:any,parcela:'comissao'|'logistica',dentro:React.ReactNode)=>{
+  const marcaTaxa=(l:any,parcela:'logistica',dentro:React.ReactNode)=>{
     const c=(l.causasTaxa||[]).find((x:any)=>x.parcela===parcela)
     if(!c) return dentro
-    const esperado=parcela==='comissao'?l.comissaoEsperada:l.logisticaEsperada
+    const esperado=l.logisticaEsperada
     const aMais=c.valor<0
+    /* ⚠️ `logisticaFba`, NÃO `logistica`: a comparação usa a TARIFA sem o frete
+       repassado. Mostrar `logistica` aqui daria um "cobrado" que não fecha com a
+       diferença ao lado — o erro nº11 de 01/08 (diagnóstico com números
+       diferentes da tela) nascendo de novo. */
     return(
       <button onClick={()=>setDetalhe(l)}
-        title={`Os outros pedidos deste produto pagam ${brl2(Math.abs(esperado||0))}; este pagou ${brl2(Math.abs(parcela==='comissao'?l.comissao:l.logistica))} — ${brl2(Math.abs(c.valor))} a ${aMais?'mais':'menos'}. Clique pra ver.`}
+        title={`Os outros pedidos deste produto pagam ${brl2(Math.abs(esperado||0))} de tarifa; este pagou ${brl2(Math.abs(l.logisticaFba??0))} — ${brl2(Math.abs(c.valor))} a ${aMais?'mais':'menos'}. Clique pra ver.`}
         style={{background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:'inherit',fontSize:'inherit',
           color:'inherit',textDecoration:'underline',textDecorationColor:'#A855F7',
           textDecorationStyle:'wavy' as const,textUnderlineOffset:3}}>
@@ -3369,7 +3374,7 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
                   menos", que é outra acusação. Aqui é "cobrou diferente do que
                   cobra nos outros pedidos deste produto" — vale olhar, não
                   necessariamente cobrar. */}
-              <NumTd hide={hide}>{marcaTaxa(l,'comissao',val(l.comissao,t.red))}</NumTd>
+              <NumTd hide={hide}>{val(l.comissao,t.red)}</NumTd>
               <NumTd hide={hide}>{marcaTaxa(l,'logistica',val(l.logistica,t.red))}</NumTd>
               {temOutras && <NumTd hide={hide}>{val(l.outrasTaxas,t.red)}</NumTd>}
               {temDevolucao && <NumTd hide={hide}>{val(l.devolucao,t.red)}</NumTd>}
@@ -3556,8 +3561,10 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
                   Fora do padrão dos outros pedidos deste produto
                 </div>
                 {detalhe.causasTaxa.map((c:any,i:number)=>{
-                  const esp=c.parcela==='comissao'?detalhe.comissaoEsperada:c.parcela==='logistica'?detalhe.logisticaEsperada:null
-                  const real=c.parcela==='comissao'?detalhe.comissao:c.parcela==='logistica'?detalhe.logistica:null
+                  // ⚠️ `logisticaFba` é o que foi COMPARADO. `logistica` traz o
+                  // frete repassado junto e não fecharia com a diferença acima.
+                  const esp=c.parcela==='logistica'?detalhe.logisticaEsperada:null
+                  const real=c.parcela==='logistica'?detalhe.logisticaFba:null
                   return(
                     <div key={i} style={{fontSize:12,color:t.t2,padding:'5px 0',borderTop:i?`1px solid ${t.line}`:'none'}}>
                       <div style={{display:'flex',alignItems:'center',gap:9}}>
@@ -3577,17 +3584,18 @@ function Conciliacao({connected,range,hide}:{connected?:boolean|null;range:{from
                   )
                 })}
                 <div style={{fontSize:10.5,color:t.t3,marginTop:8,lineHeight:1.55}}>
-                  ⚠️ Isto <b>não entra</b> na diferença acima: lá é o que o comprador pagou, aqui é o que a Amazon cobrou. Taxa fora do padrão costuma ter causa legítima (mudança de faixa de preço, de peso ou de tabela) — é onde <b>olhar</b>, não uma cobrança pronta.
+                  ⚠️ Isto <b>não entra</b> na diferença acima: lá é o que o comprador pagou, aqui é o que a Amazon cobrou. Tarifa fora do padrão costuma ter causa legítima (peso remedido, mudança de tabela, promoção que deixou de valer) — é onde <b>olhar</b>, não uma cobrança pronta.
                 </div>
               </div>
-            ) : detalhe.comissaoEsperada!=null ? (
+            ) : detalhe.logisticaEsperada!=null ? (
               <div style={{marginTop:10,fontSize:11,color:t.grn,display:'flex',alignItems:'center',gap:6}}>
                 <i className="ti ti-check" style={{fontSize:14}} aria-hidden="true"/>
-                Comissão e logística na régua dos outros pedidos deste produto.
+                Tarifa de logística na régua dos outros pedidos deste produto.
               </div>
             ) : (
               <div style={{marginTop:10,fontSize:10.5,color:t.t3,lineHeight:1.6}}>
-                Ainda <b>não dá pra dizer</b> se estas taxas estão fora do padrão: são precisos pelo menos 4 pedidos liquidados do mesmo produto (e de um SKU só) pra existir um padrão. Sem isso, qualquer comparação seria chute.
+                Ainda <b>não dá pra dizer</b> se a tarifa está fora do padrão: são precisos pelo menos 4 pedidos liquidados do mesmo produto, mesmo canal, mesma quantidade e da mesma tabela de tarifa. Sem isso, comparar seria chute.
+                {' '}A <b>comissão não é comparada</b> de propósito — ela varia legitimamente por faixa de preço e piso mínimo, e não temos como dizer quanto ela <i>deveria</i> ser.
               </div>
             )}
           </div>
