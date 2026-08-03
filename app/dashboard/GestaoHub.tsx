@@ -1264,6 +1264,8 @@ function ZoomBtn({onClick}:{onClick:()=>void}){
 // no agregado do período + a lista dos pedidos daquele produto (do Espelho Local).
 // Todos os rateios usam share de faturamento — reconcilia com o Top 15 e a DRE.
 function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajustes}:{produto:{sku:string;name:string;image?:string;asin?:string};realDre:any;adsReal?:any;costs:Record<string,number>;imposto:number;hide:boolean;onClose:()=>void;ajustes?:AjustePedido[]}){
+  // As campanhas classificadas no CONJUNTO — o rótulo de cada uma vem daqui.
+  const campanhas=realDre?.linhas?.descontoPorCampanha||[]
   const t=useT()
   const [orders,setOrders]=useState<any|null>(null)
   const p=(realDre?.produtos||[]).find((x:any)=>x.sku===produto.sku)
@@ -1345,25 +1347,31 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
               no frete grátis a Amazon COBRA o frete do comprador e devolve pelo
               desconto — os dois se anulam e o líquido é ZERO. Somá-lo ao cupom
               mostraria um custo que não existe. Medido em 59 pedidos. */}
-          {/* ⚠️ SEM % AQUI. Este card soma o PERÍODO, então qualquer razão vira
-              média ponderada: 100 unidades vendidas antes do cupom + 100 depois
-              mostrariam 2,5% onde o seller configurou 5%. A % exata aparece no
-              PEDIDO, onde é medida sobre uma venda só.
-              ⭐ E QUEBRADO POR TIPO quando o repasse já ensinou o que aquele
-              `PromotionId` é (Cupom, Oferta relâmpago…). O que ele ainda não
-              ensinou cai no "Cupom / oferta" genérico — rotular por descarte
-              seria chute sobre o dinheiro do seller. */}
-          {Object.entries(p?.descontoPorTipo||{}).map(([nome,v]:[string,any])=>(Number(v)>0.005)?(
-            <Row key={nome} label={nome} val={Number(v)} sign="-" color={t.gold} hide={hide}
-                 nota="desconto que você concedeu — este dinheiro não entrou"/>
-          ):null)}
+          {/* ⭐ AS CAMPANHAS, com o que CADA UMA é — medido, não configurado.
+              O rótulo ("Desconto de 5%", "Desconto de R$ 10,00", ou só
+              "Desconto") sai da medição do conjunto de pedidos daquela campanha;
+              o VALOR é o pedaço que caiu neste produto.
+              ⚠️ Nada de % escrita no código: cada seller configura o que quer, em
+              percentual ou valor fixo, com quantos SKUs quiser. Medido na base:
+              taxas de 5%, 6%, 7%, 8%, 10% e 15%, campanhas de 1 a 32 produtos.
+              ⚠️ E quando o dado não permite dizer (produto vendido sempre pelo
+              mesmo preço, onde "5%" e "R$5,00" descrevem o MESMO número), o
+              rótulo é só "Desconto" — 64 das 103 campanhas reais estão aí. */}
+          {(p?.campanhas||[]).map((c:any)=>{
+            const info=(campanhas||[]).find((x:any)=>x.id===c.id)
+            return (c.valor>0.005)?(
+              <Row key={c.id} label={info?.rotulo||'Desconto'} val={c.valor} sign="-" color={t.gold} hide={hide}
+                   nota={info?.produtos>1?`campanha em ${info.produtos} produtos — este dinheiro não entrou`
+                                          :'desconto que você concedeu — este dinheiro não entrou'}/>
+            ):null
+          })}
           {(()=>{
-            const classificado=Object.values(p?.descontoPorTipo||{}).reduce((a:number,b:any)=>a+(Number(b)||0),0)
-            const resto=Math.round(((p?.descontoProduto||0)-classificado)*100)/100
+            const emCampanha=(p?.campanhas||[]).reduce((a:number,c:any)=>a+(Number(c.valor)||0),0)
+            const resto=Math.round(((p?.descontoProduto||0)-emCampanha)*100)/100
             if(!(resto>0.005)) return null
             return <Row label="Cupom / oferta" val={resto} sign="-" color={t.gold} hide={hide}
-                     nota={classificado>0.005
-                       ? 'o tipo destas ainda não veio no repasse'
+                     nota={emCampanha>0.005
+                       ? 'desconto sem campanha identificada pela Amazon'
                        : 'desconto que você concedeu — este dinheiro não entrou'}/>
           })()}
           {(p?.descontoFrete||0)>0.005 && (
