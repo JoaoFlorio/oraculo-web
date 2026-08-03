@@ -559,6 +559,12 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
         <span style={{fontSize:13.5,fontWeight:600,color:t.t1}}>DRE Real — sua conta Amazon</span>
         <span style={{fontSize:10.5,color:t.t3}}>· ao vivo da Finances API</span>
       </div>
+      {/* ⚠️ NÃO acrescentar linha aqui: `RealDRECard` NÃO É RENDERIZADO em lugar
+          nenhum (nenhum `<RealDRECard`, nos dois repos). Eu cheguei a escrever a
+          decomposição do cupom aqui e o revisor pegou — código morto novo é pior
+          que código morto velho: dá a impressão de que a tela mudou. A
+          decomposição vive no modal do produto e na aba Pedidos, que é onde o
+          cliente olha. */}
       <Row label="Receita bruta" val={L.receitaBruta}/>
       {(L.promocoes||0)>0.005 && <Row label="Desconto que você deu" val={L.promocoes} color={t.gold}/>}
       <Row label="Devoluções" val={L.devolucoes} sign="-" color={t.red}/>
@@ -660,7 +666,12 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
       // (rótulo + porquê + ação) aplicada aos KPIs.
       kpis:[
         {label:'Faturamento',value:brl2(fat),icon:'ti-cash',color:t.vio,
-          tip:`Tudo que você vendeu no período, já líquido de cupom/desconto concedido.${devolucoesVal>0.005?`\nDevoluções: −${brl2(devolucoesVal)} → líquido de devolução: ${brl2(Math.max(0,fat-devolucoesVal))}.`:''}\nA devolução aparece como linha própria e já desconta do Lucro — aqui fica o bruto pra você ver o volume real de venda.`},
+          /* ⚠️ Este texto dizia "já líquido de cupom/desconto concedido" e ERA
+             FALSO: o cupom nunca era lido (o relatório da Amazon é cego a ele),
+             então o faturamento saía CHEIO e o lucro alto pelo mesmo valor.
+             Agora é verdade para toda venda que o Oráculo enxergou o desconto —
+             e as linhas da DRE mostram quanto foi. */
+          tip:`Tudo que você vendeu no período, já líquido do desconto que a Amazon informou (cupom, oferta, frete grátis) — a DRE abre cada parcela.${devolucoesVal>0.005?`\nDevoluções: −${brl2(devolucoesVal)} → líquido de devolução: ${brl2(Math.max(0,fat-devolucoesVal))}.`:''}\nA devolução aparece como linha própria e já desconta do Lucro — aqui fica o bruto pra você ver o volume real de venda.`},
         {label:'Líq. do Marketplace',value:brl2(liq),icon:'ti-building-bank',color:t.blue,
           tip:'O que sobra DA VENDA depois da parte da Amazon: comissão, tarifa FBA, Taxa Amazon pra Todos, armazenagem, assinatura e devoluções. Ainda não desconta seu custo de produto, imposto nem ads.'},
         {label:'Lucro Bruto',value:cm?brl2(lucroBruto):dash,icon:'ti-trending-up',color:t.grn,
@@ -1059,6 +1070,31 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
                 linha inteira ia pra "—" e escondia o que a gente sabe do outro.
                 Mostra o que foi medido e marca como parcial — some o número
                 incompleto, não o número inteiro. */}
+            {/* ⭐ "POR QUE MEU ANÚNCIO SAIU MAIS BARATO?", no pedido.
+                O preço que o anúncio pedia vem PRIMEIRO e o desconto aparece
+                nomeado — o cliente liga um cupom de 5%, esquece, e hoje vê só o
+                número final. `tabela − desconto = Total dos itens`, por construção.
+                Só aparece quando houve desconto: linha sempre igual é ruído. */}
+            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && (
+              /* ⚠️ SEM sinal: com "+" aqui e "+" no "Total dos itens" logo abaixo, a
+                 coluna deixa de somar — o olho lê duas entradas de receita onde há
+                 uma só. O preço de tabela é o PONTO DE PARTIDA, não uma parcela. */
+              <LinhaPedido t={t} icone="ti-tag" cor={t.t2} rotulo="Preço de tabela" valor={pedido.precoTabela} hide={hide}/>
+            )}
+            {/* ⚠️ CUPOM e FRETE GRÁTIS separados: no frete grátis a Amazon cobra o
+                frete do comprador e devolve por aqui — os dois se anulam e o
+                líquido é ZERO. Juntá-los mostraria um custo que não existe. */}
+            {(pedido?.desconto?.produto||0)>0.005 && (
+              <LinhaPedido t={t} icone="ti-discount-2" cor={t.gold}
+                rotulo={`Cupom / oferta${pedido.desconto.pctProduto?` (${String(pedido.desconto.pctProduto).replace('.',',')}%)`:''}`}
+                valor={pedido.desconto.produto} sinal="-" hide={hide}/>
+            )}
+            {(pedido?.desconto?.frete||0)>0.005 && (
+              <LinhaPedido t={t} icone="ti-truck" cor={t.t3} rotulo="Frete grátis (se anula)" valor={pedido.desconto.frete} sinal="-" hide={hide}/>
+            )}
+            {pedido?.desconto?.produto==null && (pedido?.desconto?.total||0)>0.005 && (
+              <LinhaPedido t={t} icone="ti-discount-2" cor={t.gold} rotulo="Desconto que você deu" valor={pedido.desconto.total} sinal="-" hide={hide}/>
+            )}
             <LinhaPedido t={t} icone="ti-shopping-cart" cor={t.grn} rotulo="Total dos itens" valor={todosSemPreco?null:tot.receita} sinal="+" hide={hide}/>
             <LinhaPedido t={t} icone="ti-percentage" cor={t.red} rotulo="Comissão" valor={tot.comissao} sinal="-" hide={hide} parcial={algumSemFee}/>
             <LinhaPedido t={t} icone="ti-package" cor={t.red} rotulo="Taxa FBA" valor={tot.fba} sinal="-" hide={hide} parcial={algumSemFee}/>
@@ -1271,12 +1307,45 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
 
         {/* Waterfall — tudo que é descontado até a margem final */}
         <div style={{background:t.dark?'rgba(255,255,255,0.02)':'#FAFBFC',border:`1px solid ${t.line}`,borderRadius:12,padding:'14px 16px',marginBottom:16}}>
+          {/* ⭐ "POR QUE MEU ANÚNCIO SAIU MAIS BARATO?" — a resposta, aberta.
+              O cliente liga um cupom de 5%, esquece, vê a venda por menos e
+              conclui que a ferramenta errou. Agora o preço que o anúncio pedia
+              vem PRIMEIRO e o desconto aparece como dedução nomeada, com a %.
+              A identidade fecha por construção: tabela − desconto = Faturado. */}
+          {(p?.precoTabela||0) > (M.receitaBruta||0) + 0.005 && (
+            <Row label={`Preço de tabela (${units} un.)`} val={p.precoTabela} hide={hide}
+                 nota="o que o anúncio pedia, antes do desconto"/>
+          )}
+          {/* ⚠️ CUPOM e FRETE GRÁTIS em linhas SEPARADAS, e isso não é preciosismo:
+              no frete grátis a Amazon COBRA o frete do comprador e devolve pelo
+              desconto — os dois se anulam e o líquido é ZERO. Somá-lo ao cupom
+              mostraria um custo que não existe. Medido em 59 pedidos. */}
+          {(p?.descontoProduto||0)>0.005 && (
+            <Row label={`Cupom / oferta${p.descontoProdutoPct?` (${String(p.descontoProdutoPct).replace('.',',')}%)`:''}`}
+                 val={p.descontoProduto} sign="-" color={t.gold} hide={hide}
+                 nota="desconto que você concedeu — este dinheiro não entrou"/>
+          )}
+          {(p?.descontoFrete||0)>0.005 && (
+            <Row label="Frete grátis" val={p.descontoFrete} sign="-" color={t.t3} hide={hide}
+                 nota="a Amazon cobra o frete do comprador e devolve por aqui: os dois se anulam, custo líquido zero"/>
+          )}
+          {/* Desconto de pedido antigo, sem a divisão gravada. Uma linha só —
+              dividir sem o dado seria chute, e chute aqui inventa um custo. */}
+          {(p?.descontoIndiviso||0)>0.005 && (
+            <Row label="Desconto que você deu" val={p.descontoIndiviso} sign="-" color={t.gold} hide={hide}
+                 nota="cupom, promoção ou frete grátis — pedido antigo, sem a separação gravada"/>
+          )}
+          {/* ⚠️ COMPAT: snapshot gravado ANTES desta versão não tem a quebra. Sem
+              este fallback o desconto simplesmente SUMIA da tela até o payload
+              revalidar — some a linha, some a explicação, e o cliente volta a
+              perguntar por que o número não bate. */}
+          {p?.precoTabela===undefined && (p?.promo||0)>0.005 && (
+            <Row label="Desconto que você deu" val={p.promo} sign="-" color={t.gold} hide={hide}
+                 nota="cupom, promoção ou frete grátis"/>
+          )}
           <Row label={`Faturado (${units} un.)`} val={M.receitaBruta} strong hide={hide}
+               sign={(p?.precoTabela||0) > (M.receitaBruta||0) + 0.005 ? '=' : undefined}
                nota={semPreco>0?`+${semPreco} un. que a Amazon ainda não precificou — fora da conta, não zeradas`:undefined}/>
-          {/* ⭐ O desconto que o SELLER deu. Já estava descontado da receita acima,
-              mas invisível: ele dava cupom e não sabia quanto tinha dado. */}
-          {(p?.promo||0)>0.005 && <Row label="Desconto que você deu" val={p.promo} color={t.gold} hide={hide}
-               nota="cupom, promoção ou frete grátis — já descontado do Faturado acima"/>}
           {M.devolucaoValor>0.005 && <Row label={`Devoluções (${M.devolucaoUnits} un.)`} val={M.devolucaoValor} sign="-" color={t.red} hide={hide}
                nota="estorno real do repasse — o custo dessas unidades também sai do CMV"/>}
           <Row label="Comissão Amazon" val={M.comissao} sign="-" color={t.red} hide={hide}
