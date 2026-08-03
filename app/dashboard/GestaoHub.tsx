@@ -671,7 +671,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
              então o faturamento saía CHEIO e o lucro alto pelo mesmo valor.
              Agora é verdade para toda venda que o Oráculo enxergou o desconto —
              e as linhas da DRE mostram quanto foi. */
-          tip:`Tudo que você vendeu no período, já líquido do desconto que a Amazon informou (cupom, oferta, frete grátis) — a DRE abre cada parcela.${devolucoesVal>0.005?`\nDevoluções: −${brl2(devolucoesVal)} → líquido de devolução: ${brl2(Math.max(0,fat-devolucoesVal))}.`:''}\nA devolução aparece como linha própria e já desconta do Lucro — aqui fica o bruto pra você ver o volume real de venda.`},
+          tip:`Tudo que você vendeu no período, já líquido de todo desconto que o Oráculo enxergou (cupom, oferta, frete grátis).\n⚠️ Cupom em venda ANTIGA pode não estar aqui: a Amazon só informa o desconto pela API de pedidos, e o histórico só ganha esse dado quando é reprocessado.${devolucoesVal>0.005?`\nDevoluções: −${brl2(devolucoesVal)} → líquido de devolução: ${brl2(Math.max(0,fat-devolucoesVal))}.`:''}\nA devolução aparece como linha própria e já desconta do Lucro — aqui fica o bruto pra você ver o volume real de venda.`},
         {label:'Líq. do Marketplace',value:brl2(liq),icon:'ti-building-bank',color:t.blue,
           tip:'O que sobra DA VENDA depois da parte da Amazon: comissão, tarifa FBA, Taxa Amazon pra Todos, armazenagem, assinatura e devoluções. Ainda não desconta seu custo de produto, imposto nem ads.'},
         {label:'Lucro Bruto',value:cm?brl2(lucroBruto):dash,icon:'ti-trending-up',color:t.grn,
@@ -1075,27 +1075,44 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
                 nomeado — o cliente liga um cupom de 5%, esquece, e hoje vê só o
                 número final. `tabela − desconto = Total dos itens`, por construção.
                 Só aparece quando houve desconto: linha sempre igual é ruído. */}
-            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && (
+            {/* ⚠️ `algumEstimado` fora: `pedido.precoTabela` vem do espelho (só
+                preço REAL) e `tot.receita` é calculado no front, que ESTIMA o item
+                pendente. Com fontes diferentes dos dois lados a subtração não
+                fecha — e uma decomposição que não fecha é pior que nenhuma. */}
+            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && !algumEstimado && (
               /* ⚠️ SEM sinal: com "+" aqui e "+" no "Total dos itens" logo abaixo, a
                  coluna deixa de somar — o olho lê duas entradas de receita onde há
                  uma só. O preço de tabela é o PONTO DE PARTIDA, não uma parcela. */
-              <LinhaPedido t={t} icone="ti-tag" cor={t.t2} rotulo="Preço de tabela" valor={pedido.precoTabela} hide={hide}/>
+              <LinhaPedido t={t} icone="ti-tag" cor={t.t2} rotulo="Antes do desconto" valor={pedido.precoTabela} hide={hide}/>
             )}
             {/* ⚠️ CUPOM e FRETE GRÁTIS separados: no frete grátis a Amazon cobra o
                 frete do comprador e devolve por aqui — os dois se anulam e o
                 líquido é ZERO. Juntá-los mostraria um custo que não existe. */}
-            {(pedido?.desconto?.produto||0)>0.005 && (
+            {/* ⚠️ TODAS presas à MESMA âncora da linha de cima. Sem isso, num
+                pedido com item pendente (preço estimado no front, `precoTabela` 0
+                no backend) a dedução aparecia ÓRFÃ: uma subtração no meio de uma
+                lista aritmética, sem a linha de onde ela sai. */}
+            {/* ⚠️ `algumEstimado` fora: `pedido.precoTabela` vem do espelho (só
+                preço REAL) e `tot.receita` é calculado no front, que ESTIMA o item
+                pendente. Com fontes diferentes dos dois lados a subtração não
+                fecha — e uma decomposição que não fecha é pior que nenhuma. */}
+            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && !algumEstimado && (pedido?.desconto?.produto||0)>0.005 && (
               <LinhaPedido t={t} icone="ti-discount-2" cor={t.gold}
                 rotulo={`Cupom / oferta${pedido.desconto.pctProduto?` (${String(pedido.desconto.pctProduto).replace('.',',')}%)`:''}`}
                 valor={pedido.desconto.produto} sinal="-" hide={hide}/>
             )}
-            {(pedido?.desconto?.frete||0)>0.005 && (
-              <LinhaPedido t={t} icone="ti-truck" cor={t.t3} rotulo="Frete grátis (se anula)" valor={pedido.desconto.frete} sinal="-" hide={hide}/>
+            {/* ⚠️ `algumEstimado` fora: `pedido.precoTabela` vem do espelho (só
+                preço REAL) e `tot.receita` é calculado no front, que ESTIMA o item
+                pendente. Com fontes diferentes dos dois lados a subtração não
+                fecha — e uma decomposição que não fecha é pior que nenhuma. */}
+            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && !algumEstimado && (pedido?.desconto?.frete||0)>0.005 && (
+              <LinhaPedido t={t} icone="ti-truck" cor={t.t3} rotulo="Desconto de frete" valor={pedido.desconto.frete} sinal="-" hide={hide}/>
             )}
-            {pedido?.desconto?.produto==null && (pedido?.desconto?.total||0)>0.005 && (
+            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && !algumEstimado && pedido?.desconto?.produto==null && (pedido?.desconto?.total||0)>0.005 && (
               <LinhaPedido t={t} icone="ti-discount-2" cor={t.gold} rotulo="Desconto que você deu" valor={pedido.desconto.total} sinal="-" hide={hide}/>
             )}
-            <LinhaPedido t={t} icone="ti-shopping-cart" cor={t.grn} rotulo="Total dos itens" valor={todosSemPreco?null:tot.receita} sinal="+" hide={hide}/>
+            <LinhaPedido t={t} icone="ti-shopping-cart" cor={t.grn} rotulo="Total dos itens" valor={todosSemPreco?null:tot.receita}
+              sinal={(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco ? "=" : "+"} hide={hide}/>
             <LinhaPedido t={t} icone="ti-percentage" cor={t.red} rotulo="Comissão" valor={tot.comissao} sinal="-" hide={hide} parcial={algumSemFee}/>
             <LinhaPedido t={t} icone="ti-package" cor={t.red} rotulo="Taxa FBA" valor={tot.fba} sinal="-" hide={hide} parcial={algumSemFee}/>
             {tot.imp>0.005 && <LinhaPedido t={t} icone="ti-receipt-tax" cor={t.red} rotulo="Imposto" valor={tot.imp} sinal="-" hide={hide}/>}
@@ -1215,7 +1232,10 @@ function CaixaInfo({t,rotulo,valor,custom}:{t:Theme;rotulo:string;valor:string;c
     </div>
   )
 }
-function LinhaPedido({t,icone,cor,rotulo,valor,sinal,forte,hide,parcial}:{t:Theme;icone:string;cor:string;rotulo:string;valor:number|null;sinal?:'+'|'-';forte?:boolean;hide:boolean;parcial?:boolean}){
+/* ⚠️ `sinal` aceita '=' desde 03/08: com a decomposição do desconto, "Antes do
+   desconto" e "Total dos itens" ficavam os DOIS com '+' e a coluna deixava de
+   somar até o lucro — o olho lia duas entradas de receita onde há uma só. */
+function LinhaPedido({t,icone,cor,rotulo,valor,sinal,forte,hide,parcial}:{t:Theme;icone:string;cor:string;rotulo:string;valor:number|null;sinal?:'+'|'-'|'=';forte?:boolean;hide:boolean;parcial?:boolean}){
   return(
     <div style={{display:'flex',alignItems:'center',gap:10,padding:'7px 0'}}>
       <span style={{width:27,height:27,borderRadius:8,background:cor+(t.dark?'22':'1A'),display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
@@ -1313,21 +1333,33 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
               vem PRIMEIRO e o desconto aparece como dedução nomeada, com a %.
               A identidade fecha por construção: tabela − desconto = Faturado. */}
           {(p?.precoTabela||0) > (M.receitaBruta||0) + 0.005 && (
-            <Row label={`Preço de tabela (${units} un.)`} val={p.precoTabela} hide={hide}
-                 nota="o que o anúncio pedia, antes do desconto"/>
+            /* ⚠️ A NOTA DIZIA "o que o anúncio pedia" e ISSO ERA FALSO: o valor
+               inclui frete e embrulho (é `price + frete + embrulho`), então num
+               pedido com R$8,90 de frete o anúncio pedia 79,90 e a linha mostrava
+               88,80. Tem que somar assim — é o par exato do Faturado, senão a
+               identidade não fecha —, mas o texto precisa dizer o que o número É. */
+            <Row label={`Antes do desconto (${units} un.)`} val={p.precoTabela} hide={hide}
+                 nota="preço do anúncio + frete + embrulho, antes de qualquer desconto"/>
           )}
           {/* ⚠️ CUPOM e FRETE GRÁTIS em linhas SEPARADAS, e isso não é preciosismo:
               no frete grátis a Amazon COBRA o frete do comprador e devolve pelo
               desconto — os dois se anulam e o líquido é ZERO. Somá-lo ao cupom
               mostraria um custo que não existe. Medido em 59 pedidos. */}
           {(p?.descontoProduto||0)>0.005 && (
-            <Row label={`Cupom / oferta${p.descontoProdutoPct?` (${String(p.descontoProdutoPct).replace('.',',')}%)`:''}`}
-                 val={p.descontoProduto} sign="-" color={t.gold} hide={hide}
+            /* ⚠️ SEM % AQUI. Este card soma o PERÍODO, então qualquer razão vira
+               média ponderada: 100 unidades vendidas antes do cupom + 100 depois
+               mostrariam 2,5% onde o seller configurou 5%. A % exata aparece no
+               PEDIDO, onde é medida sobre uma venda só. */
+            <Row label="Cupom / oferta" val={p.descontoProduto} sign="-" color={t.gold} hide={hide}
                  nota="desconto que você concedeu — este dinheiro não entrou"/>
           )}
           {(p?.descontoFrete||0)>0.005 && (
-            <Row label="Frete grátis" val={p.descontoFrete} sign="-" color={t.t3} hide={hide}
-                 nota="a Amazon cobra o frete do comprador e devolve por aqui: os dois se anulam, custo líquido zero"/>
+            /* ⚠️ O texto AFIRMAVA "os dois se anulam, custo líquido zero" — e a
+               tela nunca compara este valor com o frete que foi cobrado. Quando
+               se anulam, anulam mesmo; quando não, a afirmação seria falsa e o
+               cliente não teria como saber. Diz-se o que o dado sustenta. */
+            <Row label="Desconto de frete" val={p.descontoFrete} sign="-" color={t.t3} hide={hide}
+                 nota="abatido do frete que a Amazon cobrou do comprador — no frete grátis os dois se anulam"/>
           )}
           {/* Desconto de pedido antigo, sem a divisão gravada. Uma linha só —
               dividir sem o dado seria chute, e chute aqui inventa um custo. */}
@@ -1339,9 +1371,14 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
               este fallback o desconto simplesmente SUMIA da tela até o payload
               revalidar — some a linha, some a explicação, e o cliente volta a
               perguntar por que o número não bate. */}
+          {/* ⚠️ Payload antigo (servido de cache enquanto revalida) não tem a
+              decomposição. SEM âncora acima, a dedução ficava órfã — subtração no
+              meio de uma lista sem a linha de onde ela sai. Aqui ela vira
+              INFORMATIVA (sem sinal), porque neste payload o desconto já está
+              dentro do Faturado abaixo. */}
           {p?.precoTabela===undefined && (p?.promo||0)>0.005 && (
-            <Row label="Desconto que você deu" val={p.promo} sign="-" color={t.gold} hide={hide}
-                 nota="cupom, promoção ou frete grátis"/>
+            <Row label="Desconto que você deu" val={p.promo} color={t.gold} hide={hide}
+                 nota="cupom, promoção ou frete grátis — já dentro do Faturado abaixo"/>
           )}
           <Row label={`Faturado (${units} un.)`} val={M.receitaBruta} strong hide={hide}
                sign={(p?.precoTabela||0) > (M.receitaBruta||0) + 0.005 ? '=' : undefined}
