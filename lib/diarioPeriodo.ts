@@ -41,6 +41,27 @@
  */
 export interface ParcelasPeriodo {
   receitaBruta: number
+  /**
+   * ⭐ O QUE O ANÚNCIO PEDIA, antes de qualquer desconto — e o DESCONTO concedido.
+   * `precoTabela − desconto = receitaBruta`, por construção.
+   *
+   * 🚨 SEM AS DUAS, UMA CORREÇÃO DE DADO VIRA ACUSAÇÃO CONTRA A AMAZON. Em
+   * 03/08/2026 o Oráculo passou a enxergar o CUPOM, que nunca tinha sido lido (o
+   * relatório da Amazon é cego a ele). A receita de julho caiu R$439 na conta do
+   * dono — e o diário, que só via `receitaBruta`, narrava *"saíram R$439 de
+   * faturamento — venda cancelada ou devolvida deixou de contar"*. Nenhuma venda
+   * foi cancelada: o desconto é que passou a ser contado, e o preço de tabela
+   * subiu junto (frete e embrulho que vieram na mesma leitura).
+   *
+   * Com as duas, `dRec` se decompõe EXATO: `dReceita = dTabela − dDesconto`.
+   *
+   * ⚠️ `null` = o payload não trouxe (versão anterior à decomposição). Não é
+   * zero: zero afirmaria que o anúncio pedia R$0,00. Quando falta, o snapshot
+   * OMITE a parcela e o diário volta ao comportamento antigo, que atribui a
+   * variação a venda — melhor que inventar uma causa sem lastro.
+   */
+  precoTabela: number | null
+  desconto: number | null
   devolucoes: number
   comissao: number
   fba: number
@@ -63,11 +84,13 @@ export interface SnapshotPeriodo extends Partial<ParcelasPeriodo> {
   /** ISO de quando o seller viu estes números. */
   visto: string
   /**
-   * 2 = tem todas as parcelas e serve pra reconciliar. Snapshot gravado antes
-   * disso existir continua valendo pro diário, com as parcelas que faltam indo
-   * pro resíduo em vez de virarem causa inventada.
+   * 3 = tem todas as parcelas (com `precoTabela` e `desconto`) e serve pra
+   * reconciliar. Snapshot v2 continua valendo pro diário: sem as duas parcelas
+   * novas, a variação da receita volta a ser narrada como venda que entrou/saiu
+   * — que é o comportamento antigo, e é melhor que inventar uma causa que aquele
+   * snapshot não tem como sustentar.
    */
-  v?: 2
+  v?: 2 | 3
   /** Maturidade no momento da foto — é o que identifica "quando era estimativa". */
   maturidade?: 'aberto' | 'liquidando' | 'fechado'
   /** Compatibilidade com o primeiro formato, onde receitaBruta se chamava assim. */
@@ -156,9 +179,12 @@ export function snapshotDoPeriodo(
   return {
     chave: chaveDoPeriodo(periodo),
     visto: agora.toISOString(),
-    v: 2,
+    v: 3,
     maturidade,
     receitaBruta: r2(p.receitaBruta || 0),
+    // ⚠️ Omitidas quando não conhecidas — ver a nota em `ParcelasPeriodo`.
+    ...(p.precoTabela == null ? {} : { precoTabela: r2(p.precoTabela) }),
+    ...(p.desconto == null ? {} : { desconto: r2(p.desconto) }),
     // Mantido pelo nome antigo também: foto gravada antes disto continua comparável.
     faturamento: r2(p.receitaBruta || 0),
     devolucoes: r2(p.devolucoes || 0),
@@ -200,9 +226,25 @@ export function decompor(antes: SnapshotPeriodo, depois: SnapshotPeriodo): Decom
   const dUni = (conhecido(antes.unidades) && conhecido(depois.unidades))
     ? Number(depois.unidades) - Number(antes.unidades) : 0
 
+  /* ⭐ A VARIAÇÃO DA RECEITA TEM DUAS CAUSAS DIFERENTES, e confundi-las culpa a
+     Amazon pelo que foi correção nossa:
+       dReceita = dTabela − dDesconto
+     `dTabela` é venda que ENTROU ou SAIU de verdade. `dDesconto` é desconto que
+     passou a (ou deixou de) ser contado. Só se separa quando os dois snapshots
+     têm as parcelas; senão cai no comportamento antigo, que atribui tudo a venda. */
+  const dTab = d('precoTabela')
+  const dDesc = d('desconto')
+  const separavel = dTab !== null && dDesc !== null && dRec !== null
+    && Math.abs((dTab - dDesc) - dRec) <= RUIDO
+  // O movimento REAL de venda: com a separação, é `dTab`; sem ela, o que se tem.
+  const dVenda = separavel ? dTab : dRec
+
   // "Sem venda nova" é o que distingue tarifa REAL substituindo estimativa de
-  // tarifa acompanhando venda que entrou. Se não sei a receita, não afirmo nem um.
-  const semVendaNova = dRec !== null && Math.abs(dRec) <= RUIDO
+  // tarifa acompanhando venda que entrou. ⚠️ Olha o movimento de VENDA, não a
+  // receita: uma correção de desconto mexe na receita sem nenhuma venda nova, e
+  // fazia toda tarifa do período ser narrada como "mudou" em vez de "o real
+  // substituiu a estimativa".
+  const semVendaNova = dVenda !== null && Math.abs(dVenda) <= RUIDO
 
   const causas: Causa[] = []
   const põe = (valor: number | null, c: Omit<Causa, 'valor'>) => {
@@ -210,16 +252,45 @@ export function decompor(antes: SnapshotPeriodo, depois: SnapshotPeriodo): Decom
     causas.push({ ...c, valor })
   }
 
+  /* ⭐ A CORREÇÃO DE DESCONTO, NOMEADA — antes de falar de venda.
+     Quando o Oráculo passa a enxergar um desconto que já existia (o cupom, em
+     03/08/2026), a receita cai sem que nenhuma venda tenha saído. Sem esta
+     causa, a queda ia inteira pro balde "venda cancelada ou devolvida", que
+     acusa a Amazon de desfazer venda que ela nunca desfez. */
+  if (separavel && dDesc !== null && Math.abs(dDesc) > RUIDO) {
+    põe(-dDesc, dDesc > 0 ? {
+      rotulo: 'Desconto que passou a ser contado', autor: 'voce',
+      explicacao: 'Cupom, oferta ou frete grátis que você concedeu e que agora aparece separado na conta. A venda continua a mesma — o que mudou é que o desconto deixou de ficar escondido dentro dela.',
+      frase: `${brl(dDesc)} de desconto seu passaram a ser contados — nenhuma venda saiu`,
+    } : {
+      rotulo: 'Desconto que deixou de ser contado', autor: 'voce',
+      explicacao: 'Um desconto que estava na conta foi revertido ou deixou de se aplicar aos pedidos do período.',
+      frase: `${brl(-dDesc)} de desconto saíram da conta`,
+    })
+  }
+
+  /* 🚨 NA VIRADA DE FORMATO, A CAUSA DE VENDA CALA — e só ela.
+     Foto anterior v2 (sem `precoTabela`/`desconto`) contra atual v3: a variação
+     da receita não tem como ser separada em "venda" × "desconto", e a queda de
+     uma CORREÇÃO DE DADO sairia rotulada como *"venda cancelada ou devolvida
+     deixou de contar"* — acusando a Amazon de desfazer venda que ela nunca
+     desfez. Sem a causa, a diferença vai pro RESÍDUO, que o arquivo já declara
+     como "ainda não explicado": dizer que não sabe é honesto, culpar não é.
+     ⚠️ Escopo estreito: acontece UMA vez por período, na primeira visita depois
+     do deploy, e as outras causas (tarifa, devolução, CMV) seguem narradas.
+     Da segunda visita em diante os dois lados são v3 e a separação volta. */
+  const viradaDeFormato = (antes.v ?? 0) < 3 && (depois.v ?? 0) >= 3 && !separavel
+
   // ── O que a Amazon fez com as vendas ──
-  if (dRec !== null && Math.abs(dRec) > RUIDO) {
-    põe(dRec, dRec > 0 ? {
+  if (!viradaDeFormato && dVenda !== null && Math.abs(dVenda) > RUIDO) {
+    põe(dVenda, dVenda > 0 ? {
       rotulo: 'Vendas que entraram depois', autor: 'amazon',
       explicacao: 'Pedidos que a Amazon indexou depois da sua última olhada e passaram a contar no período.',
-      frase: `entraram ${brl(dRec)} de venda${dUni > 0 ? ` (${dUni} unidade${dUni === 1 ? '' : 's'})` : ''}`,
+      frase: `entraram ${brl(dVenda)} de venda${dUni > 0 ? ` (${dUni} unidade${dUni === 1 ? '' : 's'})` : ''}`,
     } : {
       rotulo: 'Vendas que deixaram de contar', autor: 'amazon',
       explicacao: 'Pedido cancelado ou devolvido deixa de contar como receita — a venda não existiu.',
-      frase: `saíram ${brl(dRec)} de faturamento — venda cancelada ou devolvida deixou de contar`,
+      frase: `saíram ${brl(dVenda)} de faturamento — venda cancelada ou devolvida deixou de contar`,
     })
   }
   const dDev = d('devolucoes')
@@ -340,8 +411,13 @@ export function narrarMudancas(anterior: SnapshotPeriodo | null | undefined, atu
 
 /* ═══════════════ RECONCILIAÇÃO — a estimativa contra o fechamento ══════════ */
 
+/* ⚠️ `>= 2`, NÃO `=== 2`. Quando a v3 entrou (parcelas de preço de tabela e
+   desconto, 03/08/2026), um teste de igualdade passou a REJEITAR o formato mais
+   novo — a reconciliação sumia da tela de todo mundo justamente no deploy que
+   melhorou o dado. Versão nova tem que ser aceita por construção; o que precisa
+   de guarda é a ANTIGA, e ela já cai no `conhecido(s.lucro)`. */
 const completo = (s?: SnapshotPeriodo | null): boolean =>
-  !!s && s.v === 2 && conhecido(s.lucro)
+  !!s && (s.v ?? 0) >= 2 && conhecido(s.lucro)
 
 /**
  * A peça que ninguém tem: por que o número que você viu não é o número que

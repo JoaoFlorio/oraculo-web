@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { maturidadeDoPeriodo, JANELA_DEVOLUCAO_DIAS } from '../lib/maturidadePeriodo.ts'
-import { snapshotDoPeriodo, narrarMudancas, reconciliar, normalizarMarcos, chaveDoPeriodo, type ParcelasPeriodo } from '../lib/diarioPeriodo.ts'
+import { snapshotDoPeriodo, narrarMudancas, reconciliar, decompor, normalizarMarcos, chaveDoPeriodo, type ParcelasPeriodo, type Causa } from '../lib/diarioPeriodo.ts'
 
 /* A Gestão mistura o relógio da OPERAÇÃO (data da compra, provisório) com o do
    REPASSE (data do lançamento, ~6 dias de atraso, final). Número que se mexe é
@@ -57,6 +57,8 @@ const PARC: Omit<ParcelasPeriodo, 'lucro'> = {
   receitaBruta: 30000, devolucoes: 300, comissao: 3600, fba: 1800, taxaPrograma: 150,
   armazenagem: 200, assinatura: 19, outrasTaxas: 50, cmv: 15000, imposto: 2400,
   credito: 0, custoEventual: 0, unidades: 210,
+  // Identidade: precoTabela − desconto = receitaBruta.
+  precoTabela: 30500, desconto: 500,
 }
 const foto = (mudanca: Partial<Omit<ParcelasPeriodo, 'lucro'>>, mat: 'aberto'|'liquidando'|'fechado' = 'liquidando', quando = AGORA) => {
   const x = { ...PARC, ...mudanca }
@@ -228,4 +230,78 @@ test('metadata corrompido não derruba a Gestão', () => {
   assert.deepEqual(normalizarMarcos(null), {})
   assert.deepEqual(normalizarMarcos('lixo'), {})
   assert.deepEqual(normalizarMarcos({ x: 42, y: null, z: {} }), {})
+})
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   🚨 CORREÇÃO DE DESCONTO NÃO É VENDA CANCELADA (03/08/2026)
+
+   O Oráculo passou a enxergar o CUPOM, que nunca tinha sido lido — o relatório
+   da Amazon é cego a ele. A receita de julho caiu R$439 na conta do dono, e o
+   diário, que só via `receitaBruta`, narrava:
+       "saíram R$439 de faturamento — venda cancelada ou devolvida deixou de contar"
+   Nenhuma venda foi cancelada. Acusar a Amazon de desfazer venda que ela nunca
+   desfez é o pior erro que este arquivo pode cometer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+test('🚨 desconto que passou a ser contado NÃO vira "venda cancelada"', () => {
+  // O caso real: o desconto sobe 689, o preço de tabela sobe 249 (frete e
+  // embrulho que vieram na mesma leitura), a receita cai 440. Nada foi cancelado.
+  const antes = foto({})
+  const depois = foto({ precoTabela: 30749, desconto: 1189, receitaBruta: 29560 })
+  const dec = decompor(antes, depois)
+
+  const cancelou = dec.causas.find((c: Causa) => c.rotulo === 'Vendas que deixaram de contar')
+  assert.equal(cancelou, undefined, 'nenhuma venda saiu — não pode aparecer essa causa')
+
+  const desc = dec.causas.find((c: Causa) => c.rotulo === 'Desconto que passou a ser contado')!
+  assert.ok(desc, 'a causa certa tem que aparecer')
+  assert.equal(desc.valor, -689, 'e com o efeito real no lucro')
+  assert.equal(desc.autor, 'voce', 'o desconto é do seller, não da Amazon')
+
+  const venda = dec.causas.find((c: Causa) => c.rotulo === 'Vendas que entraram depois')!
+  assert.equal(venda.valor, 249, 'o que entrou de venda de verdade, separado')
+  assert.equal(dec.fecha, true, 'e a decomposição continua fechando')
+})
+
+test('venda cancelada de VERDADE continua sendo narrada como tal', () => {
+  // Sem mexer no desconto: a tabela cai junto com a receita.
+  const dec = decompor(foto({}), foto({ precoTabela: 30000, receitaBruta: 29500 }))
+  const c = dec.causas.find((x: Causa) => x.rotulo === 'Vendas que deixaram de contar')!
+  assert.ok(c, 'aqui a venda saiu mesmo')
+  assert.equal(c.valor, -500)
+  assert.equal(c.autor, 'amazon')
+})
+
+test('snapshot ANTIGO (sem as parcelas) volta ao comportamento de antes', () => {
+  // Sem `precoTabela`/`desconto` dos dois lados não dá pra separar — e inventar
+  // a separação seria pior que a narrativa antiga.
+  const antes: any = { ...foto({}) }; delete antes.precoTabela; delete antes.desconto
+  const depois: any = { ...foto({ receitaBruta: 29560 }) }; delete depois.precoTabela; delete depois.desconto
+  const dec = decompor(antes, depois)
+  assert.ok(dec.causas.find((c: Causa) => c.rotulo === 'Vendas que deixaram de contar'))
+  assert.equal(dec.causas.find((c: Causa) => c.rotulo === 'Desconto que passou a ser contado'), undefined)
+})
+
+test('🚨 na virada de formato a causa de VENDA cala — e só ela', () => {
+  // v2 (sem as parcelas) × v3: a variação da receita não é separável, e a queda
+  // de uma correção de dado sairia como "venda cancelada". Uma vez por período.
+  const antes: any = { ...foto({}) }
+  antes.v = 2; delete antes.precoTabela; delete antes.desconto
+  const depois = foto({ precoTabela: 30749, desconto: 1189, receitaBruta: 29560, comissao: 3900 })
+  const dec = decompor(antes, depois)
+  assert.equal(dec.causas.find((c: Causa) => c.rotulo.startsWith('Vendas')), undefined,
+    'não se acusa a Amazon de desfazer venda que ela não desfez')
+  assert.ok(dec.causas.find((c: Causa) => c.rotulo.includes('Comissão')),
+    'mas as OUTRAS causas seguem narradas — a guarda é estreita')
+  assert.equal(dec.fecha, false, 'e a diferença vai pro resíduo, declarada')
+  // Da segunda visita em diante os dois lados são v3 e a separação volta.
+  const dec2 = decompor(foto({}), depois)
+  assert.ok(dec2.causas.find((c: Causa) => c.rotulo === 'Desconto que passou a ser contado'))
+})
+
+test('a reconciliação ACEITA o formato novo (v3), não só o v2', () => {
+  // `completo` testava `v === 2`: bumpar a versão faria a reconciliação sumir da
+  // tela de todo mundo justamente no deploy que melhorou o dado.
+  const r = reconciliar(foto({}, 'aberto'), foto({ comissao: 3900 }, 'fechado'))
+  assert.ok(r, 'v3 tem que reconciliar')
 })

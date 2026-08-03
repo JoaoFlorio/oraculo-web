@@ -4387,6 +4387,10 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
     // — parcela que falta é diferença atribuída ao motivo errado.
     const atual=snapshotDoPeriodo(realDre.period,{
       receitaBruta:L.receitaBruta||0, devolucoes:L.devolucoes||0,
+      /* ⚠️ `?? null`, nunca `|| 0`: payload anterior à decomposição não tem estas
+         parcelas, e gravar 0 afirmaria que o anúncio pedia R$0,00 — o diário
+         então "explicaria" a receita inteira como desconto. Ausente é ausente. */
+      precoTabela:L.precoTabela ?? null, desconto:L.promocoes ?? null,
       comissao:L.comissao||0, fba:L.fba||0, taxaPrograma:L.taxaPrograma||0,
       armazenagem:L.armazenagem||0, assinatura:L.assinatura||0, outrasTaxas:L.outrasTaxas||0,
       cmv, imposto:totais.imposto, credito:totais.credito, custoEventual:totais.custoEventual,
