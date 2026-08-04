@@ -2360,6 +2360,10 @@ function AdsAdmin({margem}:{margem?:number|null}){
   const [aviso,setAviso]=useState<{ok:boolean;txt:string}|null>(null)
   const [rascunho,setRascunho]=useState<Record<string,string>>({})   // orçamento sendo digitado
   const [aberta,setAberta]=useState<string|null>(null)               // campanha expandida (palavras)
+  /* ⚠️ Abre em ATIVAS, não em "todas". Numa conta com 93 campanhas a maioria
+     está pausada há meses, e o que a pessoa quer mexer é no que está gastando
+     agora. "Todas" continua a um clique — mas não é o que ela procura ao abrir. */
+  const [estado,setEstado]=useState<'ativas'|'pausadas'|'todas'>('ativas')
 
   async function carregar(){
     setSt({loading:true,data:null}); setAviso(null)
@@ -2394,14 +2398,20 @@ function AdsAdmin({margem}:{margem?:number|null}){
   const d=st?.data
   const todas:any[]=d?.campanhas||[]
   const recs=d?.ok&&ads30?recomendacoes(ads30,todas,margem??null):[]
-  const vis=todas.filter(c=>!busca||String(c.nome||'').toLowerCase().includes(busca.toLowerCase()))
+  /* Filtro de estado + nome. A contagem de cada aba sai de `todas`, não do que
+     já está filtrado: o número em "Ativas" tem que dizer quantas a conta tem,
+     não quantas sobraram da busca por nome. */
+  const ativas=todas.filter(c=>c.estado==='ENABLED').length
+  const vis=todas
+    .filter(c=>estado==='todas'||(estado==='ativas'?c.estado==='ENABLED':c.estado!=='ENABLED'))
+    .filter(c=>!busca||String(c.nome||'').toLowerCase().includes(busca.toLowerCase()))
   const btn={padding:'7px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}
 
   return(
     <div style={{marginTop:18,padding:'14px 16px',borderRadius:12,border:`1px dashed ${t.line}`,background:'rgba(255,255,255,0.02)'}}>
       <span style={{fontSize:10,fontWeight:700,letterSpacing:'0.1em',color:t.t3,textTransform:'uppercase' as const}}>Admin · gerenciar campanhas</span>
       <p style={{fontSize:11,color:t.t3,margin:'8px 0 0',lineHeight:1.5}}>
-        Pausar/reativar e mudar orçamento diário — <b style={{color:t.gold}}>altera de verdade na Amazon</b>. Toda alteração é confirmada e registrada. Aqui aparecem <b>todas</b> as campanhas, inclusive as pausadas.
+        Pausar/reativar e mudar orçamento diário — <b style={{color:t.gold}}>altera de verdade na Amazon</b>. Toda alteração é confirmada e registrada. Abre nas <b>ativas</b> — as pausadas estão a um clique.
       </p>
       <button onClick={carregar} disabled={st?.loading} style={{...btn,marginTop:10,cursor:st?.loading?'default':'pointer'}}>
         {st?.loading?'Carregando…':todas.length?'Recarregar':'Carregar campanhas'}
@@ -2457,10 +2467,35 @@ function AdsAdmin({margem}:{margem?:number|null}){
       {d?.ok && (
         <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${t.line}`}}>
           <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,marginBottom:10}}>
-            <span style={{fontSize:11.5,color:t.t2}}>{todas.length} campanha(s){vis.length!==todas.length?` · ${vis.length} no filtro`:''}</span>
+            {/* Cada aba carrega a CONTAGEM: "quantas estão ativas" é a primeira
+                pergunta de quem abre esta tela, e responder no rótulo evita ter
+                que clicar pra descobrir. */}
+            <div style={{display:'flex',gap:4,background:t.dark?'rgba(255,255,255,0.04)':'#F1F2F4',borderRadius:9,padding:3}}>
+              {([['ativas','Ativas',ativas],['pausadas','Pausadas',todas.length-ativas],['todas','Todas',todas.length]] as const).map(([k,rot,n])=>{
+                const on=estado===k
+                return(
+                  <button key={k} onClick={()=>setEstado(k as typeof estado)} aria-pressed={on}
+                    style={{padding:'5px 11px',borderRadius:7,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:on?700:600,
+                      border:'none',background:on?(t.dark?'rgba(255,255,255,0.10)':'#FFFFFF'):'transparent',
+                      color:on?t.t1:t.t3,display:'flex',alignItems:'center',gap:6}}>
+                    {k==='ativas' && <span style={{width:6,height:6,borderRadius:99,background:on?t.grn:t.t3,flexShrink:0}}/>}
+                    {rot}
+                    <span style={{fontVariantNumeric:'tabular-nums',fontWeight:700,color:on?t.gold:t.t3}}>{n}</span>
+                  </button>
+                )
+              })}
+            </div>
             <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="filtrar por nome…"
               style={{marginLeft:'auto',padding:'6px 10px',borderRadius:8,border:`1px solid ${t.line}`,background:'transparent',color:t.t1,fontSize:11.5,fontFamily:'inherit',outline:'none',minWidth:170}}/>
           </div>
+          {vis.length===0 && (
+            <div style={{padding:'18px 14px',textAlign:'center' as const,fontSize:12,color:t.t3,
+              border:`1px dashed ${t.line}`,borderRadius:10}}>
+              {busca
+                ? <>Nenhuma campanha {estado==='todas'?'':estado==='ativas'?'ativa ':'pausada '}com “{busca}” no nome.</>
+                : estado==='ativas' ? 'Nenhuma campanha ativa no momento.' : 'Nenhuma campanha pausada.'}
+            </div>
+          )}
           {/* ⚠️ ERA UMA LINHA SÓ com tudo espremido em fonte 9,5–12: nome, estado,
               R$, input, dois botões e o id, sem separação nenhuma. Em 93
               campanhas isso vira parede de risco cinza — o João não conseguia
@@ -2534,7 +2569,7 @@ function AdsAdmin({margem}:{margem?:number|null}){
             )
           })}
           </div>
-          {vis.length>40 && <div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Mostrando 40 de {vis.length} — use o filtro pra achar as outras.</div>}
+          {vis.length>40 && <div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Mostrando 40 de {vis.length} {estado==='todas'?'campanhas':estado==='ativas'?'ativas':'pausadas'} — filtre por nome pra achar as outras.</div>}
         </div>
       )}
     </div>
