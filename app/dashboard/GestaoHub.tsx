@@ -2164,6 +2164,100 @@ function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem
   )
 }
 
+/* ── AS 4 SEGMENTAÇÕES DA CAMPANHA AUTOMÁTICA ─────────────────────────────────
+   Campanha automática não tem palavra-chave — tem QUATRO alvos, cada um com
+   lance próprio, e a tela dizia "nenhuma palavra-chave nesta campanha" como se
+   não houvesse nada a fazer.
+
+   ⚠️ As quatro NÃO se comportam igual: "correspondência próxima" costuma
+   converter melhor e "complementares" costuma ser a mais cara por venda. Deixar
+   o mesmo lance nas quatro é o erro clássico de quem roda automática — na
+   Furadeira Automática do João as quatro estavam em R$ 0,40. Por isso elas
+   aparecem JUNTAS e na mesma ordem sempre: o valor de uma só significa alguma
+   coisa ao lado das outras três. */
+function AlvosAutomaticos({campaignId,nome}:{campaignId:string;nome:string}){
+  const t=useT()
+  const [alvos,setAlvos]=useState<any[]|null>(null)
+  const [erro,setErro]=useState<string|null>(null)
+  const [rasc,setRasc]=useState<Record<string,string>>({})
+  const [salvando,setSalvando]=useState<string|null>(null)
+  useEffect(()=>{
+    let vivo=true
+    fetch(`/api/admin/ads-auto-targets?campaignId=${encodeURIComponent(campaignId)}`)
+      .then(r=>r.json())
+      .then(d=>{ if(!vivo) return; if(d?.ok) setAlvos(d.alvos||[]); else setErro(String(d?.erro||d?.error||'não consegui ler')) })
+      .catch(()=>{ if(vivo) setErro('sem resposta do servidor') })
+    return ()=>{ vivo=false }
+  },[campaignId])
+
+  async function salvar(a:any, bid:number){
+    if(!confirm(`Mudar o lance da segmentação "${a.nome}"\n\nCampanha: ${nome}\nDe R$ ${a.lance} para R$ ${bid.toFixed(2)}?\n\nIsso altera o CPC de verdade na Amazon.`)) return
+    setSalvando(a.targetId); setErro(null)
+    try{
+      const r=await fetch('/api/admin/ads-auto-target',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({targetId:a.targetId,campaignId,bid})})
+      const d=await r.json()
+      if(d.ok){
+        setAlvos(xs=>(xs||[]).map(x=>x.targetId===a.targetId?{...x,lance:d.lance}:x))
+        setRasc(v=>{ const n={...v}; delete n[a.targetId]; return n })
+      } else setErro(d.erro||d.error||'não foi aplicado')
+    }catch{ setErro('sem resposta do servidor') }
+    setSalvando(null)
+  }
+
+  if(!alvos && !erro) return null          // ainda lendo: não pisca caixa vazia
+  if(erro) return <div style={{padding:'11px 13px',borderBottom:`1px solid ${t.line}`,fontSize:11.5,color:t.red}}>{erro}</div>
+  if(!alvos?.length) return null           // campanha manual: nada a mostrar aqui
+
+  // Todos iguais é sinal, não detalhe — é o estado padrão que ninguém revisou.
+  const todosIguais = alvos.length>1 && new Set(alvos.map(a=>Number(a.lance))).size===1
+  return(
+    <div style={{padding:'11px 13px',borderBottom:`1px solid ${t.line}`}}>
+      <div style={{fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:'uppercase' as const,color:t.t3,marginBottom:2}}>
+        Campanha automática · as 4 segmentações
+      </div>
+      <div style={{fontSize:10.5,color:t.t3,marginBottom:9,lineHeight:1.45}}>
+        {todosIguais
+          ? <>As quatro estão no <b style={{color:t.gold}}>mesmo lance</b> — elas não convertem igual. Próxima costuma render mais; complementares costuma ser a mais cara por venda.</>
+          : <>Cada uma tem lance próprio e se comporta como uma campanha diferente.</>}
+      </div>
+      <div style={{display:'flex',flexDirection:'column' as const,gap:9}}>
+        {alvos.map(a=>{
+          const atual=Number(a.lance)||0
+          const v=rasc[a.targetId]
+          const novo=v!=null&&v!==''?Number(v):atual
+          const mudou=isFinite(novo)&&novo>0&&Math.abs(novo-atual)>0.001
+          const passo=(f:number)=>setRasc(r=>({...r,[a.targetId]:Math.max(0.02,+(atual*f).toFixed(2)).toFixed(2)}))
+          return(
+            <div key={a.targetId} style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const}}>
+              <div style={{flex:'1 1 190px',minWidth:0}}>
+                <div style={{fontSize:12.5,fontWeight:600,color:t.t1}}>{a.nome}</div>
+                <div style={{fontSize:10.5,color:t.t3,lineHeight:1.4}}>{a.dica}</div>
+              </div>
+              <button onClick={()=>passo(0.9)} title="baixar 10%" aria-label={`Baixar 10% o lance de ${a.nome}`}
+                style={{width:30,height:30,borderRadius:8,cursor:'pointer',border:`1px solid ${t.line2}`,background:'transparent',color:t.t1,fontSize:15,fontWeight:700,fontFamily:'inherit',lineHeight:1}}>−</button>
+              <div style={{display:'flex',alignItems:'center',gap:5,background:t.card,border:`1px solid ${mudou?t.gold:t.line2}`,borderRadius:8,padding:'5px 9px'}}>
+                <span style={{fontSize:11,color:t.t3}}>R$</span>
+                <input value={v??atual.toFixed(2)} onChange={e=>setRasc(r=>({...r,[a.targetId]:e.target.value}))}
+                  inputMode="decimal" aria-label={`Lance de ${a.nome}`}
+                  style={{width:52,border:'none',background:'transparent',color:t.t1,fontSize:13,fontWeight:600,
+                    fontFamily:FH,fontVariantNumeric:'tabular-nums',outline:'none',padding:0}}/>
+              </div>
+              <button onClick={()=>passo(1.1)} title="subir 10%" aria-label={`Subir 10% o lance de ${a.nome}`}
+                style={{width:30,height:30,borderRadius:8,cursor:'pointer',border:`1px solid ${t.line2}`,background:'transparent',color:t.t1,fontSize:15,fontWeight:700,fontFamily:'inherit',lineHeight:1}}>+</button>
+              {mudou && <button disabled={salvando===a.targetId} onClick={()=>salvar(a,novo)}
+                style={{padding:'6px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,
+                  border:'none',background:t.gold,color:t.dark?'#1c1606':'#3a2a05'}}>
+                {salvando===a.targetId?'…':`salvar ${novo<atual?'↓':'↑'}`}
+              </button>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 /* ── O LANCE DA CAMPANHA ──────────────────────────────────────────────────────
    ⚠️ Na Amazon NÃO existe "lance da campanha". O lance mora no target (palavra
    ou produto) e, acima dele, no `defaultBid` do GRUPO DE ANÚNCIOS — o valor que
@@ -2428,6 +2522,10 @@ function AdsAdmin({margem}:{margem?:number|null}){
                 </div>
                 {expandida && (
                   <div style={{borderTop:`1px solid ${t.line}`,background:t.dark?'rgba(0,0,0,0.18)':'#FAFBFC'}}>
+                    {/* As 4 vêm ANTES: numa automática elas são a alavanca, e o
+                        lance do grupo é só o teto delas. Numa campanha manual
+                        este bloco não renderiza nada. */}
+                    <AlvosAutomaticos campaignId={c.campaignId} nome={c.nome}/>
                     <LanceDoGrupo campaignId={c.campaignId} nome={c.nome}/>
                     <Keywords campaignId={c.campaignId} nome={c.nome} margem={margem}/>
                   </div>
