@@ -13,6 +13,7 @@ import { maturidadeDoPeriodo, type SeloMaturidade } from '@/lib/maturidadePeriod
 import { snapshotDoPeriodo, narrarMudancas, reconciliar, normalizarMarcos, chaveDoPeriodo, type SnapshotPeriodo, type MarcosPeriodo, type Diario, type Reconciliacao } from '@/lib/diarioPeriodo'
 import { GRUPOS, TELA_INICIAL, grupoDaTab, grupoPorId, telaAoEntrarNoGrupo, tabPorId } from '@/lib/navegacaoGestao'
 import { totaisDoEstoque, valorDeVenda, valorDeMercadoria } from '@/lib/estoqueFba'
+import { linhasPorCampanha, linhasPorProduto, tacos, periodosCasam, type ProdutoDre as AdsProdutoDre } from '@/lib/adsMetricas'
 
 const FinanceiroPanel = dynamic(()=>import('./FinanceiroPanel'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#888'}}>Carregando DRE…</div>})
 
@@ -2323,7 +2324,24 @@ function AdsAdmin({margem}:{margem?:number|null}){
     </div>
   )
 }
-function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean;isAdmin?:boolean;margemAds?:number|null}){
+/* As fotinhas dos produtos que a campanha anuncia.
+   ⚠️ Mostra ATÉ TRÊS e conta o resto. Uma campanha automática pode anunciar o
+   catálogo inteiro: exibir só a primeira foto daria a impressão de campanha de
+   um produto só, e é justamente o tipo de coisa que faz o cliente cortar lance
+   olhando para o produto errado. */
+function ProdutosDaCampanha({produtos}:{produtos:{sku:string;name:string;image:string}[]}){
+  const t=useT()
+  if(!produtos.length) return <span style={{fontSize:11,color:t.t3}}>—</span>
+  const mostra=produtos.slice(0,3), resto=produtos.length-mostra.length
+  return(
+    <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}} title={produtos.map(p=>p.name).join(' · ')}>
+      {mostra.map((p,i)=><Thumb key={i} p={{id:p.sku,name:p.name,image:p.image}}/>)}
+      {resto>0 && <span style={{fontSize:11,color:t.t3,fontWeight:600}}>+{resto}</span>}
+      {produtos.length===1 && <span style={{fontSize:11.5,color:t.t2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{produtos[0].name}</span>}
+    </div>
+  )
+}
+function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,inv}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean;isAdmin?:boolean;margemAds?:number|null;realDre?:any;inv?:any}){
   const t=useT()
   // Não conectou a conta de Ads ainda
   if(adsConnected===false) return(
@@ -2341,30 +2359,91 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds}:{m:Produ
       {adsLoading?'Gerando o relatório de ads na Amazon… na 1ª vez leva alguns minutos; depois fica instantâneo (atualiza no fundo).':'Relatório de ads indisponível no momento. Tente atualizar em instantes.'}
     </div>
   )
-  const camps:any[]=adsReal.byCampaign||[]
+  /* Catálogo pra foto e nome: quem VENDEU no período (DRE) ∪ quem tem ESTOQUE.
+     Produto anunciado que não vendeu não aparece na DRE — e é justamente ele que
+     mais interessa numa tela de Ads, porque é onde o dinheiro some sem retorno. */
+  const catalogo:AdsProdutoDre[]=(()=>{
+    const map=new Map<string,AdsProdutoDre>()
+    for(const p of (realDre?.produtos||[])) map.set(p.sku,{sku:p.sku,asin:p.asin,name:p.name,image:p.image,units:p.units,receita:p.receita})
+    for(const it of (inv?.inventario||[])){
+      const at=map.get(it.sku)
+      if(at){ if(!at.image) at.image=it.image; if(!at.name) at.name=it.name }
+      else map.set(it.sku,{sku:it.sku,asin:it.asin,name:it.name,image:it.image,units:0,receita:0})
+    }
+    return [...map.values()]
+  })()
+  const linhasCamp=linhasPorCampanha(adsReal.byCampaign||[],catalogo)
+  const linhasProd=linhasPorProduto(adsReal.bySku||[],catalogo,periodosCasam(adsReal.period,realDre?.period))
+  const fatTotal=Number(realDre?.linhas?.receitaBruta)||0
+  // ⚠️ Só divide as duas fontes quando elas falam do MESMO intervalo — ver
+  // `periodosCasam`. ACoS e ROAS não precisam disso: saem do mesmo relatório.
+  const mesmoPeriodo=periodosCasam(adsReal.period,realDre?.period)
+  const tacosConta=mesmoPeriodo?tacos(Number(adsReal.spend)||0,fatTotal):null
+  // `metricas.completo` vem do backend: os dias mais velhos do espelho foram
+  // gravados antes de pedidos/unidades existirem, e somá-los assim mesmo faria
+  // "90 dias" mostrar o número de 31 chamando de total.
+  const met=adsReal.metricas
+  const parcial=!!met && !met.completo
   const tot=[
     {label:'Gasto',value:brl2(adsReal.spend),icon:'ti-speakerphone',color:t.gold},
     {label:'Vendas por Ads',value:brl2(adsReal.sales),icon:'ti-cash',color:t.grn},
+    {label:'TACoS',value:tacosConta!=null?pc(tacosConta):'—',icon:'ti-chart-pie',color:tacosConta==null?t.t3:tacosConta<10?t.grn:tacosConta<20?t.gold:t.red},
     {label:'ACoS',value:pc(adsReal.acos),icon:'ti-target',color:adsReal.acos<20?t.grn:adsReal.acos<30?t.gold:t.red},
     {label:'ROAS',value:(Number(adsReal.roas)||0).toFixed(2)+'x',icon:'ti-rotate-clockwise',color:t.grn},
   ]
   const upd=adsReal.updatedAt?new Date(adsReal.updatedAt):null
+  const noteStyle:React.CSSProperties={fontSize:10,color:t.t3,marginTop:5,textAlign:'center' as const,fontFamily:FG,lineHeight:1.3}
   return(<>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:16}}>
-      {tot.map((k,i)=><KPI key={i} {...k} hide={hide}/>)}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:16,alignItems:'start'}}>
+      {tot.map((k,i)=><div key={i}>
+        <KPI {...k} hide={hide}/>
+        {k.label==='TACoS'&&tacosConta==null&&<div style={noteStyle}>{mesmoPeriodo?'sem faturamento no período':'o anúncio ainda responde por outro intervalo'}</div>}
+      </div>)}
     </div>
-    <Hint>ACoS &lt;20% ótimo · 20–30% atenção · &gt;30% prejuízo (revisar lance).</Hint>
-    <Table head={[{label:'Campanha',w:'42%'},{label:'Gasto',right:true},{label:'Vendas',right:true},{label:'ROAS',right:true},{label:'ACoS',right:true}]}>
-      {camps.map((c,i)=>{
-        const acos=c.sales>0?c.spend/c.sales*100:0, roas=c.spend>0?c.sales/c.spend:0
-        return(<tr key={i}>
-          <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,fontSize:13,color:t.t1,fontWeight:500,whiteSpace:'nowrap' as const,overflow:'hidden',textOverflow:'ellipsis'}}>{c.campaign}</td>
-          <NumTd hide={hide}>{brl2(c.spend)}</NumTd><NumTd hide={hide}>{brl2(c.sales)}</NumTd>
-          <NumTd>{c.sales>0?roas.toFixed(1)+'x':'—'}</NumTd>
-          <PillTd><Pill kind={c.sales<=0?'red':acos<20?'grn':acos<30?'gold':'red'}>{c.sales>0?pc(acos):'—'}</Pill></PillTd>
-        </tr>)
-      })}
+    <Hint><b>ACoS</b> é o gasto sobre a venda que o <b>anúncio</b> trouxe — mede o anúncio. <b>TACoS</b> é o gasto sobre o faturamento <b>inteiro</b> — mede quanto da sua operação o anúncio come. ACoS &lt;20% ótimo · 20–30% atenção · &gt;30% prejuízo (revisar lance).</Hint>
+    {parcial && (
+      <div style={{background:t.dark?'rgba(240,180,41,0.07)':'#FFFDF5',border:`1px solid ${t.gold}`,borderRadius:11,padding:'10px 13px',margin:'0 0 12px',fontSize:11.5,color:t.t2,lineHeight:1.55}}>
+        <b style={{color:t.gold}}>Pedidos e unidades ainda não cobrem o período inteiro.</b> A Amazon só reescreve os
+        últimos 31 dias sozinha — {met.diasComMetrica} de {met.diasAtivos} dias com anúncio já têm o dado.
+        Gasto, vendas, ACoS e ROAS estão completos; as colunas de pedido e unidade aparecem como “—” onde falta.
+      </div>
+    )}
+    <Table minWidth={980} head={[{label:'Campanha',w:'26%'},{label:'Produto anunciado',w:'20%'},{label:'Gasto',right:true},{label:'Vendas',right:true},{label:'Pedidos',right:true},{label:'Conversão',right:true},{label:'ROAS',right:true},{label:'ACoS',right:true}]}>
+      {linhasCamp.map((c,i)=>(<tr key={i}>
+        <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,fontSize:13,color:t.t1,fontWeight:500,whiteSpace:'nowrap' as const,overflow:'hidden',textOverflow:'ellipsis'}}>{c.campaign}</td>
+        <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`}}><ProdutosDaCampanha produtos={c.produtos}/></td>
+        <NumTd hide={hide}>{brl2(c.spend)}</NumTd><NumTd hide={hide}>{brl2(c.sales)}</NumTd>
+        <NumTd color={t.t2}>{c.pedidos!=null?c.pedidos:'—'}</NumTd>
+        <NumTd color={t.t2}>{c.conversao!=null?pc(c.conversao):'—'}</NumTd>
+        <NumTd>{c.roas!=null?c.roas.toFixed(1)+'x':'—'}</NumTd>
+        <PillTd><Pill kind={c.acos==null?'red':c.acos<20?'grn':c.acos<30?'gold':'red'}>{c.acos!=null?pc(c.acos):'—'}</Pill></PillTd>
+      </tr>))}
     </Table>
+    {/* ── POR PRODUTO — a leitura do Gestor Seller, do lado da de campanha ──── */}
+    {linhasProd.length>0 && (<>
+      <div style={{fontFamily:FG,fontSize:15,fontWeight:600,color:t.t1,margin:'22px 0 8px'}}>Por produto anunciado</div>
+      <Hint>Quanto cada produto custou de anúncio e o que ele devolveu — inclusive o que a campanha não mostra: o <b>faturamento total</b> dele e quanto vendeu <b>sem anúncio</b>.</Hint>
+      <Table minWidth={1120} head={[{label:'Produto',w:'24%'},{label:'Custo Ads',right:true},{label:'Fat. Ads',right:true},{label:'Un. Ads',right:true},{label:'Un. orgânicas',right:true},{label:'Fat. total',right:true},{label:'Conversão',right:true},{label:'ROAS',right:true},{label:'TACoS',right:true},{label:'ACoS',right:true}]}>
+        {linhasProd.map((p,i)=>(<tr key={i}>
+          <ProdCell p={{id:p.sku,image:p.image,name:p.name,sku:p.sku}}/>
+          <NumTd color={t.gold} hide={hide}>{brl2(p.custoAds)}</NumTd>
+          <NumTd color={t.grn} hide={hide}>{brl2(p.fatAds)}</NumTd>
+          <NumTd color={t.t2}>{p.unAds!=null?p.unAds:'—'}</NumTd>
+          <NumTd color={t.t2}>{p.unOrganicas!=null?p.unOrganicas:'—'}</NumTd>
+          <NumTd hide={hide}>{p.fatTotal!=null&&p.fatTotal>0?brl2(p.fatTotal):'—'}</NumTd>
+          <NumTd color={t.t2}>{p.conversao!=null?pc(p.conversao):'—'}</NumTd>
+          <NumTd>{p.roas!=null?p.roas.toFixed(1)+'x':'—'}</NumTd>
+          <PillTd><Pill kind={p.tacos==null?'red':p.tacos<10?'grn':p.tacos<20?'gold':'red'}>{p.tacos!=null?pc(p.tacos):'—'}</Pill></PillTd>
+          <PillTd><Pill kind={p.acos==null?'red':p.acos<20?'grn':p.acos<30?'gold':'red'}>{p.acos!=null?pc(p.acos):'—'}</Pill></PillTd>
+        </tr>))}
+      </Table>
+      {(Number(adsReal.adsNaoAtribuido)||0)>0.005 && (
+        <div style={{fontSize:10.5,color:t.t3,marginTop:8}}>
+          {brl2(adsReal.adsNaoAtribuido)} de gasto que nenhum produto reivindica (Sponsored Brands e campanha sem produto ativo)
+          ficam fora desta tabela — espalhar entre os produtos seria rateio.
+        </div>
+      )}
+    </>)}
     {upd && <div style={{fontSize:10.5,color:t.t3,marginTop:10,display:'flex',gap:6,alignItems:'center'}}>
       <i className="ti ti-refresh" style={{fontSize:12}} aria-hidden="true"/>Atualizado {upd.toLocaleString('pt-BR')} · dado real da Advertising API{adsReal.stale?' · revalidando no fundo':''}
     </div>}
@@ -4570,7 +4649,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} selo={selo} diario={diario} recon={recon} cmv={cmv} impostoTotal={totais.imposto} credito={totais.credito} custoEventual={totais.custoEventual} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail} ajustes={ajustes} onAddAjuste={addAjuste} onRemoverAjuste={removeAjuste}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto} ajustes={ajustes} onDetail={setDetail}/>}
-        {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef}/>}
+        {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef} realDre={realDre} inv={inventory}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto} adsReal={adsData}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto} isAdmin={isAdmin}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
