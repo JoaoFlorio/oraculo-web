@@ -2324,6 +2324,67 @@ function AdsAdmin({margem}:{margem?:number|null}){
     </div>
   )
 }
+/* ── O NEO NA ABA DE ADS ──────────────────────────────────────────────────────
+   As regras do backend acham o que fazer e JÁ ESCREVEM a ação; o modelo só
+   narra. Por isso a lista de ações aparece aqui mesmo quando a narração falha:
+   o conselho não depende do modelo ter respondido.
+
+   ⚠️ Recomendação sobre lance mexe no dinheiro do cliente. Nada aqui executa
+   nada na Amazon — é leitura. Quem clica em pausar é o seller, no Seller Central. */
+function NeoAds({hide}:{hide:boolean}){
+  const t=useT()
+  const [d,setD]=useState<any>(null)
+  const [carregando,setCarregando]=useState(true)
+  const [aberto,setAberto]=useState(false)
+  useEffect(()=>{
+    let vivo=true
+    fetch('/api/agent/insight-ads',{cache:'no-store'})
+      .then(r=>r.json())
+      .then(x=>{ if(vivo && x?.texto) setD(x) })
+      .catch(()=>{})
+      .finally(()=>{ if(vivo) setCarregando(false) })
+    return ()=>{ vivo=false }
+  },[])
+  if(carregando) return(
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'14px 16px',marginBottom:14,fontSize:12.5,color:t.t3,display:'flex',alignItems:'center',gap:9}}>
+      <i className="ti ti-loader-2" style={{fontSize:15,color:t.gold}} aria-hidden="true"/>O NEO está olhando suas campanhas…
+    </div>
+  )
+  if(!d) return null
+  const cor = d.severidade==='critico'?t.red : d.severidade==='atencao'?t.gold : t.grn
+  const sinais:any[] = d.sinais||[]
+  return(
+    <div style={{background:t.dark?'rgba(255,255,255,0.02)':'#FCFCFD',border:`1px solid ${t.line}`,borderLeft:`3px solid ${cor}`,borderRadius:14,padding:'14px 16px',marginBottom:14}}>
+      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:7}}>
+        <i className="ti ti-sparkles" style={{fontSize:15,color:cor}} aria-hidden="true"/>
+        <span style={{fontSize:11,fontWeight:700,color:t.t3,letterSpacing:.5,textTransform:'uppercase' as const}}>NEO · o que fazer nos anúncios</span>
+      </div>
+      <div style={{fontSize:13,color:t.t1,lineHeight:1.65,whiteSpace:'pre-wrap' as const,filter:hide?'blur(5px)':'none'}}>{d.texto}</div>
+      {sinais.length>0 && (<>
+        <button onClick={()=>setAberto(v=>!v)} style={{marginTop:10,background:'none',border:'none',padding:0,cursor:'pointer',fontSize:11.5,color:t.t2,fontWeight:600,display:'flex',alignItems:'center',gap:5,fontFamily:'inherit'}}>
+          <i className={`ti ti-chevron-${aberto?'down':'right'}`} style={{fontSize:13}} aria-hidden="true"/>
+          {aberto?'Ocultar':`Ver ${sinais.length===1?'o ponto':`os ${sinais.length} pontos`} e o que fazer em cada um`}
+        </button>
+        {aberto && (
+          <div style={{marginTop:9,display:'flex',flexDirection:'column' as const,gap:9}}>
+            {sinais.map((s,i)=>{
+              const c = s.sev==='critico'?t.red : s.sev==='atencao'?t.gold : t.grn
+              return(
+                <div key={i} style={{paddingLeft:10,borderLeft:`2px solid ${c}`}}>
+                  <div style={{fontSize:12.5,color:t.t1,fontWeight:500,lineHeight:1.5,filter:hide?'blur(5px)':'none'}}>{s.titulo}</div>
+                  <div style={{fontSize:11.5,color:t.t2,lineHeight:1.55,marginTop:3}}>{s.acao}</div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </>)}
+      <div style={{fontSize:10,color:t.t3,marginTop:10}}>
+        Leitura das suas campanhas dos últimos 14 dias cruzada com o seu estoque. O NEO não mexe em nada — quem aplica é você.
+      </div>
+    </div>
+  )
+}
 /* As fotinhas dos produtos que a campanha anuncia.
    ⚠️ Mostra ATÉ TRÊS e conta o resto. Uma campanha automática pode anunciar o
    catálogo inteiro: exibir só a primeira foto daria a impressão de campanha de
@@ -2400,6 +2461,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
         {k.label==='TACoS'&&tacosConta==null&&<div style={noteStyle}>{mesmoPeriodo?'sem faturamento no período':'o anúncio ainda responde por outro intervalo'}</div>}
       </div>)}
     </div>
+    <NeoAds hide={hide}/>
     <Hint><b>ACoS</b> é o gasto sobre a venda que o <b>anúncio</b> trouxe — mede o anúncio. <b>TACoS</b> é o gasto sobre o faturamento <b>inteiro</b> — mede quanto da sua operação o anúncio come. ACoS &lt;20% ótimo · 20–30% atenção · &gt;30% prejuízo (revisar lance).</Hint>
     {parcial && (
       <div style={{background:t.dark?'rgba(240,180,41,0.07)':'#FFFDF5',border:`1px solid ${t.gold}`,borderRadius:11,padding:'10px 13px',margin:'0 0 12px',fontSize:11.5,color:t.t2,lineHeight:1.55}}>
