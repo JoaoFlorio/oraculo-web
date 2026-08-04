@@ -2559,7 +2559,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
       </div>)}
     </div>
     <NeoAds hide={hide}/>
-    <Hint><b>ACoS</b> é o gasto sobre a venda que o <b>anúncio</b> trouxe — mede o anúncio. <b>TACoS</b> é o gasto sobre o faturamento <b>inteiro</b> — mede quanto da sua operação o anúncio come. ACoS &lt;20% ótimo · 20–30% atenção · &gt;30% prejuízo (revisar lance).</Hint>
+    <Hint><b>ACoS</b> é o gasto sobre a venda que o <b>anúncio</b> trouxe — mede o anúncio. <b>TACoS</b> é o gasto sobre o faturamento <b>inteiro</b> — mede quanto da sua operação o anúncio come. ⚠️ <b>O ACoS sai da sua margem</b> — não existe número bom no vácuo: num produto que deixa 20%, um ACoS de 20% é venda com lucro zero. A régua é a margem do produto: gastar menos da metade dela é saudável, passar dela é prejuízo. Sem o CMV cadastrado o Oráculo assume 20% de margem e avisa que assumiu.</Hint>
     {parcial && (
       <div style={{background:t.dark?'rgba(240,180,41,0.07)':'#FFFDF5',border:`1px solid ${t.gold}`,borderRadius:11,padding:'10px 13px',margin:'0 0 12px',fontSize:11.5,color:t.t2,lineHeight:1.55}}>
         <b style={{color:t.gold}}>Pedidos e unidades ainda não cobrem o período inteiro.</b> A Amazon só reescreve os

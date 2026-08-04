@@ -69,16 +69,52 @@ const SEV = {
   ok:      { cor: '#31d183', rotulo: 'Operação na régua' },
 } as const
 
+/* 🚨 TODA IMAGEM VIRA JPEG AQUI, NO NAVEGADOR.
+ *
+ * A câmera do iPhone salva em HEIC, e HEIC não é lido por nenhum dos dois
+ * motores do jeito que chegava: a imagem era descartada e o NEO respondia
+ * "você esqueceu de mandar a foto" com a miniatura na tela do cliente.
+ *
+ * O navegador já sabe decodificar tudo que ele consegue EXIBIR — inclusive HEIC
+ * no Safari e no macOS. Então quem converte é ele: decodifica, redesenha num
+ * canvas e reexporta como JPEG. De quebra resolve o peso (foto de celular passa
+ * de 5MB e batia no limite) sem o vendedor precisar saber de nada disso.
+ *
+ * ⚠️ Se o navegador NÃO souber abrir (HEIC no Chrome do Windows, por exemplo),
+ * o erro tem que ser explícito na tela — falhar em silêncio aqui recria
+ * exatamente o bug que isto veio consertar. */
+const LADO_MAX = 1600   // além disso é pixel que o modelo não usa e token que o seller paga
+
 function lerImagem(file: File): Promise<Img> {
   return new Promise((resolve, reject) => {
-    const r = new FileReader()
-    r.onload = () => {
-      const m = /^data:(image\/[a-zA-Z+]+);base64,(.*)$/.exec(String(r.result || ''))
-      if (!m) return reject(new Error('formato inválido'))
-      resolve({ mediaType: m[1], data: m[2] })
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      try {
+        const escala = Math.min(1, LADO_MAX / Math.max(img.naturalWidth, img.naturalHeight))
+        const w = Math.max(1, Math.round(img.naturalWidth * escala))
+        const h = Math.max(1, Math.round(img.naturalHeight * escala))
+        const c = document.createElement('canvas')
+        c.width = w; c.height = h
+        const ctx = c.getContext('2d')
+        if (!ctx) return reject(new Error('sem canvas'))
+        // Fundo branco: PNG com transparência viraria preto ao virar JPEG.
+        ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h)
+        ctx.drawImage(img, 0, 0, w, h)
+        const dataUrl = c.toDataURL('image/jpeg', 0.88)
+        const m = /^data:(image\/jpeg);base64,(.*)$/.exec(dataUrl)
+        if (!m || !m[2]) return reject(new Error('falha ao converter'))
+        resolve({ mediaType: 'image/jpeg', data: m[2] })
+      } catch { reject(new Error('falha ao converter')) }
     }
-    r.onerror = () => reject(new Error('falha ao ler'))
-    r.readAsDataURL(file)
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      // O navegador não decodifica este formato. Diz qual é, pra pessoa saber.
+      const ext = (file.name.split('.').pop() || '').toUpperCase()
+      reject(new Error(ext ? `formato ${ext}` : 'formato não suportado'))
+    }
+    img.src = url
   })
 }
 
@@ -347,8 +383,19 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
     const novas: Img[] = []
     for (const f of Array.from(files)) {
       if (pend.length + novas.length >= MAX_IMGS) break
-      if (f.size > 5 * 1024 * 1024) { setErro('Cada imagem deve ter até 5MB.'); continue }
-      try { novas.push(await lerImagem(f)) } catch { setErro('Não consegui ler essa imagem.') }
+      // ⚠️ SEM teto de tamanho na entrada: a conversão redimensiona pra 1600px e
+      // reexporta em JPEG, então uma foto de 12MB do celular sai com algumas
+      // centenas de KB. O limite antigo recusava justamente a foto que o
+      // vendedor acabou de tirar — que é o caso mais comum de todos.
+      try { novas.push(await lerImagem(f)) }
+      catch (e: any) {
+        // Erro EXPLÍCITO e acionável. Um "não consegui ler essa imagem" genérico
+        // deixa a pessoa sem saber o que fazer com o arquivo na mão.
+        const motivo = String(e?.message || '')
+        setErro(motivo.startsWith('formato')
+          ? `Seu navegador não abre ${motivo.replace('formato ', '')}. Salve a foto como JPG ou PNG e mande de novo.`
+          : 'Não consegui converter essa imagem. Tente salvar como JPG e reenviar.')
+      }
     }
     if (novas.length) setPend((p) => [...p, ...novas].slice(0, MAX_IMGS))
     if (fileRef.current) fileRef.current.value = ''
