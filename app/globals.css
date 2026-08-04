@@ -574,3 +574,15 @@ body {
 @media (prefers-reduced-motion: reduce){
   .ora-app .ora-tab-in{ animation:none; }
 }
+
+/* ── A ÍRIS DO NEO ──────────────────────────────────────────────────────────
+   Os dois anéis giram em sentidos opostos e MUITO devagar (48s e 72s): é
+   respiração de instrumento ligado, não animação chamando atenção. Rápido
+   demais viraria "carregando", que é outra mensagem. */
+.ora-iris-ring{ transform-origin:50% 50%; animation:oraIris 48s linear infinite; }
+.ora-iris-fib { transform-origin:50% 50%; animation:oraIris 72s linear infinite reverse; }
+@keyframes oraIris{ to{ transform:rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce){
+  .ora-iris-ring, .ora-iris-fib{ animation:none; }
+}

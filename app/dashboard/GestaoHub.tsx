@@ -2324,10 +2324,61 @@ function AdsAdmin({margem}:{margem?:number|null}){
     </div>
   )
 }
+/* ── A ÍRIS DO NEO ────────────────────────────────────────────────────────────
+   O rosto do agente é o olho da própria marca (o `oracle-eye`), não um mascote
+   de IA. E ele não decora: MEDE.
+     · a íris veste a cor da severidade;
+     · a pupila CONTRAI no crítico (14) e relaxa no tudo-certo (20);
+     · o anel externo é um medidor — a fração `carga` dos 40 traços acende.
+   Quem olha sabe a gravidade antes de ler uma palavra.
+
+   Desenhado por laço, não por `path` escrito à mão: os traços saem de seno e
+   cosseno, então mudar o número deles é mudar uma constante. */
+function IrisNeo({tam=56,sev='ok',carga=0}:{tam?:number;sev?:'critico'|'atencao'|'ok';carga?:number}){
+  const t=useT()
+  const cor = sev==='critico'?t.red : sev==='atencao'?t.gold : t.grn
+  const cx=60, cy=60
+  const N=40, acesos=Math.round(N*Math.max(0,Math.min(1,carga)))
+  const rp = sev==='critico'?14 : sev==='atencao'?17 : 20
+  // A pupila é escura NOS DOIS TEMAS — olho não inverte junto com o painel.
+  const pupila = t.dark?'#07070E':'#141422'
+  const opIris = t.dark?0.22:0.5
+  return(
+    <svg width={tam} height={tam} viewBox="0 0 120 120" aria-hidden="true" style={{display:'block',flexShrink:0}}>
+      <g className="ora-iris-ring">
+        {Array.from({length:N},(_,i)=>{
+          const a=(i/N)*Math.PI*2-Math.PI/2, on=i<acesos, r1=44, r2=on?51:48
+          return <line key={i} x1={cx+Math.cos(a)*r1} y1={cy+Math.sin(a)*r1}
+            x2={cx+Math.cos(a)*r2} y2={cy+Math.sin(a)*r2}
+            stroke={on?cor:t.line2} strokeWidth={on?2.2:1.2} strokeLinecap="round" opacity={on?.95:.5}/>
+        })}
+      </g>
+      <circle cx={cx} cy={cy} r={38} fill={t.gold} opacity={opIris*0.5}/>
+      <circle cx={cx} cy={cy} r={38} fill="none" stroke={t.gold} strokeWidth={1.4} opacity={.55}/>
+      <g className="ora-iris-fib">
+        {Array.from({length:56},(_,i)=>{
+          const a=(i/56)*Math.PI*2, r1=20+(i%3)*2.2, r2=36-(i%4)
+          return <line key={i} x1={cx+Math.cos(a)*r1} y1={cy+Math.sin(a)*r1}
+            x2={cx+Math.cos(a)*r2} y2={cy+Math.sin(a)*r2}
+            stroke={t.gold} strokeWidth={.9} opacity={i%5===0?opIris*2:opIris}/>
+        })}
+      </g>
+      <circle cx={cx} cy={cy} r={26} fill="none" stroke={cor} strokeWidth={1.1} opacity={.45}/>
+      <circle cx={cx} cy={cy} r={rp} fill={pupila}/>
+      <circle cx={cx} cy={cy} r={rp} fill="none" stroke={cor} strokeWidth={1.6} opacity={.9}/>
+      <circle cx={cx+rp*.42} cy={cy-rp*.46} r={rp*.2} fill={t.goldText} opacity={.85}/>
+    </svg>
+  )
+}
+
 /* ── O NEO NA ABA DE ADS ──────────────────────────────────────────────────────
    As regras do backend acham o que fazer e JÁ ESCREVEM a ação; o modelo só
    narra. Por isso a lista de ações aparece aqui mesmo quando a narração falha:
    o conselho não depende do modelo ter respondido.
+
+   ⭐ CADA SINAL É UMA LEITURA, não uma frase: o NÚMERO QUE DÓI → onde → a
+   evidência crua → o que fazer. Antes tudo isso vinha embrulhado num parágrafo,
+   e os números — que são o assunto — sumiam no meio do texto.
 
    ⚠️ Recomendação sobre lance mexe no dinheiro do cliente. Nada aqui executa
    nada na Amazon — é leitura. Quem clica em pausar é o seller, no Seller Central. */
@@ -2335,7 +2386,7 @@ function NeoAds({hide}:{hide:boolean}){
   const t=useT()
   const [d,setD]=useState<any>(null)
   const [carregando,setCarregando]=useState(true)
-  const [aberto,setAberto]=useState(false)
+  const [aberto,setAberto]=useState(true)
   useEffect(()=>{
     let vivo=true
     fetch('/api/agent/insight-ads',{cache:'no-store'})
@@ -2346,41 +2397,87 @@ function NeoAds({hide}:{hide:boolean}){
     return ()=>{ vivo=false }
   },[])
   if(carregando) return(
-    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'14px 16px',marginBottom:14,fontSize:12.5,color:t.t3,display:'flex',alignItems:'center',gap:9}}>
-      <i className="ti ti-loader-2" style={{fontSize:15,color:t.gold}} aria-hidden="true"/>O NEO está olhando suas campanhas…
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:16,padding:'16px 18px',marginBottom:14,fontSize:12.5,color:t.t3,display:'flex',alignItems:'center',gap:11}}>
+      <IrisNeo tam={30} sev="ok" carga={0}/>O NEO está olhando suas campanhas…
     </div>
   )
   if(!d) return null
-  const cor = d.severidade==='critico'?t.red : d.severidade==='atencao'?t.gold : t.grn
   const sinais:any[] = d.sinais||[]
+  const criticos = sinais.filter(s=>s.sev==='critico').length
+  const atencoes = sinais.filter(s=>s.sev==='atencao').length
+  const cor = d.severidade==='critico'?t.red : d.severidade==='atencao'?t.gold : t.grn
+  // O anel MEDE: fração de sinais graves sobre o total. Sem sinal, anel apagado.
+  const carga = sinais.length ? (criticos+atencoes*0.5)/sinais.length : 0
+  const veredito = criticos>0
+    ? `${criticos} ${criticos===1?'crítico':'críticos'}${atencoes?` · ${atencoes} de atenção`:''}`
+    : atencoes>0 ? `${atencoes} ${atencoes===1?'ponto de atenção':'pontos de atenção'}` : 'tudo dentro da régua'
+  /* ⚠️ Taxa abaixo de 1% ganha uma casa a mais. `pc()` usa uma só, e 0,23% e
+     0,31% viravam ambas "0,2%"/"0,3%" — arredondando justo onde a diferença
+     importa, e discordando do título, que escreve 0,23%. Número grande e frase
+     têm que dizer o mesmo. */
+  const fmt=(v:number,f:string)=> f==='brl'?brl2(v)
+    : f==='pct'?(Math.abs(v)<1?v.toFixed(2).replace('.',',')+'%':pc(v))
+    : f==='dias'?`${v}d` : String(v)
   return(
-    <div style={{background:t.dark?'rgba(255,255,255,0.02)':'#FCFCFD',border:`1px solid ${t.line}`,borderLeft:`3px solid ${cor}`,borderRadius:14,padding:'14px 16px',marginBottom:14}}>
-      <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:7}}>
-        <i className="ti ti-sparkles" style={{fontSize:15,color:cor}} aria-hidden="true"/>
-        <span style={{fontSize:11,fontWeight:700,color:t.t3,letterSpacing:.5,textTransform:'uppercase' as const}}>NEO · o que fazer nos anúncios</span>
-      </div>
-      <div style={{fontSize:13,color:t.t1,lineHeight:1.65,whiteSpace:'pre-wrap' as const,filter:hide?'blur(5px)':'none'}}>{d.texto}</div>
-      {sinais.length>0 && (<>
-        <button onClick={()=>setAberto(v=>!v)} style={{marginTop:10,background:'none',border:'none',padding:0,cursor:'pointer',fontSize:11.5,color:t.t2,fontWeight:600,display:'flex',alignItems:'center',gap:5,fontFamily:'inherit'}}>
-          <i className={`ti ti-chevron-${aberto?'down':'right'}`} style={{fontSize:13}} aria-hidden="true"/>
-          {aberto?'Ocultar':`Ver ${sinais.length===1?'o ponto':`os ${sinais.length} pontos`} e o que fazer em cada um`}
-        </button>
-        {aberto && (
-          <div style={{marginTop:9,display:'flex',flexDirection:'column' as const,gap:9}}>
-            {sinais.map((s,i)=>{
-              const c = s.sev==='critico'?t.red : s.sev==='atencao'?t.gold : t.grn
-              return(
-                <div key={i} style={{paddingLeft:10,borderLeft:`2px solid ${c}`}}>
-                  <div style={{fontSize:12.5,color:t.t1,fontWeight:500,lineHeight:1.5,filter:hide?'blur(5px)':'none'}}>{s.titulo}</div>
-                  <div style={{fontSize:11.5,color:t.t2,lineHeight:1.55,marginTop:3}}>{s.acao}</div>
-                </div>
-              )
-            })}
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:16,marginBottom:14,overflow:'hidden'}}>
+      {/* Cabeça: o olho, quem está falando, o veredito e a narração. */}
+      <div style={{display:'flex',gap:15,padding:'16px 18px',alignItems:'flex-start',
+        background:t.dark?'rgba(240,194,98,0.045)':'rgba(231,184,92,0.06)'}}>
+        <IrisNeo tam={54} sev={d.severidade} carga={carga}/>
+        <div style={{minWidth:0,flex:1}}>
+          <div style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const}}>
+            <span style={{fontFamily:FH,fontSize:12.5,fontWeight:600,letterSpacing:.6,color:t.t1}}>NEO</span>
+            <span style={{fontSize:9.5,fontWeight:700,letterSpacing:.9,textTransform:'uppercase' as const,
+              padding:'3px 8px',borderRadius:5,color:cor,
+              background:d.severidade==='critico'?t.pillRed[0]:d.severidade==='atencao'?t.pillGold[0]:t.pillGrn[0]}}>{veredito}</span>
           </div>
-        )}
+          <div style={{fontSize:13,color:t.t1,lineHeight:1.68,marginTop:7,whiteSpace:'pre-wrap' as const,filter:hide?'blur(5px)':'none'}}>{d.texto}</div>
+        </div>
+      </div>
+
+      {sinais.length>0 && (<>
+        <button onClick={()=>setAberto(v=>!v)} aria-expanded={aberto}
+          style={{width:'100%',textAlign:'left' as const,background:'none',border:'none',borderTop:`1px solid ${t.line}`,
+            padding:'9px 18px',cursor:'pointer',fontSize:11.5,color:t.t2,fontWeight:600,
+            display:'flex',alignItems:'center',gap:6,fontFamily:'inherit'}}>
+          <i className={`ti ti-chevron-${aberto?'down':'right'}`} style={{fontSize:13}} aria-hidden="true"/>
+          {aberto?'Ocultar a leitura':`Ver ${sinais.length===1?'o ponto':`os ${sinais.length} pontos`} e o que fazer em cada um`}
+        </button>
+        {aberto && sinais.map((s,i)=>{
+          const c = s.sev==='critico'?t.red : s.sev==='atencao'?t.gold : t.grn
+          return(
+            <div key={i} style={{display:'grid',gridTemplateColumns:'auto minmax(0,1fr)',gap:'0 15px',
+              padding:'14px 18px',borderTop:`1px solid ${t.line}`,alignItems:'start'}}>
+              {/* O número que dói, em tabular pra alinhar de linha em linha. */}
+              <div style={{textAlign:'right' as const,minWidth:88}}>
+                <div style={{fontFamily:FH,fontSize:20,fontWeight:600,letterSpacing:'-0.02em',color:c,
+                  fontVariantNumeric:'tabular-nums',lineHeight:1.15,filter:hide&&s.formato==='brl'?'blur(5px)':'none'}}>
+                  {typeof s.valor==='number'?fmt(s.valor,s.formato):'—'}
+                </div>
+                <div style={{fontSize:9,fontWeight:700,letterSpacing:.9,textTransform:'uppercase' as const,color:t.t3,marginTop:3}}>{s.rotulo}</div>
+              </div>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:600,color:t.t1,lineHeight:1.4}}>{s.alvo||s.titulo}</div>
+                {Array.isArray(s.chips)&&s.chips.length>0 && (
+                  <div style={{display:'flex',flexWrap:'wrap' as const,gap:6,marginTop:7}}>
+                    {s.chips.map((ch:string,j:number)=>(
+                      <span key={j} style={{fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',fontSize:10.5,
+                        color:t.t2,background:t.card2,border:`1px solid ${t.line}`,borderRadius:5,padding:'2.5px 7px',
+                        fontVariantNumeric:'tabular-nums',filter:hide?'blur(4px)':'none'}}>{ch}</span>
+                    ))}
+                  </div>
+                )}
+                <div style={{display:'flex',gap:8,marginTop:9,alignItems:'flex-start',fontSize:12,color:t.t2,lineHeight:1.55}}>
+                  <i className="ti ti-arrow-narrow-right" style={{fontSize:14,color:t.gold,flexShrink:0,marginTop:1}} aria-hidden="true"/>
+                  <span>{s.acao}</span>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </>)}
-      <div style={{fontSize:10,color:t.t3,marginTop:10}}>
-        Leitura das suas campanhas dos últimos 14 dias cruzada com o seu estoque. O NEO não mexe em nada — quem aplica é você.
+      <div style={{padding:'10px 18px',fontSize:10,color:t.t3,borderTop:`1px solid ${t.line}`,background:t.card2}}>
+        Campanhas dos últimos 14 dias cruzadas com o seu estoque · o NEO não mexe em nada, quem aplica é você
       </div>
     </div>
   )
