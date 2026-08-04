@@ -2164,6 +2164,55 @@ function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem
   )
 }
 
+/* ── O BOTÃO QUE APLICA A RECOMENDAÇÃO ────────────────────────────────────────
+   O NEO deixa de só apontar e passa a executar. Isto mexe no dinheiro do
+   cliente, então o desenho é todo em torno de não errar:
+
+   ⚠️ CONFIRMAÇÃO QUE DIZ O EFEITO, não "tem certeza?". "Ela para de gastar e de
+   vender imediatamente" é a informação que faz a pessoa decidir; "confirmar?"
+   só transfere a responsabilidade sem informar nada.
+   ⚠️ O botão SÓ EXISTE quando o backend mandou `acao_botao` — e ele só manda com
+   campanha inequívoca e ativa. Nome duplicado, campanha já pausada ou sinal de
+   página (conversão baixa) não ganham botão.
+   ⚠️ Depois de aplicado vira TEXTO, não volta a ser botão: o cartão está em
+   cache de 12h e o número ao lado é o de ANTES. Reoferecer "baixar mais 10%"
+   sobre um dado velho é como o cliente corta lance duas vezes sem perceber. */
+function AplicarNeo({acao,feito,onFeito}:{acao:any;feito?:string;onFeito:(txt:string)=>void}){
+  const t=useT()
+  const [rodando,setRodando]=useState(false)
+  const [erro,setErro]=useState<string|null>(null)
+  if(feito) return(
+    <div style={{display:'flex',alignItems:'center',gap:6,marginTop:9,fontSize:11.5,color:t.grn,fontWeight:600}}>
+      <i className="ti ti-check" style={{fontSize:14}} aria-hidden="true"/>{feito}
+    </div>
+  )
+  async function aplicar(){
+    if(!confirm(acao.confirmacao)) return
+    setRodando(true); setErro(null)
+    try{
+      const r=await fetch('/api/agent/aplicar',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({tipo:acao.tipo,campaignId:acao.campaignId})})
+      const d=await r.json()
+      if(d.ok) onFeito(acao.tipo==='pausar'?'Campanha pausada na Amazon.':`Lance reduzido em ${d.itens||''} ponto(s) da campanha.`)
+      else setErro(String(d.erro||d.error||'não foi aplicado'))
+    }catch{ setErro('sem resposta do servidor') }
+    setRodando(false)
+  }
+  return(
+    <div style={{marginTop:9}}>
+      <button onClick={aplicar} disabled={rodando}
+        style={{padding:'7px 13px',borderRadius:8,cursor:rodando?'default':'pointer',fontFamily:'inherit',
+          fontSize:11.5,fontWeight:700,border:`1px solid ${t.gold}`,
+          background:t.dark?'rgba(240,194,98,0.10)':'rgba(231,184,92,0.14)',color:t.gold,
+          display:'flex',alignItems:'center',gap:6}}>
+        <i className={`ti ti-${rodando?'loader-2':acao.tipo==='pausar'?'player-pause':'arrow-down-right'}`} style={{fontSize:13}} aria-hidden="true"/>
+        {rodando?'aplicando na Amazon…':acao.rotulo}
+      </button>
+      {erro && <div style={{fontSize:11,color:t.red,marginTop:5,lineHeight:1.45}}>{erro}</div>}
+    </div>
+  )
+}
+
 /* ── AS 4 SEGMENTAÇÕES DA CAMPANHA AUTOMÁTICA ─────────────────────────────────
    Campanha automática não tem palavra-chave — tem QUATRO alvos, cada um com
    lance próprio, e a tela dizia "nenhuma palavra-chave nesta campanha" como se
@@ -2646,6 +2695,8 @@ function NeoAds({hide}:{hide:boolean}){
      exatamente o que o `rules-of-hooks` pegou: o cartão renderiza `null` numa
      passada e o card inteiro na seguinte, e o React perde o pareamento. Um bug
      que não aparece em tsc nem em teste, só na tela do cliente. */
+  // O que já foi aplicado nesta sessão, por campanha+ação.
+  const [feitos,setFeitos]=useState<Record<string,string>>({})
   const [giro,setGiro]=useState(0)
   const quantasChamadas=Math.min(((d?.sinais||[]) as any[]).length,3)
   useEffect(()=>{
@@ -2766,6 +2817,8 @@ function NeoAds({hide}:{hide:boolean}){
                   <i className="ti ti-arrow-narrow-right" style={{fontSize:14,color:t.gold,flexShrink:0,marginTop:1}} aria-hidden="true"/>
                   <span>{s.acao}</span>
                 </div>
+                {s.acao_botao && <AplicarNeo acao={s.acao_botao} feito={feitos[s.acao_botao.campaignId+s.acao_botao.tipo]}
+                  onFeito={txt=>setFeitos(f=>({...f,[s.acao_botao.campaignId+s.acao_botao.tipo]:txt}))}/>}
               </div>
             </div>
           )
