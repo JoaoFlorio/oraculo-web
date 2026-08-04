@@ -586,3 +586,10 @@ body {
 @media (prefers-reduced-motion: reduce){
   .ora-iris-ring, .ora-iris-fib{ animation:none; }
 }
+
+/* A chamada do NEO trocando de assunto: entra deslizando de baixo, sem piscar.
+   Fade puro faria a frase sumir e aparecer no mesmo lugar, o que lê como falha
+   de renderização; o deslocamento diz "trocou". */
+.ora-neo-chamada{ animation:oraNeoChamada .5s cubic-bezier(.22,.61,.36,1) both; }
+@keyframes oraNeoChamada{ from{ opacity:0; transform:translateY(6px);} to{ opacity:1; transform:none;} }
+@media (prefers-reduced-motion: reduce){ .ora-neo-chamada{ animation:none; } }

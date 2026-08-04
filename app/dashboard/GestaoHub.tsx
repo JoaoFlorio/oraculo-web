@@ -2164,6 +2164,89 @@ function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem
   )
 }
 
+/* ── O LANCE DA CAMPANHA ──────────────────────────────────────────────────────
+   ⚠️ Na Amazon NÃO existe "lance da campanha". O lance mora no target (palavra
+   ou produto) e, acima dele, no `defaultBid` do GRUPO DE ANÚNCIOS — o valor que
+   vale pra todo target sem lance próprio. É essa a alavanca que o vendedor chama
+   de "baixar o lance dessa campanha" sem abrir palavra por palavra.
+
+   Os grupos carregam SOB DEMANDA, ao expandir: pedir os grupos das 93 campanhas
+   de uma vez seriam 93 chamadas à Amazon pra mostrar número que ninguém pediu. */
+function LanceDoGrupo({campaignId,nome}:{campaignId:string;nome:string}){
+  const t=useT()
+  const [grupos,setGrupos]=useState<any[]|null>(null)
+  const [erro,setErro]=useState<string|null>(null)
+  const [rasc,setRasc]=useState<Record<string,string>>({})
+  const [salvando,setSalvando]=useState<string|null>(null)
+  useEffect(()=>{
+    let vivo=true
+    fetch(`/api/admin/ads-adgroups?campaignId=${encodeURIComponent(campaignId)}`)
+      .then(r=>r.json())
+      .then(d=>{ if(!vivo) return; if(d?.ok) setGrupos(d.grupos||[]); else setErro(d?.error||'não consegui ler os grupos') })
+      .catch(()=>{ if(vivo) setErro('sem resposta do servidor') })
+    return ()=>{ vivo=false }
+  },[campaignId])
+
+  async function salvar(g:any, bid:number){
+    if(!confirm(`Mudar o lance de "${nome}"\n\nGrupo: ${g.nome}\nDe R$ ${g.lance} para R$ ${bid.toFixed(2)}?\n\nIsso altera o CPC de verdade na Amazon.`)) return
+    setSalvando(g.adGroupId); setErro(null)
+    try{
+      const r=await fetch('/api/admin/ads-adgroup',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({adGroupId:g.adGroupId,campaignId,bid})})
+      const d=await r.json()
+      if(d.ok){
+        setGrupos(gs=>(gs||[]).map(x=>x.adGroupId===g.adGroupId?{...x,lance:d.lance}:x))
+        setRasc(v=>{ const n={...v}; delete n[g.adGroupId]; return n })
+      } else setErro(d.erro||d.error||'não foi aplicado')
+    }catch{ setErro('sem resposta do servidor') }
+    setSalvando(null)
+  }
+
+  const cx={padding:'11px 13px',borderBottom:`1px solid ${t.line}`}
+  if(erro) return <div style={{...cx,fontSize:11.5,color:t.red}}>{erro}</div>
+  if(!grupos) return <div style={{...cx,fontSize:11.5,color:t.t3}}>Lendo o lance na Amazon…</div>
+  if(!grupos.length) return <div style={{...cx,fontSize:11.5,color:t.t3}}>Esta campanha não tem grupo de anúncios.</div>
+
+  return(
+    <div style={cx}>
+      <div style={{fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:'uppercase' as const,color:t.t3,marginBottom:8}}>
+        Lance do grupo · vale pra toda palavra sem lance próprio
+      </div>
+      <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+        {grupos.map(g=>{
+          const atual=Number(g.lance)||0
+          const v=rasc[g.adGroupId]
+          const novo=v!=null&&v!==''?Number(v):atual
+          const mudou=isFinite(novo)&&novo>0&&Math.abs(novo-atual)>0.001
+          // −10% / +10%: o passo que o vendedor realmente usa pra calibrar CPC.
+          const passo=(f:number)=>setRasc(r=>({...r,[g.adGroupId]:Math.max(0.02,+(atual*f).toFixed(2)).toFixed(2)}))
+          return(
+            <div key={g.adGroupId} style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const}}>
+              <span style={{flex:'1 1 150px',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,fontSize:12,color:t.t2}}>{g.nome}</span>
+              <button onClick={()=>passo(0.9)} title="baixar 10%" aria-label={`Baixar 10% o lance de ${g.nome}`}
+                style={{width:30,height:30,borderRadius:8,cursor:'pointer',border:`1px solid ${t.line2}`,background:'transparent',color:t.t1,fontSize:15,fontWeight:700,fontFamily:'inherit',lineHeight:1}}>−</button>
+              <div style={{display:'flex',alignItems:'center',gap:5,background:t.card,border:`1px solid ${mudou?t.gold:t.line2}`,borderRadius:8,padding:'5px 9px'}}>
+                <span style={{fontSize:11,color:t.t3}}>R$</span>
+                <input value={v??atual.toFixed(2)} onChange={e=>setRasc(r=>({...r,[g.adGroupId]:e.target.value}))}
+                  inputMode="decimal" aria-label={`Lance do grupo ${g.nome}`}
+                  style={{width:52,border:'none',background:'transparent',color:t.t1,fontSize:13,fontWeight:600,
+                    fontFamily:FH,fontVariantNumeric:'tabular-nums',outline:'none',padding:0}}/>
+              </div>
+              <button onClick={()=>passo(1.1)} title="subir 10%" aria-label={`Subir 10% o lance de ${g.nome}`}
+                style={{width:30,height:30,borderRadius:8,cursor:'pointer',border:`1px solid ${t.line2}`,background:'transparent',color:t.t1,fontSize:15,fontWeight:700,fontFamily:'inherit',lineHeight:1}}>+</button>
+              {mudou && <button disabled={salvando===g.adGroupId} onClick={()=>salvar(g,novo)}
+                style={{padding:'6px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,
+                  border:'none',background:t.gold,color:t.dark?'#1c1606':'#3a2a05'}}>
+                {salvando===g.adGroupId?'…':`salvar ${novo<atual?'↓':'↑'}`}
+              </button>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function AdsAdmin({margem}:{margem?:number|null}){
   const t=useT()
   const [st,setSt]=useState<{loading:boolean;data:any}|null>(null)
@@ -2284,40 +2367,75 @@ function AdsAdmin({margem}:{margem?:number|null}){
             <input value={busca} onChange={e=>setBusca(e.target.value)} placeholder="filtrar por nome…"
               style={{marginLeft:'auto',padding:'6px 10px',borderRadius:8,border:`1px solid ${t.line}`,background:'transparent',color:t.t1,fontSize:11.5,fontFamily:'inherit',outline:'none',minWidth:170}}/>
           </div>
+          {/* ⚠️ ERA UMA LINHA SÓ com tudo espremido em fonte 9,5–12: nome, estado,
+              R$, input, dois botões e o id, sem separação nenhuma. Em 93
+              campanhas isso vira parede de risco cinza — o João não conseguia
+              nem enxergar. Agora cada campanha é um BLOCO com o nome legível em
+              cima e os controles rotulados embaixo. */}
+          <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
           {vis.slice(0,40).map((c:any)=>{
             const ativa=c.estado==='ENABLED'
             const val=rascunho[c.campaignId]
             const mudou=val!=null&&val!==''&&Number(val)!==Number(c.orcamento)
+            const expandida=aberta===c.campaignId
             return(
-              <div key={c.campaignId}>
-              <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap' as const,padding:'7px 0',borderTop:`1px solid ${t.line}`}}>
-                <button onClick={()=>setAberta(a=>a===c.campaignId?null:c.campaignId)}
-                  title="Ver palavras-chave e lances"
-                  style={{background:'transparent',border:'none',color:t.t3,cursor:'pointer',fontFamily:'inherit',fontSize:11,padding:'0 2px',lineHeight:1}}>
-                  {aberta===c.campaignId?'▾':'▸'}
-                </button>
-                <span style={{flex:'1 1 190px',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,fontSize:12,color:t.t1}}>{c.nome}</span>
-                <span style={{fontSize:10,fontWeight:700,color:ativa?t.grn:t.t3,minWidth:56}}>{ativa?'ATIVA':'PAUSADA'}</span>
-                <div style={{display:'flex',alignItems:'center',gap:4}}>
-                  <span style={{fontSize:10.5,color:t.t3}}>R$</span>
-                  <input value={val??String(c.orcamento??'')} onChange={e=>setRascunho(v=>({...v,[c.campaignId]:e.target.value}))}
-                    inputMode="decimal" style={{width:62,padding:'4px 6px',borderRadius:6,border:`1px solid ${mudou?t.gold:t.line}`,background:'transparent',color:t.t1,fontSize:11.5,fontFamily:FG,outline:'none'}}/>
-                  {mudou && <button disabled={salvando===c.campaignId}
-                    onClick={()=>aplicar(c,{budget:Number(val)},`Mudar o orçamento diário de "${c.nome}"\n\nDe R$ ${c.orcamento} para R$ ${Number(val)}?\n\nIsso altera de verdade na Amazon.`)}
-                    style={{padding:'4px 9px',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:10.5,fontWeight:700,border:`1px solid ${t.gold}`,background:'transparent',color:t.gold}}>salvar</button>}
+              <div key={c.campaignId} style={{background:t.card,border:`1px solid ${expandida?t.line2:t.line}`,borderRadius:11,overflow:'hidden'}}>
+                <div style={{padding:'11px 13px'}}>
+                  {/* Linha 1: quem é a campanha e como ela está. */}
+                  <div style={{display:'flex',alignItems:'center',gap:9,minWidth:0}}>
+                    <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,
+                      fontSize:13.5,fontWeight:600,color:t.t1}} title={`#${c.campaignId}`}>{c.nome}</span>
+                    <span style={{flexShrink:0,fontSize:9.5,fontWeight:700,letterSpacing:.8,textTransform:'uppercase' as const,
+                      padding:'3px 9px',borderRadius:5,color:ativa?t.grn:t.t3,
+                      background:ativa?t.pillGrn[0]:(t.dark?'rgba(255,255,255,0.06)':'#F1F2F4')}}>{ativa?'ativa':'pausada'}</span>
+                  </div>
+                  {/* Linha 2: os controles, cada um com rótulo. */}
+                  <div style={{display:'flex',alignItems:'flex-end',gap:14,marginTop:10,flexWrap:'wrap' as const}}>
+                    <div>
+                      <div style={{fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:'uppercase' as const,color:t.t3,marginBottom:4}}>Orçamento/dia</div>
+                      <div style={{display:'flex',alignItems:'center',gap:6}}>
+                        <div style={{display:'flex',alignItems:'center',gap:5,background:t.card2,border:`1px solid ${mudou?t.gold:t.line2}`,borderRadius:8,padding:'5px 9px'}}>
+                          <span style={{fontSize:11,color:t.t3}}>R$</span>
+                          <input value={val??String(c.orcamento??'')} onChange={e=>setRascunho(v=>({...v,[c.campaignId]:e.target.value}))}
+                            inputMode="decimal" aria-label={`Orçamento diário de ${c.nome}`}
+                            style={{width:58,border:'none',background:'transparent',color:t.t1,fontSize:13,fontWeight:600,
+                              fontFamily:FH,fontVariantNumeric:'tabular-nums',outline:'none',padding:0}}/>
+                        </div>
+                        {mudou && <button disabled={salvando===c.campaignId}
+                          onClick={()=>aplicar(c,{budget:Number(val)},`Mudar o orçamento diário de "${c.nome}"\n\nDe R$ ${c.orcamento} para R$ ${Number(val)}?\n\nIsso altera de verdade na Amazon.`)}
+                          style={{padding:'6px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,
+                            border:'none',background:t.gold,color:t.dark?'#1c1606':'#3a2a05'}}>
+                          {salvando===c.campaignId?'…':'salvar'}
+                        </button>}
+                      </div>
+                    </div>
+                    <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+                      <button onClick={()=>setAberta(a=>a===c.campaignId?null:c.campaignId)}
+                        style={{padding:'7px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:600,
+                          border:`1px solid ${t.line2}`,background:'transparent',color:t.t2,display:'flex',alignItems:'center',gap:5}}>
+                        <i className={`ti ti-chevron-${expandida?'up':'down'}`} style={{fontSize:13}} aria-hidden="true"/>
+                        lance e palavras
+                      </button>
+                      <button disabled={salvando===c.campaignId}
+                        onClick={()=>aplicar(c,{state:ativa?'PAUSED':'ENABLED'},`${ativa?'PAUSAR':'REATIVAR'} a campanha "${c.nome}"?\n\nIsso altera de verdade na Amazon.`)}
+                        style={{padding:'7px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,
+                          border:`1px solid ${ativa?'rgba(248,113,113,0.45)':'rgba(52,211,153,0.45)'}`,
+                          background:ativa?'rgba(248,113,113,0.08)':'rgba(52,211,153,0.08)',color:ativa?t.red:t.grn}}>
+                        {salvando===c.campaignId?'…':ativa?'pausar':'reativar'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <button disabled={salvando===c.campaignId}
-                  onClick={()=>aplicar(c,{state:ativa?'PAUSED':'ENABLED'},`${ativa?'PAUSAR':'REATIVAR'} a campanha "${c.nome}"?\n\nIsso altera de verdade na Amazon.`)}
-                  style={{padding:'4px 11px',borderRadius:6,cursor:'pointer',fontFamily:'inherit',fontSize:10.5,fontWeight:700,
-                    border:`1px solid ${ativa?'rgba(248,113,113,0.35)':'rgba(52,211,153,0.35)'}`,background:'transparent',color:ativa?t.red:t.grn}}>
-                  {salvando===c.campaignId?'…':ativa?'pausar':'reativar'}
-                </button>
-                <span style={{fontFamily:FG,fontSize:9.5,color:t.t3,opacity:.6}}>#{c.campaignId}</span>
-              </div>
-              {aberta===c.campaignId && <Keywords campaignId={c.campaignId} nome={c.nome} margem={margem}/>}
+                {expandida && (
+                  <div style={{borderTop:`1px solid ${t.line}`,background:t.dark?'rgba(0,0,0,0.18)':'#FAFBFC'}}>
+                    <LanceDoGrupo campaignId={c.campaignId} nome={c.nome}/>
+                    <Keywords campaignId={c.campaignId} nome={c.nome} margem={margem}/>
+                  </div>
+                )}
               </div>
             )
           })}
+          </div>
           {vis.length>40 && <div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Mostrando 40 de {vis.length} — use o filtro pra achar as outras.</div>}
         </div>
       )}
@@ -2386,7 +2504,23 @@ function NeoAds({hide}:{hide:boolean}){
   const t=useT()
   const [d,setD]=useState<any>(null)
   const [carregando,setCarregando]=useState(true)
-  const [aberto,setAberto]=useState(true)
+  // 🚨 NASCE FECHADO. Aberto, o cartão empurrava os cards e as duas tabelas pra
+  // baixo da dobra — a aba de Ads já tem muita coisa, e o diagnóstico virava
+  // parede de texto antes de a pessoa ver o próprio gasto.
+  const [aberto,setAberto]=useState(false)
+  /* 🚨 O GIRO FICA AQUI EM CIMA, antes dos `return` de carregando/sem-dado.
+     Hook depois de early return muda a ORDEM dos hooks entre renders — foi
+     exatamente o que o `rules-of-hooks` pegou: o cartão renderiza `null` numa
+     passada e o card inteiro na seguinte, e o React perde o pareamento. Um bug
+     que não aparece em tsc nem em teste, só na tela do cliente. */
+  const [giro,setGiro]=useState(0)
+  const quantasChamadas=Math.min(((d?.sinais||[]) as any[]).length,3)
+  useEffect(()=>{
+    if(aberto || quantasChamadas<2) return
+    // 7s: tempo de ler a frase inteira sem a próxima roubar a leitura no meio.
+    const id=setInterval(()=>setGiro(g=>g+1),7000)
+    return ()=>clearInterval(id)
+  },[aberto,quantasChamadas])
   useEffect(()=>{
     let vivo=true
     fetch('/api/agent/insight-ads',{cache:'no-store'})
@@ -2408,9 +2542,6 @@ function NeoAds({hide}:{hide:boolean}){
   const cor = d.severidade==='critico'?t.red : d.severidade==='atencao'?t.gold : t.grn
   // O anel MEDE: fração de sinais graves sobre o total. Sem sinal, anel apagado.
   const carga = sinais.length ? (criticos+atencoes*0.5)/sinais.length : 0
-  const veredito = criticos>0
-    ? `${criticos} ${criticos===1?'crítico':'críticos'}${atencoes?` · ${atencoes} de atenção`:''}`
-    : atencoes>0 ? `${atencoes} ${atencoes===1?'ponto de atenção':'pontos de atenção'}` : 'tudo dentro da régua'
   /* ⚠️ Taxa abaixo de 1% ganha uma casa a mais. `pc()` usa uma só, e 0,23% e
      0,31% viravam ambas "0,2%"/"0,3%" — arredondando justo onde a diferença
      importa, e discordando do título, que escreve 0,23%. Número grande e frase
@@ -2418,12 +2549,40 @@ function NeoAds({hide}:{hide:boolean}){
   const fmt=(v:number,f:string)=> f==='brl'?brl2(v)
     : f==='pct'?(Math.abs(v)<1?v.toFixed(2).replace('.',',')+'%':pc(v))
     : f==='dias'?`${v}d` : String(v)
+  const veredito = criticos>0
+    ? `${criticos} ${criticos===1?'crítico':'críticos'}${atencoes?` · ${atencoes} de atenção`:''}`
+    : atencoes>0 ? `${atencoes} ${atencoes===1?'ponto de atenção':'pontos de atenção'}` : 'tudo dentro da régua'
+
+  /* ⭐ A CHAMADA FECHADA. Ela precisa fazer a pessoa querer abrir, então fala do
+     que ELA tem, não "veja as recomendações": o dinheiro queimando, o nome da
+     campanha, o produto sem estoque. Sai do sinal mais grave — o mesmo que o
+     olho já está sinalizando na cor.
+
+     ⚠️ Rotativa entre os sinais, não entre frases decorativas: cada volta mostra
+     um problema REAL diferente. Frase de efeito girando sem conteúdo vira ruído
+     de banner e a pessoa aprende a ignorar. */
+  const chamadas = sinais.slice(0,3).map((s:any)=>{
+    const v = typeof s.valor==='number'?fmt(s.valor,s.formato):''
+    switch(s.tipo){
+      case 'anuncia-sem-estoque': return `${s.alvo} está sem estoque e já consumiu ${v} em anúncio`
+      case 'queima':              return `${v} gastos em "${s.alvo}" sem uma venda sequer`
+      case 'acos-campanha':       return `"${s.alvo}" está com ${v} de ACoS — acima do que o produto aguenta`
+      case 'conversao-baixa':     return `"${s.alvo}" traz clique e não fecha venda: ${v} de conversão`
+      case 'encalhado-sem-ads':   return `${s.alvo} tem ${v} de estoque parado sem anúncio nenhum`
+      case 'campea':              return `"${s.alvo}" está com ${v} de ACoS — é onde escalar`
+      default:                    return s.titulo
+    }
+  })
+  const chamada = chamadas.length ? chamadas[giro%chamadas.length] : d.texto
   return(
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:16,marginBottom:14,overflow:'hidden'}}>
-      {/* Cabeça: o olho, quem está falando, o veredito e a narração. */}
-      <div style={{display:'flex',gap:15,padding:'16px 18px',alignItems:'flex-start',
-        background:t.dark?'rgba(240,194,98,0.045)':'rgba(231,184,92,0.06)'}}>
-        <IrisNeo tam={54} sev={d.severidade} carga={carga}/>
+      {/* A CABEÇA É O BOTÃO. Fechado, ela mostra a chamada rotativa; aberto, o
+          diagnóstico inteiro. Um clique em qualquer lugar da faixa alterna —
+          alvo grande em vez de uma setinha de 13px. */}
+      <button onClick={()=>setAberto(v=>!v)} aria-expanded={aberto}
+        style={{width:'100%',display:'flex',gap:14,padding:'14px 16px',alignItems:'center',textAlign:'left' as const,
+          background:t.dark?'rgba(240,194,98,0.045)':'rgba(231,184,92,0.06)',border:'none',cursor:'pointer',fontFamily:'inherit'}}>
+        <IrisNeo tam={aberto?54:42} sev={d.severidade} carga={carga}/>
         <div style={{minWidth:0,flex:1}}>
           <div style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const}}>
             <span style={{fontFamily:FH,fontSize:12.5,fontWeight:600,letterSpacing:.6,color:t.t1}}>NEO</span>
@@ -2431,19 +2590,22 @@ function NeoAds({hide}:{hide:boolean}){
               padding:'3px 8px',borderRadius:5,color:cor,
               background:d.severidade==='critico'?t.pillRed[0]:d.severidade==='atencao'?t.pillGold[0]:t.pillGrn[0]}}>{veredito}</span>
           </div>
-          <div style={{fontSize:13,color:t.t1,lineHeight:1.68,marginTop:7,whiteSpace:'pre-wrap' as const,filter:hide?'blur(5px)':'none'}}>{d.texto}</div>
+          {aberto ? (
+            <div style={{fontSize:13,color:t.t1,lineHeight:1.68,marginTop:7,whiteSpace:'pre-wrap' as const,filter:hide?'blur(5px)':'none'}}>{d.texto}</div>
+          ) : (
+            <div key={giro} className="ora-neo-chamada" style={{fontSize:12.5,color:t.t2,lineHeight:1.5,marginTop:4,
+              overflow:'hidden',textOverflow:'ellipsis',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as const,
+              filter:hide?'blur(5px)':'none'}}>{chamada}</div>
+          )}
         </div>
-      </div>
+        <span style={{flexShrink:0,fontSize:11,fontWeight:700,color:t.gold,display:'flex',alignItems:'center',gap:5}}>
+          {aberto?'fechar':'ver o que fazer'}
+          <i className={`ti ti-chevron-${aberto?'up':'down'}`} style={{fontSize:13}} aria-hidden="true"/>
+        </span>
+      </button>
 
-      {sinais.length>0 && (<>
-        <button onClick={()=>setAberto(v=>!v)} aria-expanded={aberto}
-          style={{width:'100%',textAlign:'left' as const,background:'none',border:'none',borderTop:`1px solid ${t.line}`,
-            padding:'9px 18px',cursor:'pointer',fontSize:11.5,color:t.t2,fontWeight:600,
-            display:'flex',alignItems:'center',gap:6,fontFamily:'inherit'}}>
-          <i className={`ti ti-chevron-${aberto?'down':'right'}`} style={{fontSize:13}} aria-hidden="true"/>
-          {aberto?'Ocultar a leitura':`Ver ${sinais.length===1?'o ponto':`os ${sinais.length} pontos`} e o que fazer em cada um`}
-        </button>
-        {aberto && sinais.map((s,i)=>{
+      {sinais.length>0 && aberto && (<>
+        {sinais.map((s,i)=>{
           const c = s.sev==='critico'?t.red : s.sev==='atencao'?t.gold : t.grn
           return(
             <div key={i} style={{display:'grid',gridTemplateColumns:'auto minmax(0,1fr)',gap:'0 15px',
@@ -2476,9 +2638,11 @@ function NeoAds({hide}:{hide:boolean}){
           )
         })}
       </>)}
-      <div style={{padding:'10px 18px',fontSize:10,color:t.t3,borderTop:`1px solid ${t.line}`,background:t.card2}}>
-        Campanhas dos últimos 14 dias cruzadas com o seu estoque · o NEO não mexe em nada, quem aplica é você
-      </div>
+      {aberto && (
+        <div style={{padding:'10px 18px',fontSize:10,color:t.t3,borderTop:`1px solid ${t.line}`,background:t.card2}}>
+          Campanhas dos últimos 14 dias cruzadas com o seu estoque · o NEO não mexe em nada, quem aplica é você
+        </div>
+      )}
     </div>
   )
 }
@@ -2559,7 +2723,31 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
       </div>)}
     </div>
     <NeoAds hide={hide}/>
-    <Hint><b>ACoS</b> é o gasto sobre a venda que o <b>anúncio</b> trouxe — mede o anúncio. <b>TACoS</b> é o gasto sobre o faturamento <b>inteiro</b> — mede quanto da sua operação o anúncio come. ⚠️ <b>O ACoS sai da sua margem</b> — não existe número bom no vácuo: num produto que deixa 20%, um ACoS de 20% é venda com lucro zero. A régua é a margem do produto: gastar menos da metade dela é saudável, passar dela é prejuízo. Sem o CMV cadastrado o Oráculo assume 20% de margem e avisa que assumiu.</Hint>
+    {/* ⚠️ Isto era uma faixa de texto corrido numa linha só — o João não
+        conseguia ler. Virou três blocos: as duas siglas lado a lado e a régua
+        embaixo, que é a parte que muda decisão. */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(230px,1fr))',gap:11,marginBottom:12}}>
+      {[
+        {sigla:'ACoS',oque:'gasto ÷ venda que o anúncio trouxe',mede:'mede o ANÚNCIO'},
+        {sigla:'TACoS',oque:'gasto ÷ faturamento inteiro',mede:'mede quanto da OPERAÇÃO o anúncio come'},
+      ].map(k=>(
+        <div key={k.sigla} style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:11,padding:'11px 13px'}}>
+          <div style={{fontFamily:FH,fontSize:13,fontWeight:600,color:t.t1}}>{k.sigla}</div>
+          <div style={{fontFamily:'ui-monospace,SFMono-Regular,Menlo,monospace',fontSize:11,color:t.gold,margin:'4px 0 5px'}}>{k.oque}</div>
+          <div style={{fontSize:11,color:t.t2,lineHeight:1.5}}>{k.mede}</div>
+        </div>
+      ))}
+      <div style={{background:t.dark?'rgba(240,194,98,0.06)':'rgba(231,184,92,0.09)',border:`1px solid ${t.gold}`,borderRadius:11,padding:'11px 13px'}}>
+        <div style={{fontFamily:FH,fontSize:13,fontWeight:600,color:t.gold}}>O ACoS sai da sua margem</div>
+        <div style={{fontSize:11.5,color:t.t1,lineHeight:1.55,marginTop:5}}>
+          Num produto que deixa <b>20%</b>, um ACoS de <b>20%</b> é venda com <b>lucro zero</b>. A régua é a margem
+          do produto: gastar menos da <b>metade</b> dela é saudável, passar dela é prejuízo.
+        </div>
+        <div style={{fontSize:10.5,color:t.t3,lineHeight:1.5,marginTop:6}}>
+          Sem o CMV cadastrado o Oráculo assume 20% de margem — e avisa que assumiu.
+        </div>
+      </div>
+    </div>
     {parcial && (
       <div style={{background:t.dark?'rgba(240,180,41,0.07)':'#FFFDF5',border:`1px solid ${t.gold}`,borderRadius:11,padding:'10px 13px',margin:'0 0 12px',fontSize:11.5,color:t.t2,lineHeight:1.55}}>
         <b style={{color:t.gold}}>Pedidos e unidades ainda não cobrem o período inteiro.</b> A Amazon só reescreve os
