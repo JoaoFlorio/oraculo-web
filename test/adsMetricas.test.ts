@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { tacos, acos, roas, conversao, unidadesOrganicas, periodosCasam, linhasPorProduto, linhasPorCampanha, type AdsSku, type AdsCampanha, type ProdutoDre } from '../lib/adsMetricas.ts'
+import { tacos, acos, roas, conversao, unidadesOrganicas, periodosCasam, diaBR, linhasPorProduto, linhasPorCampanha, type AdsSku, type AdsCampanha, type ProdutoDre } from '../lib/adsMetricas.ts'
 
 const perto = (a: number | null, b: number, tol = 0.011) =>
   assert.ok(a !== null && Math.abs(a - b) < tol, `esperado ~${b}, deu ${a}`)
@@ -34,6 +34,30 @@ test('períodos diferentes não se dividem', () => {
   assert.equal(periodosCasam({ from: '2026-07-05', to: '2026-08-03' }, dia), false)
   assert.equal(periodosCasam(dia, null), false)
   assert.equal(periodosCasam(dia, { from: '2026-08-03' }), false)   // sem `to` não dá pra afirmar
+})
+
+/* 🚨 ACHADO CONTRA A PRODUÇÃO, não pelo teste. As duas rotas respondem o mesmo
+   período em formatos diferentes: a DRE devolve o timestamp que recebeu e o Ads
+   devolve o dia já resolvido no fuso BR. Comparando literal, NADA casa — e o
+   TACoS ficaria "—" para sempre, sem erro nenhum aparecer. */
+test('o mesmo período em formatos diferentes CASA', () => {
+  const ads = { from: '2026-07-01', to: '2026-07-31' }
+  const dre = { from: '2026-07-01T23:41:55.918Z', to: '2026-07-31T23:41:55.918Z' }
+  assert.equal(periodosCasam(ads, dre), true)
+})
+
+test('o fuso é o BR (UTC-3), o mesmo dos dois lados', () => {
+  // 01/07 às 02:00Z ainda é 30/06 no Brasil — e é o dia BR que vale.
+  assert.equal(diaBR('2026-07-01T02:00:00.000Z'), '2026-06-30')
+  assert.equal(diaBR('2026-07-01'), '2026-07-01')
+  assert.equal(diaBR('nada disso'), null)
+  assert.equal(diaBR(undefined), null)
+})
+
+test('períodos de tamanhos diferentes continuam sem casar, mesmo normalizados', () => {
+  const ads = { from: '2026-07-05', to: '2026-08-03' }              // janela fixa de 30d
+  const dre = { from: '2026-08-03T12:00:00Z', to: '2026-08-03T12:00:00Z' }  // "Hoje"
+  assert.equal(periodosCasam(ads, dre), false)
 })
 
 test('sem período casado, as colunas que cruzam Ads e DRE somem — as do Ads ficam', () => {

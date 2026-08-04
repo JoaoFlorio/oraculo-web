@@ -51,13 +51,31 @@ export function tacos(gasto: number, faturamentoTotal: number): number | null {
  * venda saem do MESMO relatório.
  *
  * Sem os dois períodos, ou com eles diferentes, a resposta é "não sei".
+ *
+ * 🚨 AS DUAS FONTES FALAM FORMATOS DIFERENTES, e comparar literal não casa
+ * NUNCA. A DRE devolve o timestamp que recebeu (`2026-07-01T23:41:55.918Z`); o
+ * relatório de Ads devolve o dia já resolvido no fuso BR (`2026-07-01`). A
+ * primeira versão disto comparava string com string e teria deixado o TACoS em
+ * "—" para sempre, sem nenhum erro aparecer em lugar nenhum. Irmã da regra 97:
+ * quando nada casa, desconfie da CHAVE antes da fórmula.
  */
+export function diaBR(v: string | undefined | null): string | null {
+  const s = String(v || '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s          // já é dia "cru"
+  const t = Date.parse(s)
+  if (!isFinite(t)) return null
+  // UTC-3 fixo — a MESMA régua do `reqDateToBrDay` do backend. Usar fusos
+  // diferentes dos dois lados recriaria o desencontro numa forma mais sutil.
+  return new Date(t - 3 * 3600 * 1000).toISOString().slice(0, 10)
+}
+
 export function periodosCasam(
   a: { from?: string; to?: string } | null | undefined,
   b: { from?: string; to?: string } | null | undefined,
 ): boolean {
-  if (!a?.from || !a?.to || !b?.from || !b?.to) return false
-  return a.from === b.from && a.to === b.to
+  const aF = diaBR(a?.from), aT = diaBR(a?.to), bF = diaBR(b?.from), bT = diaBR(b?.to)
+  if (!aF || !aT || !bF || !bT) return false
+  return aF === bF && aT === bT
 }
 
 /** ACoS — gasto sobre a venda que o ANÚNCIO trouxe. `null` sem venda por ads. */
