@@ -871,7 +871,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                         </div>
                       ))}
                     </div>
-                    <div style={{ fontSize: 10.5, color: C.t3, marginTop: 8, lineHeight: 1.5 }}>A margem final ({demoCfg.marginPct}%) é atingida ajustando o custo dos produtos automaticamente (comissão + FBA + ads + margem = 100%). As participações somam ~1.</div>
+                    <div style={{ fontSize: 10.5, color: C.t3, marginTop: 8, lineHeight: 1.5 }}>A margem final ({demoCfg.marginPct}%) é a MÉDIA — o custo dos produtos é fixado por ela (comissão + FBA + ads + margem = 100%), e cada período OSCILA em torno dela (ads, ACoS e TACoS variam, como numa loja real). As participações somam ~1.</div>
                   </div>
 
                   <button type="submit" disabled={demoLoading} className="orc-gold" style={{ alignSelf: 'flex-start', background: GOLD_GRAD, color: '#02020A', border: 'none', borderRadius: 10, padding: '11px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: demoLoading ? 0.6 : 1 }}>{demoLoading ? 'Salvando…' : 'Salvar conta demo'}</button>

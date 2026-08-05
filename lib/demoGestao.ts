@@ -160,23 +160,44 @@ function periodRevenue(cfg: DemoConfig, from: string, to: string): { revenue: nu
 }
 
 // Núcleo da DRE demo p/ um faturamento R: produtos, taxas, CMV e o ADS que faz a
-// margem final (MPA) bater EXATAMENTE o alvo (corrige o arredondamento de unidades:
-// MPA = (liq - cmv - ads)/R = marginPct/100). Compartilhado entre a DRE e o
-// relatório de Ads — assim o "Valor em Ads" do Resumo e a aba Ads mostram o MESMO gasto.
+// margem final (MPA) VARIAR por período, como uma operação real — sem isto,
+// MPA/margem/TACoS/ACoS saíam IDÊNTICOS em todo período (o tell que denuncia a
+// conta demo). Os valores do config são a MÉDIA; cada período recebe um tilt
+// DETERMINÍSTICO derivado do próprio faturamento R (então DRE e Ads do MESMO
+// período pegam o MESMO tilt — o "Valor em Ads" do Resumo e da aba Ads batem).
+
+// Tilt determinístico por período (via R). Faz gasto de ads (TACoS), eficiência
+// (ACoS/ROAS), mix de comissão e FBA variarem realisticamente em torno da média.
+function dreTilt(R: number) {
+  const s = (Math.abs(Math.round(R)) % 9973) / 9973                 // 0..1 estável por período
+  const w = (ph: number, amp: number) => 1 + amp * Math.sin(s * 6.28318 * ph + ph)
+  return {
+    ads:  Math.max(0.55, w(1.0, 0.30)),   // gasto de ads: ±30% → TACoS varia
+    roas: Math.max(0.7,  w(2.3, 0.16)),   // eficiência do ads: ±16% → ACoS varia
+    comm: w(3.1, 0.05),                   // mix de categoria: ±5% na comissão
+    fba:  w(1.7, 0.09),                   // ticket/dimensão: ±9% na tarifa FBA
+  }
+}
+
 function coreDre(cfg: DemoConfig, R: number) {
   const costs = demoCosts(cfg)
+  const t = dreTilt(R)
   const produtos = cfg.products.map(p => {
     const receita = r2(p.share * R)
     const units = Math.max(0, Math.round(receita / p.price))
     return { sku: p.sku, asin: demoAsin(p.sku), units, receita, name: p.name, image: '' }
   }).filter(p => p.units > 0).sort((a, b) => b.receita - a.receita)
   const vendas = produtos.reduce((s, p) => s + p.units, 0)
-  const comissao = r2(R * cfg.commissionPct / 100)
-  const fba = r2(R * cfg.fbaPct / 100)
+  const comissao = r2(R * cfg.commissionPct / 100 * t.comm)
+  const fba = r2(R * cfg.fbaPct / 100 * t.fba)
   const liqMarketplace = r2(R - comissao - fba)
   const cmv = produtos.reduce((s, p) => s + p.units * (costs[p.sku] || 0), 0)
-  const ads = Math.max(0, r2(liqMarketplace - cmv - R * cfg.marginPct / 100))
-  return { produtos, vendas, comissao, fba, liqMarketplace, cmv, ads }
+  // ⭐ ADS AGORA VARIA (não é mais calculado pra trás pra travar a margem): é o
+  // TACoS-alvo × tilt do período. A margem final vira o RESULTADO e oscila em
+  // torno do alvo — como numa loja de verdade. A DRE fecha dentro do período.
+  const ads = Math.max(0, r2(R * cfg.tacosPct / 100 * t.ads))
+  const roasEff = r2(cfg.roas * t.roas)   // eficiência do ads NESTE período
+  return { produtos, vendas, comissao, fba, liqMarketplace, cmv, ads, roasEff }
 }
 
 // DRE fake p/ o período. Mesmo shape do backend real (computeOrdersDRE) — a Gestão
@@ -210,8 +231,9 @@ export function demoFinance(cfg: DemoConfig, from: string, to: string, daily: bo
 export function demoAdsReport(cfg: DemoConfig, window: string, from?: string, to?: string): any {
   const range = (from && to) ? { from, to } : windowRange(window)
   const { revenue } = periodRevenue(cfg, range.from, range.to)
-  const spend = coreDre(cfg, revenue).ads   // MESMO gasto da DRE (garante MPA = alvo)
-  const sales = r2(spend * cfg.roas)
+  const core = coreDre(cfg, revenue)
+  const spend = core.ads              // MESMO gasto da DRE (Resumo e Ads batem)
+  const sales = r2(spend * core.roasEff)   // eficiência VARIÁVEL do período → ACoS varia
   const acos = sales > 0 ? r2(spend / sales * 100) : 0
   const roas = spend > 0 ? r2(sales / spend) : 0
   const camps = [
@@ -225,7 +247,7 @@ export function demoAdsReport(cfg: DemoConfig, window: string, from?: string, to
   // De propósito NÃO é proporcional à receita (é o tilt determinístico abaixo):
   // no real também não é, e é justamente essa diferença que a Gestão revela.
   // 8% fica sem atribuição (Sponsored Brands / linha que a Amazon não atribui).
-  const prods = coreDre(cfg, revenue).produtos
+  const prods = core.produtos
   const pesos = prods.map((p: any, i: number) => (p.receita || 0) * (0.7 + 0.15 * ((i * 7) % 5)))
   const somaPesos = pesos.reduce((s: number, w: number) => s + w, 0) || 1
   const bySku = prods.map((p: any, i: number) => ({
