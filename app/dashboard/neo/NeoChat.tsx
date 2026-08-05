@@ -85,8 +85,37 @@ const SEV = {
  * exatamente o bug que isto veio consertar. */
 const LADO_MAX = 1600   // além disso é pixel que o modelo não usa e token que o seller paga
 
-function lerImagem(file: File): Promise<Img> {
+/* Lê o ARQUIVO CRU em base64, sem converter. É o fallback pro caso do navegador
+   não saber decodificar (HEIC no Chrome, por exemplo): o Gemini — motor padrão —
+   lê HEIC/HEIF nativamente, então a imagem chega ao modelo mesmo sem a conversão.
+   O tipo vem do próprio arquivo; se vier vazio (acontece com HEIC), inferimos da
+   extensão. */
+function lerCru(file: File): Promise<Img> {
   return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => {
+      const m = /^data:([^;]+);base64,(.*)$/.exec(String(r.result || ''))
+      if (!m || !m[2]) return reject(new Error('falha ao ler'))
+      let mt = m[1]
+      if (!mt || !mt.startsWith('image/')) {
+        const ext = (file.name.split('.').pop() || '').toLowerCase()
+        mt = ext === 'heic' || ext === 'heif' ? `image/${ext}` : ext === 'png' ? 'image/png' : 'image/jpeg'
+      }
+      resolve({ mediaType: mt, data: m[2] })
+    }
+    r.onerror = () => reject(new Error('falha ao ler'))
+    r.readAsDataURL(file)
+  })
+}
+
+/* Converte a imagem pra JPEG no navegador (encolhe e normaliza). É uma
+   OTIMIZAÇÃO, não obrigação: se o navegador não decodificar o formato (o
+   `new Image()` do Chrome não abre HEIC), CAI no arquivo cru — o backend e o
+   Gemini leem HEIC direto. O que não pode é a imagem sumir por falta de
+   conversão, que era o bug: o vendedor anexava a foto do iPhone e o NEO jurava
+   não ter recebido nada. */
+function lerImagem(file: File): Promise<Img> {
+  return new Promise((resolve) => {
     const url = URL.createObjectURL(file)
     const img = new Image()
     img.onload = () => {
@@ -98,21 +127,24 @@ function lerImagem(file: File): Promise<Img> {
         const c = document.createElement('canvas')
         c.width = w; c.height = h
         const ctx = c.getContext('2d')
-        if (!ctx) return reject(new Error('sem canvas'))
+        if (!ctx) throw new Error('sem canvas')
         // Fundo branco: PNG com transparência viraria preto ao virar JPEG.
         ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h)
         ctx.drawImage(img, 0, 0, w, h)
         const dataUrl = c.toDataURL('image/jpeg', 0.88)
         const m = /^data:(image\/jpeg);base64,(.*)$/.exec(dataUrl)
-        if (!m || !m[2]) return reject(new Error('falha ao converter'))
+        if (!m || !m[2]) throw new Error('conversão vazia')
         resolve({ mediaType: 'image/jpeg', data: m[2] })
-      } catch { reject(new Error('falha ao converter')) }
+      } catch {
+        // Canvas falhou (raro) — manda o arquivo como veio.
+        lerCru(file).then(resolve).catch(() => resolve({ mediaType: 'image/jpeg', data: '' }))
+      }
     }
     img.onerror = () => {
       URL.revokeObjectURL(url)
-      // O navegador não decodifica este formato. Diz qual é, pra pessoa saber.
-      const ext = (file.name.split('.').pop() || '').toUpperCase()
-      reject(new Error(ext ? `formato ${ext}` : 'formato não suportado'))
+      // O navegador não decodifica este formato (HEIC no Chrome). Em vez de
+      // recusar, manda os bytes crus — o Gemini abre.
+      lerCru(file).then(resolve).catch(() => resolve({ mediaType: 'image/jpeg', data: '' }))
     }
     img.src = url
   })
@@ -383,19 +415,22 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
     const novas: Img[] = []
     for (const f of Array.from(files)) {
       if (pend.length + novas.length >= MAX_IMGS) break
-      // ⚠️ SEM teto de tamanho na entrada: a conversão redimensiona pra 1600px e
-      // reexporta em JPEG, então uma foto de 12MB do celular sai com algumas
-      // centenas de KB. O limite antigo recusava justamente a foto que o
-      // vendedor acabou de tirar — que é o caso mais comum de todos.
-      try { novas.push(await lerImagem(f)) }
-      catch (e: any) {
-        // Erro EXPLÍCITO e acionável. Um "não consegui ler essa imagem" genérico
-        // deixa a pessoa sem saber o que fazer com o arquivo na mão.
-        const motivo = String(e?.message || '')
-        setErro(motivo.startsWith('formato')
-          ? `Seu navegador não abre ${motivo.replace('formato ', '')}. Salve a foto como JPG ou PNG e mande de novo.`
-          : 'Não consegui converter essa imagem. Tente salvar como JPG e reenviar.')
+      // ⚠️ Só aceita ARQUIVO DE IMAGEM. `accept="image/*"` no input não impede
+      // arrastar um PDF pra cá — e aí a "conversão" viraria lixo.
+      if (!f.type.startsWith('image/') && !/\.(jpe?g|png|webp|gif|heic|heif)$/i.test(f.name)) {
+        setErro('Esse arquivo não é uma imagem. Anexe uma foto (JPG, PNG ou do iPhone).')
+        continue
       }
+      // ⚠️ `lerImagem` NUNCA rejeita: quando o navegador não converte (HEIC no
+      // Chrome), ele cai no arquivo cru, que o Gemini lê. Só descarta o que
+      // voltou vazio (leitura falhou de verdade).
+      const img = await lerImagem(f)
+      if (!img.data) { setErro('Não consegui abrir essa imagem. Tente salvar como JPG e reenviar.'); continue }
+      // Teto no que chega ao envio: base64 acima de ~6,5MB estoura o limite do
+      // backend (~5MB de imagem). A conversão normal deixa a foto pequena; só o
+      // caminho cru (HEIC gigante) pode passar disso.
+      if (img.data.length > 6_800_000) { setErro('Essa foto é grande demais. Tire um print ou salve como JPG que fica mais leve.'); continue }
+      novas.push(img)
     }
     if (novas.length) setPend((p) => [...p, ...novas].slice(0, MAX_IMGS))
     if (fileRef.current) fileRef.current.value = ''
@@ -905,8 +940,12 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
                 m.role === 'user' ? (
                   <div key={i} className="neoMsgU">
                     {m.images?.map((im, k) => (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img key={k} className="neoImg" src={`data:${im.mediaType};base64,${im.data}`} alt="anexo" />
+                      // HEIC não RENDERIZA no Chrome, mas FOI enviado — mostra um
+                      // selo em vez de imagem quebrada, pra não parecer que falhou.
+                      /jpe?g|png|webp|gif/i.test(im.mediaType)
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img key={k} className="neoImg" src={`data:${im.mediaType};base64,${im.data}`} alt="anexo" />
+                        : <span key={k} className="neoImg" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.06)', color: '#8B8BAC', fontSize: 11, fontWeight: 600 }}>🖼 foto</span>
                     ))}
                     {m.text}
                   </div>
@@ -970,8 +1009,12 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
               <div className="neoCol" style={{ display: 'flex', gap: 8, paddingTop: 8 }}>
                 {pend.map((im, k) => (
                   <div key={k} style={{ position: 'relative' }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`data:${im.mediaType};base64,${im.data}`} alt="anexo" style={{ width: 46, height: 46, objectFit: 'cover', borderRadius: 9, border: '1px solid rgba(255,255,255,.15)' }} />
+                    {/* HEIC não renderiza no Chrome; mostra um selo (a foto vai
+                        do mesmo jeito — o Gemini lê). */}
+                    {/jpe?g|png|webp|gif/i.test(im.mediaType)
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={`data:${im.mediaType};base64,${im.data}`} alt="anexo" style={{ width: 46, height: 46, objectFit: 'cover', borderRadius: 9, border: '1px solid rgba(255,255,255,.15)' }} />
+                      : <span style={{ width: 46, height: 46, borderRadius: 9, border: '1px solid rgba(255,255,255,.15)', background: 'rgba(255,255,255,.06)', color: '#8B8BAC', fontSize: 9, fontWeight: 600, display: 'grid', placeItems: 'center', textAlign: 'center' as const }}>🖼<br/>foto</span>}
                     <button onClick={() => setPend((p) => p.filter((_, j) => j !== k))} aria-label="remover"
                       style={{ position: 'absolute', top: -6, right: -6, width: 18, height: 18, borderRadius: 999, background: '#111', border: '1px solid rgba(255,255,255,.2)', color: '#fff', fontSize: 11, lineHeight: 1, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>×</button>
                   </div>
