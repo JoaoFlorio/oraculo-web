@@ -6,7 +6,7 @@
 // Analítico/Ads/Estoque) deriva desses payloads, então fica tudo fake e consistente.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type DemoProduct = { sku: string; name: string; share: number; price: number }
+export type DemoProduct = { sku: string; name: string; share: number; price: number; asin?: string; image?: string }
 
 export type DemoConfig = {
   name: string           // nome exibido na conta (ex.: João Florio)
@@ -185,7 +185,7 @@ function coreDre(cfg: DemoConfig, R: number) {
   const produtos = cfg.products.map(p => {
     const receita = r2(p.share * R)
     const units = Math.max(0, Math.round(receita / p.price))
-    return { sku: p.sku, asin: demoAsin(p.sku), units, receita, name: p.name, image: '' }
+    return { sku: p.sku, asin: p.asin || demoAsin(p.sku), units, receita, name: p.name, image: p.image || '' }
   }).filter(p => p.units > 0).sort((a, b) => b.receita - a.receita)
   const vendas = produtos.reduce((s, p) => s + p.units, 0)
   const comissao = r2(R * cfg.commissionPct / 100 * t.comm)
@@ -261,11 +261,21 @@ export function demoAdsReport(cfg: DemoConfig, window: string, from?: string, to
   return { connected: true, ready: true, cached: true, stale: false, window, updatedAt: new Date().toISOString(), period: { from: range.from, to: range.to }, spend, sales, purchases: Math.round(sales / (avgTicket(cfg) || 1)), clicks: Math.round(spend / 1.3), impressions: Math.round(spend / 1.3 * 22), acos, roas, byCampaign, bySku, adsPorSku: true, adsNaoAtribuido, demo: true }
 }
 
-// Estoque FBA fake por produto.
+// Estoque FBA fake por produto — REALISTA pela velocidade de venda. Uma loja que
+// fatura ~R$1,88M/mês não tem 40 unidades: tem SEMANAS de cobertura por SKU. O
+// estoque disponível deriva das unidades vendidas no mês (share × rev30d ÷ preço)
+// × uma cobertura determinística de ~3 a 7 semanas, + a caminho e reservado
+// proporcionais. Assim o Estoque FBA e a Curva ABC batem com o faturamento.
 export function demoInventory(cfg: DemoConfig): any {
+  const R = cfg.rev30d || 0
   const itens = cfg.products.map((p, i) => {
-    const fulfillable = 40 + ((i * 37) % 220)
-    return { sku: p.sku, asin: demoAsin(p.sku), name: p.name, image: '', fulfillable, inbound: (i * 13) % 60, reserved: (i * 7) % 20, unfulfillable: 0 }
+    const unidadesMes = Math.max(1, Math.round((p.share * R) / (p.price || 1)))
+    // cobertura determinística por SKU: 0,8 a 1,7 mês de estoque (~3-7 semanas)
+    const cobertura = 0.8 + 0.9 * Math.abs(Math.sin(i * 1.7 + 0.6))
+    const fulfillable = Math.max(20, Math.round(unidadesMes * cobertura))
+    const inbound = Math.round(unidadesMes * (0.2 + 0.3 * Math.abs(Math.sin(i * 2.3 + 1.1))))  // reposição a caminho
+    const reserved = Math.round(unidadesMes * 0.04)   // ~1 dia reservado (em separação)
+    return { sku: p.sku, asin: p.asin || demoAsin(p.sku), name: p.name, image: p.image || '', fulfillable, inbound, reserved, unfulfillable: 0 }
   })
   // ⚠️ A chave é `inventario`, não `itens`: é o nome que o backend real devolve
   // e o único que o painel lê (`GestaoHub` linha ~1091 exige
@@ -273,6 +283,55 @@ export function demoInventory(cfg: DemoConfig): any {
   // conta DEMO mostrava Estoque FBA vazio e Curva Z morta — bem na conta usada
   // pra apresentar. Corrigido 21/07.
   return { connected: true, inventario: itens, demo: true }
+}
+
+// ID de pedido no formato da Amazon (701-NNNNNNN-NNNNNNN), determinístico.
+function demoOrderId(seed: number): string {
+  const n7 = (x: number) => String(1000000 + (Math.abs(Math.round(x)) % 8999999))
+  return `701-${n7(seed * 7919)}-${n7(seed * 104729 + 13)}`
+}
+
+// PEDIDOS fictícios (aba Vendas → Pedidos, e o modal da lupa por SKU). Mesma
+// forma do backend real (`/orders`): lista de pedidos com itens, preço de tabela
+// e desconto. Coerente com o faturamento do período; determinístico. Um teto de
+// exibição (não faz sentido listar milhares) — os recentes, como no real.
+export function demoOrders(cfg: DemoConfig, from: string, to: string, sku?: string): any {
+  const { revenue: R } = periodRevenue(cfg, from, to)
+  const core = coreDre(cfg, R)
+  const prods = sku ? core.produtos.filter((p: any) => p.sku === sku) : core.produtos
+  if (!prods.length) return { available: true, period: { from, to }, pedidos: [] }
+
+  const precoDoSku: Record<string, number> = {}
+  for (const cp of cfg.products) precoDoSku[cp.sku] = cp.price
+  const CAP = sku ? 40 : 60
+  const totalUnits = prods.reduce((s: number, p: any) => s + p.units, 0) || 1
+  const t0 = brtDayStartMs(Date.now())
+  const janela = Math.min(20, Math.max(1, Math.round((brtDayStartMs(new Date(to).getTime()) - brtDayStartMs(new Date(from).getTime())) / 86400000) + 1))
+  const pedidos: any[] = []
+  let idx = 0
+  for (const p of prods) {
+    const nOrders = sku ? Math.min(CAP, Math.max(1, p.units)) : Math.max(1, Math.round(CAP * p.units / totalUnits))
+    for (let k = 0; k < nOrders; k++) {
+      idx++
+      const dia = new Date(t0 - (idx % janela) * 86400000 - ((idx * 137) % 20) * 3600000)
+      const qty = (idx % 9 === 0) ? 2 : 1
+      const preco = precoDoSku[p.sku] || 0; const bruto = r2(preco * qty)
+      // ~1 em cada 4 com cupom/oferta pequeno (dá vida à decomposição na tela)
+      const desc = (idx % 4 === 0) ? r2(bruto * (0.05 + 0.05 * Math.abs(Math.sin(idx)))) : 0
+      const receita = r2(bruto - desc)
+      pedidos.push({
+        orderId: demoOrderId(idx * 31 + p.sku.length),
+        date: dia.toISOString(),
+        status: (idx % 13 === 0) ? 'Pending' : 'Shipped',
+        channel: 'AFN',
+        itens: [{ sku: p.sku, asin: p.asin, qty, receita, precoTabela: bruto }],
+        precoTabela: bruto,
+        desconto: { produto: desc, frete: 0, total: desc, pctProduto: desc > 0 ? Math.round(desc / bruto * 1000) / 10 : null },
+      })
+    }
+  }
+  pedidos.sort((a, b) => (a.date < b.date ? 1 : -1))
+  return { available: true, period: { from, to }, pedidos: pedidos.slice(0, CAP) }
 }
 
 // Faixa de datas equivalente à janela de ads (espelha o backend).
