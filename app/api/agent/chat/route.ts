@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
-import { demoConfigFor } from '@/lib/demo'
 import { prisma } from '@/lib/db'
 
 // Lê o custo por SKU e a alíquota (gestao_imposto) que o seller cadastrou na
@@ -43,14 +42,10 @@ export async function POST(req: NextRequest) {
   const messages = Array.isArray(body?.messages) ? body.messages : []
   const agent = body?.agent === 'suporte' ? 'suporte' : 'neo'
 
-  // Demo: o NEO analisa dados REAIS da Amazon, que a conta demo não tem. Já o
-  // suporte responde dúvida de produto — esse funciona normalmente na demo.
-  if (agent === 'neo' && (await demoConfigFor(user))) {
-    return NextResponse.json({
-      reply: 'O NEO analisa os seus números reais da Amazon. Nesta conta de demonstração não existe conexão real, então ele fica indisponível aqui — teste numa conta com a Amazon conectada. Para dúvidas sobre o Oráculo, use o assistente de suporte no canto da tela.',
-      demo: true, trace: [], usage: null,
-    })
-  }
+  // Conta demo: o NEO funciona NORMALMENTE — o backend serve os números
+  // fictícios coerentes (ver getDemoConfig no backend). Antes bloqueávamos aqui,
+  // e o NEO ficava "indisponível" justo na conta de apresentação. Agora passa
+  // reto pro backend, que sabe da demo.
   if (!messages.length) return NextResponse.json({ error: 'messages obrigatório' }, { status: 400 })
 
   // O NEO pode encadear várias ferramentas antes de responder. Timeout explícito

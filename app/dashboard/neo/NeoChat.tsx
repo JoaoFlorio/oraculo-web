@@ -251,7 +251,6 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
   const [ins, setIns] = useState<Insight>(null)
   const [carregandoIns, setCarregandoIns] = useState(true)
   const [semConexao, setSemConexao] = useState(false)
-  const [demo, setDemo] = useState(false)
   // O insight nasce RECOLHIDO: aberto toda vez ele vira ruído e a pessoa para
   // de ler justamente o que é urgente. Quem quiser o detalhe, clica.
   const [insAberto, setInsAberto] = useState(false)
@@ -357,7 +356,9 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
       .then((d) => {
         if (!vivo) return
         if (d?.connected === false) setSemConexao(true)
-        else if (d?.demo) setDemo(true)
+        // Conta demo: o NEO funciona normalmente (o backend serve dados fictícios
+        // coerentes). Se vier um insight (d.texto), mostra; senão, sem card — mas
+        // o chat fica ATIVO, nunca mais "indisponível".
         else if (d?.texto) {
           setIns(d)
           // Dispensa é POR INSIGHT (chave = quando foi gerado), não global —
@@ -871,13 +872,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
           </div>
         )}
 
-        {demo && (
-          <div className="neoAviso">
-            <div className="neoAvisoTx">Esta é a conta de demonstração. O NEO analisa dados reais da Amazon, então aqui ele fica indisponível — teste numa conta com a Amazon conectada.</div>
-          </div>
-        )}
-
-        {!semConexao && !demo && (
+        {!semConexao && (
           <>
             {/* Insight do dia — recolhido por padrão. Aberto o tempo todo ele
                 vira paisagem e a pessoa para de ler justamente o que é urgente.
