@@ -20,6 +20,9 @@ export type DemoConfig = {
   fbaPct: number         // tarifa FBA
   roas: number           // retorno do ads (vendas por ads / gasto)
   products: DemoProduct[]
+  // SKU do produto-ESTRELA da apresentação: fica nítido; os outros a tela pode
+  // BORRAR (nome/imagem) — pra plateia focar nele e não escrutinar os demais.
+  featuredSku?: string
 }
 
 export const DEFAULT_DEMO_CONFIG: DemoConfig = {
@@ -112,16 +115,30 @@ function dayWeight(date: Date, i: number): number {
 
 // Série de faturamento dos últimos 30 dias ([29] = hoje). Respeita: hoje=revToday,
 // soma dos últimos 7 = rev7d, soma dos 30 = rev30d — com valor DIA A DIA realista.
+// Fator determinístico por DIA do calendário (±14%). Faz "hoje" e "ontem"
+// mudarem a cada dia — senão toda apresentação mostra o MESMO faturamento de hoje
+// e de ontem, e a plateia percebe que é fake. Estável dentro do dia (refresh não
+// muda); os totais de 7d/30d ficam fixos (os outros dias absorvem a diferença).
+function fatorDoDia(dayMs: number): number {
+  const dia = Math.floor(dayMs / 86400000)
+  const s = (Math.abs(dia * 2654435 + 12345) % 9973) / 9973
+  return 0.86 + 0.28 * s
+}
+
 function dailyValues(cfg: DemoConfig): number[] {
   const dates = seriesDates()
   const arr = new Array(30).fill(0)
-  arr[29] = cfg.revToday                                 // hoje (dia em andamento)
-  // ontem (dia 28): valor PRÓPRIO configurável. Clampado ao que sobra dos 7 dias
-  // (rev7d - hoje) pra nunca estourar o total do período de 7 dias.
-  const yest = Math.max(0, Math.min(cfg.revYesterday || 0, Math.max(0, cfg.rev7d - cfg.revToday)))
+  const todayStart = brtDayStartMs(Date.now())
+  arr[29] = r2(cfg.revToday * fatorDoDia(todayStart))    // hoje (dia em andamento), varia por dia
+  // ontem (dia 28): valor PRÓPRIO, também varia por dia. Clampado ao que sobra dos
+  // 7 dias (rev7d - hoje) pra nunca estourar o total do período de 7 dias.
+  const yestBase = (cfg.revYesterday || 0) * fatorDoDia(todayStart - 86400000)
+  const yest = Math.max(0, Math.min(yestBase, Math.max(0, cfg.rev7d - arr[29])))
   arr[28] = r2(yest)
-  // 5 dias anteriores a ontem (23..27): somam rev7d - hoje - ontem, ponderados por dia da semana
-  const rest5 = Math.max(0, cfg.rev7d - cfg.revToday - yest)
+  // 5 dias anteriores a ontem (23..27): somam rev7d - hoje - ontem, ponderados por
+  // dia da semana. ⚠️ Usa arr[29]/arr[28] REAIS (já variados por fatorDoDia), não
+  // os valores-base do config — senão o total de 7 dias derivava.
+  const rest5 = Math.max(0, cfg.rev7d - arr[29] - yest)
   let w5 = 0; for (let i = 23; i <= 27; i++) w5 += dayWeight(dates[i], i)
   for (let i = 23; i <= 27; i++) arr[i] = r2(rest5 * dayWeight(dates[i], i) / (w5 || 1))
   // dias 0..22: somam rev30d - rev7d
@@ -185,7 +202,7 @@ function coreDre(cfg: DemoConfig, R: number) {
   const produtos = cfg.products.map(p => {
     const receita = r2(p.share * R)
     const units = Math.max(0, Math.round(receita / p.price))
-    return { sku: p.sku, asin: p.asin || demoAsin(p.sku), units, receita, name: p.name, image: p.image || '' }
+    return { sku: p.sku, asin: p.asin || demoAsin(p.sku), units, receita, name: p.name, image: p.image || '', demoBlur: !!cfg.featuredSku && p.sku !== cfg.featuredSku }
   }).filter(p => p.units > 0).sort((a, b) => b.receita - a.receita)
   const vendas = produtos.reduce((s, p) => s + p.units, 0)
   const comissao = r2(R * cfg.commissionPct / 100 * t.comm)
@@ -275,7 +292,7 @@ export function demoInventory(cfg: DemoConfig): any {
     const fulfillable = Math.max(20, Math.round(unidadesMes * cobertura))
     const inbound = Math.round(unidadesMes * (0.2 + 0.3 * Math.abs(Math.sin(i * 2.3 + 1.1))))  // reposição a caminho
     const reserved = Math.round(unidadesMes * 0.04)   // ~1 dia reservado (em separação)
-    return { sku: p.sku, asin: p.asin || demoAsin(p.sku), name: p.name, image: p.image || '', fulfillable, inbound, reserved, unfulfillable: 0 }
+    return { sku: p.sku, asin: p.asin || demoAsin(p.sku), name: p.name, image: p.image || '', fulfillable, inbound, reserved, unfulfillable: 0, demoBlur: !!cfg.featuredSku && p.sku !== cfg.featuredSku }
   })
   // ⚠️ A chave é `inventario`, não `itens`: é o nome que o backend real devolve
   // e o único que o painel lê (`GestaoHub` linha ~1091 exige

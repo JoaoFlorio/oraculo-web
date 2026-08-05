@@ -429,11 +429,14 @@ function Thumb({p}:{p:{id:string;image?:string;name:string}}){
   if(p.image) return <img src={p.image} alt="" width={34} height={34} style={{borderRadius:8,objectFit:'cover',flexShrink:0,border:'1px solid rgba(0,0,0,0.06)'}}/>
   return <span aria-hidden style={{width:34,height:34,borderRadius:8,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',background:c+'22'}}><i className="ti ti-photo" style={{fontSize:16,color:c}}/></span>
 }
-function ProdCell({p}:{p:{id:string;image?:string;name:string;sku?:string}}){
+function ProdCell({p,blur}:{p:{id:string;image?:string;name:string;sku?:string};blur?:boolean}){
   const t=useT()
+  // Demo: borra IDENTIDADE (imagem/nome/SKU) dos produtos que não são a estrela,
+  // pra plateia focar no produto-estrela e não escrutinar os demais.
+  const bl=blur?{filter:'blur(5px)',userSelect:'none' as const,pointerEvents:'none' as const}:undefined
   return(
     <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`}}>
-      <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0}}>
+      <div style={{display:'flex',alignItems:'center',gap:10,minWidth:0,...bl}}>
         <Thumb p={p}/>
         <div style={{minWidth:0}}>
           <div style={{fontSize:12.5,fontWeight:500,color:t.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
@@ -820,7 +823,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
           ]}>
             {top15.map((r,i)=>(
               <tr key={i}>
-                <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}}/>
+                <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}} blur={r.p.demoBlur}/>
                 <NumTd hide={hide}>{brl2(r.preco)}</NumTd>
                 <NumTd color={r.custoU>0?t.t1:t.t3} hide={hide}>{r.custoU>0?brl2(r.custoU):'—'}</NumTd>
                 <NumTd>{r.units}</NumTd>
@@ -1968,7 +1971,7 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
         const dir=m?.clsAntes?(ORDEM_CLS[m.clsAntes]>ORDEM_CLS[r.cls]?'sobe':ORDEM_CLS[m.clsAntes]<ORDEM_CLS[r.cls]?'cai':'igual'):null
         return(
           <tr key={i}>
-            <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}}/>
+            <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}} blur={r.p.demoBlur}/>
             <PillTd><ClassBadge t={t} cls={r.cls}/></PillTd>
             {mapaAntes && <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right' as const,whiteSpace:'nowrap' as const}}>
               {!m ? <span style={{fontSize:11,color:t.t3}}>—</span>
@@ -3354,7 +3357,7 @@ function Analitico({realDre,hide,connected,mockM,costs={},imposto=0,adsReal}:{re
         ]}>
           {rows.map((r,i)=>(
             <tr key={i}>
-              <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}}/>
+              <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}} blur={r.p.demoBlur}/>
               <NumTd>{r.units}</NumTd>
               <NumTd strong hide={hide}>{brl2(r.receita)}</NumTd>
               <NumTd hide={hide}>{brl2(r.ticket)}</NumTd>
@@ -3549,7 +3552,7 @@ function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realD
             const vVenda=valorDeVenda(it)
             const vMerc=valorDeMercadoria(it,costs[it.sku]||0)
             return(<tr key={i}>
-              <ProdCell p={{id:it.sku,image:it.image,name:it.name||it.sku,sku:it.sku}}/>
+              <ProdCell p={{id:it.sku,image:it.image,name:it.name||it.sku,sku:it.sku}} blur={it.demoBlur}/>
               <NumTd color={t.grn} hide={hide}>{vVenda!=null?brl2(vVenda):'—'}</NumTd>
               <NumTd color={t.gold} hide={hide}>{vMerc!=null?brl2(vMerc):'—'}</NumTd>
               <NumTd strong>{it.fulfillable}</NumTd>
