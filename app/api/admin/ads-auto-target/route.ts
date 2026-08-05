@@ -19,11 +19,16 @@ export async function POST(req: NextRequest) {
   const targetId = String(body?.targetId || '').trim()
   const campaignId = String(body?.campaignId || '').trim()
   if (!targetId || !campaignId) return NextResponse.json({ error: 'targetId e campaignId obrigatórios' }, { status: 400 })
+  if (body?.bid == null && !body?.state) return NextResponse.json({ error: 'bid ou state obrigatório' }, { status: 400 })
   try {
     const r = await fetch(`${BACKEND}/api/ads/auto-target-update`, {
       method: 'POST', cache: 'no-store',
       headers: { 'Content-Type': 'application/json', 'x-internal-key': process.env.INTERNAL_KEY || '' },
-      body: JSON.stringify({ email: admin.email, targetId, campaignId, bid: Number(body?.bid) }),
+      body: JSON.stringify({
+        email: admin.email, targetId, campaignId,
+        ...(body?.bid != null ? { bid: Number(body.bid) } : {}),
+        ...(body?.state ? { state: String(body.state) } : {}),
+      }),
     })
     const d = await r.json().catch(() => ({ error: 'resposta inválida' }))
     return NextResponse.json(d, { status: r.status })

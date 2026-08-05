@@ -60,11 +60,16 @@ export async function PATCH(req: NextRequest) {
   const admin = await getAdminSession()
   if (!admin) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
-  if (!b?.keywordId || b?.bid == null) return NextResponse.json({ error: 'keywordId e bid obrigatórios' }, { status: 400 })
+  // bid OU state (ligar/desligar). Um dos dois basta.
+  if (!b?.keywordId || (b?.bid == null && !b?.state)) return NextResponse.json({ error: 'keywordId e (bid ou state) obrigatórios' }, { status: 400 })
   try {
     const r = await fetch(`${BACKEND}/api/ads/keyword-update`, {
       method: 'POST', cache: 'no-store', headers: KEY(),
-      body: JSON.stringify({ email: admin.email, keywordId: b.keywordId, bid: Number(b.bid) }),
+      body: JSON.stringify({
+        email: admin.email, keywordId: b.keywordId,
+        ...(b.bid != null ? { bid: Number(b.bid) } : {}),
+        ...(b.state ? { state: String(b.state) } : {}),
+      }),
     })
     return NextResponse.json(await r.json(), { status: r.status })
   } catch {

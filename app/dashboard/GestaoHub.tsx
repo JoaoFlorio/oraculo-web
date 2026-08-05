@@ -2120,13 +2120,29 @@ function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem
     setGerando(false)
   }
   async function salvarLance(k:any, bid:number){
-    if(!confirm(`Mudar o lance de "${k.texto}"\n\nDe R$ ${k.lance} para R$ ${bid}?\n\nIsso altera de verdade na Amazon.`)) return
+    if(!confirm(`Mudar o lance de "${nomePalavra(k.texto)}"\n\nDe R$ ${k.lance} para R$ ${bid}?\n\nIsso altera de verdade na Amazon.`)) return
     setSalvando(k.keywordId)
     try{
       const r=await fetch('/api/admin/ads-keywords',{method:'PATCH',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({keywordId:k.keywordId,bid})})
       const d=await r.json()
       if(d.ok){ setKws(v=>(v||[]).map(x=>x.keywordId===k.keywordId?{...x,lance:bid}:x)); setRasc(v=>{const n={...v};delete n[k.keywordId];return n}) }
+      else setErro(d.erro||d.error||'não foi aplicado')
+    }catch{ setErro('sem resposta do servidor') }
+    setSalvando(null)
+  }
+  // Liga/desliga a palavra na Amazon. Desligar é o que faltava: palavra que gasta
+  // e não vende às vezes precisa PARAR, não só baixar o lance.
+  async function togglePalavra(k:any){
+    const ativa=String(k.estado||'').toUpperCase()==='ENABLED'
+    const novo=ativa?'PAUSED':'ENABLED'
+    if(!confirm(`${ativa?'DESLIGAR':'LIGAR'} a palavra "${nomePalavra(k.texto)}"?\n\n${ativa?'Ela para de aparecer e de gastar na Amazon. Dá pra ligar de novo quando quiser.':'Ela volta a aparecer nas buscas e a gastar.'}`)) return
+    setSalvando(k.keywordId)
+    try{
+      const r=await fetch('/api/admin/ads-keywords',{method:'PATCH',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({keywordId:k.keywordId,state:novo})})
+      const d=await r.json()
+      if(d.ok) setKws(v=>(v||[]).map(x=>x.keywordId===k.keywordId?{...x,estado:novo}:x))
       else setErro(d.erro||d.error||'não foi aplicado')
     }catch{ setErro('sem resposta do servidor') }
     setSalvando(null)
@@ -2165,12 +2181,15 @@ function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem
         const val=rasc[k.keywordId]
         const mudou=val!=null&&val!==''&&Number(val)!==Number(k.lance)
         const temNum=k.gasto>0||k.vendas>0
+        const pausada=String(k.estado||'').toUpperCase()==='PAUSED'
         return(
-          <div key={k.keywordId} style={{border:`1px solid ${ruim?(t.dark?'rgba(255,122,110,0.35)':'rgba(220,38,38,0.28)'):t.line}`,borderRadius:10,padding:'10px 12px',background:ruim?(t.dark?'rgba(255,122,110,0.05)':'#FFF7F6'):'transparent'}}>
-            {/* Linha 1: a palavra e o tipo de correspondência, legível. */}
+          <div key={k.keywordId} style={{border:`1px solid ${pausada?t.line:ruim?(t.dark?'rgba(255,122,110,0.35)':'rgba(220,38,38,0.28)'):t.line}`,borderRadius:10,padding:'10px 12px',
+            background:pausada?(t.dark?'rgba(255,255,255,0.015)':'#FAFAFB'):ruim?(t.dark?'rgba(255,122,110,0.05)':'#FFF7F6'):'transparent',opacity:pausada?0.68:1}}>
+            {/* Linha 1: a palavra, o tipo, e o selo de PAUSADA quando desligada. */}
             <div style={{display:'flex',alignItems:'center',gap:7,minWidth:0}}>
-              {ruim&&<span style={{color:t.red,fontSize:12,flexShrink:0}} title="gasta sem vender ou acima do alvo">▲</span>}
-              <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,fontSize:13,fontWeight:600,color:t.t1}}>{nomePalavra(k.texto)}</span>
+              {ruim&&!pausada&&<span style={{color:t.red,fontSize:12,flexShrink:0}} title="gasta sem vender ou acima do alvo">▲</span>}
+              <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,fontSize:13,fontWeight:600,color:t.t1,textDecoration:pausada?'line-through':'none'}}>{nomePalavra(k.texto)}</span>
+              {pausada && <span style={{flexShrink:0,fontSize:9,fontWeight:700,letterSpacing:.6,textTransform:'uppercase' as const,color:t.t3,background:t.dark?'rgba(255,255,255,0.06)':'#F1F2F4',borderRadius:5,padding:'2px 7px'}}>desligada</span>}
               <span style={{flexShrink:0,fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:'uppercase' as const,color:t.t3,background:t.dark?'rgba(255,255,255,0.06)':'#F1F2F4',borderRadius:5,padding:'2px 7px'}}>{tipoPalavra(k.matchType)}</span>
             </div>
             {/* Linha 2: o desempenho, com RÓTULO em cada número. */}
@@ -2199,14 +2218,25 @@ function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem
               {mudou && <button disabled={salvando===k.keywordId} onClick={()=>salvarLance(k,Number(val))}
                 style={{padding:'6px 13px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:'none',background:t.gold,color:t.dark?'#1c1606':'#3a2a05'}}>
                 {salvando===k.keywordId?'…':'salvar'}</button>}
-              {sug>0&&sug<k.lance&&!mudou && (
-                <button disabled={salvando===k.keywordId} onClick={()=>salvarLance(k,sug)}
-                  title={`ACoS ${acos?acos.toFixed(0)+'%':'sem venda'} contra seu alvo de ${alvo.toFixed(0)}% — o NEO sugere baixar pra trazer de volta`}
-                  style={{marginLeft:'auto',padding:'6px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.gold}`,background:t.dark?'rgba(240,194,98,0.10)':'rgba(231,184,92,0.14)',color:t.gold,display:'flex',alignItems:'center',gap:5}}>
-                  <i className="ti ti-arrow-down-right" style={{fontSize:13}} aria-hidden="true"/>
-                  {salvando===k.keywordId?'…':`baixar p/ ${brl2(sug)}`}
+              {/* Grupo à direita: baixar lance (quando o NEO sugere) e ligar/desligar. */}
+              <div style={{marginLeft:'auto',display:'flex',gap:7,alignItems:'center',flexWrap:'wrap' as const}}>
+                {sug>0&&sug<k.lance&&!mudou&&!pausada && (
+                  <button disabled={salvando===k.keywordId} onClick={()=>salvarLance(k,sug)}
+                    title={`ACoS ${acos?acos.toFixed(0)+'%':'sem venda'} contra seu alvo de ${alvo.toFixed(0)}% — o NEO sugere baixar pra trazer de volta`}
+                    style={{padding:'6px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.gold}`,background:t.dark?'rgba(240,194,98,0.10)':'rgba(231,184,92,0.14)',color:t.gold,display:'flex',alignItems:'center',gap:5}}>
+                    <i className="ti ti-arrow-down-right" style={{fontSize:13}} aria-hidden="true"/>
+                    {salvando===k.keywordId?'…':`baixar p/ ${brl2(sug)}`}
+                  </button>
+                )}
+                {/* Ligar/desligar: parar a palavra de vez, não só baixar o lance. */}
+                <button disabled={salvando===k.keywordId} onClick={()=>togglePalavra(k)}
+                  style={{padding:'6px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,
+                    border:`1px solid ${pausada?'rgba(52,211,153,0.45)':'rgba(248,113,113,0.4)'}`,
+                    background:pausada?'rgba(52,211,153,0.08)':'transparent',color:pausada?t.grn:t.red,display:'flex',alignItems:'center',gap:5}}>
+                  <i className={`ti ti-player-${pausada?'play':'pause'}`} style={{fontSize:13}} aria-hidden="true"/>
+                  {salvando===k.keywordId?'…':pausada?'ligar':'desligar'}
                 </button>
-              )}
+              </div>
             </div>
           </div>
         )
@@ -2339,6 +2369,22 @@ function AlvosAutomaticos({campaignId,nome}:{campaignId:string;nome:string}){
     }catch{ setErro('sem resposta do servidor') }
     setSalvando(null)
   }
+  // Liga/desliga a segmentação. Desligar uma das 4 que gasta sem vender para de
+  // vez — na Avespa Branco do João, "próxima" e "complementares" são o caso.
+  async function toggleSeg(a:any){
+    const ativa=String(a.estado||'').toUpperCase()==='ENABLED'
+    const novo=ativa?'PAUSED':'ENABLED'
+    if(!confirm(`${ativa?'DESLIGAR':'LIGAR'} a segmentação "${a.nome}"?\n\nCampanha: ${nome}\n\n${ativa?'Ela para de aparecer e de gastar. Dá pra ligar de novo quando quiser.':'Ela volta a aparecer e a gastar.'}`)) return
+    setSalvando(a.targetId); setErro(null)
+    try{
+      const r=await fetch('/api/admin/ads-auto-target',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({targetId:a.targetId,campaignId,state:novo})})
+      const d=await r.json()
+      if(d.ok) setAlvos(xs=>(xs||[]).map(x=>x.targetId===a.targetId?{...x,estado:novo}:x))
+      else setErro(d.erro||d.error||'não foi aplicado')
+    }catch{ setErro('sem resposta do servidor') }
+    setSalvando(null)
+  }
 
   if(!alvos && !erro) return null          // ainda lendo: não pisca caixa vazia
   if(erro) return <div style={{padding:'11px 13px',borderBottom:`1px solid ${t.line}`,fontSize:11.5,color:t.red}}>{erro}</div>
@@ -2375,10 +2421,14 @@ function AlvosAutomaticos({campaignId,nome}:{campaignId:string;nome:string}){
           const temNum=a.gasto!=null
           const acos=temNum&&a.vendas>0?(a.gasto/a.vendas)*100:null
           const vendeu=temNum&&a.vendas>0
+          const pausada=String(a.estado||'').toUpperCase()==='PAUSED'
           return(
-            <div key={a.targetId} style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const}}>
+            <div key={a.targetId} style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const,opacity:pausada?0.62:1}}>
               <div style={{flex:'1 1 190px',minWidth:0}}>
-                <div style={{fontSize:12.5,fontWeight:600,color:t.t1}}>{a.nome}</div>
+                <div style={{fontSize:12.5,fontWeight:600,color:t.t1,display:'flex',alignItems:'center',gap:7}}>
+                  <span style={{textDecoration:pausada?'line-through':'none'}}>{a.nome}</span>
+                  {pausada && <span style={{fontSize:8.5,fontWeight:700,letterSpacing:.6,textTransform:'uppercase' as const,color:t.t3,background:t.dark?'rgba(255,255,255,0.06)':'#F1F2F4',borderRadius:4,padding:'2px 6px'}}>desligada</span>}
+                </div>
                 {temNum ? (
                   <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,alignItems:'baseline',marginTop:2,
                     fontFamily:FG,fontSize:10.5,fontVariantNumeric:'tabular-nums' as const}}>
@@ -2412,6 +2462,15 @@ function AlvosAutomaticos({campaignId,nome}:{campaignId:string;nome:string}){
                   border:'none',background:t.gold,color:t.dark?'#1c1606':'#3a2a05'}}>
                 {salvando===a.targetId?'…':`salvar ${novo<atual?'↓':'↑'}`}
               </button>}
+              {/* Ligar/desligar a segmentação — parar de vez, não só baixar o lance. */}
+              <button disabled={salvando===a.targetId} onClick={()=>toggleSeg(a)}
+                title={pausada?'ligar esta segmentação':'desligar esta segmentação'}
+                style={{padding:'6px 11px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11,fontWeight:700,
+                  border:`1px solid ${pausada?'rgba(52,211,153,0.45)':'rgba(248,113,113,0.4)'}`,
+                  background:pausada?'rgba(52,211,153,0.08)':'transparent',color:pausada?t.grn:t.red,display:'flex',alignItems:'center',gap:5}}>
+                <i className={`ti ti-player-${pausada?'play':'pause'}`} style={{fontSize:13}} aria-hidden="true"/>
+                {salvando===a.targetId?'…':pausada?'ligar':'desligar'}
+              </button>
             </div>
           )
         })}
