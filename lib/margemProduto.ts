@@ -168,21 +168,25 @@ export function totaisDoPeriodo(
   imposto = 0,
   ajustes?: AjustePedido[],
   periodo?: { from?: string; to?: string },
-): { cmv: number; imposto: number; unidadesLiquidas: number; semCusto: number; receitaSemCusto: number; credito: number; custoEventual: number } {
+): { cmv: number; imposto: number; unidadesLiquidas: number; semCusto: number; receitaSemCusto: number; credito: number; custoEventual: number; armazenagem: number } {
   let cmv = 0, impostoTotal = 0, unidadesLiquidas = 0, semCusto = 0, receitaSemCusto = 0
-  let credito = 0, custoEventual = 0
+  let credito = 0, custoEventual = 0, armazenagem = 0
   for (const p of (produtos || [])) {
     const aj = ajustesDoProduto(ajustes, p.sku, periodo?.from, periodo?.to)
     const M = margemDoProduto({ linhas, produto: p, reembolsos, custoUnit: custoUnit[p.sku] || 0, imposto, ajustes: aj })
     cmv += M.cmv; impostoTotal += M.imposto; unidadesLiquidas += M.unitsLiquidas
     credito += M.credito; custoEventual += M.custoEventual
+    // ⭐ Armazenagem MEDIDA por SKU (custo de estoque). Somada AQUI pra o agregado
+    // descontar a MESMA coisa que cada card de produto desconta — sem isto o
+    // agregado ignorava a armazenagem medida e discordava da soma dos produtos.
+    armazenagem += (M.armazenagem || 0)
     // ⚠️ Produto sem custo cadastrado entra no lucro com CMV ZERO: a receita dele
     // conta inteira e o custo não. O agregado fica otimista e nada na tela avisa.
     // Contamos aqui pra a capa poder declarar de quanto é o buraco.
     if (M.receitaLiquida > 0 && !M.temCusto) { semCusto++; receitaSemCusto += M.receitaLiquida }
   }
   const r2 = (n: number) => Math.round(n * 100) / 100
-  return { cmv: r2(cmv), imposto: r2(impostoTotal), unidadesLiquidas, semCusto, receitaSemCusto: r2(receitaSemCusto), credito: r2(credito), custoEventual: r2(custoEventual) }
+  return { cmv: r2(cmv), imposto: r2(impostoTotal), unidadesLiquidas, semCusto, receitaSemCusto: r2(receitaSemCusto), credito: r2(credito), custoEventual: r2(custoEventual), armazenagem: r2(armazenagem) }
 }
 
 /**
@@ -198,9 +202,13 @@ export function totaisDoPeriodo(
  */
 export function lucroDoPeriodo(
   liqMarketplace: number,
-  t: { cmv: number; imposto: number; credito?: number; custoEventual?: number },
+  t: { cmv: number; imposto: number; credito?: number; custoEventual?: number; armazenagem?: number },
 ): number {
-  const v = (liqMarketplace || 0) - (t.cmv || 0) - (t.imposto || 0) + (t.credito || 0) - (t.custoEventual || 0)
+  // ⚠️ A armazenagem MEDIDA (custo de estoque por SKU) entra AQUI, depois do
+  // líquido — porque o `liqMarketplace` agora é só a parte da VENDA (comissão,
+  // FBA, taxas), SEM armazenagem nem assinatura. Isso casa com o card de cada
+  // produto, que já descontava a armazenagem medida depois do líquido dele.
+  const v = (liqMarketplace || 0) - (t.cmv || 0) - (t.imposto || 0) - (t.armazenagem || 0) + (t.credito || 0) - (t.custoEventual || 0)
   return Math.round(v * 100) / 100
 }
 

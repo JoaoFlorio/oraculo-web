@@ -619,7 +619,7 @@ function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
   while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
   return out
 }
-function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail,selo,diario,recon}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;credito?:number;custoEventual?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void;selo?:SeloMaturidade;diario?:Diario|null;recon?:Reconciliacao|null}){
+function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,armazenagemMedida=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail,selo,diario,recon}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;credito?:number;custoEventual?:number;armazenagemMedida?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void;selo?:SeloMaturidade;diario?:Diario|null;recon?:Reconciliacao|null}){
   const t=useT()
   // (Removidos os KPIs/composição MOCK com deltas fabricados "+12,4%" etc. — eram
   // código morto: o render usa só RK.kpis (real), loadingKpis ou emptyKpis.)
@@ -658,7 +658,11 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
     // conta desde que a aba Vendas passou a aceitar lançamento por pedido — a capa
     // não, então a soma dos produtos não fechava com o KPI logo acima deles. É o
     // mesmo defeito que o imposto tinha, com outro nome.
-    const lucroBruto=lucroDoPeriodo(liq,{cmv,imposto:impostoTotal,credito,custoEventual})
+    // ⚠️ armazenagem MEDIDA entra aqui: o `liq` agora é só a parte da VENDA (sem
+    // armazenagem/assinatura crua), então a estocagem medida por SKU desce no
+    // Lucro Bruto — igual ao card de cada produto. Sem isto, a capa ignoraria a
+    // estocagem que os produtos descontam e discordaria da soma deles.
+    const lucroBruto=lucroDoPeriodo(liq,{cmv,imposto:impostoTotal,credito,custoEventual,armazenagem:armazenagemMedida})
     const lucroPosAds=ads===null?null:lucroBruto-ads
     const margem=base>0?lucroBruto/base*100:0, roi=cmv>0?lucroBruto/cmv*100:0
     const mpa=(lucroPosAds!==null&&base>0)?lucroPosAds/base*100:null
@@ -675,9 +679,9 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,sem
              e as linhas da DRE mostram quanto foi. */
           tip:`Tudo que você vendeu no período, já líquido de todo desconto que o Oráculo enxergou (cupom, oferta, frete grátis).\n⚠️ Cupom em venda ANTIGA pode não estar aqui: a Amazon só informa o desconto pela API de pedidos, e o histórico só ganha esse dado quando é reprocessado.${devolucoesVal>0.005?`\nDevoluções: −${brl2(devolucoesVal)} → líquido de devolução: ${brl2(Math.max(0,fat-devolucoesVal))}.`:''}\nA devolução aparece como linha própria e já desconta do Lucro — aqui fica o bruto pra você ver o volume real de venda.`},
         {label:'Líq. do Marketplace',value:brl2(liq),icon:'ti-building-bank',color:t.blue,
-          tip:'O que sobra DA VENDA depois da parte da Amazon: comissão, tarifa FBA, Taxa Amazon pra Todos, armazenagem, assinatura e devoluções. Ainda não desconta seu custo de produto, imposto nem ads.'},
+          tip:'O que sobra DA VENDA depois da parte da Amazon sobre o pedido: comissão, tarifa FBA, Taxa Amazon pra Todos e devoluções.\nArmazenagem e assinatura NÃO entram aqui — são custos MENSAIS da conta (estocagem por volume, mensalidade), aparecem no Repasse. Ainda não desconta seu custo de produto, imposto nem ads.'},
         {label:'Lucro Bruto',value:cm?brl2(lucroBruto):dash,icon:'ti-trending-up',color:t.grn,
-          tip:'Líq. do Marketplace − custo dos produtos (CMV das unidades líquidas) − imposto + lançamentos avulsos. É o lucro ANTES do anúncio.'},
+          tip:'Líq. do Marketplace − custo dos produtos (CMV das unidades líquidas) − imposto − armazenagem MEDIDA por SKU + lançamentos avulsos. É o lucro da VENDA, antes do anúncio.\nA cobrança MENSAL de estocagem e a assinatura são custo da conta e aparecem no Repasse (o caixa), não aqui — assim uma cobrança do mês não vira "prejuízo" num dia de venda boa.'},
         {label:'Margem',value:cm?pc(margem):dash,icon:'ti-percentage',color:t.grn,
           tip:'Lucro Bruto ÷ receita líquida de devolução. Mesma régua usada no card de cada produto — capa e detalhe não têm como discordar.'},
         {label:'Número de Vendas',value:String(vendas),icon:'ti-shopping-cart',color:t.blue,
@@ -5351,7 +5355,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         )}
 
         {/* Conteúdo */}
-        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} selo={selo} diario={diario} recon={recon} cmv={cmv} impostoTotal={totais.imposto} credito={totais.credito} custoEventual={totais.custoEventual} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
+        {tab==='resumo' && <Resumo hide={hide} realDre={realDre} selo={selo} diario={diario} recon={recon} cmv={cmv} impostoTotal={totais.imposto} credito={totais.credito} custoEventual={totais.custoEventual} armazenagemMedida={totais.armazenagem} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail} ajustes={ajustes} onAddAjuste={addAjuste} onRemoverAjuste={removeAjuste}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto} ajustes={ajustes} onDetail={setDetail}/>}
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef} realDre={realDre} inv={inventory}/>}
