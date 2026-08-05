@@ -16,7 +16,18 @@ const KEY = () => ({ 'Content-Type': 'application/json', 'x-internal-key': proce
 export async function GET(req: NextRequest) {
   const admin = await getAdminSession()
   if (!admin) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  const campaignId = (new URL(req.url).searchParams.get('campaignId') || '').trim()
+  const sp = new URL(req.url).searchParams
+  // ?status=1 → o relatório (fire-and-forget) está rodando? já tem dado? Sem
+  // campaignId: é o poll que a tela faz enquanto espera a geração terminar.
+  if (sp.get('status') === '1') {
+    try {
+      const r = await fetch(`${BACKEND}/api/ads/keywords-status?email=${encodeURIComponent(admin.email)}`, { cache: 'no-store', headers: KEY() })
+      return NextResponse.json(await r.json(), { status: r.status })
+    } catch {
+      return NextResponse.json({ ok: false, erro: 'Backend indisponível' }, { status: 502 })
+    }
+  }
+  const campaignId = (sp.get('campaignId') || '').trim()
   if (!campaignId) return NextResponse.json({ error: 'campaignId obrigatório' }, { status: 400 })
   try {
     const r = await fetch(

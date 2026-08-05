@@ -2089,8 +2089,14 @@ function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem
     try{
       const r=await fetch('/api/admin/ads-keywords',{method:'POST'})
       const d=await r.json()
-      if(!d.ok) setErro(d.erro||'não deu pra gerar')
-      await carregar()
+      if(!d.ok && !d.gerando){ setErro(d.erro||'não deu pra gerar'); setGerando(false); return }
+      // O relatório roda em segundo plano (passa do timeout do gateway) — espera
+      // terminar checando o status, senão a tela nunca mostraria o desempenho.
+      for(let i=0;i<32;i++){
+        await new Promise(res=>setTimeout(res,15000))
+        const st=await fetch('/api/admin/ads-keywords?status=1').then(x=>x.json()).catch(()=>null)
+        if(st && !st.gerando){ if(st.erro) setErro(String(st.erro).slice(0,200)); await carregar(); break }
+      }
     }catch{ setErro('sem resposta do servidor') }
     setGerando(false)
   }
@@ -2230,14 +2236,40 @@ function AlvosAutomaticos({campaignId,nome}:{campaignId:string;nome:string}){
   const [erro,setErro]=useState<string|null>(null)
   const [rasc,setRasc]=useState<Record<string,string>>({})
   const [salvando,setSalvando]=useState<string|null>(null)
-  useEffect(()=>{
-    let vivo=true
-    fetch(`/api/admin/ads-auto-targets?campaignId=${encodeURIComponent(campaignId)}`)
-      .then(r=>r.json())
-      .then(d=>{ if(!vivo) return; if(d?.ok) setAlvos(d.alvos||[]); else setErro(String(d?.erro||d?.error||'não consegui ler')) })
-      .catch(()=>{ if(vivo) setErro('sem resposta do servidor') })
-    return ()=>{ vivo=false }
-  },[campaignId])
+  const [temPerf,setTemPerf]=useState(false)
+  const [gerando,setGerando]=useState(false)
+  const carregar=()=>fetch(`/api/admin/ads-auto-targets?campaignId=${encodeURIComponent(campaignId)}`)
+    .then(r=>r.json())
+    .then(d=>{ if(d?.ok){ setAlvos(d.alvos||[]); setTemPerf(!!d.temPerf) } else setErro(String(d?.erro||d?.error||'não consegui ler')) })
+    .catch(()=>setErro('sem resposta do servidor'))
+  useEffect(()=>{ let vivo=true; carregar().finally(()=>{void vivo}); return ()=>{vivo=false} },[campaignId])   // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* O relatório de desempenho é da CONTA inteira (todas as campanhas, 30 dias) e
+     leva minutos — igual ao de palavra-chave, é o MESMO relatório. Um clique aqui
+     enche o desempenho das segmentações E das palavras de uma vez.
+
+     ⚠️ O backend gera em SEGUNDO PLANO (o relatório passa do timeout do gateway),
+     então a tela DISPARA e depois FICA CHECANDO até o dado aparecer. Sem o poll,
+     o clique voltaria "gerando" e nunca mostraria o resultado. */
+  async function baixarDesempenho(){
+    setGerando(true); setErro(null)
+    try{
+      const r=await fetch('/api/admin/ads-keywords',{method:'POST'})
+      const d=await r.json()
+      if(!d.ok && !d.gerando){ setErro(d.erro||'não deu pra gerar o relatório'); setGerando(false); return }
+      // Checa a cada 15s por até ~8min (o relatório da Amazon costuma levar 2–5).
+      for(let i=0;i<32;i++){
+        await new Promise(res=>setTimeout(res,15000))
+        const st=await fetch('/api/admin/ads-keywords?status=1').then(x=>x.json()).catch(()=>null)
+        if(st && !st.gerando){
+          if(st.erro){ setErro(String(st.erro).slice(0,200)) }
+          await carregar()
+          break
+        }
+      }
+    }catch{ setErro('sem resposta do servidor') }
+    setGerando(false)
+  }
 
   async function salvar(a:any, bid:number){
     if(!confirm(`Mudar o lance da segmentação "${a.nome}"\n\nCampanha: ${nome}\nDe R$ ${a.lance} para R$ ${bid.toFixed(2)}?\n\nIsso altera o CPC de verdade na Amazon.`)) return
@@ -2265,10 +2297,18 @@ function AlvosAutomaticos({campaignId,nome}:{campaignId:string;nome:string}){
       <div style={{fontSize:9,fontWeight:700,letterSpacing:.8,textTransform:'uppercase' as const,color:t.t3,marginBottom:2}}>
         Campanha automática · as 4 segmentações
       </div>
-      <div style={{fontSize:10.5,color:t.t3,marginBottom:9,lineHeight:1.45}}>
-        {todosIguais
-          ? <>As quatro estão no <b style={{color:t.gold}}>mesmo lance</b> — elas não convertem igual. Próxima costuma render mais; complementares costuma ser a mais cara por venda.</>
-          : <>Cada uma tem lance próprio e se comporta como uma campanha diferente.</>}
+      <div style={{fontSize:10.5,color:t.t3,marginBottom:9,lineHeight:1.45,display:'flex',gap:8,alignItems:'baseline',flexWrap:'wrap' as const}}>
+        <span style={{flex:'1 1 auto'}}>
+          {todosIguais
+            ? <>As quatro estão no <b style={{color:t.gold}}>mesmo lance</b> — elas não convertem igual. Próxima costuma render mais; complementares costuma ser a mais cara por venda.</>
+            : <>Cada uma tem lance próprio e se comporta como uma campanha diferente.</>}
+        </span>
+        {/* Baixar o desempenho: enche gasto/vendas/ACoS das 4, igual à Amazon. */}
+        {!temPerf && <button onClick={baixarDesempenho} disabled={gerando}
+          style={{flexShrink:0,padding:'4px 10px',borderRadius:7,cursor:gerando?'default':'pointer',fontFamily:'inherit',
+            fontSize:10.5,fontWeight:700,border:`1px solid ${t.gold}`,background:'transparent',color:t.gold}}>
+          {gerando?'baixando… (minutos)':'ver gasto e ACoS de cada'}
+        </button>}
       </div>
       <div style={{display:'flex',flexDirection:'column' as const,gap:9}}>
         {alvos.map(a=>{
@@ -2277,11 +2317,30 @@ function AlvosAutomaticos({campaignId,nome}:{campaignId:string;nome:string}){
           const novo=v!=null&&v!==''?Number(v):atual
           const mudou=isFinite(novo)&&novo>0&&Math.abs(novo-atual)>0.001
           const passo=(f:number)=>setRasc(r=>({...r,[a.targetId]:Math.max(0.02,+(atual*f).toFixed(2)).toFixed(2)}))
+          // Desempenho da segmentação (null = relatório não baixado ainda).
+          const temNum=a.gasto!=null
+          const acos=temNum&&a.vendas>0?(a.gasto/a.vendas)*100:null
+          const vendeu=temNum&&a.vendas>0
           return(
             <div key={a.targetId} style={{display:'flex',alignItems:'center',gap:9,flexWrap:'wrap' as const}}>
               <div style={{flex:'1 1 190px',minWidth:0}}>
                 <div style={{fontSize:12.5,fontWeight:600,color:t.t1}}>{a.nome}</div>
-                <div style={{fontSize:10.5,color:t.t3,lineHeight:1.4}}>{a.dica}</div>
+                {temNum ? (
+                  <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,alignItems:'baseline',marginTop:2,
+                    fontFamily:FG,fontSize:10.5,fontVariantNumeric:'tabular-nums' as const}}>
+                    <span style={{color:t.t2}}>{brl2(a.gasto)} gastos</span>
+                    <span style={{color:t.t3}}>·</span>
+                    {vendeu
+                      ? <span style={{color:t.grn}}>{brl2(a.vendas)} em venda</span>
+                      : <span style={{color:t.red,fontWeight:700}}>sem venda</span>}
+                    {acos!=null && <><span style={{color:t.t3}}>·</span>
+                      <span style={{color:acos<15?t.grn:acos<30?t.gold:t.red,fontWeight:700}}>ACoS {pc(acos)}</span></>}
+                    {a.impressoes!=null && <><span style={{color:t.t3}}>·</span>
+                      <span style={{color:t.t3}}>{Number(a.impressoes).toLocaleString('pt-BR')} impr.</span></>}
+                  </div>
+                ) : (
+                  <div style={{fontSize:10.5,color:t.t3,lineHeight:1.4}}>{a.dica}</div>
+                )}
               </div>
               <button onClick={()=>passo(0.9)} title="baixar 10%" aria-label={`Baixar 10% o lance de ${a.nome}`}
                 style={{width:30,height:30,borderRadius:8,cursor:'pointer',border:`1px solid ${t.line2}`,background:'transparent',color:t.t1,fontSize:15,fontWeight:700,fontFamily:'inherit',lineHeight:1}}>−</button>
