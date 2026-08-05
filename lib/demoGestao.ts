@@ -52,6 +52,17 @@ export function mergeDemoConfig(partial: any): DemoConfig {
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 
+// ASIN realista e DETERMINÍSTICO a partir do SKU (formato B0 + 8 alfanuméricos,
+// como os reais). Sem isto o demo mostrava "B0DEMO01" — denunciava a conta.
+function demoAsin(sku: string): string {
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789'
+  let h = 0
+  for (let i = 0; i < sku.length; i++) h = (h * 31 + sku.charCodeAt(i)) >>> 0
+  let s = ''
+  for (let i = 0; i < 8; i++) { s += A[h % A.length]; h = Math.floor(h / A.length) + (h % 7) * 131 }
+  return 'B0' + s
+}
+
 // Fração do preço que é custo (CMV), calculada p/ a margem final bater exatamente:
 // MPA = 1 - comissão% - fba% - tacos% - custo%  →  custo% = 1 - (comissão+fba+tacos+MPA).
 function costRatio(cfg: DemoConfig): number {
@@ -157,7 +168,7 @@ function coreDre(cfg: DemoConfig, R: number) {
   const produtos = cfg.products.map(p => {
     const receita = r2(p.share * R)
     const units = Math.max(0, Math.round(receita / p.price))
-    return { sku: p.sku, asin: `B0DEMO${p.sku.slice(-2)}`, units, receita, name: p.name, image: '' }
+    return { sku: p.sku, asin: demoAsin(p.sku), units, receita, name: p.name, image: '' }
   }).filter(p => p.units > 0).sort((a, b) => b.receita - a.receita)
   const vendas = produtos.reduce((s, p) => s + p.units, 0)
   const comissao = r2(R * cfg.commissionPct / 100)
@@ -232,7 +243,7 @@ export function demoAdsReport(cfg: DemoConfig, window: string, from?: string, to
 export function demoInventory(cfg: DemoConfig): any {
   const itens = cfg.products.map((p, i) => {
     const fulfillable = 40 + ((i * 37) % 220)
-    return { sku: p.sku, asin: `B0DEMO${p.sku.slice(-2)}`, name: p.name, image: '', fulfillable, inbound: (i * 13) % 60, reserved: (i * 7) % 20, unfulfillable: 0 }
+    return { sku: p.sku, asin: demoAsin(p.sku), name: p.name, image: '', fulfillable, inbound: (i * 13) % 60, reserved: (i * 7) % 20, unfulfillable: 0 }
   })
   // ⚠️ A chave é `inventario`, não `itens`: é o nome que o backend real devolve
   // e o único que o painel lê (`GestaoHub` linha ~1091 exige
