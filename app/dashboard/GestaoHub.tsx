@@ -824,7 +824,16 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
                 <NumTd hide={hide}>{brl2(r.preco)}</NumTd>
                 <NumTd color={r.custoU>0?t.t1:t.t3} hide={hide}>{r.custoU>0?brl2(r.custoU):'—'}</NumTd>
                 <NumTd>{r.units}</NumTd>
-                <NumTd strong hide={hide}>{brl2(r.receita)}</NumTd>
+                {/* ⭐ "POR QUE A VENDA SAIU MAIS BARATA QUE O ANÚNCIO?" na LINHA, não
+                    só na lupa (05/08). O cliente batia o olho no líquido (R$26,48)
+                    sem ver o anúncio (R$34,97) e achava a venda/o Oráculo errado.
+                    Mostra o preço de tabela riscado quando houve desconto; a
+                    decomposição completa (cupom/frete) segue no modal. */}
+                <NumTd strong hide={hide}>{brl2(r.receita)}
+                  {(r.p?.precoTabela||0) > r.receita + 0.005 && (
+                    <span style={{display:'block',fontSize:9.5,fontWeight:400,color:t.t3,textDecoration:'line-through'}} title="Preço do anúncio antes do cupom/promoção — veja a decomposição na lupa">de {brl2(r.p.precoTabela)}</span>
+                  )}
+                </NumTd>
                 <NumTd color={t.t2}>{r.repres.toFixed(1).replace('.',',')}%</NumTd>
                 <NumTd color={r.custoU>0&&r.lucro!==null?(r.lucro>=0?t.grn:t.red):t.t3} hide={hide}>{r.custoU>0&&r.lucro!==null?brl2(r.lucro):'—'}</NumTd>
                 <PillTd>{r.custoU>0&&r.margem!==null?<Pill kind={r.margem>20?'grn':r.margem>0?'gold':'red'}>{pc(r.margem)}</Pill>:<span style={{fontSize:10.5,color:t.t3}}>—</span>}</PillTd>
