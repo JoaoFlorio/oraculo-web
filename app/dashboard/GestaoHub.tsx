@@ -2064,6 +2064,25 @@ function lanceSugerido(lance:number, acos:number, alvo:number):number{
   return Math.max(0.02,Math.round(Math.max(lance*CORTE_MAXIMO,ideal)*100)/100)
 }
 
+/* Os tipos que a Amazon devolve em inglês → o nome que o vendedor entende, e o
+   texto às vezes cru (asin-expanded="B0..", keyword-group="category") → legível.
+   Nome interno de API não é rótulo de tela. */
+function tipoPalavra(mt:string):string{
+  const m=String(mt||'').toUpperCase()
+  if(m==='BROAD') return 'ampla'
+  if(m==='PHRASE') return 'frase'
+  if(m==='EXACT') return 'exata'
+  if(m.startsWith('TARGETING')) return 'por produto'
+  return m.toLowerCase()||'—'
+}
+function nomePalavra(texto:string):string{
+  const t=String(texto||'')
+  const asin=/asin-expanded="?([A-Z0-9]{10})"?/i.exec(t)||/asin="?([A-Z0-9]{10})"?/i.exec(t)
+  if(asin) return `produto ${asin[1]}`
+  if(/keyword-group|category/i.test(t)) return 'categoria do produto'
+  return t
+}
+
 /** Painel de palavras-chave de UMA campanha: desempenho + lance + sugestão do NEO. */
 function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem?:number|null}){
   const t=useT()
@@ -2120,13 +2139,24 @@ function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem
       {kws===null && <div style={{fontSize:11,color:t.t3}}>Carregando palavras…</div>}
       {kws!==null && kws.length===0 && <div style={{fontSize:11,color:t.t3}}>Nenhuma palavra-chave nesta campanha (pode ser segmentação automática).</div>}
       {semDados && kws.length>0 && (
-        <div style={{fontSize:11,color:t.t3,marginBottom:8,lineHeight:1.5}}>
-          Os lances estão aqui, mas o <b>desempenho por palavra</b> ainda não foi baixado.
-          <button onClick={gerar} disabled={gerando} style={{marginLeft:8,padding:'3px 9px',borderRadius:6,cursor:gerando?'default':'pointer',fontFamily:'inherit',fontSize:10.5,fontWeight:700,border:`1px solid ${t.line}`,background:'transparent',color:t.t2}}>
-            {gerando?'gerando… (minutos)':'baixar desempenho'}
+        <div style={{fontSize:11.5,color:t.t2,marginBottom:10,lineHeight:1.5,background:t.dark?'rgba(240,194,98,0.05)':'rgba(231,184,92,0.08)',border:`1px solid ${t.line}`,borderRadius:9,padding:'9px 12px'}}>
+          Aqui estão os lances de cada palavra. Falta o <b>desempenho</b> — quanto cada uma gastou, vendeu e o ACoS.
+          <button onClick={gerar} disabled={gerando} style={{marginLeft:8,padding:'5px 11px',borderRadius:7,cursor:gerando?'default':'pointer',fontFamily:'inherit',fontSize:11,fontWeight:700,border:`1px solid ${t.gold}`,background:'transparent',color:t.gold}}>
+            {gerando?'baixando… (minutos)':'ver gasto e ACoS de cada'}
           </button>
         </div>
       )}
+      {/* Legenda: explica UMA vez o que cada número da linha significa, pra não
+          precisar adivinhar. Só aparece quando já há desempenho pra ler. */}
+      {!semDados && kws!==null && kws.length>0 && (
+        <div style={{fontSize:11,color:t.t3,marginBottom:10,lineHeight:1.55}}>
+          Cada palavra mostra <b style={{color:t.t2}}>quanto gastou</b>, <b style={{color:t.t2}}>quanto vendeu</b> e o
+          <b style={{color:t.t2}}> ACoS</b> (gasto ÷ venda). Verde é saudável, vermelho passou do seu alvo de {alvo.toFixed(0)}%
+          {margem!=null?' (sua margem)':''}. O <b style={{color:t.red}}>▲</b> marca as que gastam e não vendem, ou vendem caro demais.
+          No campo <b style={{color:t.t2}}>Lance</b> você muda o valor; o botão dourado baixa pro lance que o NEO sugere.
+        </div>
+      )}
+      <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
       {(kws||[]).slice(0,25).map(k=>{
         const acos=k.vendas>0?(k.gasto/k.vendas)*100:null
         const opinavel=k.gasto>=GASTO_MINIMO_KW
@@ -2134,36 +2164,60 @@ function Keywords({campaignId,nome,margem}:{campaignId:string;nome:string;margem
         const sug=ruim&&k.lance>0?(acos!==null?lanceSugerido(k.lance,acos,alvo):Math.max(0.02,Math.round(k.lance*CORTE_MAXIMO*100)/100)):0
         const val=rasc[k.keywordId]
         const mudou=val!=null&&val!==''&&Number(val)!==Number(k.lance)
+        const temNum=k.gasto>0||k.vendas>0
         return(
-          <div key={k.keywordId} style={{display:'flex',gap:7,alignItems:'center',flexWrap:'wrap' as const,padding:'5px 0',borderTop:`1px solid ${t.line}`}}>
-            <span style={{flex:'1 1 150px',minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,fontSize:11.5,color:ruim?t.t1:t.t2}}>
-              {ruim&&<span style={{color:t.red,marginRight:4}}>▲</span>}{k.texto}
-              <span style={{color:t.t3,fontSize:9.5,marginLeft:5}}>{k.matchType}</span>
-            </span>
-            <span style={{fontFamily:FG,fontSize:10.5,color:t.t3,minWidth:96}}>{brl2(k.gasto)} → {brl2(k.vendas)}</span>
-            <span style={{fontFamily:FG,fontSize:10.5,minWidth:52,color:acos===null?(k.gasto>0?t.red:t.t3):acos>=alvo?t.red:t.grn}}>
-              {acos===null?(k.gasto>0?'sem venda':'—'):`${acos.toFixed(0)}%`}
-            </span>
-            <div style={{display:'flex',alignItems:'center',gap:3}}>
-              <span style={{fontSize:10,color:t.t3}}>R$</span>
-              <input value={val??String(k.lance??'')} onChange={e=>setRasc(v=>({...v,[k.keywordId]:e.target.value}))}
-                inputMode="decimal" style={{width:52,padding:'3px 5px',borderRadius:5,border:`1px solid ${mudou?t.gold:t.line}`,background:'transparent',color:t.t1,fontSize:11,fontFamily:FG,outline:'none'}}/>
-              {mudou && <button disabled={salvando===k.keywordId} onClick={()=>salvarLance(k,Number(val))}
-                style={{padding:'3px 7px',borderRadius:5,cursor:'pointer',fontFamily:'inherit',fontSize:10,fontWeight:700,border:`1px solid ${t.gold}`,background:'transparent',color:t.gold}}>ok</button>}
+          <div key={k.keywordId} style={{border:`1px solid ${ruim?(t.dark?'rgba(255,122,110,0.35)':'rgba(220,38,38,0.28)'):t.line}`,borderRadius:10,padding:'10px 12px',background:ruim?(t.dark?'rgba(255,122,110,0.05)':'#FFF7F6'):'transparent'}}>
+            {/* Linha 1: a palavra e o tipo de correspondência, legível. */}
+            <div style={{display:'flex',alignItems:'center',gap:7,minWidth:0}}>
+              {ruim&&<span style={{color:t.red,fontSize:12,flexShrink:0}} title="gasta sem vender ou acima do alvo">▲</span>}
+              <span style={{flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,fontSize:13,fontWeight:600,color:t.t1}}>{nomePalavra(k.texto)}</span>
+              <span style={{flexShrink:0,fontSize:9.5,fontWeight:700,letterSpacing:.4,textTransform:'uppercase' as const,color:t.t3,background:t.dark?'rgba(255,255,255,0.06)':'#F1F2F4',borderRadius:5,padding:'2px 7px'}}>{tipoPalavra(k.matchType)}</span>
             </div>
-            {sug>0&&sug<k.lance&&!mudou && (
-              <button disabled={salvando===k.keywordId} onClick={()=>salvarLance(k,sug)}
-                title={`ACOS ${acos?acos.toFixed(0)+'%':'sem venda'} contra alvo de ${alvo.toFixed(0)}%`}
-                style={{padding:'3px 9px',borderRadius:5,cursor:'pointer',fontFamily:'inherit',fontSize:10,fontWeight:700,border:`1px solid rgba(240,180,41,0.45)`,background:'rgba(240,180,41,0.07)',color:t.gold}}>
-                {salvando===k.keywordId?'…':`baixar p/ ${brl2(sug)}`}
-              </button>
+            {/* Linha 2: o desempenho, com RÓTULO em cada número. */}
+            {temNum ? (
+              <div style={{display:'flex',gap:9,flexWrap:'wrap' as const,alignItems:'baseline',marginTop:7,fontFamily:FG,fontSize:11.5,fontVariantNumeric:'tabular-nums' as const}}>
+                <span style={{color:t.t2}}>gastou <b style={{color:t.t1}}>{brl2(k.gasto)}</b></span>
+                <span style={{color:t.t3}}>·</span>
+                {k.vendas>0
+                  ? <span style={{color:t.t2}}>vendeu <b style={{color:t.grn}}>{brl2(k.vendas)}</b></span>
+                  : <span style={{color:t.red,fontWeight:700}}>não vendeu</span>}
+                {acos!=null && <><span style={{color:t.t3}}>·</span>
+                  <span style={{color:acos>=alvo?t.red:t.grn,fontWeight:700}}>ACoS {acos.toFixed(0)}%</span></>}
+              </div>
+            ) : (
+              <div style={{fontSize:11,color:t.t3,marginTop:6}}>sem gasto no período</div>
             )}
+            {/* Linha 3: o lance, rotulado, com o botão de sugestão à direita. */}
+            <div style={{display:'flex',alignItems:'center',gap:9,marginTop:9,flexWrap:'wrap' as const}}>
+              <span style={{fontSize:9.5,fontWeight:700,letterSpacing:.6,textTransform:'uppercase' as const,color:t.t3}}>Lance</span>
+              <div style={{display:'flex',alignItems:'center',gap:5,background:t.card2,border:`1px solid ${mudou?t.gold:t.line2}`,borderRadius:8,padding:'5px 9px'}}>
+                <span style={{fontSize:11,color:t.t3}}>R$</span>
+                <input value={val??String(k.lance??'')} onChange={e=>setRasc(v=>({...v,[k.keywordId]:e.target.value}))}
+                  inputMode="decimal" aria-label={`Lance de ${nomePalavra(k.texto)}`}
+                  style={{width:50,border:'none',background:'transparent',color:t.t1,fontSize:13,fontWeight:600,fontFamily:FH,fontVariantNumeric:'tabular-nums' as const,outline:'none',padding:0}}/>
+              </div>
+              {mudou && <button disabled={salvando===k.keywordId} onClick={()=>salvarLance(k,Number(val))}
+                style={{padding:'6px 13px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:'none',background:t.gold,color:t.dark?'#1c1606':'#3a2a05'}}>
+                {salvando===k.keywordId?'…':'salvar'}</button>}
+              {sug>0&&sug<k.lance&&!mudou && (
+                <button disabled={salvando===k.keywordId} onClick={()=>salvarLance(k,sug)}
+                  title={`ACoS ${acos?acos.toFixed(0)+'%':'sem venda'} contra seu alvo de ${alvo.toFixed(0)}% — o NEO sugere baixar pra trazer de volta`}
+                  style={{marginLeft:'auto',padding:'6px 12px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',fontSize:11.5,fontWeight:700,border:`1px solid ${t.gold}`,background:t.dark?'rgba(240,194,98,0.10)':'rgba(231,184,92,0.14)',color:t.gold,display:'flex',alignItems:'center',gap:5}}>
+                  <i className="ti ti-arrow-down-right" style={{fontSize:13}} aria-hidden="true"/>
+                  {salvando===k.keywordId?'…':`baixar p/ ${brl2(sug)}`}
+                </button>
+              )}
+            </div>
           </div>
         )
       })}
+      </div>
+      {kws!==null&&kws.length>25 && (
+        <div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Mostrando as 25 que mais gastaram, de {kws.length}.</div>
+      )}
       {kws!==null&&kws.length>0 && (
-        <div style={{fontSize:9.5,color:t.t3,marginTop:8,lineHeight:1.5}}>
-          Alvo de ACOS: {alvo.toFixed(0)}%{margem!=null?' (sua margem)':' (genérico — cadastre o CMV pra afinar)'}. O lance sugerido usa regra de três (ACOS ÷ alvo), com corte de no máximo 50% por vez — cortar demais de uma vez costuma matar a palavra. Palavra com menos de {brl2(GASTO_MINIMO_KW)} gastos fica sem opinião.
+        <div style={{fontSize:10,color:t.t3,marginTop:8,lineHeight:1.5}}>
+          O lance sugerido corta no máximo metade por vez — cortar demais de uma vez faz a palavra perder posição e parar de aparecer. Palavra com menos de {brl2(GASTO_MINIMO_KW)} gastos ainda não tem amostra pra opinar.
         </div>
       )}
     </div>
