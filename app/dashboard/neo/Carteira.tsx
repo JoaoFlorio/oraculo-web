@@ -64,11 +64,16 @@ export default function Carteira() {
 
   return (
     <>
-      <div className={`neoWallet${acabando ? ' low' : ''}`}>
-        <span className="wSpark" aria-hidden>◈</span>
-        <span className="wNum">{disponivel.toLocaleString('pt-BR')}</span>
-        <span className="wLbl">crédito{disponivel === 1 ? '' : 's'}</span>
-        <button className="wBtn" onClick={() => setAberto(true)}>Recarregar</button>
+      <div className="neoWalletWrap">
+        <div className={`neoWallet${acabando ? ' low' : ''}`}>
+          <span className="wSpark" aria-hidden>◈</span>
+          <span className="wNum">{disponivel.toLocaleString('pt-BR')}</span>
+          <span className="wLbl">crédito{disponivel === 1 ? '' : 's'}</span>
+          <button className="wBtn" onClick={() => setAberto(true)}>Recarregar</button>
+        </div>
+        {st.franquia && st.franquia.limite > 0 && (
+          <div className="wRenova">{st.franquia.limite.toLocaleString('pt-BR')} créditos renovados todo mês</div>
+        )}
       </div>
 
       {aberto && (
@@ -80,12 +85,18 @@ export default function Carteira() {
       )}
 
       <style jsx>{`
+        .neoWalletWrap{
+          display:flex; flex-direction:column; align-items:flex-end; gap:3px;
+          margin:0 0 12px auto; width:fit-content;
+        }
         .neoWallet{
-          display:flex; align-items:center; gap:8px; margin:0 0 12px auto;
+          display:flex; align-items:center; gap:8px;
           width:fit-content; padding:7px 8px 7px 13px; border-radius:999px;
           background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07);
           font-size:12.5px; color:rgba(245,239,223,.65); transition:border-color .3s, background .3s;
         }
+        /* discreto de propósito — informa sem competir com o saldo */
+        .wRenova{ font-size:9.5px; color:rgba(245,239,223,.32); letter-spacing:.02em; padding-right:7px; }
         .neoWallet.low{ border-color:rgba(240,180,41,.4); background:rgba(240,180,41,.07); color:#f5efdf; }
         .wSpark{ color:${OURO}; font-size:11px; opacity:.85; }
         .low .wSpark{ opacity:1; text-shadow:0 0 10px rgba(240,180,41,.6); }
