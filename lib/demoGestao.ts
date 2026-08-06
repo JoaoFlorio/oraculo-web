@@ -214,7 +214,17 @@ function coreDre(cfg: DemoConfig, R: number) {
   const produtos = cfg.products.map(p => {
     const receita = r2(p.share * R)
     const units = Math.max(0, Math.round(receita / p.price))
-    return { sku: p.sku, asin: p.asin || demoAsin(p.sku), units, receita, name: p.name, image: p.image || '', demoBlur: !!cfg.featuredSku && p.sku !== cfg.featuredSku }
+    // ⭐ Comissão e FBA POR PRODUTO (mesmo % e mesmo tilt do agregado, então
+    // somam no total). `feeMedido: true` é o que faz o painel COMPLETAR o cálculo
+    // por produto — sem isso a tabela mostrava "—" em Lucro/Margem/MPA enquanto o
+    // agregado mostrava margem, e os dois discordavam.
+    return {
+      sku: p.sku, asin: p.asin || demoAsin(p.sku), units, receita, name: p.name, image: p.image || '',
+      demoBlur: !!cfg.featuredSku && p.sku !== cfg.featuredSku,
+      comissao: r2(receita * cfg.commissionPct / 100 * t.comm),
+      fba: r2(receita * cfg.fbaPct / 100 * t.fba),
+      taxaPrograma: 0, outrasTaxas: 0, feeMedido: true,
+    }
   }).filter(p => p.units > 0).sort((a, b) => b.receita - a.receita)
   const vendas = produtos.reduce((s, p) => s + p.units, 0)
   const comissao = r2(R * cfg.commissionPct / 100 * t.comm)
