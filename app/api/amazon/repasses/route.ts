@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
+import { demoConfigFor } from '@/lib/demo'
+import { demoRepasses } from '@/lib/demoGestao'
 
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
 
@@ -18,11 +20,16 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const url = new URL(req.url)
+  const meses = Math.min(12, Math.max(1, Number(url.searchParams.get('meses') ?? 3) || 3))
+
+  // Conta DEMO: repasses fictícios coerentes com o faturamento (igual finance/orders).
+  const demo = await demoConfigFor(user)
+  if (demo) return NextResponse.json(demoRepasses(demo, meses))
+
   // ⭐ Admin pode olhar a conta de OUTRO cliente (suporte no lançamento: o cliente
   // manda print de um repasse vermelho e o João investiga da sessão dele). Pra
   // todo mundo mais, o e-mail continua vindo só da sessão.
   const alvo = (url.searchParams.get('email') || '').trim().toLowerCase()
-  const meses = Math.min(12, Math.max(1, Number(url.searchParams.get('meses') ?? 3) || 3))
   const conferir = url.searchParams.get('conferir') === '1' ? '&conferir=1' : ''
   // Diagnóstico: campos crus do grupo. Só admin — é dado de depuração, não de tela.
   const cru = (url.searchParams.get('cru') === '1' && user.role === 'admin') ? '&cru=1' : ''

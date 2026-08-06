@@ -413,3 +413,51 @@ function windowRange(window: string): { from: string; to: string } {
     default:          return { from: new Date(now.getTime() - 30 * 86400000).toISOString(), to } // 30d
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// REPASSES da conta demo — os pagamentos que a Amazon "depositou", COERENTES com o
+// faturamento demo (mesma lógica de uma conta real com esse volume). A Amazon BR
+// liquida a cada ~14 dias; cada repasse = faturamento do ciclo − comissão − FBA −
+// devoluções (o Ads na BR é cobrado à parte, não sai do repasse). Determinístico
+// (varia por ciclo, mas reproduzível) e ancorado a `Date.now()` — igual ao resto
+// do demo. Sem isso, a aba Repasses caía em "conta Amazon não conectada".
+export function demoRepasses(config: any, meses = 3): any {
+  const cfg = mergeDemoConfig(config)
+  const DAY = 86400000
+  const now = Date.now()
+  const CICLO = 14
+  const nCiclos = Math.max(2, Math.round((meses * 30) / CICLO))   // ~2 por mês
+  const rev15 = (cfg.rev30d || 0) / 2                             // faturamento por ciclo
+  const comPct = (cfg.commissionPct || 15) / 100
+  const fbaPct = (cfg.fbaPct || 8) / 100
+  const devPct = 0.014                                            // ~1,4% devoluções (coerente com o demo)
+
+  const repasses: any[] = []
+  for (let i = 0; i < nCiclos; i++) {
+    const fimMs = now - (i * CICLO + 6) * DAY                     // fechou ~6 dias após o fim do ciclo
+    const iniMs = fimMs - CICLO * DAY
+    let h = ((i + 1) * 2654435761) >>> 0                          // variação determinística ±10%
+    const varia = 0.9 + (h % 21) / 100
+    const receita = r2(rev15 * varia)
+    const valor = r2(receita - receita * comPct - receita * fbaPct - receita * devPct)
+    const iniISO = new Date(iniMs).toISOString().slice(0, 10)
+    const fimISO = new Date(fimMs).toISOString().slice(0, 10)
+    repasses.push({
+      id: `DEMO-REP-${i}`,
+      inicio: iniISO, fim: fimISO,
+      status: 'Closed', transferencia: 'Completed',
+      valorTransferido: valor, moeda: 'BRL', saldoInicial: 0,
+      dataTransferencia: new Date(fimMs + 5 * DAY).toISOString().slice(0, 10),
+      contaFinal: '4021',
+      numeroLiquidacao: String(90000000 + i * 137),
+      ehPagamento: true, foiTransferido: true,
+      ciclo: `${iniISO}|${fimISO}`,
+    })
+  }
+  const N = repasses.length
+  return {
+    repasses, conferido: true, conferencias: [],
+    naoConferidos: 0, limiteConferencia: 8,
+    repassesConferidos: N, repassesTotal: N, demo: true,
+  }
+}
