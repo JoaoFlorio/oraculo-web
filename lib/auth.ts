@@ -8,11 +8,12 @@ if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'oraculo-secret-dev-only')
 export const COOKIE = 'oraculo_session'
 
-// Até 2 sessões simultâneas por usuário: computador + celular (app PWA). O
-// deleteMany total anterior derrubava o app do celular toda vez que o dono
-// logava no desktop ("fica deslogando"). Anti-compartilhamento continua: um 3º
-// aparelho derruba a sessão mais antiga — emprestar a conta desloga alguém.
-const MAX_SESSIONS = 2
+// Sessões simultâneas por usuário. Subiu pra 3 (João, 06/08/2026): com 2, se o
+// dono logava DUAS vezes no PC (o web cria sessão nova a cada login), a 3ª
+// empurrava a sessão do CELULAR pra fora e ele perdia a notificação push do app.
+// Com 3 há folga pra PC + celular sem derrubar o telefone. Anti-compartilhamento
+// continua: o 4º aparelho derruba o mais antigo. Ajustável por env.
+const MAX_SESSIONS = parseInt(process.env.MAX_SESSIONS || '3')
 
 export async function createToken(userId: string): Promise<string> {
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
