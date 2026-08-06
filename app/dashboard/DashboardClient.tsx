@@ -1738,6 +1738,25 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const curNav  = NAV.find(n=>n.id===nav)
   const curCat  = CATS.find(c=>c.id===cat)
   const isCross = cat === 'all'
+
+  // Troca de categoria — a mesma lógica servia a lateral e agora também o
+  // dropdown do topo de Mais Vendidos (pro cliente filtrar sem caçar na barra).
+  // Reusa o pool já garimpado da categoria se existir; senão, garimpa.
+  function escolherCategoria(id: string){
+    setCat(id); setPage(1); setSortBy('default')
+    const target = nav==='search' ? 'bestsellers' : nav
+    if(nav==='search') setNav('bestsellers')
+    const k = `${target}__${id}`
+    const pool = poolRef.current[k]
+    if(pool && pool.length){
+      loadIdRef.current++
+      setLoading(false); setLoadError(false); setMoreLoading(false)
+      setProds(pool); setDone(true)
+      setPoolExhausted(!!exhaustedRef.current[k])
+      return
+    }
+    load(target, id, '', false)
+  }
   // Ordenação client-side sobre o pool (default = ordem do servidor).
   // Ordena só o SNAPSHOT do momento em que o usuário escolheu a ordenação —
   // itens que chegarem depois (goNext/loadMore) entram ao FINAL, sem se
@@ -1986,21 +2005,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   {CATS.map(c=>{
                     const active=cat===c.id
                     return(
-                      <button key={c.id} onClick={()=>{
-                        setCat(c.id); setPage(1); setSortBy('default')
-                        const target=nav==='search'?'bestsellers':nav
-                        if(nav==='search') setNav('bestsellers')
-                        const k=`${target}__${c.id}`
-                        const pool=poolRef.current[k]
-                        if(pool&&pool.length){
-                          loadIdRef.current++
-                          setLoading(false);setLoadError(false);setMoreLoading(false)
-                          setProds(pool);setDone(true)
-                          setPoolExhausted(!!exhaustedRef.current[k])
-                          return
-                        }
-                        load(target,c.id,'',false)
-                      }} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 20px',borderRadius:7,border:'none',cursor:'pointer',marginBottom:1,background:active?`${tint(T.gold,3)}`:'none',fontFamily:'inherit',textAlign:'left' as const}}>
+                      <button key={c.id} onClick={()=>escolherCategoria(c.id)} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 20px',borderRadius:7,border:'none',cursor:'pointer',marginBottom:1,background:active?`${tint(T.gold,3)}`:'none',fontFamily:'inherit',textAlign:'left' as const}}>
                         <div style={{width:4,height:4,borderRadius:'50%',background:active?T.gold:T.t3,flexShrink:0}}/>
                         <span style={{fontSize:11,color:active?T.gold:T.t4,fontWeight:active?600:400,letterSpacing:'-0.01em'}}>{c.label}</span>
                       </button>
@@ -2529,8 +2534,17 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   {done&&<> · <span className="ora-num" style={{color:T.t4}}>{prods.length}</span> <span style={{color:T.t4}}>produtos{!isFree&&!poolExhausted?'+':''}</span></>}
                 </p>
               </div>
-              {/* Ações contextuais: Ordenar + CSV + Atualizar */}
-              <div className="ora-ptools" style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+              {/* Ações contextuais: Categoria + Ordenar + CSV + Atualizar */}
+              <div className="ora-ptools" style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,flexWrap:'wrap' as const,justifyContent:'flex-end'}}>
+                {/* Dropdown de categoria — pro cliente filtrar o garimpo na própria
+                    tela, sem precisar abrir a lista da barra lateral. */}
+                <select value={cat} aria-label="Categoria" title="Escolher categoria"
+                  onChange={e=>escolherCategoria(e.target.value)}
+                  style={{background:T.card,border:`1px solid ${isCross?T.line:T.lineG}`,color:isCross?T.t3:T.gold,fontWeight:600,fontSize:10,padding:'8px 10px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.04em',outline:'none',transition:'all .15s'}}>
+                  {CATS.map(c=>(
+                    <option key={c.id} value={c.id}>{c.id==='all'?'Categoria: Todas':c.label}</option>
+                  ))}
+                </select>
                 {done&&prods.length>0&&(
                   <select value={sortBy} aria-label="Ordenar produtos" title="Ordenar produtos"
                     onChange={e=>{sortBaseRef.current=prods.length;setSortBy(e.target.value as 'default'|'sales'|'score'|'bsr');setPage(1)}}
