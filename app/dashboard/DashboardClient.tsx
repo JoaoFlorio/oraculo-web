@@ -1983,7 +1983,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
           <nav style={{flex:1,overflowY:'auto',overflowX:'hidden',padding:'8px',display:'flex',flexDirection:'column',gap:2,position:'relative' as const}}>
             {navGroups.map(g=>(
               <React.Fragment key={g.group}>
-                {sideOpen&&<Lbl style={{padding:'12px 8px 6px',marginBottom:2}}>{g.group}</Lbl>}
+                {sideOpen&&<Lbl style={{padding:'14px 8px 6px',marginBottom:2,color:T.t2,fontSize:10}}>{g.group}</Lbl>}
                 {g.ids.map(id=>{
                   const n = NAV.find(x=>x.id===id)!
                   const active = nav===id
@@ -1999,7 +1999,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                         fontFamily:'inherit',textAlign:'left' as const,outline:'none',opacity:locked?.5:1}}>
                       <NavIcon id={id} active={active}/>
                       {sideOpen&&<>
-                        <span style={{fontSize:12,fontWeight:active?600:400,color:active?T.t1:T.t2,whiteSpace:'nowrap' as const,flex:1,letterSpacing:'-0.01em'}}>{n.label}</span>
+                        <span style={{fontSize:12.5,fontWeight:active?700:500,color:active?T.t1:T.t2,whiteSpace:'nowrap' as const,flex:1,letterSpacing:'-0.01em'}}>{n.label}</span>
                         {id==='saved'&&saved.length>0&&(
                           <span className="ora-num" style={{background:T.goldSub,border:`1px solid ${tint(T.gold,25)}`,color:T.gold,fontSize:9,fontWeight:700,minWidth:18,height:16,padding:'0 5px',borderRadius:99,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>{saved.length}</span>
                         )}
