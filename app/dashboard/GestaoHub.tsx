@@ -826,7 +826,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
           ]}>
             {top15.map((r,i)=>(
               <tr key={i}>
-                <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}} blur={r.p.demoBlur||hide}/>
+                <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}} blur={r.p.demoBlur ?? hide}/>
                 <NumTd hide={hide}>{brl2(r.preco)}</NumTd>
                 <NumTd color={r.custoU>0?t.t1:t.t3} hide={hide}>{r.custoU>0?brl2(r.custoU):'—'}</NumTd>
                 <NumTd>{r.units}</NumTd>
@@ -1974,7 +1974,7 @@ function CurvaABC({realDre,costs={},adsReal,inv,connected,mockD,hide,imposto=0,a
         const dir=m?.clsAntes?(ORDEM_CLS[m.clsAntes]>ORDEM_CLS[r.cls]?'sobe':ORDEM_CLS[m.clsAntes]<ORDEM_CLS[r.cls]?'cai':'igual'):null
         return(
           <tr key={i}>
-            <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}} blur={r.p.demoBlur||hide}/>
+            <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}} blur={r.p.demoBlur ?? hide}/>
             <PillTd><ClassBadge t={t} cls={r.cls}/></PillTd>
             {mapaAntes && <td style={{padding:'9px 8px',borderTop:`1px solid ${t.line}`,textAlign:'right' as const,whiteSpace:'nowrap' as const}}>
               {!m ? <span style={{fontSize:11,color:t.t3}}>—</span>
@@ -3149,7 +3149,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
       <Hint>Quanto cada produto custou de anúncio e o que ele devolveu — inclusive o que a campanha não mostra: o <b>faturamento total</b> dele e quanto vendeu <b>sem anúncio</b>.</Hint>
       <Table minWidth={1120} head={[{label:'Produto',w:'24%'},{label:'Custo Ads',right:true},{label:'Fat. Ads',right:true},{label:'Un. Ads',right:true},{label:'Un. orgânicas',right:true},{label:'Fat. total',right:true},{label:'Conversão',right:true},{label:'ROAS',right:true},{label:'TACoS',right:true},{label:'ACoS',right:true}]}>
         {linhasProd.map((p,i)=>(<tr key={i}>
-          <ProdCell p={{id:p.sku,image:p.image,name:p.name,sku:p.sku}} blur={hide}/>
+          <ProdCell p={{id:p.sku,image:p.image,name:p.name,sku:p.sku}} blur={(p as any).demoBlur ?? hide}/>
           <NumTd color={t.gold} hide={hide}>{brl2(p.custoAds)}</NumTd>
           <NumTd color={t.grn} hide={hide}>{brl2(p.fatAds)}</NumTd>
           <NumTd color={t.t2}>{p.unAds!=null?p.unAds:'—'}</NumTd>
@@ -3362,7 +3362,7 @@ function Analitico({realDre,hide,connected,mockM,costs={},imposto=0,adsReal}:{re
         ]}>
           {rows.map((r,i)=>(
             <tr key={i}>
-              <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}} blur={r.p.demoBlur||hide}/>
+              <ProdCell p={{id:r.p.sku,image:r.p.image,name:r.p.name||r.p.sku,sku:r.p.sku}} blur={r.p.demoBlur ?? hide}/>
               <NumTd>{r.units}</NumTd>
               <NumTd strong hide={hide}>{brl2(r.receita)}</NumTd>
               <NumTd hide={hide}>{brl2(r.ticket)}</NumTd>
@@ -3557,7 +3557,7 @@ function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realD
             const vVenda=valorDeVenda(it)
             const vMerc=valorDeMercadoria(it,costs[it.sku]||0)
             return(<tr key={i}>
-              <ProdCell p={{id:it.sku,image:it.image,name:it.name||it.sku,sku:it.sku}} blur={it.demoBlur}/>
+              <ProdCell p={{id:it.sku,image:it.image,name:it.name||it.sku,sku:it.sku}} blur={it.demoBlur ?? hide}/>
               <NumTd color={t.grn} hide={hide}>{vVenda!=null?brl2(vVenda):'—'}</NumTd>
               <NumTd color={t.gold} hide={hide}>{vMerc!=null?brl2(vMerc):'—'}</NumTd>
               <NumTd strong>{it.fulfillable}</NumTd>
