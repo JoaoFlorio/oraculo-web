@@ -66,18 +66,30 @@ function demoAsin(sku: string): string {
   return 'B0' + s
 }
 
-// Fração do preço que é custo (CMV), calculada p/ a margem final bater exatamente:
-// MPA = 1 - comissão% - fba% - tacos% - custo%  →  custo% = 1 - (comissão+fba+tacos+MPA).
-function costRatio(cfg: DemoConfig): number {
-  const r = 1 - (cfg.commissionPct + cfg.fbaPct + cfg.tacosPct + cfg.marginPct) / 100
-  return Math.max(0.05, Math.min(0.9, r))
+// Margem pós-ads ALVO de CADA produto — espalhada e realista, NÃO todas iguais
+// (margem idêntica em todo produto era mais um tell). Determinística por SKU, em
+// torno da média (marginPct): ~11% a ~25%. O produto-ESTRELA ganha uma margem
+// saudável e bonita de propósito, pra brilhar quando o João destaca ele.
+function margemAlvoProduto(cfg: DemoConfig, sku: string): number {
+  const base = (cfg.marginPct || 16) / 100
+  if (cfg.featuredSku && sku === cfg.featuredSku) return Math.min(0.28, base + 0.09)  // estrela: ~25%
+  let h = 0
+  for (let i = 0; i < sku.length; i++) h = (h * 31 + sku.charCodeAt(i)) >>> 0
+  const s = (h % 1000) / 1000                       // 0..1 determinístico por SKU
+  return Math.max(0.11, Math.min(0.25, base + 0.13 * (s - 0.5)))  // média ~base, espalhado
 }
 
-// Custo por SKU — grava no metadata `gestao_cmv` do demo (o front calcula o CMV daí).
+// Custo por SKU (CMV) — grava no metadata `gestao_cmv` do demo (o front calcula o
+// CMV daí). O custo é o que SOBRA depois de comissão + FBA + ads + a margem-alvo
+// do produto: custo% = 1 - comissão% - fba% - tacos% - margem_alvo%. Assim cada
+// produto exibe uma margem pós-ads diferente e coerente com as taxas.
 export function demoCosts(cfg: DemoConfig): Record<string, number> {
-  const cr = costRatio(cfg)
+  const fixo = (cfg.commissionPct + cfg.fbaPct + cfg.tacosPct) / 100
   const out: Record<string, number> = {}
-  for (const p of cfg.products) out[p.sku] = r2(p.price * cr)
+  for (const p of cfg.products) {
+    const cr = Math.max(0.12, Math.min(0.85, 1 - fixo - margemAlvoProduto(cfg, p.sku)))
+    out[p.sku] = r2(p.price * cr)
+  }
   return out
 }
 
