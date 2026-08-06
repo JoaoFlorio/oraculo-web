@@ -10,10 +10,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 const OURO = '#f0b429'
 
 interface Evento { id: number; tipo: string; creditos: number; motivo: string; created_at: string }
+interface Pacote { valor: number; creditos: number }
 interface Status {
   ativa: boolean
   saldo: number
   extrato: Evento[]
+  // Pacotes com desconto por volume (os botões). O "outro valor" usa a taxa base.
+  pacotes: Pacote[]
   creditosPorReal: number
   valores: number[]
   recargaMin: number
@@ -91,7 +94,11 @@ export default function Carteira() {
 function ModalRecarga({ status, onFechar, onCreditou }: {
   status: Status; onFechar: () => void; onCreditou: () => void
 }) {
-  const [valorSel, setValorSel] = useState<number | null>(status.valores[1] ?? status.valores[0] ?? null)
+  // Seleção inicial vem dos PACOTES (não de `valores`, que pode estar defasado):
+  // o do meio, ou o primeiro. Assim o botão pré-marcado é sempre um que existe.
+  const [valorSel, setValorSel] = useState<number | null>(
+    status.pacotes[1]?.valor ?? status.pacotes[0]?.valor ?? null,
+  )
   const [custom, setCustom] = useState('')     // string do campo "outro valor"
   const [nome, setNome] = useState('')
   const [cpf, setCpf] = useState('')
@@ -106,7 +113,12 @@ function ModalRecarga({ status, onFechar, onCreditou }: {
   const custoNum = custom ? Math.round(parseFloat(custom.replace(',', '.')) * 100) / 100 : NaN
   const usandoCustom = custom.trim() !== '' && !Number.isNaN(custoNum)
   const valor = usandoCustom ? custoNum : valorSel
-  const creditosDe = (v: number) => Math.round(v * status.creditosPorReal)
+  // Espelha o backend (creditosDeValor): pacote exato leva o bônus de volume;
+  // qualquer outro valor cai na taxa base. Assim o número exibido bate com o cobrado.
+  const creditosDe = (v: number) => {
+    const p = status.pacotes.find(pk => pk.valor === v)
+    return p ? p.creditos : Math.round(v * status.creditosPorReal)
+  }
   const creditos = valor && valor > 0 ? creditosDe(valor) : 0
   const anunciosDe = (c: number) => Math.floor(c / (status.custos.anuncio || 1))
 
@@ -186,14 +198,14 @@ function ModalRecarga({ status, onFechar, onCreditou }: {
             </p>
 
             <div className="rcGrid">
-              {status.valores.map(v => {
-                const sel = !usandoCustom && valorSel === v
+              {status.pacotes.map(p => {
+                const sel = !usandoCustom && valorSel === p.valor
                 return (
-                  <button key={v} className={`rcAmount${sel ? ' on' : ''}`}
-                    onClick={() => { setCustom(''); setValorSel(v) }}>
-                    <span className="rcValor">{brl(v)}</span>
-                    <span className="rcCred">{creditosDe(v).toLocaleString('pt-BR')} créditos</span>
-                    <span className="rcAnun">≈ {anunciosDe(creditosDe(v))} anúncio{anunciosDe(creditosDe(v)) === 1 ? '' : 's'}</span>
+                  <button key={p.valor} className={`rcAmount${sel ? ' on' : ''}`}
+                    onClick={() => { setCustom(''); setValorSel(p.valor) }}>
+                    <span className="rcValor">{brl(p.valor)}</span>
+                    <span className="rcCred">{p.creditos.toLocaleString('pt-BR')} créditos</span>
+                    <span className="rcAnun">≈ {anunciosDe(p.creditos)} anúncio{anunciosDe(p.creditos) === 1 ? '' : 's'}</span>
                   </button>
                 )
               })}
