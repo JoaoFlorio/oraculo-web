@@ -50,7 +50,6 @@ export default function Carteira() {
   // O que o seller pode gastar AGORA = franquia do mês + créditos comprados.
   // (Antes o chip mostrava só o comprado, aparecendo "0" pra quem tinha os 150.)
   const disponivel = (st.franquia?.restante ?? 0) + st.saldo
-  const anuncios = Math.floor(disponivel / (st.custos.anuncio || 1))
   // Chama atenção (dourado) só quando não dá mais pra um anúncio — quando de fato importa.
   const acabando = disponivel < st.custos.anuncio
 
@@ -60,7 +59,6 @@ export default function Carteira() {
         <span className="wSpark" aria-hidden>◈</span>
         <span className="wNum">{disponivel.toLocaleString('pt-BR')}</span>
         <span className="wLbl">crédito{disponivel === 1 ? '' : 's'}</span>
-        {anuncios > 0 && <span className="wSub">· {anuncios} anúncio{anuncios > 1 ? 's' : ''}</span>}
         <button className="wBtn" onClick={() => setAberto(true)}>Recarregar</button>
       </div>
 
