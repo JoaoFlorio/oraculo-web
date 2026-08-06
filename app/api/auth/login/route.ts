@@ -4,6 +4,13 @@ import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
 import { createToken, COOKIE, accessDenied } from '@/lib/auth'
 
+// ⚠️ SEGURANÇA (pentest 06/08/2026): hash "isca" de custo 12 pra igualar o TEMPO
+// de resposta quando o e-mail NÃO existe. Sem isso, e-mail inexistente respondia
+// rápido (sem bcrypt) e e-mail de cliente respondia ~200ms — um atacante media o
+// tempo e descobria quais e-mails são clientes (enumeração). Agora os dois
+// caminhos rodam um bcrypt.compare equivalente.
+const HASH_ISCA = '$2b$12$ZUNqUoaHoA.7urkvufERLuUXm2gEDx1O/4enNAx4ah2JM4vn2ivcq'
+
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json()
@@ -12,8 +19,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Preencha todos os campos' }, { status: 400 })
 
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
-    if (!user)
+    if (!user) {
+      await bcrypt.compare(String(password), HASH_ISCA)   // gasta o mesmo tempo do caminho real
       return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 })
+    }
 
     const valid = await bcrypt.compare(password, user.password)
     if (!valid)

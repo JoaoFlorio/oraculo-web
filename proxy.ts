@@ -24,9 +24,16 @@ interface Balde { count: number; resetAt: number }
 const baldes = new Map<string, Balde>()
 
 function ipDe(req: NextRequest): string {
-  // Railway põe o IP real no X-Forwarded-For (1º da lista).
+  // ⚠️ SEGURANÇA (pentest 06/08/2026): o IP real é o ÚLTIMO hop do X-Forwarded-For,
+  // não o primeiro. O Envoy do Railway ANEXA o IP do cliente à DIREITA — o que
+  // vem à esquerda é controlado pelo atacante (ele manda `X-Forwarded-For: <fake>`
+  // e o Envoy vira `<fake>, <ip-real>`). Ler o [0] deixava o atacante trocar de
+  // "IP" a cada requisição e furar o limite. Ler o último bate com o backend
+  // (`trust proxy: 1`, que lê o hop da direita). Sem hop, x-real-ip (setado pelo
+  // proxy, não pelo cliente).
   const xff = req.headers.get('x-forwarded-for') || ''
-  return xff.split(',')[0].trim() || req.headers.get('x-real-ip') || 'desconhecido'
+  const hops = xff.split(',').map(s => s.trim()).filter(Boolean)
+  return hops[hops.length - 1] || req.headers.get('x-real-ip') || 'desconhecido'
 }
 
 export function proxy(req: NextRequest) {

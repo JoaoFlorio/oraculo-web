@@ -22,7 +22,16 @@ export async function POST(req: NextRequest) {
       cache: 'no-store',
       signal: AbortSignal.timeout(120_000),
       headers: { 'content-type': 'application/json', 'x-internal-key': process.env.INTERNAL_KEY || '' },
-      body: JSON.stringify({ prompt, refs: Array.isArray(body?.refs) ? body.refs.slice(0, 6) : [] }),
+      // 🔒 SEGURANÇA: email/plano/isAdmin vêm da SESSÃO (nunca do cliente) pra o
+      // backend cobrar o crédito certo. Antes só ia {prompt, refs} e a imagem
+      // saía sem cobrança nenhuma (furo do pentest 06/08).
+      body: JSON.stringify({
+        prompt,
+        refs: Array.isArray(body?.refs) ? body.refs.slice(0, 6) : [],
+        email: user.email,
+        planoSeller: user.plan,
+        ...(user.role === 'admin' ? { isAdmin: true } : {}),
+      }),
     })
     return NextResponse.json(await r.json(), { status: r.status })
   } catch (e: any) {
