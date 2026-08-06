@@ -16,7 +16,7 @@ model User {
   active    Boolean   @default(true)
   expiresAt DateTime?
   phone     String?
-  role      String    @default("client")   // client | staff | admin
+  role      String    @default("client")   // client | staff | support | admin | demo
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   sessions        Session[]

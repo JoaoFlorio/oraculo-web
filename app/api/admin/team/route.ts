@@ -14,28 +14,36 @@ function genPassword(): string {
   return p
 }
 
-// GET /api/admin/team → lista membros da equipe (staff + admin)
+// Papéis de equipe que o admin gerencia por aqui (nunca 'admin' nem 'client').
+//  · staff   = só cadastra cliente
+//  · support = admin RESTRITO: só vê clientes e reenvia senha (ver SupportClient)
+const TEAM_ROLES = ['staff', 'support'] as const
+type TeamRole = typeof TEAM_ROLES[number]
+
+// GET /api/admin/team → lista membros da equipe (staff + support + admin)
 export async function GET() {
   const admin = await getAdminSession()
   if (!admin) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   const team = await prisma.user.findMany({
-    where: { role: { in: ['staff', 'admin'] } },
+    where: { role: { in: ['staff', 'support', 'admin'] } },
     select: { id: true, name: true, email: true, role: true, active: true, createdAt: true },
     orderBy: { createdAt: 'asc' },
   })
   return NextResponse.json({ team })
 }
 
-// POST /api/admin/team → cria funcionário (role=staff) com senha gerada
+// POST /api/admin/team → cria membro da equipe (staff OU support) com senha gerada
 export async function POST(req: NextRequest) {
   const admin = await getAdminSession()
   if (!admin) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { name, email } = await req.json()
+  const { name, email, role } = await req.json()
   if (!email || typeof email !== 'string') {
     return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
   }
+  // Só staff/support saem daqui — nunca admin/client (evita criar admin pela UI).
+  const teamRole: TeamRole = TEAM_ROLES.includes(role) ? role : 'staff'
 
   const emailNorm = email.toLowerCase().trim()
   const exists = await prisma.user.findUnique({ where: { email: emailNorm } })
@@ -48,13 +56,13 @@ export async function POST(req: NextRequest) {
       name:     (typeof name === 'string' && name.trim()) || emailNorm.split('@')[0],
       email:    emailNorm,
       password: hash,
-      role:     'staff',
+      role:     teamRole,
       plan:     'free',
       active:   true,
     },
   })
 
-  return NextResponse.json({ ok: true, password })
+  return NextResponse.json({ ok: true, password, role: teamRole })
 }
 
 // PATCH /api/admin/team → ativa/desativa funcionário (nunca admin)
@@ -72,7 +80,7 @@ export async function PATCH(req: NextRequest) {
   if (user.role === 'admin') {
     return NextResponse.json({ error: 'Não é permitido alterar um admin' }, { status: 403 })
   }
-  if (user.role !== 'staff') {
+  if (!TEAM_ROLES.includes(user.role as TeamRole)) {
     return NextResponse.json({ error: 'Usuário não é membro da equipe' }, { status: 400 })
   }
 

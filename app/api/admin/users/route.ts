@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import bcrypt from 'bcryptjs'
 import { Resend } from 'resend'
 import { prisma } from '@/lib/db'
-import { getStaffSession, getAdminSession } from '@/lib/auth'
+import { getStaffSession, getAdminSession, getClientsSession } from '@/lib/auth'
 
 const ADMIN_KEY    = process.env.INTERNAL_KEY  || ''
 const ADMIN_SECRET = process.env.ADMIN_SECRET  || ''
@@ -16,10 +16,20 @@ async function checkAuth(req: NextRequest) {
   if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return true  // backend interno
   return !!(await getStaffSession())                                          // admin/staff logado
 }
-// GET/PATCH/PUT (listar/alterar/reenviar): só admin OU backend interno.
+// PATCH (mudar plano / desativar): só admin OU backend interno.
 async function checkAdmin(req: NextRequest) {
   if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return true
   return !!(await getAdminSession())
+}
+// GET (listar) e PUT (reenviar senha): admin OU support OU backend interno.
+// Devolve o "nível" pra as rotas aplicarem a guarda fina do support (que faz SÓ
+// isso — não cria (POST=staff), não muda plano/desativa (PATCH=admin), e só
+// enxerga/reseta CLIENTE, nunca admin/staff/outro support).
+async function clientsLevel(req: NextRequest): Promise<'internal' | 'admin' | 'support' | null> {
+  if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return 'internal'
+  const s = await getClientsSession()
+  if (!s) return null
+  return s.role === 'admin' ? 'admin' : 'support'
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -120,10 +130,12 @@ async function createBackendLicense(email: string, plan: string): Promise<string
   }
 }
 
-// GET /api/admin/users → lista todos os usuários
+// GET /api/admin/users → lista os usuários (support enxerga SÓ clientes)
 export async function GET(req: NextRequest) {
-  if (!(await checkAdmin(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const level = await clientsLevel(req)
+  if (!level) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const users = await prisma.user.findMany({
+    where: level === 'support' ? { role: 'client' } : undefined,   // support não vê admin/staff
     select: { id: true, name: true, email: true, phone: true, role: true, plan: true, active: true, expiresAt: true, createdAt: true },
     orderBy: { createdAt: 'desc' },
   })
@@ -238,12 +250,19 @@ export async function PATCH(req: NextRequest) {
 
 // PUT /api/admin/users → reseta senha + reenvia email de acesso
 export async function PUT(req: NextRequest) {
-  if (!(await checkAdmin(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const level = await clientsLevel(req)
+  if (!level) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { email } = await req.json()
   if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
 
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+
+  // 🔒 ANTI-ESCALONAMENTO: support só reseta senha de CLIENTE. Sem isso, ele
+  // poderia resetar a senha do admin por email e tomar a conta.
+  if (level === 'support' && user.role !== 'client') {
+    return NextResponse.json({ error: 'Sem permissão para este usuário' }, { status: 403 })
+  }
 
   // Gera nova senha e atualiza no banco
   const password = genPassword()

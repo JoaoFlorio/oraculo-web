@@ -204,7 +204,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   const [form, setForm] = useState({ email: '', name: '', phone: '', plan: 'monthly' })
   // Equipe
   const [team, setTeam] = useState<any[]>(previewData?.team || [])
-  const [teamForm, setTeamForm] = useState({ name: '', email: '' })
+  const [teamForm, setTeamForm] = useState({ name: '', email: '', role: 'staff' })
   const [teamCreated, setTeamCreated] = useState<{ name: string; email: string; password: string } | null>(null)
   const [teamLoading, setTeamLoading] = useState(false)
   const [teamMsg, setTeamMsg] = useState<string | null>(null)
@@ -280,7 +280,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
     e.preventDefault(); setTeamLoading(true); setTeamMsg(null); setTeamCreated(null)
     const r = await fetch('/api/admin/team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(teamForm) })
     const d = await r.json()
-    if (r.ok) { setTeamCreated({ name: teamForm.name, email: teamForm.email, password: d.password }); setTeamForm({ name: '', email: '' }); await load() }
+    if (r.ok) { setTeamCreated({ name: teamForm.name, email: teamForm.email, password: d.password }); setTeamForm({ name: '', email: '', role: 'staff' }); await load() }
     else setTeamMsg(d.error || 'Erro ao criar funcionário')
     setTeamLoading(false)
   }
@@ -754,7 +754,8 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                       <tbody>
                         {team.map((m: any) => {
                           const admin = m.role === 'admin'
-                          const roleCol = admin ? C.gold : C.blue
+                          const roleCol = admin ? C.gold : m.role === 'support' ? C.violet : C.blue
+                          const roleLbl = admin ? 'ADMIN' : m.role === 'support' ? 'SUPORTE' : 'STAFF'
                           return (
                             <tr key={m.id} className="orc-row">
                               <td style={{ padding: '10px 12px', ...cellB }}>
@@ -762,7 +763,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                                 <div style={{ color: C.t3, fontSize: 11 }}>{m.email}</div>
                               </td>
                               <td style={{ padding: '10px 12px', ...cellB }}>
-                                <span style={{ background: `${roleCol}1A`, color: roleCol, border: `1px solid ${roleCol}40`, borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em' }}>{admin ? 'ADMIN' : 'STAFF'}</span>
+                                <span style={{ background: `${roleCol}1A`, color: roleCol, border: `1px solid ${roleCol}40`, borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em' }}>{roleLbl}</span>
                               </td>
                               <td style={{ padding: '10px 12px', ...cellB }}>
                                 <span style={{ color: m.active ? C.green : C.t3, fontWeight: 700, fontSize: 12 }}>● {m.active ? 'Ativo' : 'Inativo'}</span>
@@ -786,19 +787,26 @@ export default function AdminClient({ role, name, previewData }: { role: string;
 
             {/* Adicionar funcionário */}
             <div style={{ ...card, padding: '24px 26px' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Adicionar funcionário</div>
-              <div style={{ fontSize: 12, color: C.t3, marginBottom: 20 }}>Cria um acesso de equipe (staff) restrito ao cadastro de clientes.</div>
+              <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>Adicionar à equipe</div>
+              <div style={{ fontSize: 12, color: C.t3, marginBottom: 20 }}>Cria o acesso, gera a senha e envia por e-mail. <strong style={{ color: C.t2 }}>Funcionário</strong> só cadastra clientes; <strong style={{ color: C.violet }}>Suporte</strong> vê a lista de clientes e reenvia senha (sem ver vendas).</div>
 
               {teamMsg && <div style={{ marginBottom: 14, padding: '10px 14px', borderRadius: 10, fontSize: 12.5, background: 'rgba(248,113,113,0.10)', color: C.red, border: '1px solid rgba(248,113,113,0.3)' }}>{teamMsg}</div>}
 
               <form onSubmit={addStaff} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
                   <label style={fieldLabel}>Nome</label>
-                  <input type="text" value={teamForm.name} onChange={e => setTeamForm({ ...teamForm, name: e.target.value })} placeholder="Nome do funcionário" className="orc-in" style={inputSt} />
+                  <input type="text" value={teamForm.name} onChange={e => setTeamForm({ ...teamForm, name: e.target.value })} placeholder="Nome do membro" className="orc-in" style={inputSt} />
                 </div>
                 <div>
                   <label style={fieldLabel}>E-mail *</label>
-                  <input required type="email" value={teamForm.email} onChange={e => setTeamForm({ ...teamForm, email: e.target.value })} placeholder="funcionario@email.com" className="orc-in" style={inputSt} />
+                  <input required type="email" value={teamForm.email} onChange={e => setTeamForm({ ...teamForm, email: e.target.value })} placeholder="pessoa@email.com" className="orc-in" style={inputSt} />
+                </div>
+                <div>
+                  <label style={fieldLabel}>Papel</label>
+                  <select value={teamForm.role} onChange={e => setTeamForm({ ...teamForm, role: e.target.value })} className="orc-in" style={inputSt}>
+                    <option value="staff">Funcionário — só cadastra clientes</option>
+                    <option value="support">Suporte — clientes + reenviar senha</option>
+                  </select>
                 </div>
                 <button type="submit" disabled={teamLoading} className="orc-gold" style={{ background: GOLD_GRAD, color: '#1a1305', fontWeight: 800, fontSize: 13, padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginTop: 4, transition: 'filter .15s' }}>{teamLoading ? 'Criando…' : 'Criar acesso da equipe'}</button>
               </form>

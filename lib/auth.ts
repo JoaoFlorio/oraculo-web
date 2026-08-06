@@ -51,7 +51,7 @@ type AccessUser = { active?: boolean; plan?: string; expiresAt?: Date | null; ro
 export function accessDenied(user: AccessUser | null): 'notfound' | 'inactive' | 'free' | 'expired' | null {
   if (!user) return 'notfound'
   if (!user.active) return 'inactive'
-  if (user.role === 'admin' || user.role === 'staff' || user.role === 'demo') return null // equipe/demo entram independente de plano
+  if (user.role === 'admin' || user.role === 'staff' || user.role === 'support' || user.role === 'demo') return null // equipe/demo entram independente de plano
   if (user.plan === 'free' || !user.plan) return 'free'           // sem plano pago = bloqueado
   if (user.plan === 'lifetime') return null                       // vitalício nunca expira
   if (user.expiresAt && new Date(user.expiresAt).getTime() + GRACE_MS < Date.now()) return 'expired'
@@ -88,6 +88,15 @@ export async function getStaffSession() {
 export async function getAdminSession() {
   const user = await getSession()
   if (!user || user.role !== 'admin') return null
+  return user
+}
+
+// Sessão com acesso à GESTÃO DE CLIENTES (listar + reenviar senha): admin OU
+// support. O papel `support` é um admin RESTRITO — enxerga só a tela de clientes
+// e reenvia senha; NUNCA vê vendas/faturamento/equipe (essas usam getAdminSession).
+export async function getClientsSession() {
+  const user = await getSession()
+  if (!user || (user.role !== 'admin' && user.role !== 'support')) return null
   return user
 }
 
