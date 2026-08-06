@@ -205,7 +205,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   // Equipe
   const [team, setTeam] = useState<any[]>(previewData?.team || [])
   const [teamForm, setTeamForm] = useState({ name: '', email: '', role: 'staff' })
-  const [teamCreated, setTeamCreated] = useState<{ name: string; email: string; password: string } | null>(null)
+  const [teamCreated, setTeamCreated] = useState<{ name: string; email: string; password?: string; promoted?: boolean; role?: string } | null>(null)
   const [teamLoading, setTeamLoading] = useState(false)
   const [teamMsg, setTeamMsg] = useState<string | null>(null)
   // Conta demo (apresentação)
@@ -280,7 +280,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
     e.preventDefault(); setTeamLoading(true); setTeamMsg(null); setTeamCreated(null)
     const r = await fetch('/api/admin/team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(teamForm) })
     const d = await r.json()
-    if (r.ok) { setTeamCreated({ name: teamForm.name, email: teamForm.email, password: d.password }); setTeamForm({ name: '', email: '', role: 'staff' }); await load() }
+    if (r.ok) { setTeamCreated({ name: teamForm.name, email: teamForm.email, password: d.password, promoted: d.action === 'promoted', role: d.role }); setTeamForm({ name: '', email: '', role: 'staff' }); await load() }
     else setTeamMsg(d.error || 'Erro ao criar funcionário')
     setTeamLoading(false)
   }
@@ -813,19 +813,27 @@ export default function AdminClient({ role, name, previewData }: { role: string;
 
               {teamCreated && (
                 <div style={{ marginTop: 18, padding: '14px 16px', borderRadius: 12, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.3)' }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.green, marginBottom: 10 }}>Funcionário criado</div>
-                  {[['E-mail', teamCreated.email], ['Senha', teamCreated.password]].map(([l, v]) => (
-                    <div key={l} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 8 }}>
-                      <div style={{ ...upLabel, marginBottom: 6 }}>{l}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <code style={{ ...num, fontSize: 12, color: C.gold, flex: 1, wordBreak: 'break-all' }}>{v}</code>
-                        <CopyBtn value={v} />
-                      </div>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: C.green, marginBottom: 10 }}>{teamCreated.promoted ? `Conta promovida a ${teamCreated.role === 'support' ? 'Suporte' : 'Funcionário'}` : 'Acesso da equipe criado'}</div>
+                  {teamCreated.promoted ? (
+                    <div style={{ fontSize: 12, color: C.t2, lineHeight: 1.6 }}>
+                      <strong style={{ color: C.t1 }}>{teamCreated.email}</strong> já tinha conta e foi promovida — <strong style={{ color: C.green }}>mantém o mesmo login e senha</strong> e o acesso ao produto. É só pedir pra ela entrar em <span style={{ color: C.gold }}>/admin</span> (ou usar o botão “Painel Admin” no painel dela).
                     </div>
-                  ))}
-                  <div style={{ fontSize: 11, color: C.t2, lineHeight: 1.55, marginTop: 4 }}>
-                    Envie estes dados ao funcionário; ele acessa <span style={{ color: C.gold }}>/login</span> e cai direto no cadastro de clientes. A senha é exibida apenas uma vez.
-                  </div>
+                  ) : (
+                    <>
+                      {[['E-mail', teamCreated.email], ['Senha', teamCreated.password || '—']].map(([l, v]) => (
+                        <div key={l} style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: '10px 14px', marginBottom: 8 }}>
+                          <div style={{ ...upLabel, marginBottom: 6 }}>{l}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <code style={{ ...num, fontSize: 12, color: C.gold, flex: 1, wordBreak: 'break-all' }}>{v}</code>
+                            <CopyBtn value={v} />
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ fontSize: 11, color: C.t2, lineHeight: 1.55, marginTop: 4 }}>
+                        Envie estes dados; a pessoa acessa <span style={{ color: C.gold }}>/login</span>. A senha é exibida apenas uma vez.
+                      </div>
+                    </>
+                  )}
                   <button onClick={() => setTeamCreated(null)} className="orc-ghost" style={{ marginTop: 10, background: 'none', border: `1px solid ${C.line}`, borderRadius: 7, color: C.t3, fontSize: 11, padding: '4px 12px', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .15s,border-color .15s' }}>Fechar</button>
                 </div>
               )}

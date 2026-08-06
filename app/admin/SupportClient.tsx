@@ -87,7 +87,10 @@ export default function SupportClient({ name }: { name: string }) {
             <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.14em' }}>ORÁCULO <span style={{ color: C.gold }}>SUPORTE</span></div>
             <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>{name} · <span style={{ color: C.gold, textTransform: 'uppercase', fontWeight: 700 }}>suporte</span> · reenvio de senha</div>
           </div>
-          <button onClick={logout} style={{ background: 'transparent', border: `1px solid ${C.line2}`, color: C.t2, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit' }}>Sair</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <a href="/dashboard" style={{ background: 'transparent', border: `1px solid ${C.gold}55`, color: C.gold, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'none' }}>Painel do cliente ↗</a>
+            <button onClick={logout} style={{ background: 'transparent', border: `1px solid ${C.line2}`, color: C.t2, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit' }}>Sair</button>
+          </div>
         </div>
 
         {msg && (

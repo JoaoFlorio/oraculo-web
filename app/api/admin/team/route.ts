@@ -47,7 +47,16 @@ export async function POST(req: NextRequest) {
 
   const emailNorm = email.toLowerCase().trim()
   const exists = await prisma.user.findUnique({ where: { email: emailNorm } })
-  if (exists) return NextResponse.json({ error: 'Já existe um usuário com este email' }, { status: 409 })
+  if (exists) {
+    // Conta JÁ EXISTE (ex.: já é cliente e usa o Oráculo). Em vez de barrar,
+    // PROMOVE ao papel de equipe — mantém login, senha, plano e acesso ao
+    // produto intactos; só ganha o papel. Nunca mexe em admin/demo.
+    if (exists.role === 'admin' || exists.role === 'demo') {
+      return NextResponse.json({ error: `Não é permitido alterar uma conta ${exists.role}` }, { status: 403 })
+    }
+    await prisma.user.update({ where: { id: exists.id }, data: { role: teamRole } })
+    return NextResponse.json({ ok: true, action: 'promoted', role: teamRole, kept: true })
+  }
 
   const password = genPassword()
   const hash     = await bcrypt.hash(password, 12)
