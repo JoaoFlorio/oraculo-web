@@ -2085,6 +2085,14 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M14 4H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7M16 8l4 4-4 4M20 12H9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </button>
                 </div>
+                {/* Emblema MEMBRO FUNDADOR — só vitalício. É o "a mais" de quem entrou no início. */}
+                {isLifetime&&(
+                  <div title="Você é membro fundador do Oráculo" style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6,padding:'5px 10px',borderRadius:8,
+                    background:`linear-gradient(90deg, ${tint(T.gold,16)}, ${tint(T.gold,4)})`,border:`1px solid ${tint(T.gold,32)}`}}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 15.9 6.8 18.1l1-5.8L3.5 8.2l5.9-.9L12 2z" fill={T.gold}/></svg>
+                    <span style={{fontSize:8.5,fontWeight:800,letterSpacing:'0.12em',textTransform:'uppercase' as const,color:T.gold}}>Membro Fundador</span>
+                  </div>
+                )}
                 {isFree&&(
                   <button onClick={()=>setUpgrade(true)} style={{width:'100%',background:T.goldG,border:'none',cursor:'pointer',color:'#02020A',fontSize:9,fontFamily:'inherit',padding:'7px',borderRadius:7,letterSpacing:'0.08em',fontWeight:800,textTransform:'uppercase' as const}}>Fazer Upgrade</button>
                 )}
