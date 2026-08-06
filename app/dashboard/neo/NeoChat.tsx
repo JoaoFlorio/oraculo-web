@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import Carteira from './Carteira'
+import { salvarGeradas, carregarGeradas, limparGeradas } from './idbGeradas'
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * AGENTE NEO — ambiente premium
@@ -31,7 +32,11 @@ type Ficha = {
   custoBrl?: number
 }
 type ImgGerada = { rotulo: string; mediaType: string; data: string }
-type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[]; ficha?: Ficha; geradas?: ImgGerada[] }
+type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[]; ficha?: Ficha; geradas?: ImgGerada[]; id?: string }
+
+// Id estável só pras mensagens com imagem gerada — é a chave que liga a mensagem
+// (texto no localStorage) às imagens guardadas no IndexedDB ao reabrir a aba.
+const novoId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`)
 type Insight = { texto: string; severidade: 'critico' | 'atencao' | 'ok'; geradoEm: string } | null
 
 const GPT_AGENT_URL = 'https://chatgpt.com/g/g-6a02736d422081918e58416c49426a3a-oraculo-ia-especialista-em-marketplace'
@@ -272,14 +277,24 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
   const chaveConversa = `oraculo_neo_chat_v1:${userEmail || 'anon'}`
   const hidratadoRef = useRef(false)
   useEffect(() => {
+    let vivo = true
     try {
       const raw = localStorage.getItem(chaveConversa)
       if (raw) {
         const salvo = JSON.parse(raw) as Msg[]
-        if (Array.isArray(salvo) && salvo.length) setMsgs(salvo)
+        if (Array.isArray(salvo) && salvo.length) {
+          setMsgs(salvo)
+          // As imagens geradas ficam no IndexedDB (não cabem no localStorage).
+          // Reidrata por id — assim elas voltam quando ele reabre a conversa.
+          carregarGeradas(chaveConversa).then((mapa) => {
+            if (!vivo || !Object.keys(mapa).length) return
+            setMsgs((atual) => atual.map((m) => (m.id && mapa[m.id] ? { ...m, geradas: mapa[m.id] } : m)))
+          })
+        }
       }
     } catch {}
     hidratadoRef.current = true
+    return () => { vivo = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveConversa])
   useEffect(() => {
@@ -297,6 +312,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
     setMsgs([])
     ultimoEnvioRef.current = null
     try { localStorage.removeItem(chaveConversa) } catch {}
+    void limparGeradas(chaveConversa)   // some com as imagens guardadas também
   }
   const [pend, setPend] = useState<Img[]>([])
   const [loading, setLoading] = useState(false)
@@ -486,7 +502,8 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         // Guarda qual motor o servidor usou de verdade — é o que o seletor
         // mostra enquanto o admin não força nenhum.
         if (data.provider === 'claude' || data.provider === 'gemini') setMotorAtivo(data.provider)
-        setMsgs([...historico, {
+        const geradas = Array.isArray(data.imagens) && data.imagens.length ? (data.imagens as ImgGerada[]) : undefined
+        const msg: Msg = {
           role: 'assistant', text: data.reply || '(sem resposta)',
           ficha: {
             provider: data.provider, model: data.model, ms: data.ms,
@@ -495,8 +512,17 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
             tokensSaida: data.usage?.output_tokens,
             custoBrl: data.custo?.brl,
           },
-          geradas: Array.isArray(data.imagens) ? data.imagens : undefined,
-        }])
+          geradas,
+          id: geradas ? novoId() : undefined,
+        }
+        setMsgs([...historico, msg])
+        if (geradas && msg.id) {
+          // Guarda as imagens no IndexedDB (não cabem no localStorage) pra elas
+          // não sumirem quando o seller trocar de aba e voltar.
+          void salvarGeradas(chaveConversa, msg.id, geradas)
+          // Gerou imagem = consumiu crédito: avisa a Carteira pra atualizar na hora.
+          window.dispatchEvent(new Event('neo:creditos-mudou'))
+        }
         if (VOZ_SAIDA && vozAtiva && data.reply) falar(data.reply)
       }
     } catch (e: any) {

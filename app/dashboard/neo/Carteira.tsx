@@ -45,6 +45,15 @@ export default function Carteira() {
 
   useEffect(() => { carregar() }, [carregar])
 
+  // Tempo real: quando o NEO gera/ajusta uma imagem (consome crédito), ele
+  // dispara este evento e o chip recarrega na hora — antes só atualizava ao
+  // sair e voltar pra aba.
+  useEffect(() => {
+    const onMudou = () => carregar()
+    window.addEventListener('neo:creditos-mudou', onMudou)
+    return () => window.removeEventListener('neo:creditos-mudou', onMudou)
+  }, [carregar])
+
   if (!st?.ativa) return null
 
   // O que o seller pode gastar AGORA = franquia do mês + créditos comprados.
@@ -124,7 +133,6 @@ function ModalRecarga({ status, onFechar, onCreditou }: {
     return p ? p.creditos : Math.round(v * status.creditosPorReal)
   }
   const creditos = valor && valor > 0 ? creditosDe(valor) : 0
-  const anunciosDe = (c: number) => Math.floor(c / (status.custos.anuncio || 1))
 
   const foraDaFaixa = usandoCustom && (custoNum < status.recargaMin || custoNum > status.recargaMax)
   const podeGerar = !!valor && valor >= status.recargaMin && valor <= status.recargaMax && !gerando
@@ -217,7 +225,6 @@ function ModalRecarga({ status, onFechar, onCreditou }: {
                     onClick={() => { setCustom(''); setValorSel(p.valor) }}>
                     <span className="rcValor">{brl(p.valor)}</span>
                     <span className="rcCred">{p.creditos.toLocaleString('pt-BR')} créditos</span>
-                    <span className="rcAnun">≈ {anunciosDe(p.creditos)} anúncio{anunciosDe(p.creditos) === 1 ? '' : 's'}</span>
                   </button>
                 )
               })}
