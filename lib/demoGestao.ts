@@ -226,7 +226,11 @@ function coreDre(cfg: DemoConfig, R: number) {
       taxaPrograma: 0, outrasTaxas: 0, feeMedido: true,
     }
   }).filter(p => p.units > 0).sort((a, b) => b.receita - a.receita)
-  const vendas = produtos.reduce((s, p) => s + p.units, 0)
+  // Unidades = soma das unidades; VENDAS (pedidos) é um pouco menor — como numa
+  // loja real, uns pedidos levam 2+ itens. Sem isto "Nº de Vendas" == "Unidades"
+  // (todo pedido com 1 item), que é mais um tell.
+  const unidades = produtos.reduce((s, p) => s + p.units, 0)
+  const vendas = Math.max(1, Math.round(unidades / 1.09))
   const comissao = r2(R * cfg.commissionPct / 100 * t.comm)
   const fba = r2(R * cfg.fbaPct / 100 * t.fba)
   const liqMarketplace = r2(R - comissao - fba)
@@ -236,7 +240,7 @@ function coreDre(cfg: DemoConfig, R: number) {
   // torno do alvo — como numa loja de verdade. A DRE fecha dentro do período.
   const ads = Math.max(0, r2(R * cfg.tacosPct / 100 * t.ads))
   const roasEff = r2(cfg.roas * t.roas)   // eficiência do ads NESTE período
-  return { produtos, vendas, comissao, fba, liqMarketplace, cmv, ads, roasEff }
+  return { produtos, vendas, unidades, comissao, fba, liqMarketplace, cmv, ads, roasEff }
 }
 
 // DRE fake p/ o período. Mesmo shape do backend real (computeOrdersDRE) — a Gestão
@@ -249,16 +253,27 @@ export function demoFinance(cfg: DemoConfig, from: string, to: string, daily: bo
   }
   const { revenue: R, daily: dailyArr } = periodRevenue(cfg, from, to)
   const c = coreDre(cfg, R)
+  // DEVOLUÇÕES realistas: ~1,3–2,3% das unidades dos mais vendidos voltam. Loja de
+  // milhares de pedidos com ZERO devolução é tell. Determinístico, pequeno.
+  const precoDoSku: Record<string, number> = {}
+  for (const cp of cfg.products) precoDoSku[cp.sku] = cp.price
+  const reembolsos = c.produtos.slice(0, Math.min(6, c.produtos.length)).map((p: any, i: number) => {
+    const un = Math.round(p.units * (0.013 + 0.010 * Math.abs(Math.sin(i * 1.7 + 0.4))))
+    return un > 0 ? { sku: p.sku, units: un, valor: r2(un * (precoDoSku[p.sku] || 0)) } : null
+  }).filter(Boolean) as any[]
+  const devolucoes = r2(reembolsos.reduce((s, r) => s + r.valor, 0))
+  const receitaLiquida = r2(R - devolucoes)
+  const liqMarketplace = r2(receitaLiquida - c.comissao - c.fba)
   return {
     connected: true,
     period: { from, to },
-    linhas: { receitaBruta: R, devolucoes: 0, receitaLiquida: R, comissao: c.comissao, taxaPrograma: 0, fba: c.fba, armazenagem: 0, assinatura: 0, outrasTaxas: 0, ads: c.ads },
-    liqMarketplace: c.liqMarketplace,
-    vendas: c.vendas, unidades: c.vendas,
+    linhas: { receitaBruta: R, devolucoes, receitaLiquida, comissao: c.comissao, taxaPrograma: 0, fba: c.fba, armazenagem: 0, assinatura: 0, outrasTaxas: 0, ads: c.ads },
+    liqMarketplace,
+    vendas: c.vendas, unidades: c.unidades,
     faturamento: R,
     ticket: c.vendas > 0 ? r2(R / c.vendas) : 0,
     produtos: c.produtos,
-    reembolsos: [],
+    reembolsos,
     daily: dailyArr,
     demo: true,
   }
@@ -344,7 +359,8 @@ export function demoOrders(cfg: DemoConfig, from: string, to: string, sku?: stri
   for (const cp of cfg.products) precoDoSku[cp.sku] = cp.price
   const CAP = sku ? 40 : 60
   const totalUnits = prods.reduce((s: number, p: any) => s + p.units, 0) || 1
-  const t0 = brtDayStartMs(Date.now())
+  const agora = Date.now()
+  const t0 = brtDayStartMs(agora)
   const janela = Math.min(20, Math.max(1, Math.round((brtDayStartMs(new Date(to).getTime()) - brtDayStartMs(new Date(from).getTime())) / 86400000) + 1))
   const pedidos: any[] = []
   let idx = 0
@@ -352,7 +368,16 @@ export function demoOrders(cfg: DemoConfig, from: string, to: string, sku?: stri
     const nOrders = sku ? Math.min(CAP, Math.max(1, p.units)) : Math.max(1, Math.round(CAP * p.units / totalUnits))
     for (let k = 0; k < nOrders; k++) {
       idx++
-      const dia = new Date(t0 - (idx % janela) * 86400000 - ((idx * 137) % 20) * 3600000)
+      // Horário REAL de venda: horário comercial variado (9h–21h) com minutos, e
+      // NUNCA no futuro (pedido de hoje que cairia depois de agora vira "há alguns
+      // minutos"). Sem isto vários pedidos caíam na meia-noite exata e, ordenados
+      // por data, iam pro topo — a tela mostrava "00:00:00" em tudo.
+      const diaOffset = idx % janela
+      const hora = 9 + ((idx * 7) % 13)          // 9h a 21h
+      const minuto = (idx * 17) % 60
+      let ts = t0 - diaOffset * 86400000 + hora * 3600000 + minuto * 60000
+      if (ts > agora) ts = agora - (((idx * 11) % 240) + 3) * 60000   // 3..243 min atrás
+      const dia = new Date(ts)
       const qty = (idx % 9 === 0) ? 2 : 1
       const preco = precoDoSku[p.sku] || 0; const bruto = r2(preco * qty)
       // ~1 em cada 4 com cupom/oferta pequeno (dá vida à decomposição na tela)
