@@ -13,6 +13,7 @@ const T = {
   cardHov: 'var(--cardHov)',
   modal:   'var(--modal)',
   line:    'var(--line)',
+  line2:   'var(--line2, var(--line))',
   lineG:   'var(--lineG)',
   gold:    'var(--gold)',
   goldG:   'var(--goldG)',
@@ -2551,26 +2552,26 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               <div className="ora-ptools" style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,flexWrap:'wrap' as const,justifyContent:'flex-end'}}>
                 {/* Busca livre — o cliente digita e o Oráculo traz só o que ele
                     procurou (Enter ou lupa). O × volta pro garimpo da categoria. */}
-                <div style={{display:'flex',alignItems:'center',background:T.card,border:`1px solid ${query?T.lineG:T.line}`,borderRadius:8,overflow:'hidden'}}>
-                  <input value={searchInput}
+                <div style={{display:'flex',alignItems:'center',background:T.cardHov,border:`1px solid ${query?T.lineG:T.line2}`,borderRadius:8,overflow:'hidden'}}>
+                  <input className="ora-search" value={searchInput}
                     onChange={e=>setSearchInput(e.target.value)}
                     onKeyDown={e=>{if(e.key==='Enter')buscar()}}
                     placeholder="Buscar produto…" aria-label="Buscar produto"
-                    style={{background:'none',border:'none',outline:'none',color:T.t1,fontSize:11,padding:'8px 10px',fontFamily:'inherit',width:150}}/>
+                    style={{background:'none',border:'none',outline:'none',color:T.t1,fontSize:11.5,fontWeight:500,padding:'8px 10px',fontFamily:'inherit',width:150}}/>
                   {query&&(
                     <button onClick={limparBusca} title="Limpar busca" aria-label="Limpar busca"
-                      style={{background:'none',border:'none',color:T.t3,cursor:'pointer',padding:'0 8px',fontSize:15,lineHeight:1}}>×</button>
+                      style={{background:'none',border:'none',color:T.t2,cursor:'pointer',padding:'0 8px',fontSize:16,lineHeight:1}}>×</button>
                   )}
                   <button onClick={buscar} title="Buscar" aria-label="Buscar"
-                    style={{display:'flex',alignItems:'center',justifyContent:'center',background:tint(T.gold,8),border:'none',borderLeft:`1px solid ${T.line}`,color:T.gold,cursor:'pointer',padding:'8px 11px'}}>
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.4" stroke="currentColor" strokeWidth="1.4"/><path d="M7.6 7.6L10.5 10.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                    style={{display:'flex',alignItems:'center',justifyContent:'center',background:T.goldG,border:'none',color:'#1a1200',cursor:'pointer',padding:'9px 12px'}}>
+                    <svg width="13" height="13" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.4" stroke="currentColor" strokeWidth="1.6"/><path d="M7.6 7.6L10.5 10.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
                   </button>
                 </div>
                 {/* Dropdown de categoria — pro cliente filtrar o garimpo na própria
                     tela, sem precisar abrir a lista da barra lateral. */}
                 <select value={cat} aria-label="Categoria" title="Escolher categoria"
                   onChange={e=>escolherCategoria(e.target.value)}
-                  style={{background:T.card,border:`1px solid ${isCross?T.line:T.lineG}`,color:isCross?T.t3:T.gold,fontWeight:600,fontSize:10,padding:'8px 10px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.04em',outline:'none',transition:'all .15s'}}>
+                  style={{background:T.cardHov,border:`1px solid ${isCross?T.line2:T.lineG}`,color:isCross?T.t2:T.gold,fontWeight:600,fontSize:10.5,padding:'8px 10px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.04em',outline:'none',transition:'all .15s'}}>
                   {CATS.map(c=>(
                     <option key={c.id} value={c.id}>{c.id==='all'?'Categoria: Todas':c.label}</option>
                   ))}
@@ -2578,7 +2579,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 {done&&prods.length>0&&(
                   <select value={sortBy} aria-label="Ordenar produtos" title="Ordenar produtos"
                     onChange={e=>{sortBaseRef.current=prods.length;setSortBy(e.target.value as 'default'|'sales'|'score'|'bsr');setPage(1)}}
-                    style={{background:T.card,border:`1px solid ${T.line}`,color:sortBy==='default'?T.t3:T.gold,fontWeight:600,fontSize:10,padding:'8px 10px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.04em',outline:'none',transition:'all .15s'}}>
+                    style={{background:T.cardHov,border:`1px solid ${T.line2}`,color:sortBy==='default'?T.t2:T.gold,fontWeight:600,fontSize:10.5,padding:'8px 10px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.04em',outline:'none',transition:'all .15s'}}>
                     <option value="default">Ordenar: Padrão</option>
                     <option value="sales">Ordenar: Mais vendidos</option>
                     <option value="score">Ordenar: Melhor score</option>
@@ -2587,9 +2588,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 )}
                 {cfg.export&&done&&prods.length>0&&(
                   <button onClick={()=>exportCSV(prods,cat)}
-                    style={{display:'flex',alignItems:'center',gap:6,background:'none',border:`1px solid ${T.line}`,color:T.t2,fontWeight:600,fontSize:10,padding:'8px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase' as const,transition:'all .15s'}}
+                    style={{display:'flex',alignItems:'center',gap:6,background:T.cardHov,border:`1px solid ${T.line2}`,color:T.t2,fontWeight:600,fontSize:10,padding:'8px 14px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.08em',textTransform:'uppercase' as const,transition:'all .15s'}}
                     onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
-                    onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t2}}>
+                    onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line2;el.style.color=T.t2}}>
                     <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v7M3 5.5l3 3 3-3M1 9v1a1 1 0 001 1h8a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     CSV
                   </button>
@@ -2597,9 +2598,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 {/* Atualizar NÃO manda bust: a novidade vem do exclude + shuffle do serve;
                     o rebuild do pool (caro na SP-API) fica reservado p/ remaining<12 no load */}
                 <button onClick={()=>load(nav,cat,queryRef.current,false)} title="Limpa o garimpo atual e redistribui produtos novos"
-                  style={{display:'flex',alignItems:'center',gap:7,background:'none',border:`1px solid ${T.line}`,color:T.t3,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
+                  style={{display:'flex',alignItems:'center',gap:7,background:T.cardHov,border:`1px solid ${T.line2}`,color:T.t2,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
                   onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
-                  onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
+                  onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line2;el.style.color=T.t2}}>
                   <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M9.5 2A5 5 0 1 0 10 5.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M9.5 2V5H6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   Atualizar
                 </button>

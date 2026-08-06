@@ -31,7 +31,7 @@ body {
 :root {
   /* superfícies em camadas */
   --bg:#07080D; --sidebar:#0A0B12; --card:#10121B; --cardHov:#161925; --modal:#0E1018;
-  --line:rgba(255,255,255,0.06); --lineG:rgba(240,180,41,0.30);
+  --line:rgba(255,255,255,0.06); --line2:rgba(255,255,255,0.16); --lineG:rgba(240,180,41,0.30);
   --gold:#F0B429; --goldG:linear-gradient(135deg,#F5C842 0%,#C48F10 100%); --goldSub:rgba(240,180,41,0.09);
   /* gradiente p/ texto com background-clip (wordmark) — precisa contrastar com --sidebar */
   --goldTextG:linear-gradient(115deg,#FFE7A6 0%,#F0B429 48%,#C48F10 100%);
@@ -47,7 +47,7 @@ body {
 }
 [data-theme="light"] {
   --bg:#F4F5F8; --sidebar:#FFFFFF; --card:#FFFFFF; --cardHov:#F8FAFC; --modal:#FFFFFF;
-  --line:rgba(17,24,39,0.08); --lineG:rgba(200,145,14,0.45);
+  --line:rgba(17,24,39,0.08); --line2:rgba(17,24,39,0.22); --lineG:rgba(200,145,14,0.45);
   --gold:#C8910E; --goldG:linear-gradient(135deg,#E7B85C 0%,#B5840F 100%); --goldSub:rgba(200,145,14,0.12);
   /* tons escurecidos: o claro (#FFE7A6) sumiria sobre a sidebar branca */
   --goldTextG:linear-gradient(115deg,#B5840F 0%,#A0740C 48%,#8A6108 100%);
@@ -57,6 +57,9 @@ body {
   --elev2:0 10px 30px -16px rgba(17,24,39,0.18);
   --elevGold:0 6px 24px -16px rgba(200,145,14,0.4);
 }
+
+/* Placeholder da busca de Mais Vendidos — legível (o default do navegador some). */
+.ora-search::placeholder{ color:var(--t2); opacity:1; }
 
 /* ════════════════════════════════════════════════════════════════════════
    LANDING / PÁGINA DE VENDAS (cinematográfica) — escopo .ora-landing
