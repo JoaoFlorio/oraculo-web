@@ -11,9 +11,12 @@ const OURO = '#f0b429'
 
 interface Evento { id: number; tipo: string; creditos: number; motivo: string; created_at: string }
 interface Pacote { valor: number; creditos: number }
+interface Franquia { usados: number; limite: number; restante: number }
 interface Status {
   ativa: boolean
   saldo: number
+  // Franquia mensal inclusa (créditos que zeram dia 1º). O chip soma com `saldo`.
+  franquia?: Franquia
   extrato: Evento[]
   // Pacotes com desconto por volume (os botões). O "outro valor" usa a taxa base.
   pacotes: Pacote[]
@@ -44,16 +47,19 @@ export default function Carteira() {
 
   if (!st?.ativa) return null
 
-  const anuncios = Math.floor(st.saldo / (st.custos.anuncio || 1))
+  // O que o seller pode gastar AGORA = franquia do mês + créditos comprados.
+  // (Antes o chip mostrava só o comprado, aparecendo "0" pra quem tinha os 150.)
+  const disponivel = (st.franquia?.restante ?? 0) + st.saldo
+  const anuncios = Math.floor(disponivel / (st.custos.anuncio || 1))
   // Chama atenção (dourado) só quando não dá mais pra um anúncio — quando de fato importa.
-  const acabando = st.saldo < st.custos.anuncio
+  const acabando = disponivel < st.custos.anuncio
 
   return (
     <>
       <div className={`neoWallet${acabando ? ' low' : ''}`}>
         <span className="wSpark" aria-hidden>◈</span>
-        <span className="wNum">{st.saldo.toLocaleString('pt-BR')}</span>
-        <span className="wLbl">crédito{st.saldo === 1 ? '' : 's'}</span>
+        <span className="wNum">{disponivel.toLocaleString('pt-BR')}</span>
+        <span className="wLbl">crédito{disponivel === 1 ? '' : 's'}</span>
         {anuncios > 0 && <span className="wSub">· {anuncios} anúncio{anuncios > 1 ? 's' : ''}</span>}
         <button className="wBtn" onClick={() => setAberto(true)}>Recarregar</button>
       </div>
@@ -196,6 +202,14 @@ function ModalRecarga({ status, onFechar, onCreditou }: {
             <p className="rcLead">
               Um anúncio completo custa {status.custos.anuncio} créditos; um ajuste de imagem, {status.custos.imagem}.
             </p>
+            {status.franquia && (
+              <p className="rcSaldo">
+                Você tem <strong>{status.franquia.restante.toLocaleString('pt-BR')}</strong> créditos do mês
+                <span className="rcSaldoDim"> (renovam dia 1º)</span>
+                {status.saldo > 0 && <> + <strong>{status.saldo.toLocaleString('pt-BR')}</strong> comprados</>}.
+                {' '}Recarregar adiciona créditos que <strong>não expiram</strong>.
+              </p>
+            )}
 
             <div className="rcGrid">
               {status.pacotes.map(p => {
@@ -265,6 +279,10 @@ function ModalRecarga({ status, onFechar, onCreditou }: {
           text-transform:uppercase; color:${OURO}; opacity:.85; }
         .rcCard h3{ margin:6px 0 0; font-size:22px; font-weight:700; letter-spacing:-.01em; color:#fff; }
         .rcLead{ margin:8px 0 0; font-size:13px; line-height:1.5; color:rgba(245,239,223,.55); }
+        .rcSaldo{ margin:10px 0 0; padding:9px 12px; border-radius:10px; font-size:12.5px; line-height:1.5;
+          color:rgba(245,239,223,.7); background:rgba(240,180,41,.06); border:1px solid rgba(240,180,41,.15); }
+        .rcSaldo strong{ color:#f5efdf; }
+        .rcSaldoDim{ opacity:.55; }
 
         .rcGrid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:18px 0 10px; }
         .rcAmount{ display:flex; flex-direction:column; align-items:flex-start; gap:2px;
