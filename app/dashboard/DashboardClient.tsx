@@ -1362,7 +1362,15 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const [done,     setDone]     = useState(false)
   const [sideOpen, setSideOpen] = useState(true)
   const [mobileNav, setMobileNav] = useState(false) // sidebar off-canvas no mobile (≤920px)
-  const [catOpen,  setCatOpen]  = useState(false)
+  // Busca livre: `searchInput` é o campo; `query` é o termo REALMENTE carregado
+  // (dirige o cabeçalho/vazio). `queryRef` acompanha pra o loadMore/feedMore
+  // (que rodam fora do render) buscarem o mesmo termo no scroll infinito.
+  const [searchInput, setSearchInput] = useState('')
+  const [query, setQuery] = useState('')
+  const queryRef = useRef('')
+  // Chave do pool local. Busca usa `type=search` no backend (por keyword, ignora
+  // categoria) — então a chave dela é só o termo, isolada do pool da categoria.
+  const poolKey = (n:string,c:string,q:string)=> q ? `search__q:${q.toLowerCase()}` : `${n}__${c}`
   // Tema escuro/claro — escolha do cliente, persistida em localStorage
   const [theme, setTheme] = useState<'dark'|'light'>('dark')
   useEffect(()=>{
@@ -1565,14 +1573,18 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     setLoading(true); setDone(false); setPage(1); setLoadError(false)
     setMoreLoading(false)
     setSortBy('default')  // carga nova = pool novo: ordenação volta ao padrão da aba
-    const key = `${n}__${c}`
+    queryRef.current = query   // mantém loadMore/feedMore buscando o mesmo termo
+    const key = poolKey(n,c,query)
     if(bust) seenRef.current[key] = new Set()          // recomeça: pool novo, esquece o visto
     poolRef.current[key] = []                          // pool local recomeça a cada carga completa
     exhaustedRef.current[key] = false
     setPoolExhausted(false)
     const seen = (seenRef.current[key] ||= new Set())
     try{
-      const params = new URLSearchParams({type:n,category:c,q:query})
+      // Com termo, o backend busca por keyword (type=search); sem termo, é o
+      // garimpo normal da aba. O `nav` visual continua "Mais Vendidos".
+      const apiType = query ? 'search' : n
+      const params = new URLSearchParams({type:apiType,category:c,q:query})
       if(bust) params.set('bust','1')
       // envia os já vistos (últimos 800 — cobre o pool do backend mesmo com
       // degraus relaxados; acima disso o seen é resetado abaixo) p/ não repetir
@@ -1608,11 +1620,12 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // NOVO em vez de dar "fim dos dados". Retorna true se o pool cresceu.
   async function loadMore(bust=false): Promise<boolean>{
     const reqId = loadIdRef.current
-    const key = `${nav}__${cat}`
+    const q = queryRef.current
+    const key = poolKey(nav,cat,q)
     const seen = (seenRef.current[key] ||= new Set())
     setMoreLoading(true)
     try{
-      const params = new URLSearchParams({type:nav,category:cat,q:''})
+      const params = new URLSearchParams({type:q?'search':nav,category:cat,q})
       if(bust) params.set('bust','1')
       if(seen.size) params.set('exclude',[...seen].slice(-800).join(','))
       const r = await fetch(`/api/products?${params}`)
@@ -1645,7 +1658,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const feedingRef = useRef(false)
   async function feedMore(){
     if(feedingRef.current || moreLoading || loading || !done || isFree) return
-    const key = `${nav}__${cat}`
+    const key = poolKey(nav,cat,queryRef.current)
     if(page*PAGE < prods.length){ setPage(p=>p+1); return }   // ainda há carregado: revela
     if(exhaustedRef.current[key]) return
     feedingRef.current = true
@@ -1701,6 +1714,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     setMobileNav(false) // fecha o menu off-canvas ao navegar (mobile)
     if(!cfg.tabs.includes(id)){setUpgrade(true);return}
     setNav(id); setPage(1)
+    setQuery(''); setSearchInput(''); queryRef.current=''  // trocar de aba sai da busca
     setSortBy('default')  // cada aba tem semântica própria — não herda ordenação
     if(id==='competitor'||id==='saved'||id==='perfil'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
     if(id==='extension'){
@@ -1744,6 +1758,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // Reusa o pool já garimpado da categoria se existir; senão, garimpa.
   function escolherCategoria(id: string){
     setCat(id); setPage(1); setSortBy('default')
+    setQuery(''); setSearchInput(''); queryRef.current=''  // trocar categoria sai da busca
     const target = nav==='search' ? 'bestsellers' : nav
     if(nav==='search') setNav('bestsellers')
     const k = `${target}__${id}`
@@ -1756,6 +1771,22 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       return
     }
     load(target, id, '', false)
+  }
+
+  // Busca livre — o cliente digita e o Oráculo traz só o que ele procurou (o
+  // backend já aceita `q`; aqui só ligamos a UI). Termo vazio = volta ao garimpo
+  // normal da categoria.
+  function buscar(){
+    const q = searchInput.trim()
+    setQuery(q); queryRef.current = q
+    setPage(1); setSortBy('default')
+    if(nav!=='bestsellers') setNav('bestsellers')
+    load('bestsellers', cat, q, false)
+  }
+  function limparBusca(){
+    setSearchInput(''); setQuery(''); queryRef.current=''
+    setPage(1)
+    load('bestsellers', cat, '', false)
   }
   // Ordenação client-side sobre o pool (default = ordem do servidor).
   // Ordena só o SNAPSHOT do momento em que o usuário escolheu a ordenação —
@@ -1994,26 +2025,8 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               {sideOpen&&<span style={{fontSize:12,fontWeight:400,color:T.t2,whiteSpace:'nowrap' as const,flex:1,letterSpacing:'-0.01em'}}>App &amp; Avisos</span>}
             </button>
 
-            {/* Categories */}
-            {sideOpen&&(
-              <>
-                <button onClick={()=>setCatOpen(!catOpen)} style={{width:'100%',display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 10px 6px',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',marginTop:4}}>
-                  <Lbl>Categorias</Lbl>
-                  <Chevron open={catOpen}/>
-                </button>
-                <div style={{overflow:'hidden',maxHeight:catOpen?500:0,transition:'max-height .28s cubic-bezier(.4,0,.2,1)'}}>
-                  {CATS.map(c=>{
-                    const active=cat===c.id
-                    return(
-                      <button key={c.id} onClick={()=>escolherCategoria(c.id)} style={{width:'100%',display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 20px',borderRadius:7,border:'none',cursor:'pointer',marginBottom:1,background:active?`${tint(T.gold,3)}`:'none',fontFamily:'inherit',textAlign:'left' as const}}>
-                        <div style={{width:4,height:4,borderRadius:'50%',background:active?T.gold:T.t3,flexShrink:0}}/>
-                        <span style={{fontSize:11,color:active?T.gold:T.t4,fontWeight:active?600:400,letterSpacing:'-0.01em'}}>{c.label}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </>
-            )}
+            {/* Categorias saíram da lateral (06/08): agora ficam no dropdown do
+                topo da aba Mais Vendidos, onde o cliente filtra o garimpo. */}
           </nav>
 
           {/* Suporte + Perfil */}
@@ -2530,12 +2543,29 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 </div>
                 <h1 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:6,lineHeight:1}}>{curNav?.label}</h1>
                 <p style={{fontSize:11,color:T.t3}}>
-                  {isCross?'Todas as categorias':curCat?.label}
+                  {query?<>Resultados para <span style={{color:T.gold}}>“{query}”</span></>:(isCross?'Todas as categorias':curCat?.label)}
                   {done&&<> · <span className="ora-num" style={{color:T.t4}}>{prods.length}</span> <span style={{color:T.t4}}>produtos{!isFree&&!poolExhausted?'+':''}</span></>}
                 </p>
               </div>
               {/* Ações contextuais: Categoria + Ordenar + CSV + Atualizar */}
               <div className="ora-ptools" style={{display:'flex',alignItems:'center',gap:8,flexShrink:0,flexWrap:'wrap' as const,justifyContent:'flex-end'}}>
+                {/* Busca livre — o cliente digita e o Oráculo traz só o que ele
+                    procurou (Enter ou lupa). O × volta pro garimpo da categoria. */}
+                <div style={{display:'flex',alignItems:'center',background:T.card,border:`1px solid ${query?T.lineG:T.line}`,borderRadius:8,overflow:'hidden'}}>
+                  <input value={searchInput}
+                    onChange={e=>setSearchInput(e.target.value)}
+                    onKeyDown={e=>{if(e.key==='Enter')buscar()}}
+                    placeholder="Buscar produto…" aria-label="Buscar produto"
+                    style={{background:'none',border:'none',outline:'none',color:T.t1,fontSize:11,padding:'8px 10px',fontFamily:'inherit',width:150}}/>
+                  {query&&(
+                    <button onClick={limparBusca} title="Limpar busca" aria-label="Limpar busca"
+                      style={{background:'none',border:'none',color:T.t3,cursor:'pointer',padding:'0 8px',fontSize:15,lineHeight:1}}>×</button>
+                  )}
+                  <button onClick={buscar} title="Buscar" aria-label="Buscar"
+                    style={{display:'flex',alignItems:'center',justifyContent:'center',background:tint(T.gold,8),border:'none',borderLeft:`1px solid ${T.line}`,color:T.gold,cursor:'pointer',padding:'8px 11px'}}>
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.4" stroke="currentColor" strokeWidth="1.4"/><path d="M7.6 7.6L10.5 10.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                  </button>
+                </div>
                 {/* Dropdown de categoria — pro cliente filtrar o garimpo na própria
                     tela, sem precisar abrir a lista da barra lateral. */}
                 <select value={cat} aria-label="Categoria" title="Escolher categoria"
@@ -2566,7 +2596,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 )}
                 {/* Atualizar NÃO manda bust: a novidade vem do exclude + shuffle do serve;
                     o rebuild do pool (caro na SP-API) fica reservado p/ remaining<12 no load */}
-                <button onClick={()=>load(nav,cat,'',false)} title="Limpa o garimpo atual e redistribui produtos novos"
+                <button onClick={()=>load(nav,cat,queryRef.current,false)} title="Limpa o garimpo atual e redistribui produtos novos"
                   style={{display:'flex',alignItems:'center',gap:7,background:'none',border:`1px solid ${T.line}`,color:T.t3,fontSize:10,fontWeight:600,padding:'8px 16px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',letterSpacing:'0.1em',textTransform:'uppercase' as const,transition:'all .15s'}}
                   onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
                   onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
@@ -2623,7 +2653,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                         <><svg className="ora-spin" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke={T.gold} strokeWidth="2" strokeLinecap="round"/></svg>
                         <span style={{fontSize:11,color:T.t3}}>garimpando mais produtos…</span></>
                       ) : poolExhausted ? (
-                        <span style={{fontSize:11,color:T.t3}}>Você já viu os melhores de {isCross?'todas as categorias':`“${curCat?.label}”`} por aqui. Toque em <button onClick={()=>load(nav,cat,'',true)} style={{background:'none',border:'none',color:T.gold,fontWeight:600,cursor:'pointer',fontFamily:'inherit',fontSize:11,padding:0}}>Atualizar</button> pra rodar novas buscas.</span>
+                        <span style={{fontSize:11,color:T.t3}}>Você já viu os melhores de {query?`“${query}”`:(isCross?'todas as categorias':`“${curCat?.label}”`)} por aqui. Toque em <button onClick={()=>load(nav,cat,queryRef.current,true)} style={{background:'none',border:'none',color:T.gold,fontWeight:600,cursor:'pointer',fontFamily:'inherit',fontSize:11,padding:0}}>Atualizar</button> pra rodar novas buscas.</span>
                       ) : page*PAGE < sortedProds.length ? (
                         <button onClick={()=>setPage(p=>p+1)} style={{background:'none',border:`1px solid ${T.line}`,color:T.t2,fontSize:11,padding:'8px 18px',borderRadius:8,cursor:'pointer',fontFamily:'inherit'}}>Mostrar mais</button>
                       ) : null}
@@ -2654,7 +2684,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             )}
 
             {/* No results */}
-            {!loading&&done&&!loadError&&prods.length===0&&<div style={{textAlign:'center' as const,padding:'80px 24px',color:T.t3,fontSize:13}}>Nenhum produto encontrado. Tente outra busca ou categoria.</div>}
+            {!loading&&done&&!loadError&&prods.length===0&&<div style={{textAlign:'center' as const,padding:'80px 24px',color:T.t3,fontSize:13}}>{query?<>Nada encontrado para “{query}”. Tente outro termo ou categoria.</>:'Nenhum produto encontrado. Tente outra busca ou categoria.'}</div>}
             </>}
           </main>
         </div>
