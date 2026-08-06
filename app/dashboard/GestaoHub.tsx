@@ -757,7 +757,10 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
       custoU:costs[p.sku]||0,
       repres:fatTot>0?M.receitaBruta/fatTot*100:0,
       devolucao:M.devolucaoValor,
-      lucro:M.lucroAntesAds, margem:M.margem,
+      // ⚠️ A coluna "Margem" é ANTES do ads (pareia com "Lucro"); o pós-ads é a
+      // coluna MPA. M.margem colapsava pro pós-ads quando havia ads medido, então
+      // Margem e MPA saíam IDÊNTICAS num produto que gastou em anúncio — ilógico.
+      lucro:M.lucroAntesAds, margem:(M.lucroAntesAds!=null&&M.receitaLiquida>0)?M.lucroAntesAds/M.receitaLiquida*100:null,
       custoAds:M.ads, lucroPos:M.lucro,
       mpa:(M.lucro!==null&&M.receitaLiquida>0)?M.lucro/M.receitaLiquida*100:null}
   }) : []
@@ -3322,7 +3325,9 @@ function Analitico({realDre,hide,connected,mockM,costs={},imposto=0,adsReal}:{re
         ticket:units>0?M.receitaBruta/units:0,
         shareRec:receitaTotal>0?M.receitaBruta/receitaTotal*100:0,
         custoTotal:M.cmv,temCusto:M.temCusto,
-        lucro:M.lucroAntesAds,margem:M.margem,
+        // Margem ANTES do ads, pra parear com o Lucro (antes do ads) e com a
+        // margemMedia ponderada logo abaixo — que também usa o lucro antes do ads.
+        lucro:M.lucroAntesAds,margem:(M.lucroAntesAds!=null&&M.receitaLiquida>0)?M.lucroAntesAds/M.receitaLiquida*100:null,
         ref:refBySku[p.sku]||{units:0,valor:0}}
     })
     const comCusto=rows.filter(r=>r.temCusto&&r.lucro!==null)
