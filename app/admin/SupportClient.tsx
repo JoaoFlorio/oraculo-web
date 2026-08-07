@@ -33,6 +33,8 @@ export default function SupportClient({ name }: { name: string }) {
   const [enviando, setEnviando] = useState<string | null>(null)
   const [gerado, setGerado] = useState<{ email: string; password: string; licenseKey: string } | null>(null)
   const [copiado, setCopiado] = useState<string | null>(null)
+  const [form, setForm] = useState({ email: '', name: '', phone: '', plan: 'monthly' })
+  const [criando, setCriando] = useState(false)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -58,6 +60,30 @@ export default function SupportClient({ name }: { name: string }) {
       else setMsg({ text: d.error || 'Erro ao reenviar.', ok: false })
     } catch { setMsg({ text: 'Falha de conexão.', ok: false }) }
     setEnviando(null)
+  }
+
+  async function criarCliente(e: React.FormEvent) {
+    e.preventDefault()
+    if (!form.email.trim()) return
+    setCriando(true); setMsg(null); setGerado(null)
+    try {
+      const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      const d = await r.json()
+      if (r.ok) {
+        setGerado({ email: form.email, password: d.password || '(mantida)', licenseKey: d.licenseKey || '—' })
+        setMsg({
+          text: d.action === 'updated'
+            ? `Cliente já existia — plano atualizado para ${PLAN_LABEL[form.plan] || form.plan}.`
+            : d.emailEnviado
+              ? `Acesso criado e e-mail enviado para ${form.email}. ✓`
+              : `Acesso criado — ⚠️ o e-mail pode não ter saído, confira/reenvie.`,
+          ok: true,
+        })
+        setForm({ email: '', name: '', phone: '', plan: 'monthly' })
+        carregar()
+      } else setMsg({ text: d.error || 'Erro ao criar o acesso.', ok: false })
+    } catch { setMsg({ text: 'Falha de conexão.', ok: false }) }
+    setCriando(false)
   }
 
   function copiar(id: string, texto: string) {
@@ -100,7 +126,7 @@ export default function SupportClient({ name }: { name: string }) {
         {/* Card da senha gerada */}
         {gerado && (
           <div style={{ marginBottom: 20, background: C.card, border: `1px solid rgba(240,180,41,0.3)`, borderRadius: 14, padding: '18px 20px' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, marginBottom: 4 }}>✓ Nova senha gerada — e-mail reenviado</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, marginBottom: 4 }}>✓ Dados de acesso</div>
             <div style={{ fontSize: 12, color: C.t3, marginBottom: 14 }}>O e-mail já foi enviado para <strong style={{ color: C.t2 }}>{gerado.email}</strong>. Se preferir, copie e mande você mesmo:</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
               {[['E-mail', gerado.email], ['Senha', gerado.password], ['Chave da extensão', gerado.licenseKey]].map(([lbl, val]) => (
@@ -117,6 +143,33 @@ export default function SupportClient({ name }: { name: string }) {
             </div>
           </div>
         )}
+
+        {/* Novo cliente — a Marli cria igual o admin; o e-mail de acesso sai na hora */}
+        <div style={{ marginBottom: 20, background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: '18px 20px' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 3 }}>Novo cliente</div>
+          <div style={{ fontSize: 12, color: C.t3, marginBottom: 16 }}>Gera senha + chave da extensão e <strong style={{ color: C.t2 }}>envia o e-mail de acesso automaticamente</strong>.</div>
+          <form onSubmit={criarCliente} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, alignItems: 'end' }}>
+            <div>
+              <label style={{ fontSize: 10, color: C.t3, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>E-mail *</label>
+              <input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="cliente@email.com" style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, color: C.t3, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Nome</label>
+              <input type="text" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Nome do cliente" style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, color: C.t3, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Telefone</label>
+              <input type="text" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="(11) 90000-0000" inputMode="tel" style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <label style={{ fontSize: 10, color: C.t3, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Plano</label>
+              <select value={form.plan} onChange={e => setForm({ ...form, plan: e.target.value })} style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }}>
+                {(['monthly', 'biannual', 'annual', 'lifetime'] as const).map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
+              </select>
+            </div>
+            <button type="submit" disabled={criando} style={{ background: GOLD_GRAD, color: '#1a1305', fontWeight: 800, fontSize: 13, padding: '11px 18px', borderRadius: 10, border: 'none', cursor: criando ? 'default' : 'pointer', fontFamily: 'inherit', opacity: criando ? 0.6 : 1, whiteSpace: 'nowrap' }}>{criando ? 'Criando…' : 'Criar acesso'}</button>
+          </form>
+        </div>
 
         {/* Lista de clientes */}
         <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: '16px 18px' }}>
@@ -154,7 +207,7 @@ export default function SupportClient({ name }: { name: string }) {
             </table>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: C.t3, marginTop: 14, textAlign: 'center' }}>Você tem acesso apenas à gestão de clientes e ao reenvio de senha.</div>
+        <div style={{ fontSize: 11, color: C.t3, marginTop: 14, textAlign: 'center' }}>Você pode criar clientes e reenviar senha. Vendas e faturamento ficam só com o admin.</div>
       </div>
     </div>
   )

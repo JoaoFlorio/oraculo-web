@@ -11,10 +11,12 @@ const BACKEND_URL  = process.env.BACKEND_URL   || 'https://central.oraculojf.com
 const FRONTEND_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.oraculojf.com.br'
 const resend       = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
-// POST (criar cliente): admin OU funcionário (staff) OU backend interno.
+// POST (criar cliente): admin OU funcionário (staff) OU SUPORTE OU backend interno.
+// O suporte (Marli) cria clientes igual o admin — sempre role='client' (o POST não
+// aceita `role`), então não há risco de escalonamento por aqui.
 async function checkAuth(req: NextRequest) {
   if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return true  // backend interno
-  return !!(await getStaffSession())                                          // admin/staff logado
+  return !!(await getStaffSession()) || !!(await getClientsSession())          // admin/staff/support logado
 }
 // PATCH (mudar plano / desativar): só admin OU backend interno.
 async function checkAdmin(req: NextRequest) {
@@ -188,11 +190,24 @@ export async function POST(req: NextRequest) {
   // Gera licença no backend (só se não vier uma pronta)
   const licKey = skipLicense ? (providedKey || null) : await createBackendLicense(email, targetPlan)
 
+  // ⭐ ENVIA O E-MAIL DE ACESSO NA HORA (João, 06/08): antes o "Criar acesso" NÃO
+  // mandava e-mail — tinha que clicar em "Reenviar". Agora sai automático na
+  // criação MANUAL (admin/staff/suporte). O webhook (skipLicense=true) NÃO entra:
+  // ele dispara o próprio e-mail de acesso (greenn.ts), então evita duplicar.
+  let emailEnviado = false
+  if (!skipLicense) {
+    try {
+      await sendAccessEmail({ to: user.email, name: user.name || user.email, password, key: licKey || '—', plan: user.plan })
+      emailEnviado = true
+    } catch (e: any) { console.error('[admin/users] falha ao enviar email de acesso na criação:', e?.message ?? e) }
+  }
+
   return NextResponse.json({
     ok: true, action: 'created',
     user:       { email: user.email, plan: user.plan },
     password,   // senha gerada automaticamente
     licenseKey: licKey,
+    emailEnviado,
   })
 }
 
