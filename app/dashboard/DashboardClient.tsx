@@ -33,11 +33,11 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
-  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','extension','agente','perfil'],                                                                 modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','perfil'], modal:true,  export:true  },
+  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','extension','agente','tutoriais','perfil'],                                                                 modal:false, export:false },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 const GREENN: Record<string,string> = {
@@ -78,7 +78,15 @@ const NAV = [
   { id:'competitor',  label:'Análise Rival'     },
   { id:'agente',      label:'Agente NEO'        },
   { id:'extension',   label:'Extensão'          },
+  { id:'tutoriais',   label:'Tutoriais'         },
   { id:'perfil',      label:'Meu Perfil'        },
+]
+// Tutoriais em vídeo (Panda Video). Para adicionar/editar um vídeo: pegue a URL
+// de EMBED no Panda (Compartilhar → Incorporar → o `src` do iframe, começa com
+// https://player-vz-….tv.pandavideo.com.br/embed/?v=…) e cole em `embed`.
+// `title` e `desc` são livres. Entradas com `embed` vazio não aparecem.
+const TUTORIAIS: {title:string; desc:string; embed:string}[] = [
+  { title:'Como começar no Oráculo', desc:'Primeiros passos para usar o painel e tirar o máximo da ferramenta.', embed:'https://player-vz-aa29160c-7ea.tv.pandavideo.com.br/embed/?v=3c01f72e-9b8d-45c1-af48-a504fdafb9d2' },
 ]
 // Abas 'new' (Recém Adicionados), 'trending' (Em Alta) e 'generics' (Genéricos)
 // foram REMOVIDAS em 19/07/2026: cada uma era uma consulta separada à API da
@@ -89,6 +97,7 @@ const NAV_GROUPS = [
   { group:'Gestão',      ids:['financeiro'] },
   { group:'Mineração',   ids:['bestsellers','saved','competitor'] },
   { group:'Ferramentas', ids:['agente','extension'] },
+  { group:'Ajuda',       ids:['tutoriais'] },
   { group:'Conta',       ids:['perfil'] },
 ]
 // ⭐ A comissão vem do BACKEND, junto de cada produto (`referralRate` e
@@ -263,6 +272,7 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     agente:     <><circle cx="14" cy="10" r="5" stroke="currentColor" strokeWidth="1.5"/><path d="M10 15c-3 1.5-5 4-5 7h18c0-3-2-5.5-5-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M14 10v3M12 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     financeiro: <><path d="M6 20V14M10 20V10M14 20V6M18 20V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M6 8l4-3 4 4 4-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
     perfil:     <><circle cx="14" cy="10.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5.5 23c1.3-4.4 4.7-6.8 8.5-6.8s7.2 2.4 8.5 6.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
+    tutoriais:  <><rect x="4" y="7" width="20" height="15" rx="3" stroke="currentColor" strokeWidth="1.5"/><path d="M12 11.5l5 3-5 3z" fill="currentColor"/></>,
   }
   return(
     <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0,color:c}}>
@@ -2281,6 +2291,41 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   ))}
                 </div>
 
+              </div>
+            )}
+
+            {/* Tutoriais — vídeos de ajuda (Panda Video). Player 16:9 responsivo;
+                a lista vem de TUTORIAIS (topo do arquivo). Visível em todo plano. */}
+            {nav==='tutoriais'&&(
+              <div style={{maxWidth:860,margin:'0 auto',paddingTop:24,width:'100%'}}>
+                <div style={{textAlign:'center' as const,marginBottom:32}}>
+                  <div style={{marginBottom:12,display:'flex',justifyContent:'center'}}><NavIcon id="tutoriais" active/></div>
+                  <h2 style={{fontSize:22,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Tutoriais</h2>
+                  <p style={{fontSize:13,color:T.t3,lineHeight:1.6}}>Vídeos curtos pra você tirar o máximo do Oráculo.</p>
+                </div>
+                {TUTORIAIS.filter(t=>t.embed).length===0?(
+                  <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,padding:'44px 24px',textAlign:'center' as const,boxShadow:'var(--elev1)'}}>
+                    <div style={{marginBottom:10,display:'flex',justifyContent:'center',opacity:.6}}><NavIcon id="tutoriais" active={false}/></div>
+                    <div style={{fontSize:13,color:T.t3}}>Novos tutoriais chegando em breve.</div>
+                  </div>
+                ):(
+                  <div style={{display:'flex',flexDirection:'column',gap:24}}>
+                    {TUTORIAIS.filter(t=>t.embed).map((t,i)=>(
+                      <div key={i} style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:14,overflow:'hidden',boxShadow:'var(--elev1)'}}>
+                        <div style={{position:'relative' as const,paddingTop:'56.25%',background:'#000'}}>
+                          <iframe src={t.embed} title={t.title} loading="lazy"
+                            allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen"
+                            allowFullScreen
+                            style={{border:'none',position:'absolute' as const,top:0,left:0,width:'100%',height:'100%'}}/>
+                        </div>
+                        <div style={{padding:'16px 20px'}}>
+                          <div style={{fontSize:14,fontWeight:700,color:T.t1,marginBottom:t.desc?4:0,letterSpacing:'-0.01em'}}>{t.title}</div>
+                          {t.desc&&<div style={{fontSize:12,color:T.t3,lineHeight:1.6}}>{t.desc}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
