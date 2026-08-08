@@ -86,7 +86,7 @@ const NAV = [
 // https://player-vz-….tv.pandavideo.com.br/embed/?v=…) e cole em `embed`.
 // `title` e `desc` são livres. Entradas com `embed` vazio não aparecem.
 const TUTORIAIS: {title:string; desc:string; embed:string}[] = [
-  { title:'Como começar no Oráculo', desc:'Primeiros passos para usar o painel e tirar o máximo da ferramenta.', embed:'https://player-vz-aa29160c-7ea.tv.pandavideo.com.br/embed/?v=3c01f72e-9b8d-45c1-af48-a504fdafb9d2' },
+  { title:'Tour completo do Oráculo', desc:'Um passeio por toda a plataforma para você tirar o máximo da ferramenta.', embed:'https://player-vz-aa29160c-7ea.tv.pandavideo.com.br/embed/?v=3c01f72e-9b8d-45c1-af48-a504fdafb9d2' },
 ]
 // Abas 'new' (Recém Adicionados), 'trending' (Em Alta) e 'generics' (Genéricos)
 // foram REMOVIDAS em 19/07/2026: cada uma era uma consulta separada à API da
