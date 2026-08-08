@@ -2591,7 +2591,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             )}
 
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&nav!=='perfil'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&nav!=='perfil'&&nav!=='tutoriais'&&<>
             <div className="ora-phead" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
               <div style={{minWidth:0}}>
                 <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
