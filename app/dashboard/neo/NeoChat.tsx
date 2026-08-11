@@ -901,10 +901,13 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
 
         /* ── Multi-chat: botão + drawer de conversas ── */
         .neoChatsBtn{ display:flex; align-items:center; gap:7px; font-family:'IBM Plex Mono', monospace;
-          font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:rgba(245,239,223,.6);
-          background:transparent; border:1px solid rgba(240,180,41,.22); border-radius:999px;
-          padding:8px 14px; cursor:pointer; transition:all .25s; white-space:nowrap; }
-        .neoChatsBtn:hover{ border-color:rgba(240,180,41,.5); color:#f5efdf; }
+          font-size:10.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:#f0b429;
+          background:rgba(240,180,41,.12); border:1px solid rgba(240,180,41,.5); border-radius:999px;
+          padding:9px 16px; cursor:pointer; transition:all .2s; white-space:nowrap;
+          box-shadow:0 0 16px -6px rgba(240,180,41,.5); }
+        .neoChatsBtn span[aria-hidden]{ font-size:13px; }
+        .neoChatsBtn:hover{ background:#f0b429; border-color:#f0b429; color:#0d0a02;
+          box-shadow:0 4px 18px -4px rgba(240,180,41,.6); }
         .neoDrawerWrap{ position:absolute; inset:0; z-index:40; display:flex; }
         .neoDrawerBack{ position:absolute; inset:0; background:rgba(0,0,0,.55); }
         .neoDrawer{ position:relative; width:320px; max-width:82vw; height:100%;
