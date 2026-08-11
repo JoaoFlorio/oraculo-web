@@ -264,6 +264,16 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [input, setInput] = useState('')
 
+  // ── Multi-chat (barra de conversas por tópico) ────────────────────────────
+  // Modelo de BAIXO RISCO: o cache localStorage abaixo (a conversa ABERTA) fica
+  // INTOCADO. Por cima, guardamos no SERVIDOR várias conversas + um ponteiro da
+  // ativa. O NEO lê os RESUMOS das anteriores (backend) e fica mais afiado.
+  type ConvItem = { id: string; titulo: string; resumo?: string | null; atualizadaEm: string; mensagens: number }
+  const [conversas, setConversas] = useState<ConvItem[]>([])
+  const [conversaId, setConversaId] = useState<string | null>(null)
+  const [chatsAberto, setChatsAberto] = useState(false)
+  const chaveConvAtiva = `oraculo_neo_conv_ativa:${userEmail || 'anon'}`
+
   // ── Persistência da conversa ──────────────────────────────────────────────
   // O componente do NEO desmonta ao trocar de aba (Gestão etc.), e antes a
   // conversa vivia só no estado — sumia toda vez. Agora ela fica no localStorage,
@@ -328,6 +338,66 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
   const [vozNome, setVozNome] = useState('')
   const recRef = useRef<any>(null)
   const ultimoEnvioRef = useRef<Msg[] | null>(null)   // p/ o botão "tentar de novo"
+
+  // ── Multi-chat: funções da barra de conversas ─────────────────────────────
+  const carregarConversas = async () => {
+    try {
+      const res = await fetch('/api/agent/conversas', { cache: 'no-store' })
+      const d = await res.json().catch(() => null)
+      if (Array.isArray(d?.conversas)) setConversas(d.conversas)
+    } catch {}
+  }
+  // Restaura a conversa ativa (ponteiro) + carrega a lista ao montar.
+  useEffect(() => {
+    try { const a = localStorage.getItem(chaveConvAtiva); if (a) setConversaId(a) } catch {}
+    void carregarConversas()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveConvAtiva])
+  const setAtiva = (id: string | null) => {
+    setConversaId(id)
+    try { id ? localStorage.setItem(chaveConvAtiva, id) : localStorage.removeItem(chaveConvAtiva) } catch {}
+  }
+  // Resume a conversa ATUAL (pro NEO ficar afiado nas próximas). Fire-and-forget.
+  const resumirAtual = () => {
+    if (!conversaId || !msgs.length) return
+    fetch('/api/agent/conversas', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ op: 'resumir', id: conversaId }),
+    }).then(() => carregarConversas()).catch(() => {})
+  }
+  const novoChat = () => {
+    resumirAtual()
+    limparConversa()
+    setAtiva(null)
+    setChatsAberto(false)
+  }
+  const abrirConversa = async (id: string) => {
+    if (id === conversaId) { setChatsAberto(false); return }
+    resumirAtual()
+    setChatsAberto(false)
+    try {
+      const res = await fetch(`/api/agent/conversas?id=${encodeURIComponent(id)}`, { cache: 'no-store' })
+      const d = await res.json().catch(() => null)
+      const hist: Msg[] = Array.isArray(d?.mensagens)
+        ? d.mensagens.map((m: any) => ({ role: m.role === 'user' ? 'user' : 'assistant', text: String(m.conteudo || '') }))
+        : []
+      setMsgs(hist)
+      ultimoEnvioRef.current = null
+      setAtiva(id)
+    } catch { setErro('Não consegui abrir essa conversa. Tente de novo.') }
+  }
+  const renomearChat = async (id: string, atual: string) => {
+    const t = window.prompt('Novo nome do chat:', atual)
+    if (t == null) return
+    await fetch('/api/agent/conversas', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'renomear', id, titulo: t.trim() || 'Conversa' }) }).catch(() => {})
+    void carregarConversas()
+  }
+  const apagarChat = async (id: string) => {
+    if (!window.confirm('Apagar este chat? Não dá pra desfazer.')) return
+    await fetch('/api/agent/conversas', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'apagar', id }) }).catch(() => {})
+    if (id === conversaId) { limparConversa(); setAtiva(null) }
+    void carregarConversas()
+  }
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -466,9 +536,20 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
     setLoading(true)
     ultimoEnvioRef.current = historico
     try {
+      // Multi-chat: garante uma conversa ativa (cria no 1º envio) pra o backend
+      // gravar o turno e injetar os resumos das conversas anteriores.
+      let cid = conversaId
+      if (!cid) {
+        try {
+          const r = await fetch('/api/agent/conversas', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'criar' }) })
+          const dd = await r.json().catch(() => null)
+          if (dd?.id) { cid = dd.id; setAtiva(cid) }
+        } catch {}
+      }
       const corpo = JSON.stringify({
         agent: 'neo',
         ...(isAdmin && motor ? { provider: motor } : {}),
+        ...(cid ? { conversaId: cid } : {}),
         messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })),
       })
 
@@ -516,6 +597,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
           id: geradas ? novoId() : undefined,
         }
         setMsgs([...historico, msg])
+        void carregarConversas()   // título/horário da conversa mudaram no servidor
         if (geradas && msg.id) {
           // Guarda as imagens no IndexedDB (não cabem no localStorage) pra elas
           // não sumirem quando o seller trocar de aba e voltar.
@@ -816,7 +898,64 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         @media (prefers-reduced-motion: reduce){
           .nmRing,.nmArc,.nmNode,.neoDot{ animation:none !important; }
         }
+
+        /* ── Multi-chat: botão + drawer de conversas ── */
+        .neoChatsBtn{ display:flex; align-items:center; gap:7px; font-family:'IBM Plex Mono', monospace;
+          font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:rgba(245,239,223,.6);
+          background:transparent; border:1px solid rgba(240,180,41,.22); border-radius:999px;
+          padding:8px 14px; cursor:pointer; transition:all .25s; white-space:nowrap; }
+        .neoChatsBtn:hover{ border-color:rgba(240,180,41,.5); color:#f5efdf; }
+        .neoDrawerWrap{ position:absolute; inset:0; z-index:40; display:flex; }
+        .neoDrawerBack{ position:absolute; inset:0; background:rgba(0,0,0,.55); }
+        .neoDrawer{ position:relative; width:320px; max-width:82vw; height:100%;
+          background:#0a0a12; border-right:1px solid rgba(240,180,41,.18); display:flex; flex-direction:column;
+          box-shadow:8px 0 40px rgba(0,0,0,.5); animation:neoDrawerIn .18s ease both; }
+        @keyframes neoDrawerIn{ from{ transform:translateX(-16px); opacity:.6 } to{ transform:none; opacity:1 } }
+        .neoDrawerHead{ display:flex; align-items:center; gap:10px; padding:16px 16px 12px; border-bottom:1px solid rgba(240,180,41,.12); }
+        .neoDrawerHead .t{ font-family:'Unbounded',sans-serif; font-weight:700; font-size:13px; letter-spacing:.12em; color:#f5efdf; }
+        .neoDrawerHead .x{ margin-left:auto; background:none; border:none; color:rgba(245,239,223,.6); font-size:22px; cursor:pointer; line-height:1; }
+        .neoNovoBtn{ margin:12px 16px; padding:11px 14px; border-radius:11px; border:1px solid rgba(240,180,41,.35);
+          background:rgba(240,180,41,.1); color:#f0b429; font-family:'IBM Plex Mono',monospace; font-size:11px;
+          letter-spacing:.12em; text-transform:uppercase; cursor:pointer; transition:all .2s; }
+        .neoNovoBtn:hover{ background:rgba(240,180,41,.18); }
+        .neoConvList{ flex:1; overflow-y:auto; padding:0 10px 14px; display:flex; flex-direction:column; gap:4px; }
+        .neoConvItem{ display:flex; align-items:center; gap:8px; padding:10px; border-radius:10px; cursor:pointer;
+          border:1px solid transparent; transition:all .15s; }
+        .neoConvItem:hover{ background:rgba(255,255,255,.04); }
+        .neoConvItem.on{ background:rgba(240,180,41,.1); border-color:rgba(240,180,41,.28); }
+        .neoConvT{ flex:1; min-width:0; font-size:12.5px; color:#e9e4d4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .neoConvActs{ display:flex; gap:2px; }
+        .neoConvActs button{ background:none; border:none; color:rgba(245,239,223,.45); cursor:pointer; font-size:12px; padding:3px 5px; border-radius:6px; }
+        .neoConvActs button:hover{ color:#f0b429; background:rgba(240,180,41,.1); }
+        .neoConvEmpty{ color:rgba(245,239,223,.4); font-size:12px; text-align:center; padding:24px 12px; }
       `}</style>
+
+      {/* Multi-chat: drawer com os chats do seller (por tópico). Resumo automático
+          por chat faz o NEO ficar mais afiado a cada conversa (backend). */}
+      {chatsAberto && (
+        <div className="neoDrawerWrap">
+          <div className="neoDrawerBack" onClick={() => setChatsAberto(false)} />
+          <div className="neoDrawer">
+            <div className="neoDrawerHead">
+              <span className="t">SEUS CHATS</span>
+              <button className="x" onClick={() => setChatsAberto(false)} aria-label="Fechar">×</button>
+            </div>
+            <button className="neoNovoBtn" onClick={novoChat}>+ Novo chat</button>
+            <div className="neoConvList">
+              {conversas.length === 0 && <div className="neoConvEmpty">Nenhuma conversa ainda.<br/>Comece a falar com o NEO — cada chat vira um tópico aqui.</div>}
+              {conversas.map((c) => (
+                <div key={c.id} className={`neoConvItem${c.id === conversaId ? ' on' : ''}`} onClick={() => abrirConversa(c.id)}>
+                  <span className="neoConvT">{c.titulo || 'Conversa'}</span>
+                  <span className="neoConvActs">
+                    <button title="Renomear" onClick={(e) => { e.stopPropagation(); renomearChat(c.id, c.titulo) }}>✎</button>
+                    <button title="Apagar" onClick={(e) => { e.stopPropagation(); apagarChat(c.id) }}>🗑</button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="neoIn">
         {/* Cabeçalho */}
@@ -827,6 +966,9 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
             <div className="neoTitle">AGENTE <b>NEO</b></div>
             <div className="neoSub">Inteligência · João Flório</div>
           </div>
+          <button className="neoChatsBtn" onClick={() => { void carregarConversas(); setChatsAberto(true) }} title="Seus chats por tópico">
+            <span aria-hidden>☰</span> Chats
+          </button>
           {/* Comparador de motores — só admin. Manda a MESMA pergunta pros dois
               e a ficha técnica embaixo de cada resposta mostra quem foi, quanto
               demorou e quantos tokens saíram. */}

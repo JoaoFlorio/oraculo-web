@@ -79,6 +79,9 @@ export async function POST(req: NextRequest) {
         // ⭐ Nome do seller pra o NEO tratar pela pessoa (parceiro, não robô).
         // Vem da sessão (autoritativo), o backend usa só o primeiro nome.
         ...(agent === 'neo' && user.name ? { nome: user.name } : {}),
+        // Multi-chat: qual conversa está ativa (o backend grava o turno e injeta
+        // os resumos das anteriores). Só no NEO; ausente = comportamento antigo.
+        ...(agent === 'neo' && body?.conversaId ? { conversaId: String(body.conversaId) } : {}),
         // O CMV (custo por SKU) e a alíquota de imposto vivem no metadata do
         // usuário AQUI no web — a Amazon não conhece o que o seller pagou. O
         // NEO roda no backend e não alcança este banco, então o proxy carrega
