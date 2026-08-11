@@ -76,6 +76,9 @@ export async function POST(req: NextRequest) {
         // Plano do aluno — define a COTA mensal inclusa de anúncios. Vem da
         // sessão (o cliente não escolhe o próprio plano), igual ao isAdmin.
         planoSeller: user.plan,
+        // ⭐ Nome do seller pra o NEO tratar pela pessoa (parceiro, não robô).
+        // Vem da sessão (autoritativo), o backend usa só o primeiro nome.
+        ...(agent === 'neo' && user.name ? { nome: user.name } : {}),
         // O CMV (custo por SKU) e a alíquota de imposto vivem no metadata do
         // usuário AQUI no web — a Amazon não conhece o que o seller pagou. O
         // NEO roda no backend e não alcança este banco, então o proxy carrega
