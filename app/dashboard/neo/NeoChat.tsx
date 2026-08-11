@@ -900,11 +900,12 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         }
 
         /* ── Multi-chat: botão + drawer de conversas ── */
-        .neoChatsBtn{ display:flex; align-items:center; gap:7px; font-family:'IBM Plex Mono', monospace;
+        .neoChatsBtn{ position:absolute; top:16px; left:16px; z-index:30;
+          display:flex; align-items:center; gap:7px; font-family:'IBM Plex Mono', monospace;
           font-size:10.5px; font-weight:600; letter-spacing:.16em; text-transform:uppercase; color:#f0b429;
-          background:rgba(240,180,41,.12); border:1px solid rgba(240,180,41,.5); border-radius:999px;
+          background:rgba(10,10,18,.72); border:1px solid rgba(240,180,41,.5); border-radius:999px;
           padding:9px 16px; cursor:pointer; transition:all .2s; white-space:nowrap;
-          box-shadow:0 0 16px -6px rgba(240,180,41,.5); }
+          box-shadow:0 0 16px -6px rgba(240,180,41,.5); backdrop-filter:blur(4px); }
         .neoChatsBtn span[aria-hidden]{ font-size:13px; }
         .neoChatsBtn:hover{ background:#f0b429; border-color:#f0b429; color:#0d0a02;
           box-shadow:0 4px 18px -4px rgba(240,180,41,.6); }
@@ -960,6 +961,14 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         </div>
       )}
 
+      {/* Botão dos chats no CANTO onde o painel abre (topo-esquerdo). Some quando
+          o painel está aberto (o × dele fecha). */}
+      {!chatsAberto && (
+        <button className="neoChatsBtn" onClick={() => { void carregarConversas(); setChatsAberto(true) }} title="Seus chats por tópico">
+          <span aria-hidden>☰</span> Chats
+        </button>
+      )}
+
       <div className="neoIn">
         {/* Cabeçalho */}
         <div className="neoHead">
@@ -969,9 +978,6 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
             <div className="neoTitle">AGENTE <b>NEO</b></div>
             <div className="neoSub">Inteligência · João Flório</div>
           </div>
-          <button className="neoChatsBtn" onClick={() => { void carregarConversas(); setChatsAberto(true) }} title="Seus chats por tópico">
-            <span aria-hidden>☰</span> Chats
-          </button>
           {/* Comparador de motores — só admin. Manda a MESMA pergunta pros dois
               e a ficha técnica embaixo de cada resposta mostra quem foi, quanto
               demorou e quantos tokens saíram. */}
