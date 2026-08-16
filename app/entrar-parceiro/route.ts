@@ -8,10 +8,27 @@ import { createToken, COOKIE } from '@/lib/auth'
 // e loga o operador COMO o cliente. O token é de uso único e curta duração; o
 // consentimento (User.metadata.partner_sellion) é reconferido aqui. Nada disso é
 // visível na área do cliente do Oráculo — é uma URL que o parceiro abre.
+// Redirect com Location RELATIVO — o backend do Railway enxerga o host interno
+// (localhost:8080), então montar URL absoluta a partir de req.url manda o browser
+// pro lugar errado. Location relativo o navegador resolve no domínio público.
+function redirect(path: string, cookie?: { value: string }): NextResponse {
+  const res = new NextResponse(null, { status: 307, headers: { Location: path } })
+  if (cookie) {
+    res.cookies.set(COOKIE, cookie.value, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 30,
+      path: '/',
+    })
+  }
+  return res
+}
+
 export async function GET(req: NextRequest) {
   const t = req.nextUrl.searchParams.get('t') || ''
   const falhar = (msg: string) =>
-    NextResponse.redirect(new URL(`/login?erro=${encodeURIComponent(msg)}`, req.url))
+    redirect(`/login?erro=${encodeURIComponent(msg)}`)
 
   if (!t) return falhar('Link inválido.')
 
@@ -37,13 +54,5 @@ export async function GET(req: NextRequest) {
   await prisma.$executeRaw`UPDATE partner_login SET used_at = now() WHERE token_hash = ${hash}`
 
   const token = await createToken(user.id)
-  const res = NextResponse.redirect(new URL('/', req.url))
-  res.cookies.set(COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 30,
-    path: '/',
-  })
-  return res
+  return redirect('/', { value: token })
 }
