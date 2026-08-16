@@ -913,6 +913,12 @@ function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail,aj
       // cujo valor a Amazon suprime. Sem isto o pedido vinha com receita 0 e
       // comissão/FBA/CMV cheios em cima = prejuízo fantasma.
       precoUn:un>0?(p.receita||0)/un:0,
+      // ⭐ A estimativa EXATA por unidade que a DRE aplicou no pedido Pendente
+      // (`base = est.unit × qtd`). O `precoUn` acima é a média do período —
+      // MISTURA venda faturada com pendente e não fecha exato quando o SKU teve
+      // os dois no período. Usar `estimativaUn` faz a linha somar exatamente com
+      // o card (regra 29/48: linha tem que fechar com ela mesma).
+      estimativaUn:(p.estimativa?.unit||0)>0?p.estimativa.unit:null,
     })
   }
   const custoDe=(sku:string)=>costs[sku]||0
@@ -927,8 +933,11 @@ function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail,aj
     // R$79,90 no card do produto e R$0,00 nesta aba - com o custo cheio em cima,
     // virava prejuizo. Usa o mesmo preco medio que a DRE ja aplicou.
     const bruto=it.receita||0
-    const estimado=bruto<=0&&qty>0&&(ref?.precoUn||0)>0
-    const receita=estimado?(ref.precoUn*qty):bruto
+    // Estimativa exata da DRE quando existe; média do período como reserva (dado
+    // antigo sem `estimativa`). Assim a linha do pendente fecha com o card.
+    const estUn=ref?.estimativaUn||ref?.precoUn||0
+    const estimado=bruto<=0&&qty>0&&estUn>0
+    const receita=estimado?(estUn*qty):bruto
     // Nem o anuncio tinha preco -> nao inventa nada e nao cobra custo de nada.
     const semPreco=receita<=0&&qty>0
     const comissao=(semPreco||ref?.comissaoUn==null)?null:ref.comissaoUn*qty
@@ -1322,6 +1331,10 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
   const armFonte=realDre?.armazenagemFonte
   // Base pra distribuir os custos do produto entre os pedidos dele.
   const precoMedio=units>0?M.receitaBruta/units:0
+  // ⭐ Estimativa EXATA por unidade que a DRE aplicou no pedido Pendente. O
+  // `precoMedio` acima é a média do período (mistura faturado com pendente) e não
+  // fecha exato quando o SKU teve os dois; a estimativa da DRE fecha por construção.
+  const estPendUn=(p?.estimativa?.unit||0)>0?p.estimativa.unit:precoMedio
   const feesProduto=M.feeMedido?(M.comissao as number)+(M.fba as number)+M.taxaPrograma+M.outrasTaxas:null
 
   const Row=({label,val,sign,strong,color,nota}:{label:string;val:number|null;sign?:'-'|'=';strong?:boolean;color?:string;hide?:boolean;nota?:string})=>(
@@ -1492,7 +1505,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
               // linha usa o MESMO valor que entrou no card, marcado como provisório,
               // e a soma das linhas fecha com "Faturado".
               const pend=/pending/i.test(o.status||'') || (o.receita||0)<=0
-              const oReceita=(o.receita||0)>0?o.receita:precoMedio*(o.qty||0)
+              const oReceita=(o.receita||0)>0?o.receita:estPendUn*(o.qty||0)
               const rShare=M.receitaBruta>0?oReceita/M.receitaBruta:0
               const oFees=feesProduto===null?null:feesProduto*rShare
               const oAds=M.ads===null?null:M.ads*rShare
