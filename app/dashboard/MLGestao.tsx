@@ -23,6 +23,7 @@ type Dre = {
   vendas: number; unidades: number
   receita: number; tarifaVenda: number; envio: number; enviosPendentes: number
   liquidoML: number
+  vendasBrutas: number
   canceladas: { pedidos: number; valor: number }
   produtos: Array<{ itemId: string; titulo: string; pedidos: number; qty: number; receita: number; tarifa: number; envio: number | null; envioParcial: boolean; liquido: number | null }>
   pedidos: Array<{ orderId: string; data: string; status: string; titulo: string; qty: number; receita: number; tarifa: number; envio: number | null; liquido: number | null }>
@@ -147,9 +148,22 @@ export default function MLGestao() {
             <Card label="Você recebeu (líquido ML)" valor={brl(dre.liquidoML)} cor={dre.liquidoML >= 0 ? T.g : T.r} sub="antes de imposto, custo do produto e Ads" />
           </div>
 
+          {/* ⭐ PONTE COM O PAINEL DO ML. Sem isto o cliente compara a nossa receita
+              com "Vendas brutas" do ML (que SOMA cancelados) e acha que erramos.
+              A conta aparece inteira: receita + cancelado = o número do painel. */}
           {dre.canceladas.pedidos > 0 && (
-            <div style={{ fontSize: 11.5, color: T.t3, background: tint(T.r, 6), border: `1px solid ${tint(T.r, 20)}`, borderRadius: 10, padding: '8px 12px', marginBottom: 14 }}>
-              {dre.canceladas.pedidos} pedido{dre.canceladas.pedidos === 1 ? '' : 's'} cancelado{dre.canceladas.pedidos === 1 ? '' : 's'} ({brl(dre.canceladas.valor)}) — fora da receita.
+            <div style={{ fontSize: 12, color: T.t2, background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '11px 14px', marginBottom: 14, boxShadow: 'var(--elev1)' }}>
+              <div style={{ fontWeight: 700, color: T.t1, marginBottom: 5 }}>Por que o painel do ML mostra outro número?</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'baseline', lineHeight: 1.7 }}>
+                <span>Receita (dinheiro que entrou) <strong style={{ color: T.g }}>{brl(dre.receita)}</strong></span>
+                <span style={{ color: T.t4 }}>+</span>
+                <span>{dre.canceladas.pedidos} cancelado{dre.canceladas.pedidos === 1 ? '' : 's'} <strong style={{ color: T.r }}>{brl(dre.canceladas.valor)}</strong></span>
+                <span style={{ color: T.t4 }}>=</span>
+                <span><strong style={{ color: T.t1 }}>{brl(dre.vendasBrutas)}</strong> — é o "Vendas brutas" do ML</span>
+              </div>
+              <div style={{ fontSize: 10.5, color: T.t4, marginTop: 5 }}>
+                O ML soma pedidos cancelados em "vendas brutas". O Oráculo mostra o que de fato entrou — por isso a diferença.
+              </div>
             </div>
           )}
 
