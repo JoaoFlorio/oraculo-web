@@ -22,6 +22,9 @@ type Produto = {
   preco: number; categoria: string | null; listingType: string | null; vendidos: number | null
   comissao: number | null; comissaoPct: number | null; envio: number | null
   voceRecebe: number | null; margemPct: number | null; permalink: string | null
+  custoAlvo: { m20: number; m30: number; m40: number } | null
+  concorrencia: { ofertas: number; vendedores: number; precoMin: number; precoMax: number; lojasOficiais: number; usandoFull: number; amostra: number } | null
+  sinais: string[]
 }
 
 const MEDALHA = ['🥇', '🥈', '🥉']
@@ -47,7 +50,7 @@ function CardProduto({ p }: { p: Produto }) {
           {p.vendidos != null && p.vendidos > 0 && <span style={{ fontSize: 10.5, color: T.g, fontWeight: 700 }}>{p.vendidos.toLocaleString('pt-BR')}+ vendidos</span>}
           {p.listingType && <span style={{ fontSize: 9.5, color: T.t4 }}>{p.listingType === 'gold_pro' ? 'Premium' : 'Clássico'}</span>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 7, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, flexWrap: 'wrap' }}>
           {p.voceRecebe != null ? (
             <span style={{ fontSize: 11.5, fontWeight: 800, color: mCor, background: tint(mCor, 10), border: `1px solid ${tint(mCor, 28)}`, borderRadius: 8, padding: '3px 8px' }}>
               recebe {brl(p.voceRecebe)} · {p.margemPct}%
@@ -63,6 +66,38 @@ function CardProduto({ p }: { p: Produto }) {
             </a>
           )}
         </div>
+
+        {/* ⭐ A pergunta que decide a compra: por quanto eu tenho que comprar? */}
+        {p.custoAlvo && p.custoAlvo.m30 > 0 && (
+          <div style={{ marginTop: 8, background: T.modal, borderRadius: 9, padding: '7px 10px' }}>
+            <div style={{ fontSize: 9.5, color: T.t4, marginBottom: 3, fontWeight: 700, letterSpacing: '0.03em' }}>COMPRE ATÉ (p/ a margem que você quer)</div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {([['20%', p.custoAlvo.m20], ['30%', p.custoAlvo.m30], ['40%', p.custoAlvo.m40]] as Array<[string, number]>).map(([m, v]) => (
+                <span key={m} style={{ fontSize: 11 }}>
+                  <span style={{ color: T.t4 }}>{m}</span>{' '}
+                  <strong style={{ color: v > 0 ? T.t1 : T.t4 }}>{v > 0 ? brl(v) : '—'}</strong>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Concorrência real do produto (ofertas do mesmo catálogo). */}
+        {p.concorrencia && (
+          <div style={{ fontSize: 10, color: T.t3, marginTop: 6, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <span>👥 <strong style={{ color: T.t2 }}>{p.concorrencia.vendedores}</strong> vendedores</span>
+            {p.concorrencia.precoMin > 0 && <span>💰 {brl(p.concorrencia.precoMin)}–{brl(p.concorrencia.precoMax)}</span>}
+            {p.concorrencia.amostra > 0 && <span>📦 {p.concorrencia.usandoFull}/{p.concorrencia.amostra} no Full</span>}
+          </div>
+        )}
+
+        {p.sinais.length > 0 && (
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 7 }}>
+            {p.sinais.slice(0, 3).map(sn => (
+              <span key={sn} style={{ fontSize: 9.5, color: T.t2, background: tint(T.pur, 12), border: `1px solid ${tint(T.pur, 25)}`, borderRadius: 6, padding: '2px 7px' }}>{sn}</span>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -149,7 +184,7 @@ export default function MLMineracao() {
 
       <p style={{ fontSize: 10.5, color: T.t4, marginTop: 14, lineHeight: 1.5 }}>
         "Recebe" = preço − comissão real da categoria − custo de envio real (reputação verde) — antes de imposto, custo do produto e Ads.
-        Produto sem "líquido medido" é aquele em que o ML não expôs a oferta/frete — nada aqui é inventado.
+        "Compre até" = o máximo a pagar no fornecedor pra fechar naquela margem (já com imposto de 4% e o líquido real). Produto sem "líquido medido" é aquele em que o ML não expôs a oferta/frete — nada aqui é inventado.
       </p>
     </div>
   )
