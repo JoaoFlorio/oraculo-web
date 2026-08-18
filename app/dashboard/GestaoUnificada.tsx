@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { SeloAmazon, SeloML } from './GestaoConsolidada'
+import { SeloAmazon, SeloML } from './SelosMarketplace'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GESTÃO com SELETOR DE LOJA (Tudo · Amazon · Mercado Livre).
