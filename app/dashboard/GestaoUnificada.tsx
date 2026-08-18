@@ -23,12 +23,14 @@ const GestaoConsolidada = dynamic(() => import('./GestaoConsolidada'), { ssr: fa
 type Loja = 'tudo' | 'amazon' | 'ml'
 const CHAVE = 'oraculo_gestao_loja'
 
-export default function GestaoUnificada(props: {
+export default function GestaoUnificada({ mlEnabled = false, ...props }: {
   promoActive?: boolean
   promoType?: 'fba' | 'comissao' | 'ambas' | null
   userEmail?: string
   theme?: 'dark' | 'light'
   isAdmin?: boolean
+  /** ML ainda em construção: sem isto, a Gestão é a Amazon pura, como sempre foi. */
+  mlEnabled?: boolean
 }) {
   const [loja, setLoja] = useState<Loja>('amazon')
   const [pronto, setPronto] = useState(false)
@@ -52,6 +54,10 @@ export default function GestaoUnificada(props: {
     { id: 'amazon', label: 'Amazon', selo: 'amz' },
     { id: 'ml', label: 'Mercado Livre', selo: 'ml' },
   ]
+
+  // 🚧 ML em construção: quem não é admin recebe a Gestão Amazon EXATAMENTE como
+  // antes — sem seletor, sem wrapper visível, nada a estranhar.
+  if (!mlEnabled) return <GestaoHub {...props} />
 
   return (
     <div style={{ width: '100%' }}>

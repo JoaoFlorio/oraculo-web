@@ -1371,10 +1371,17 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // aqui (accessDenied bloqueia plan 'free'/vazio antes do painel). Todo mundo
   // que abre o dashboard tem plano pago e, portanto, Gestão.
   const podeGestao = gestaoEnabled
+  // 🚧 GATE DO MERCADO LIVRE — ADMIN APENAS (18/08/2026).
+  // O lado ML (Gestão, Mineração, Calculadora) está em construção ativa: contas
+  // batendo, telas mudando a cada sessão. Cliente não pode ver obra em andamento —
+  // então some do menu e o seletor de loja da Gestão nem aparece pra ele (a Gestão
+  // fica exatamente como sempre foi: Amazon). Pra liberar geral, é só trocar esta
+  // linha por `true` (ou por um plano/allowlist quando for a hora).
+  const mlEnabled = user?.role === 'admin'
   const [nav,      setNav]      = useState(podeGestao ? 'financeiro' : 'bestsellers')
   // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
   const navGroups = NAV_GROUPS
-    .map(g=>({...g, ids: g.ids.filter(id=> id!=='financeiro' || gestaoEnabled)}))
+    .map(g=>({...g, ids: g.ids.filter(id=> (id!=='financeiro' || gestaoEnabled) && (!id.startsWith('ml-') || mlEnabled))}))
     .filter(g=>g.ids.length>0)
   const [cat,      setCat]      = useState('all')
   const [prods,    setProds]    = useState<any[]>([])
@@ -2305,11 +2312,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
 
             {/* Calculadora Mercado Livre — comissão real da categoria (via link do
                 anúncio) ou estimativa por preço. Motor no backend (routes/ml.ts). */}
-            {nav==='ml-calc'&&(<MLCalculator/>)}
+            {nav==='ml-calc'&&mlEnabled&&(<MLCalculator/>)}
 
             {/* Mineração ML — ranking BEST_SELLER oficial por categoria + líquido
                 real ("você recebe") por produto + buscas em alta. */}
-            {nav==='ml-minera'&&(<MLMineracao/>)}
+            {nav==='ml-minera'&&mlEnabled&&(<MLMineracao/>)}
 
             {/* Tutoriais — vídeos de ajuda (Panda Video). Player 16:9 responsivo;
                 a lista vem de TUTORIAIS (topo do arquivo). Visível em todo plano. */}
@@ -2556,7 +2563,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {/* Gestão (hub financeiro) — gated p/ allowlist enquanto SP-API em Draft */}
             {nav==='financeiro'&&gestaoEnabled&&(
               <div style={{padding:'0 4px'}}>
-                <GestaoUnificada promoActive={promo.active} promoType={promo.type} theme={theme} isAdmin={user.role==='admin'}/>
+                <GestaoUnificada promoActive={promo.active} promoType={promo.type} theme={theme} isAdmin={user.role==='admin'} mlEnabled={mlEnabled}/>
               </div>
             )}
 
