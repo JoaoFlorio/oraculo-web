@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic'
 const GestaoHub = dynamic(()=>import('./GestaoHub'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Gestão…</div>})
 const NeoChat = dynamic(()=>import('./neo/NeoChat'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Acordando o NEO…</div>})
 const MLCalculator = dynamic(()=>import('./MLCalculator'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando calculadora…</div>})
+const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando o garimpo…</div>})
+const MLGestao = dynamic(()=>import('./MLGestao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Gestão ML…</div>})
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 const T = {
@@ -34,11 +36,11 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
-  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-calc','extension','agente','tutoriais','perfil'],                                                        modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
+  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-calc','extension','agente','tutoriais','perfil'],                                                        modal:false, export:false },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','ml-gestao','ml-minera','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','ml-gestao','ml-minera','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-gestao','ml-minera','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-gestao','ml-minera','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 const GREENN: Record<string,string> = {
@@ -77,6 +79,8 @@ const NAV = [
   { id:'bestsellers', label:'Mais Vendidos'     },
   { id:'saved',       label:'Salvos'            },
   { id:'competitor',  label:'Análise Rival'     },
+  { id:'ml-gestao',   label:'Gestão ML'         },
+  { id:'ml-minera',   label:'Mineração ML'      },
   { id:'ml-calc',     label:'Calculadora ML'    },
   { id:'agente',      label:'Agente NEO'        },
   { id:'extension',   label:'Extensão'          },
@@ -98,7 +102,7 @@ const TUTORIAIS: {title:string; desc:string; embed:string}[] = [
 const NAV_GROUPS = [
   { group:'Gestão',      ids:['financeiro'] },
   { group:'Mineração',   ids:['bestsellers','saved','competitor'] },
-  { group:'Mercado Livre', ids:['ml-calc'] },
+  { group:'Mercado Livre', ids:['ml-gestao','ml-minera','ml-calc'] },
   { group:'Ferramentas', ids:['agente','extension'] },
   { group:'Ajuda',       ids:['tutoriais'] },
   { group:'Conta',       ids:['perfil'] },
@@ -277,6 +281,8 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     perfil:     <><circle cx="14" cy="10.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5.5 23c1.3-4.4 4.7-6.8 8.5-6.8s7.2 2.4 8.5 6.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     tutoriais:  <><rect x="4" y="7" width="20" height="15" rx="3" stroke="currentColor" strokeWidth="1.5"/><path d="M12 11.5l5 3-5 3z" fill="currentColor"/></>,
     'ml-calc':  <><rect x="6" y="4" width="16" height="20" rx="2.5" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="7" width="10" height="4" rx="1" stroke="currentColor" strokeWidth="1.3"/><path d="M10 15h.01M14 15h.01M18 15h.01M10 19h.01M14 19h.01M18 19h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></>,
+    'ml-gestao': <><path d="M5 22V12M11 22V6M17 22V15M23 22V9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M5 8l6-3 6 5 6-4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></>,
+    'ml-minera': <><path d="M7 21l6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 6c3-2 8-2 10 1-2 0-4 .5-5.5 2M12 6c-2 3-2 8 1 10 0-2 .5-4 2-5.5M12 6l4.5 4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></>,
   }
   return(
     <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0,color:c}}>
@@ -1735,7 +1741,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     setNav(id); setPage(1)
     setQuery(''); setSearchInput(''); queryRef.current=''  // trocar de aba sai da busca
     setSortBy('default')  // cada aba tem semântica própria — não herda ordenação
-    if(id==='competitor'||id==='saved'||id==='perfil'||id==='ml-calc'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
+    if(id==='competitor'||id==='saved'||id==='perfil'||id==='ml-calc'||id==='ml-gestao'||id==='ml-minera'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
     if(id==='extension'){
       loadIdRef.current++;setLoading(false)
       setProds([]);setDone(false)
@@ -2302,6 +2308,14 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 anúncio) ou estimativa por preço. Motor no backend (routes/ml.ts). */}
             {nav==='ml-calc'&&(<MLCalculator/>)}
 
+            {/* Gestão ML — DRE com os números REAIS cobrados pelo ML (tarifa do
+                pedido + custo real do envio). Isolada da Gestão Amazon. */}
+            {nav==='ml-gestao'&&(<MLGestao/>)}
+
+            {/* Mineração ML — ranking BEST_SELLER oficial por categoria + líquido
+                real ("você recebe") por produto + buscas em alta. */}
+            {nav==='ml-minera'&&(<MLMineracao/>)}
+
             {/* Tutoriais — vídeos de ajuda (Panda Video). Player 16:9 responsivo;
                 a lista vem de TUTORIAIS (topo do arquivo). Visível em todo plano. */}
             {nav==='tutoriais'&&(
@@ -2599,7 +2613,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             )}
 
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&nav!=='perfil'&&nav!=='tutoriais'&&nav!=='ml-calc'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&nav!=='perfil'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-gestao'&&nav!=='ml-minera'&&<>
             <div className="ora-phead" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
               <div style={{minWidth:0}}>
                 <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
