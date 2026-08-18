@@ -22,8 +22,15 @@ const T = {
 const tint = (v: string, pct: number) => `color-mix(in srgb, ${v} ${pct}%, transparent)`
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
+function Thumb({ foto, id }: { foto: string | null; id: string }) {
+  const pal = ['#7C3AED', '#E7B85C', '#2FBE8F', '#4F86C6', '#F2685C', '#9B8CFF']
+  const c = pal[(parseInt((id || '0').replace(/\D/g, '').slice(-3) || '0')) % pal.length]
+  if (foto) return <img src={foto} alt="" width={34} height={34} style={{ borderRadius: 8, objectFit: 'cover' as const, flexShrink: 0, background: '#fff', border: '1px solid rgba(0,0,0,0.06)' }} />
+  return <span aria-hidden style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${c}22` }}><i className="ti ti-photo" style={{ fontSize: 15, color: c }} /></span>
+}
+
 type Fonte = 'amazon' | 'ml'
-type LinhaProduto = { fonte: Fonte; id: string; titulo: string; unidades: number; receita: number; taxas: number; liquido: number | null }
+type LinhaProduto = { fonte: Fonte; id: string; titulo: string; foto: string | null; unidades: number; receita: number; taxas: number; liquido: number | null }
 
 function Card({ label, valor, cor, sub, destaque }: { label: string; valor: string; cor?: string; sub?: string; destaque?: boolean }) {
   return (
@@ -109,13 +116,13 @@ export default function GestaoConsolidada() {
   // Produtos das duas lojas na mesma lista, cada um com seu selo.
   const produtos: LinhaProduto[] = [
     ...(amzOn ? (amz?.produtos || []).map((p: any): LinhaProduto => ({
-      fonte: 'amazon', id: p.sku, titulo: p.sku,
+      fonte: 'amazon', id: p.sku, titulo: p.name || p.sku, foto: p.image || null,
       unidades: p.units || 0, receita: p.receita || 0,
       taxas: (p.comissao || 0) + (p.fba || 0) + (p.taxaPrograma || 0) + (p.outrasTaxas || 0),
       liquido: p.feeMedido ? (p.receita || 0) - ((p.comissao || 0) + (p.fba || 0) + (p.taxaPrograma || 0) + (p.outrasTaxas || 0)) : null,
     })) : []),
     ...(mlOn ? (ml?.produtos || []).map((p: any): LinhaProduto => ({
-      fonte: 'ml', id: p.itemId, titulo: p.titulo,
+      fonte: 'ml', id: p.itemId, titulo: p.titulo, foto: p.foto || null,
       unidades: p.qty || 0, receita: p.receita || 0,
       taxas: (p.tarifa || 0) + (p.envio || 0),
       liquido: p.liquido,
@@ -204,9 +211,12 @@ export default function GestaoConsolidada() {
                   {produtos.slice(0, 40).map(p => (
                     <tr key={`${p.fonte}-${p.id}`} style={{ borderTop: `1px solid ${tint(T.line, 60)}` }}>
                       <td style={{ padding: '8px 8px 8px 0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                          {p.fonte === 'amazon' ? <SeloAmazon size={13} /> : <SeloML size={13} />}
-                          <span style={{ color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 300 }}>{p.titulo}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                          <div style={{ position: 'relative', flexShrink: 0 }}>
+                            <Thumb foto={p.foto} id={p.id} />
+                            <span style={{ position: 'absolute', bottom: -3, right: -3 }}>{p.fonte === 'amazon' ? <SeloAmazon size={11} /> : <SeloML size={11} />}</span>
+                          </div>
+                          <span style={{ color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 280 }}>{p.titulo}</span>
                         </div>
                       </td>
                       <td style={{ padding: 8, textAlign: 'right' as const, color: T.t2 }}>{p.unidades}</td>

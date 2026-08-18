@@ -30,9 +30,18 @@ type Dre = {
   liquidoML: number
   vendasBrutas: number
   canceladas: { pedidos: number; valor: number }
-  produtos: Array<{ itemId: string; titulo: string; pedidos: number; qty: number; receita: number; tarifa: number; envio: number | null; envioParcial: boolean; liquido: number | null }>
-  pedidos: Array<{ orderId: string; data: string; status: string; titulo: string; qty: number; receita: number; tarifa: number; envio: number | null; liquido: number | null }>
+  produtos: Array<{ itemId: string; titulo: string; foto: string | null; pedidos: number; qty: number; receita: number; tarifa: number; envio: number | null; envioParcial: boolean; liquido: number | null }>
+  pedidos: Array<{ orderId: string; data: string; status: string; titulo: string; foto: string | null; qty: number; receita: number; tarifa: number; envio: number | null; liquido: number | null; itens: Array<{ itemId: string; titulo: string; foto: string | null; qty: number; unitPrice: number; tarifa: number }> }>
   motivo?: string
+}
+
+// Foto do produto — mesmo padrão da Amazon (Thumb): imagem quando há, senão um
+// placeholder colorido estável por id. 34px, cantos arredondados.
+function Thumb({ foto, id, size = 40 }: { foto: string | null; id: string; size?: number }) {
+  const pal = ['#7C3AED', '#E7B85C', '#2FBE8F', '#4F86C6', '#F2685C', '#9B8CFF', '#0EA5E9', '#F59E0B']
+  const c = pal[(parseInt((id || '0').replace(/\D/g, '').slice(-3) || '0')) % pal.length]
+  if (foto) return <img src={foto} alt="" width={size} height={size} style={{ borderRadius: 9, objectFit: 'cover' as const, flexShrink: 0, background: '#fff', border: '1px solid rgba(0,0,0,0.06)' }} />
+  return <span aria-hidden style={{ width: size, height: size, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${c}22` }}><i className="ti ti-photo" style={{ fontSize: size * 0.45, color: c }} /></span>
 }
 
 // ── Navegação (espelha GRUPOS/TABS da Amazon, com o que o ML entrega hoje) ─────
@@ -287,34 +296,50 @@ export default function MLGestao() {
             </>
           )}
 
-          {/* ── PEDIDOS ── */}
+          {/* ── PEDIDOS ── cada pedido é um CARTÃO, cada item uma linha com foto
+              (mesma anatomia da aba Pedidos da Amazon). */}
           {tab === 'pedidos' && (
             dre.pedidos.length > 0 ? (
-              <Tabela>
-                <thead>
-                  <tr>
-                    <th style={th}>Data</th><th style={th}>Produto</th>
-                    <th style={thR}>Receita</th><th style={thR}>Tarifa</th><th style={thR}>Envio</th><th style={thR}>Você recebe</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dre.pedidos.map(o => (
-                    <tr key={o.orderId} style={{ borderTop: `1px solid ${tint(T.line, 60)}` }}>
-                      <td style={{ ...td, whiteSpace: 'nowrap' as const, color: T.t3 }}>
-                        {new Date(o.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}{' '}
-                        <span style={{ color: T.t4, fontSize: 10.5 }}>{new Date(o.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-                      </td>
-                      <td style={{ ...td, color: T.t1, maxWidth: 320 }}>
-                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{o.titulo}{o.qty > 1 ? ` ×${o.qty}` : ''}</div>
-                      </td>
-                      <td style={{ ...tdR, color: T.t1, fontWeight: 600 }}>{brl(o.receita)}</td>
-                      <td style={{ ...tdR, color: T.a }}>− {brl(o.tarifa)}</td>
-                      <td style={{ ...tdR, color: o.envio != null ? T.a : T.t4 }}>{o.envio != null ? `− ${brl(o.envio)}` : 'medindo…'}</td>
-                      <td style={{ ...tdR, fontWeight: 800, color: o.liquido != null ? (o.liquido >= 0 ? T.g : T.r) : T.t4 }}>{o.liquido != null ? brl(o.liquido) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Tabela>
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+                {dre.pedidos.map(o => (
+                  <div key={o.orderId} style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: 'var(--elev1)', overflow: 'hidden' }}>
+                    {/* Cabeçalho do pedido */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${tint(T.line, 70)}`, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 9.5, fontWeight: 700, color: T.g, background: tint(T.g, 12), border: `1px solid ${tint(T.g, 30)}`, borderRadius: 5, padding: '2px 7px' }}>
+                        {o.status === 'delivered' ? 'entregue' : o.status === 'shipped' ? 'enviado' : 'pago'}
+                      </span>
+                      <span style={{ fontSize: 12, color: T.t2, fontWeight: 600 }}>
+                        {new Date(o.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                        <span style={{ color: T.t4, fontWeight: 400 }}> · {new Date(o.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </span>
+                      <span style={{ fontSize: 10, color: T.t4 }}>#{o.orderId}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 800, color: (o.liquido ?? 0) >= 0 ? T.g : T.r }}>
+                        {o.liquido != null ? `você recebe ${brl(o.liquido)}` : brl(o.receita)}
+                      </span>
+                    </div>
+                    {/* Itens do pedido, cada um com foto */}
+                    {o.itens.map((it, i) => (
+                      <div key={`${it.itemId}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', borderTop: i > 0 ? `1px solid ${tint(T.line, 50)}` : 'none' }}>
+                        <Thumb foto={it.foto} id={it.itemId} size={44} />
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontSize: 12.5, color: T.t1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{it.titulo}</div>
+                          <div style={{ fontSize: 10, color: T.t4, marginTop: 1 }}>{it.itemId}{it.qty > 1 ? ` · ${it.qty} un.` : ''}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' as const, flexShrink: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: T.t1, fontVariantNumeric: 'tabular-nums' as const }}>{brl(it.unitPrice * it.qty)}</div>
+                          <div style={{ fontSize: 10, color: T.a }}>tarifa − {brl(it.tarifa)}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {/* Rodapé: a conta do pedido */}
+                    <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end', flexWrap: 'wrap', padding: '8px 14px', borderTop: `1px solid ${tint(T.line, 70)}`, background: T.modal, fontSize: 11.5 }}>
+                      <span style={{ color: T.t3 }}>Receita <strong style={{ color: T.t1 }}>{brl(o.receita)}</strong></span>
+                      <span style={{ color: T.t3 }}>Tarifa <strong style={{ color: T.a }}>− {brl(o.tarifa)}</strong></span>
+                      <span style={{ color: T.t3 }}>Envio <strong style={{ color: o.envio != null ? T.a : T.t4 }}>{o.envio != null ? `− ${brl(o.envio)}` : 'medindo…'}</strong></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                 Nenhum pedido em {perLabel.toLowerCase()}.
@@ -336,9 +361,14 @@ export default function MLGestao() {
                   <tbody>
                     {dre.produtos.map(p => (
                       <tr key={p.itemId} style={{ borderTop: `1px solid ${tint(T.line, 60)}` }}>
-                        <td style={{ ...td, color: T.t1, maxWidth: 330 }}>
-                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.titulo}</div>
-                          <div style={{ fontSize: 9.5, color: T.t4 }}>{p.itemId} · {p.pedidos} pedido{p.pedidos === 1 ? '' : 's'}</div>
+                        <td style={{ ...td, color: T.t1, maxWidth: 340 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            <Thumb foto={p.foto} id={p.itemId} size={38} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, fontWeight: 500 }}>{p.titulo}</div>
+                              <div style={{ fontSize: 9.5, color: T.t4 }}>{p.itemId} · {p.pedidos} pedido{p.pedidos === 1 ? '' : 's'}</div>
+                            </div>
+                          </div>
                         </td>
                         <td style={tdR}>{p.qty}</td>
                         <td style={{ ...tdR, color: T.t1, fontWeight: 600 }}>{brl(p.receita)}</td>
