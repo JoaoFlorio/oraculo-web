@@ -19,7 +19,7 @@ type Modality = {
   despesas: number; lucro: number; margem: number
   fonte: 'api' | 'estimativa'
 }
-type Envio = { custoVendedor: number; custoCheio: number | null; subsidioPct: number | null; reputacao: string; pesoFaturavel: number | null; fonte: 'api' }
+type Envio = { custoVendedor: number; custoCheio: number | null; subsidioPct: number | null; reputacao: string; pesoFaturavel: number | null; cenario: 'frete-gratis' | 'logistica'; fonte: 'api' }
 type CalcResp = {
   input: { price: number; cost: number; taxPct: number; frete: number; adsPct: number; categoryId: string | null; itemId: string | null; dimensions: string | null; logisticType: string }
   item: null | { id: string; titulo: string; categoryId: string; precoAnuncio: number; vendidos: number | null; tipoAnuncio: string; thumbnail: string | null; logisticType: string | null; freteGratis: boolean }
@@ -80,7 +80,7 @@ function NumInput({ value, onChange, prefix, suffix, placeholder }: { value: str
 }
 
 /* ─── Card de uma modalidade (Clássico / Premium) ─────────────────────────── */
-function ModalityCard({ nome, cor, m, hint, freteReal }: { nome: string; cor: string; m: Modality; hint: string; freteReal?: boolean }) {
+function ModalityCard({ nome, cor, m, hint, freteLabel }: { nome: string; cor: string; m: Modality; hint: string; freteLabel?: string }) {
   const lucroCor = m.lucro > 0 ? T.g : m.lucro < 0 ? T.r : T.t2
   const Row = ({ label, val, strong, color }: { label: string; val: string; strong?: boolean; color?: string }) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '7px 0', borderTop: `1px solid ${tint(T.line, 60)}` }}>
@@ -107,7 +107,7 @@ function ModalityCard({ nome, cor, m, hint, freteReal }: { nome: string; cor: st
       )}
       {m.imposto > 0 && <Row label="Imposto" val={`− ${brl(m.imposto)}`} />}
       <Row label="Custo do produto" val={`− ${brl(m.custo)}`} />
-      {m.frete > 0 && <Row label={freteReal ? 'Frete real (Mercado Envios)' : 'Frete (Mercado Envios)'} val={`− ${brl(m.frete)}`} color={freteReal ? T.g : undefined} />}
+      {m.frete > 0 && <Row label={freteLabel || 'Frete (Mercado Envios)'} val={`− ${brl(m.frete)}`} color={freteLabel ? T.g : undefined} />}
       {m.ads > 0 && <Row label="Mercado Ads" val={`− ${brl(m.ads)}`} />}
       <Row label="Lucro por venda" val={brl(m.lucro)} strong color={lucroCor} />
       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: tint(lucroCor, 10), borderRadius: 10, padding: '8px 0' }}>
@@ -249,10 +249,13 @@ export default function MLCalculator() {
               <span>{real ? '✓ Comissão REAL da API do Mercado Livre' : '≈ Comissão ESTIMADA'}</span>
               {data.envio && (
                 <span style={{ fontWeight: 700, color: T.g }}>
-                  · 🚚 Frete real {brl(data.envio.custoVendedor)}
+                  · 🚚 {data.envio.cenario === 'logistica' ? 'Logística ML' : 'Frete real'} {brl(data.envio.custoVendedor)}
                   {data.envio.pesoFaturavel ? ` (${(data.envio.pesoFaturavel / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg faturável)` : ''}
                   {data.envio.subsidioPct != null && data.envio.custoCheio != null && data.envio.subsidioPct > 0 && (
                     <span style={{ fontWeight: 500, color: T.t3 }}> — reputação {data.envio.reputacao === 'green' ? 'verde' : data.envio.reputacao}: ML cobre {data.envio.subsidioPct}% de {brl(data.envio.custoCheio)}</span>
+                  )}
+                  {data.envio.cenario === 'logistica' && (
+                    <span style={{ fontWeight: 500, color: T.t3 }}> · o comprador paga o frete; você paga a gestão do envio</span>
                   )}
                 </span>
               )}
@@ -279,8 +282,8 @@ export default function MLCalculator() {
 
           {data && (
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', opacity: loading ? 0.55 : 1, transition: 'opacity .15s' }}>
-              <ModalityCard nome="Clássico" cor={T.pur} m={data.modalities.classico} hint="Mais barato, sem destaque nas buscas." freteReal={!!data.envio} />
-              <ModalityCard nome="Premium" cor={T.gold} m={data.modalities.premium} hint="Comissão maior, mais exposição + parcelamento sem juros." freteReal={!!data.envio} />
+              <ModalityCard nome="Clássico" cor={T.pur} m={data.modalities.classico} hint="Mais barato, sem destaque nas buscas." freteLabel={data.envio ? (data.envio.cenario === 'logistica' ? 'Logística ML (comprador paga o frete)' : 'Frete real (Mercado Envios)') : undefined} />
+              <ModalityCard nome="Premium" cor={T.gold} m={data.modalities.premium} hint="Comissão maior, mais exposição + parcelamento sem juros." freteLabel={data.envio ? (data.envio.cenario === 'logistica' ? 'Logística ML (comprador paga o frete)' : 'Frete real (Mercado Envios)') : undefined} />
             </div>
           )}
 
