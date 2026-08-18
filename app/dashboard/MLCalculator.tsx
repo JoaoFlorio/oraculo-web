@@ -19,7 +19,7 @@ type Modality = {
   despesas: number; lucro: number; margem: number
   fonte: 'api' | 'estimativa'
 }
-type Envio = { custoVendedor: number; pesoFaturavel: number | null; subsidio: number | null; fonte: 'api' }
+type Envio = { custoVendedor: number; custoCheio: number | null; subsidioPct: number | null; reputacao: string; pesoFaturavel: number | null; fonte: 'api' }
 type CalcResp = {
   input: { price: number; cost: number; taxPct: number; frete: number; adsPct: number; categoryId: string | null; itemId: string | null; dimensions: string | null; logisticType: string }
   item: null | { id: string; titulo: string; categoryId: string; precoAnuncio: number; vendidos: number | null; tipoAnuncio: string; thumbnail: string | null; logisticType: string | null; freteGratis: boolean }
@@ -131,6 +131,12 @@ export default function MLCalculator() {
   const [larg, setLarg] = useState('')
   const [comp, setComp] = useState('')
   const [peso, setPeso] = useState('')
+  // Reputação do SELLER no ML — muda o subsídio do frete grátis (medido 18/08:
+  // verde 50% · amarela 40% · vermelha/nova 0%). Salva a escolha do usuário.
+  const [reputacao, setReputacao] = useState<string>(() => {
+    try { return localStorage.getItem('oraculo_ml_reputacao') || 'green' } catch { return 'green' }
+  })
+  useEffect(() => { try { localStorage.setItem('oraculo_ml_reputacao', reputacao) } catch {} }, [reputacao])
   const [data, setData] = useState<CalcResp | null>(null)
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -153,6 +159,7 @@ export default function MLCalculator() {
       // link. Só manda quando as 4 estão preenchidas (o backend precisa do pacote todo).
       const a = numify(alt), l = numify(larg), c = numify(comp), g = numify(peso)
       if (!itemId && a > 0 && l > 0 && c > 0 && g > 0) body.dimensions = `${a}x${l}x${c},${g}`
+      body.reputation = reputacao
       const r = await fetch('/api/ml/calc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const j: CalcResp = await r.json()
       if (id !== seq.current) return // resposta velha, ignora
@@ -168,7 +175,7 @@ export default function MLCalculator() {
     } finally {
       if (id === seq.current) setLoading(false)
     }
-  }, [link, price, cost, taxPct, frete, adsPct, alt, larg, comp, peso])
+  }, [link, price, cost, taxPct, frete, adsPct, alt, larg, comp, peso, reputacao])
 
   // Debounce: recalcula ~450ms depois da última tecla.
   useEffect(() => { const t = setTimeout(calc, 450); return () => clearTimeout(t) }, [calc])
@@ -222,6 +229,13 @@ export default function MLCalculator() {
               </div>
             </Field>
           )}
+          <Field label="Sua reputação no ML" hint="Muda o subsídio do frete grátis: verde = ML cobre 50% · amarela 40% · vermelha/nova 0%.">
+            <select value={reputacao} onChange={e => setReputacao(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="green">🟢 Verde / MercadoLíder</option>
+              <option value="yellow">🟡 Amarela</option>
+              <option value="red">🔴 Vermelha / conta nova</option>
+            </select>
+          </Field>
           <Field label="Frete (manual)" hint={data?.envio ? '✓ Frete real da API em uso — este campo é ignorado.' : (data?.freteObrigatorio ? '⚠️ ≥R$79 o frete grátis é obrigatório. Cole o link ou informe as medidas p/ o valor real.' : 'Só se você paga o frete e não informou link/medidas.')}>
             <NumInput value={frete} onChange={setFrete} prefix="R$" placeholder="0,00" />
           </Field>
@@ -233,7 +247,15 @@ export default function MLCalculator() {
           {data && (
             <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, fontSize: 12, fontWeight: 700, color: real ? T.g : T.a, background: tint(real ? T.g : T.a, 10), border: `1px solid ${tint(real ? T.g : T.a, 30)}`, borderRadius: 10, padding: '9px 13px' }}>
               <span>{real ? '✓ Comissão REAL da API do Mercado Livre' : '≈ Comissão ESTIMADA'}</span>
-              {data.envio && <span style={{ fontWeight: 700, color: T.g }}>· 🚚 Frete real {brl(data.envio.custoVendedor)}{data.envio.pesoFaturavel ? ` (${(data.envio.pesoFaturavel / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg faturável)` : ''}</span>}
+              {data.envio && (
+                <span style={{ fontWeight: 700, color: T.g }}>
+                  · 🚚 Frete real {brl(data.envio.custoVendedor)}
+                  {data.envio.pesoFaturavel ? ` (${(data.envio.pesoFaturavel / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg faturável)` : ''}
+                  {data.envio.subsidioPct != null && data.envio.custoCheio != null && data.envio.subsidioPct > 0 && (
+                    <span style={{ fontWeight: 500, color: T.t3 }}> — reputação {data.envio.reputacao === 'green' ? 'verde' : data.envio.reputacao}: ML cobre {data.envio.subsidioPct}% de {brl(data.envio.custoCheio)}</span>
+                  )}
+                </span>
+              )}
               {!real && <span style={{ fontWeight: 500, color: T.t3 }}>— cole o link do anúncio para a comissão exata.</span>}
             </div>
           )}
