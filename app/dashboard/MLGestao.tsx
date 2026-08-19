@@ -1,27 +1,43 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Gestão MERCADO LIVRE — MESMO PADRÃO da Gestão Amazon (grupos + telas + seletor
-// de período + grid de KPIs), com os números REAIS COBRADOS pelo ML:
-//   receita = pago no pedido · tarifa = sale_fee do pedido · envio = custo real
-//   do shipment. Nada recalculado — fecha com o painel do ML por construção
-//   (provado: 49,90 − 5,74 − 7,85 = 36,31, centavo a centavo).
+// Gestão MERCADO LIVRE — PARIDADE com a Gestão Amazon (GestaoHub): o MESMO grid de
+// 12 KPIs, o MESMO gráfico "Resumo de Receitas", a MESMA tabela Top produtos (com
+// imagem, preço, custo, lucro, margem) e o MESMO modal de detalhamento (lupa).
 //
-// ⚠️ A navegação é ESPELHADA, não importada: o `BarraGestao` da Amazon carrega
-// GRUPOS/TABS da SP-API (Repasses, Estoque FBA, Curva ABC…) que não existem aqui.
-// Copiar a ESTÉTICA e manter as telas honestas > reusar o componente e inventar
-// aba vazia. Só entra grupo que tem tela com dado de verdade.
+// Os números são REAIS COBRADOS pelo ML: receita = pago no pedido · tarifa =
+// sale_fee real · envio = custo real do shipment. Nada recalculado.
+//
+// ⚠️ Os campos de ADS (Valor em Ads, TACOS, MPA, Lucro pós ADS, Custo Ads) mostram
+// "—" até o Mercado Ads ser integrado — igual a Amazon mostra "—" quando o Ads não
+// está conectado. Nunca inventa nem zera "não sei".
 // ─────────────────────────────────────────────────────────────────────────────
 
 const T = {
-  card: 'var(--card)', cardHov: 'var(--cardHov)', line: 'var(--line)', modal: 'var(--modal)',
-  gold: 'var(--gold)', g: 'var(--g)', a: 'var(--a)', r: 'var(--r)', pur: 'var(--pur)',
+  card: 'var(--card)', cardHov: 'var(--cardHov)', line: 'var(--line)', line2: 'var(--line2)', modal: 'var(--modal)',
+  gold: 'var(--gold)', g: 'var(--g)', a: 'var(--a)', r: 'var(--r)', pur: 'var(--pur)', blue: 'var(--blue)',
   t1: 'var(--t1)', t2: 'var(--t2)', t3: 'var(--t3)', t4: 'var(--t4)',
 }
 const tint = (v: string, pct: number) => `color-mix(in srgb, ${v} ${pct}%, transparent)`
-const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const brl = (n: number) => (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+const pc = (n: number) => (Number(n) || 0).toFixed(1).replace('.', ',') + '%'
 
+// ── Série diária (gráfico): preenche cada dia do intervalo com 0 onde não houve venda.
+const fmtDM = (d: string) => { const [, m, dd] = d.split('-'); return `${dd}/${m}` }
+const nextDay = (d: string) => { const dt = new Date(d + 'T12:00:00Z'); dt.setUTCDate(dt.getUTCDate() + 1); return dt.toISOString().slice(0, 10) }
+function fillDaily(daily: Array<{ date: string; receita: number }> = [], fromISO?: string, toISO?: string) {
+  const map: Record<string, number> = {}; for (const d of daily) map[d.date] = d.receita
+  const s = (fromISO || '').slice(0, 10), e = (toISO || '').slice(0, 10)
+  if (!s || !e) return daily.map(d => ({ label: fmtDM(d.date), receita: d.receita }))
+  const out: { label: string; receita: number }[] = []; let cur = s, guard = 0
+  while (cur <= e && guard++ < 400) { out.push({ label: fmtDM(cur), receita: map[cur] || 0 }); cur = nextDay(cur) }
+  return out
+}
+
+type Produto = { itemId: string; titulo: string; foto: string | null; pedidos: number; qty: number; receita: number; tarifa: number; envio: number | null; envioParcial: boolean; liquido: number | null; imposto: number; cmv: number | null; temCusto: boolean; lucroFinal: number | null; custoAds: number | null; lucroPosAds: number | null; mpa: number | null }
+type Pedido = { orderId: string; data: string; status: string; titulo: string; foto: string | null; qty: number; receita: number; tarifa: number; envio: number | null; liquido: number | null; imposto: number; cmv: number | null; lucroFinal: number | null; itens: Array<{ itemId: string; titulo: string; foto: string | null; qty: number; unitPrice: number; tarifa: number }> }
 type Dre = {
   connected: boolean
   nickname?: string | null
@@ -29,24 +45,86 @@ type Dre = {
   receita: number; tarifaVenda: number; envio: number; enviosPendentes: number
   liquidoML: number
   aliquota: number; imposto: number; cmv: number; lucroFinal: number
+  adsConnected: boolean; ads: number | null; tacos: number | null; lucroPosAds: number | null; mpa: number | null
   produtosSemCusto: number; unidadesSemCusto: number; receitaSemCusto: number
   vendasBrutas: number
+  daily: Array<{ date: string; receita: number }>
   canceladas: { pedidos: number; valor: number }
-  produtos: Array<{ itemId: string; titulo: string; foto: string | null; pedidos: number; qty: number; receita: number; tarifa: number; envio: number | null; envioParcial: boolean; liquido: number | null; imposto: number; cmv: number | null; temCusto: boolean; lucroFinal: number | null }>
-  pedidos: Array<{ orderId: string; data: string; status: string; titulo: string; foto: string | null; qty: number; receita: number; tarifa: number; envio: number | null; liquido: number | null; imposto: number; cmv: number | null; lucroFinal: number | null; itens: Array<{ itemId: string; titulo: string; foto: string | null; qty: number; unitPrice: number; tarifa: number }> }>
+  produtos: Produto[]
+  pedidos: Pedido[]
   motivo?: string
 }
 
-// Foto do produto — mesmo padrão da Amazon (Thumb): imagem quando há, senão um
-// placeholder colorido estável por id. 34px, cantos arredondados.
-function Thumb({ foto, id, size = 40 }: { foto: string | null; id: string; size?: number }) {
+// Foto do produto — imagem quando há, senão placeholder colorido estável por id.
+function Thumb({ foto, id, size = 34 }: { foto: string | null; id: string; size?: number }) {
   const pal = ['#7C3AED', '#E7B85C', '#2FBE8F', '#4F86C6', '#F2685C', '#9B8CFF', '#0EA5E9', '#F59E0B']
   const c = pal[(parseInt((id || '0').replace(/\D/g, '').slice(-3) || '0')) % pal.length]
-  if (foto) return <img src={foto} alt="" width={size} height={size} style={{ borderRadius: 9, objectFit: 'cover' as const, flexShrink: 0, background: '#fff', border: '1px solid rgba(0,0,0,0.06)' }} />
-  return <span aria-hidden style={{ width: size, height: size, borderRadius: 9, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${c}22` }}><i className="ti ti-photo" style={{ fontSize: size * 0.45, color: c }} /></span>
+  if (foto) return <img src={foto} alt="" width={size} height={size} style={{ borderRadius: 8, objectFit: 'cover' as const, flexShrink: 0, background: '#fff', border: '1px solid rgba(0,0,0,0.06)' }} />
+  return <span aria-hidden style={{ width: size, height: size, borderRadius: 8, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: `${c}22` }}><i className="ti ti-photo" style={{ fontSize: size * 0.45, color: c }} /></span>
 }
 
-// ── Navegação (espelha GRUPOS/TABS da Amazon, com o que o ML entrega hoje) ─────
+// Pílula de margem (verde/dourado/vermelho), igual a Amazon.
+function Pill({ kind, children }: { kind: 'grn' | 'gold' | 'red'; children: React.ReactNode }) {
+  const cor = kind === 'grn' ? T.g : kind === 'gold' ? T.gold : T.r
+  return <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: tint(cor, 15), color: cor, display: 'inline-block' }}>{children}</span>
+}
+const pillKind = (m: number): 'grn' | 'gold' | 'red' => m > 20 ? 'grn' : m > 0 ? 'gold' : 'red'
+
+// Botão de lupa (abre o modal de detalhamento do produto).
+function ZoomBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button onClick={onClick} title="Ver detalhamento"
+      style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${T.line2}`, background: T.card, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: T.t2 }}>
+      <i className="ti ti-zoom-money" style={{ fontSize: 15 }} aria-hidden="true" />
+    </button>
+  )
+}
+
+// Tabela com cabeçalho declarativo (mesmo componente estético da Amazon).
+function TableH({ head, minWidth, children }: { head: { label: string; right?: boolean; w?: string }[]; minWidth?: number; children: React.ReactNode }) {
+  return (
+    <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--elev1)' }}>
+      <div style={{ overflowX: 'auto' as const }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' as const, tableLayout: 'fixed' as const, minWidth }}>
+          <thead><tr style={{ background: tint(T.t4, 6) }}>
+            {head.map((h, i) => <th key={i} style={{ width: h.w, textAlign: h.right ? 'right' : 'left', padding: '10px 8px', fontSize: 10.5, fontWeight: 600, color: T.t3, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>{h.label}</th>)}
+          </tr></thead>
+          <tbody>{children}</tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+const cellNum: React.CSSProperties = { padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right', fontWeight: 500, fontSize: 13, color: T.t1, fontVariantNumeric: 'tabular-nums' as const }
+
+// KPI no formato da Amazon: borda de acento 1.5px, valor grande, ⓘ que abre popover.
+function Kpi({ label, valor, cor, ajuda }: { label: string; valor: string; cor: string; ajuda: string }) {
+  const [aberto, setAberto] = useState(false)
+  useEffect(() => {
+    if (!aberto) return
+    const fechar = () => setAberto(false)
+    document.addEventListener('click', fechar)
+    return () => document.removeEventListener('click', fechar)
+  }, [aberto])
+  return (
+    <div style={{ background: T.card, border: `1.5px solid ${cor}`, borderRadius: 14, padding: '16px 14px 18px', textAlign: 'center' as const, position: 'relative' as const, minHeight: 96, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center', boxShadow: 'var(--elev1)' }}>
+      <button aria-label={`O que é ${label}`} onClick={e => { e.stopPropagation(); setAberto(v => !v) }}
+        style={{ position: 'absolute' as const, top: 5, right: 6, background: 'transparent', border: 'none', cursor: 'pointer', padding: 4, lineHeight: 1 }}>
+        <i className="ti ti-info-circle" style={{ fontSize: 14, color: aberto ? T.gold : T.t3, opacity: aberto ? 1 : 0.7 }} aria-hidden="true" />
+      </button>
+      {aberto && (
+        <div onClick={e => e.stopPropagation()}
+          style={{ position: 'absolute' as const, top: 30, right: 6, left: 6, zIndex: 30, background: T.modal, border: `1px solid ${T.line2}`, borderRadius: 10, padding: '10px 12px', fontSize: 11, color: T.t2, lineHeight: 1.55, textAlign: 'left' as const, boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}>
+          {ajuda}
+        </div>
+      )}
+      <div style={{ fontSize: 12.5, color: T.t2, fontWeight: 500, marginBottom: 9, lineHeight: 1.25 }}>{label}</div>
+      <div style={{ fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em', color: T.t1, fontVariantNumeric: 'tabular-nums' as const }}>{valor}</div>
+    </div>
+  )
+}
+
+// ── Navegação (espelha GRUPOS/TABS da Amazon) ──────────────────────────────────
 const TABS_ML = [
   { id: 'resumo',   label: 'Resumo',      icon: 'ti-layout-dashboard' },
   { id: 'pedidos',  label: 'Pedidos',     icon: 'ti-cash' },
@@ -59,7 +137,7 @@ const GRUPOS_ML: Array<{ id: string; label: string; icon: string; pergunta: stri
     pergunta: 'Como está indo: o panorama do período e os pedidos um a um.',
     tabs: ['resumo', 'pedidos'] },
   { id: 'result', label: 'Resultado', icon: 'ti-chart-pie',
-    pergunta: 'Quais produtos rendem de verdade depois das taxas do Mercado Livre.',
+    pergunta: 'O custo de cada produto e o lucro que ele rende depois das taxas do ML.',
     tabs: ['produtos'] },
 ]
 
@@ -79,38 +157,92 @@ function janela(dias: number): { from: string; to: string } {
   return { from: from.toISOString(), to: agora.toISOString() }
 }
 
-// KPI no formato da Amazon: borda colorida, rótulo centrado, número grande, ⓘ.
-function Kpi({ label, valor, cor, ajuda, sub }: { label: string; valor: string; cor: string; ajuda: string; sub?: string }) {
-  const [aberto, setAberto] = useState(false)
+// ── Modal de detalhamento do produto (a lupa) — o waterfall até o lucro ─────────
+function LinhaWF({ label, val, sign, cor, strong, nota }: { label: string; val: string; sign?: '-' | '=' | '+'; cor?: string; strong?: boolean; nota?: string }) {
   return (
-    <div style={{ position: 'relative', background: T.card, border: `1px solid ${tint(cor, 45)}`, borderRadius: 14, padding: '18px 16px', textAlign: 'center' as const, boxShadow: 'var(--elev1)' }}>
-      <button onClick={() => setAberto(v => !v)} aria-label={`O que é ${label}`}
-        style={{ position: 'absolute', top: 9, right: 9, background: 'none', border: 'none', cursor: 'pointer', color: T.t4, padding: 2, lineHeight: 1 }}>
-        <i className="ti ti-info-circle" style={{ fontSize: 14 }} aria-hidden="true" />
-      </button>
-      <div style={{ fontSize: 12.5, color: T.t3, fontWeight: 500 }}>{label}</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: T.t1, marginTop: 7, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' as const }}>{valor}</div>
-      {sub && <div style={{ fontSize: 10, color: T.t4, marginTop: 4, lineHeight: 1.4 }}>{sub}</div>}
-      {aberto && (
-        <div style={{ fontSize: 10.5, color: T.t2, background: T.modal, border: `1px solid ${T.line}`, borderRadius: 9, padding: '8px 10px', marginTop: 9, lineHeight: 1.6, textAlign: 'left' as const }}>
-          {ajuda}
-        </div>
-      )}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, padding: '7px 0', borderTop: sign === '=' ? `1px solid ${T.line}` : 'none' }}>
+      <div style={{ minWidth: 0 }}>
+        <span style={{ fontSize: 12.5, color: strong ? T.t1 : T.t2, fontWeight: strong ? 700 : 500 }}>{label}</span>
+        {nota && <div style={{ fontSize: 10, color: T.t4, marginTop: 1, lineHeight: 1.4 }}>{nota}</div>}
+      </div>
+      <span style={{ fontSize: 13, fontWeight: strong ? 800 : 600, color: cor || T.t1, whiteSpace: 'nowrap' as const, fontVariantNumeric: 'tabular-nums' as const }}>
+        {sign === '-' ? '− ' : sign === '+' ? '+ ' : ''}{val}
+      </span>
     </div>
   )
 }
 
-function Tabela({ children, minWidth = 640 }: { children: React.ReactNode; minWidth?: number }) {
+function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { produto: Produto; pedidos: Pedido[]; aliquota: number; custoUn: number | null; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+  const p = produto
+  const meus = pedidos.filter(o => o.itens.some(it => it.itemId === p.itemId))
+  const adsCon = p.custoAds != null                       // Ads conectado (0 = sem campanha)
+  // Lucro final exibido: pós-ads quando o Ads está conectado; senão antes do ads.
+  const lucroExibe = adsCon ? p.lucroPosAds : p.lucroFinal
+  const margemExibe = adsCon ? p.mpa : ((p.temCusto && p.lucroFinal != null && p.receita > 0) ? p.lucroFinal / p.receita * 100 : null)
+
   return (
-    <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, padding: '14px 16px', boxShadow: 'var(--elev1)', overflowX: 'auto' as const }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse' as const, fontSize: 12.5, minWidth }}>{children}</table>
+    <div onClick={onClose} style={{ position: 'fixed' as const, inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 16px', overflowY: 'auto' as const }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(760px, 96vw)', background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+        {/* Cabeçalho */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 16px', borderBottom: `1px solid ${T.line}` }}>
+          <Thumb foto={p.foto} id={p.itemId} size={42} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.titulo}</div>
+            <div style={{ fontSize: 10.5, color: T.t4 }}>{p.itemId} · {p.qty} un. · {p.pedidos} pedido{p.pedidos === 1 ? '' : 's'}</div>
+          </div>
+          <button onClick={onClose} aria-label="Fechar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.t3, fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
+        </div>
+
+        {/* Waterfall */}
+        <div style={{ margin: '14px 16px', background: T.modal, border: `1px solid ${T.line}`, borderRadius: 12, padding: '6px 14px' }}>
+          <LinhaWF label={`Faturado (${p.qty} un.)`} val={brl(p.receita)} strong nota="o que os compradores pagaram por este anúncio no período" />
+          <LinhaWF label="Tarifa do Mercado Livre" val={brl(p.tarifa)} sign="-" cor={T.r} nota="sale_fee real cobrada em cada pedido" />
+          <LinhaWF label="Envio" val={p.envio != null ? brl(p.envio) : 'medindo…'} sign={p.envio != null ? '-' : undefined} cor={p.envio != null ? T.r : T.t4} nota="custo real do frete que ficou com você (só de pedido mono-item; multi-item não rateamos)" />
+          <LinhaWF label="Líq. do Marketplace" val={p.liquido != null ? brl(p.liquido) : '—'} sign="=" cor={p.liquido != null ? T.g : T.t4} strong />
+          {aliquota > 0 && <LinhaWF label={`Imposto (${aliquota}%)`} val={brl(p.imposto)} sign="-" cor={T.r} />}
+          <LinhaWF label={`Custo do produto (CMV, ${p.qty} un.)`} val={p.temCusto && p.cmv != null ? brl(p.cmv) : 'informe o custo'} sign={p.temCusto ? '-' : undefined} cor={p.temCusto ? T.r : T.gold} nota={custoUn != null ? `custo unitário ${brl(custoUn)} × ${p.qty} un.` : 'cadastre o custo na aba Por produto pra fechar o lucro'} />
+          <LinhaWF label="Mercado Ads deste produto" val={p.custoAds == null ? '—' : p.custoAds > 0 ? brl(p.custoAds) : brl(0)} sign={p.custoAds ? '-' : undefined} cor={p.custoAds ? T.r : T.t4} nota={p.custoAds == null ? 'Mercado Ads não conectado nesta conta' : p.custoAds > 0 ? 'gasto real de anúncio deste item no período' : 'este item não teve gasto de anúncio no período'} />
+          {/* Rodapé: lucro (pós-ads quando o Mercado Ads está conectado) */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 0 7px', borderTop: `1.5px solid ${T.line2}`, marginTop: 3 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: T.t1 }}>{!p.temCusto ? 'Lucro (falta o custo)' : adsCon ? 'Lucro pós Ads' : 'Lucro do produto'}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              {margemExibe != null && <Pill kind={pillKind(margemExibe)}>{pc(margemExibe)}</Pill>}
+              <strong style={{ fontSize: 15, fontWeight: 800, color: (p.temCusto && lucroExibe != null) ? (lucroExibe >= 0 ? T.g : T.r) : T.t4, fontVariantNumeric: 'tabular-nums' as const }}>
+                {p.temCusto && lucroExibe != null ? brl(lucroExibe) : '—'}
+              </strong>
+            </span>
+          </div>
+        </div>
+
+        {/* Pedidos deste produto */}
+        <div style={{ margin: '0 16px 16px' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: T.t2, margin: '4px 0 8px' }}>Pedidos deste produto no período</div>
+          <TableH head={[{ label: 'Data' }, { label: 'Un.', right: true }, { label: 'Faturado', right: true }, { label: 'Tarifa', right: true }]} minWidth={420}>
+            {meus.slice(0, 30).map((o, i) => {
+              const it = o.itens.find(x => x.itemId === p.itemId)!
+              return (
+                <tr key={`${o.orderId}-${i}`}>
+                  <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2 }}>
+                    {new Date(o.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                  </td>
+                  <td style={cellNum}>{it.qty}</td>
+                  <td style={{ ...cellNum, fontWeight: 600 }}>{brl(it.unitPrice * it.qty)}</td>
+                  <td style={{ ...cellNum, color: T.a }}>− {brl(it.tarifa)}</td>
+                </tr>
+              )
+            })}
+          </TableH>
+          {meus.length === 0 && <div style={{ fontSize: 11.5, color: T.t4, padding: '8px 2px' }}>Sem pedidos deste produto nos 60 mais recentes do período.</div>}
+        </div>
+      </div>
     </div>
   )
 }
-const th: React.CSSProperties = { padding: '4px 8px 9px', fontWeight: 700, color: T.t4, fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.05em', textAlign: 'left' }
-const thR: React.CSSProperties = { ...th, textAlign: 'right' }
-const td: React.CSSProperties = { padding: '9px 8px', color: T.t2 }
-const tdR: React.CSSProperties = { ...td, textAlign: 'right' }
 
 export default function MLGestao() {
   const [status, setStatus] = useState<{ connected: boolean; nickname?: string | null } | null>(null)
@@ -118,13 +250,12 @@ export default function MLGestao() {
   const [grupo, setGrupo] = useState('venda')
   const [tab, setTab] = useState<TabMl>('resumo')
   const [dre, setDre] = useState<Dre | null>(null)
+  const [chart30, setChart30] = useState<{ daily: Dre['daily']; from: string; to: string; netRatio: number | null } | null>(null)
+  const [detail, setDetail] = useState<Produto | null>(null)
   const [loading, setLoading] = useState(true)
   const [conectando, setConectando] = useState(false)
 
-  // Custo por ANÚNCIO (itemId) e alíquota de imposto — informados pelo seller,
-  // guardados no metadata do User (mesmo endpoint da Amazon). O custo do ML mora
-  // numa chave PRÓPRIA (ml_gestao_cmv) porque a DRE ML é por itemId e o pedido do
-  // ML não traz SKU — não dá pra reusar o custo por SKU da Amazon.
+  // Custo por ANÚNCIO (itemId) e alíquota de imposto — guardados no metadata do User.
   const [custos, setCustos] = useState<Record<string, string>>({})
   const [imposto, setImposto] = useState<string>('')  // '' = herda o imposto da Amazon
   const custoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -144,9 +275,17 @@ export default function MLGestao() {
     finally { setLoading(false) }
   }, [])
 
-  // Recarrega SÓ a DRE (sem o spinner de página) — usado depois de salvar um custo
-  // ou o imposto, pra o lucro voltar recalculado pelo backend (fonte única da
-  // fórmula: o cliente nunca refaz a conta do lucro, só relê).
+  // Gráfico "Resumo de Receitas": janela FIXA de 30 dias (independente do filtro),
+  // igual a Amazon. netRatio = líquido/receita do período (líquido proporcional).
+  const carregarChart = useCallback(async () => {
+    const { from, to } = janela(30)
+    try {
+      const r = await fetch(`/api/ml/gestao/dre?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+      const d = await r.json()
+      if (d?.connected) setChart30({ daily: d.daily || [], from, to, netRatio: d.receita > 0 ? d.liquidoML / d.receita : null })
+    } catch {}
+  }, [])
+
   const recarregarDre = useCallback(async () => {
     const dias = PERIODOS.find(p => p.id === periodo)?.dias ?? 7
     const { from, to } = janela(dias)
@@ -178,8 +317,7 @@ export default function MLGestao() {
     if (custoTimer.current) clearTimeout(custoTimer.current)
     setSalvando(true)
     custoTimer.current = setTimeout(async () => {
-      // Grava só números > 0 (0/vazio = "não sei", não zero) — casa com o backend.
-      // Aceita vírgula decimal (BR): "12,50" → 12.5.
+      // Grava só números > 0 (0/vazio = "não sei", não zero). Aceita vírgula BR.
       const limpo: Record<string, number> = {}
       for (const k of Object.keys(next)) { const v = Number(String(next[k]).replace(',', '.')); if (isFinite(v) && v > 0) limpo[k] = v }
       await fetch('/api/user/metadata', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'ml_gestao_cmv', value: limpo }) }).catch(() => {})
@@ -202,7 +340,7 @@ export default function MLGestao() {
   useEffect(() => {
     fetch('/api/ml/gestao/status').then(r => r.json()).then(st => {
       setStatus(st)
-      if (st.connected) carregar(periodo)
+      if (st.connected) { carregar(periodo); carregarChart() }
       else setLoading(false)
     }).catch(() => setLoading(false))
   }, []) // eslint-disable-line
@@ -220,8 +358,8 @@ export default function MLGestao() {
 
   const irGrupo = (id: string) => {
     setGrupo(id)
-    const g = GRUPOS_ML.find(x => x.id === id)!
-    if (!g.tabs.includes(tab)) setTab(g.tabs[0])
+    const gr = GRUPOS_ML.find(x => x.id === id)!
+    if (!gr.tabs.includes(tab)) setTab(gr.tabs[0])
   }
 
   // ── Não conectado: o convite ────────────────────────────────────────────────
@@ -246,9 +384,24 @@ export default function MLGestao() {
   const g = GRUPOS_ML.find(x => x.id === grupo)!
   const perLabel = PERIODOS.find(p => p.id === periodo)?.label || ''
 
+  // ── Dados derivados dos KPIs (mesmas fórmulas do GestaoHub) ──────────────────
+  const fat = dre?.receita || 0
+  const liq = dre?.liquidoML || 0
+  const cmvTot = dre?.cmv || 0
+  const lucroBruto = dre?.lucroFinal || 0
+  const cm = cmvTot > 0                                  // sem custo nenhum → lucro/margem/ROI = —
+  const vendas = dre?.vendas || 0
+  const ticket = vendas > 0 ? fat / vendas : 0
+  const margem = fat > 0 ? lucroBruto / fat * 100 : 0
+  const roi = cmvTot > 0 ? lucroBruto / cmvTot * 100 : 0
+  const fatTot = (dre?.produtos || []).reduce((s, p) => s + p.receita, 0)
+  const chartData = chart30 ? fillDaily(chart30.daily, chart30.from, chart30.to).map(x => ({ ...x, liq: chart30.netRatio == null ? null : Math.round(x.receita * chart30.netRatio * 100) / 100 })) : []
+
+  const ADS_TIP = 'Vem do Mercado Ads da sua conta. Como não há gasto de anúncio medido no período, aparece como "—" — nunca é inventado nem zerado.'
+
   return (
     <div style={{ width: '100%', paddingTop: 4 }}>
-      {/* Cabeçalho + seletor de período (mesmo lugar da Amazon: canto direito) */}
+      {/* Cabeçalho + seletor de período */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
         <div>
           <h1 style={{ fontSize: 27, fontWeight: 800, color: T.t1, letterSpacing: '-0.03em', lineHeight: 1.1 }}>Gestão</h1>
@@ -263,7 +416,7 @@ export default function MLGestao() {
         </select>
       </div>
 
-      {/* Conexão — mesmo selo verde da Amazon */}
+      {/* Conexão */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: T.g, background: tint(T.g, 10), border: `1px solid ${tint(T.g, 30)}`, borderRadius: 20, padding: '5px 12px' }}>
           <i className="ti ti-circle-check" style={{ fontSize: 14 }} aria-hidden="true" /> Conta Mercado Livre conectada
@@ -274,7 +427,7 @@ export default function MLGestao() {
         </button>
       </div>
 
-      {/* Barra de grupos + telas (estética idêntica à da Amazon) */}
+      {/* Barra de grupos + telas */}
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' as const, marginBottom: 11 }}>
         {GRUPOS_ML.map(gr => {
           const on = grupo === gr.id
@@ -316,81 +469,139 @@ export default function MLGestao() {
 
       {!loading && dre?.connected && (
         <>
-          {/* ── RESUMO ── */}
+          {/* ── RESUMO (paridade com a Amazon: 12 KPIs + gráfico + Top produtos) ── */}
           {tab === 'resumo' && (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(215px, 1fr))', gap: 13, marginBottom: 14 }}>
-                <Kpi label="Faturamento" valor={brl(dre.receita)} cor={T.pur}
-                  sub={`${dre.vendas} venda${dre.vendas === 1 ? '' : 's'} · ${dre.unidades} un.`}
-                  ajuda="O que os compradores pagaram nos pedidos válidos do período. Pedido cancelado não entra aqui (o painel do ML soma cancelado em 'vendas brutas' — por isso os números diferem)." />
-                <Kpi label="Líq. do Marketplace" valor={brl(dre.liquidoML)} cor={T.g}
-                  sub="antes de imposto, CMV e Ads"
-                  ajuda="Faturamento menos o que o ML cobrou: tarifa de venda real de cada pedido e o custo real de cada envio. É o que sobra do marketplace, antes do custo do produto." />
-                <Kpi label="Tarifas do ML" valor={`− ${brl(dre.tarifaVenda)}`} cor={T.a}
-                  sub="tarifa real cobrada por venda"
-                  ajuda="A tarifa que o ML cobrou em cada pedido (sale_fee) — não é estimativa nem tabela: é o valor que aparece no seu extrato." />
-                <Kpi label="Envios" valor={`− ${brl(dre.envio)}`} cor={T.a}
-                  sub={dre.enviosPendentes > 0 ? `${dre.enviosPendentes} envio${dre.enviosPendentes === 1 ? '' : 's'} sem custo medido` : 'custo real dos envios'}
-                  ajuda="O custo de envio que ficou com você (frete grátis que você banca ou a logística do ML). Envio ainda não medido aparece declarado — nunca somamos zero fingindo que medimos." />
-                <Kpi label="Imposto" valor={`− ${brl(dre.imposto)}`} cor={T.a}
-                  sub={`${dre.aliquota > 0 ? `${dre.aliquota}% sobre o faturamento` : 'sem alíquota configurada'}`}
-                  ajuda={`Imposto estimado sobre o faturamento do período à alíquota de ${dre.aliquota || 0}%. Configure a alíquota na aba "Por produto". Se você não definir uma alíquota só do ML, ela é herdada da sua configuração da Amazon.`} />
-                <Kpi label="CMV" valor={`− ${brl(dre.cmv)}`} cor={T.a}
-                  sub={dre.produtosSemCusto > 0 ? `${dre.produtosSemCusto} produto${dre.produtosSemCusto === 1 ? '' : 's'} sem custo` : 'custo dos produtos vendidos'}
-                  ajuda="O custo dos produtos que você vendeu (custo do anúncio × unidades). Só conta o produto com custo cadastrado — produto sem custo NÃO entra como zero, ele fica declarado acima e o lucro sai otimista até você cadastrar. Cadastre o custo na aba 'Por produto'." />
-                <Kpi label="Lucro final" valor={brl(dre.lucroFinal)} cor={dre.lucroFinal >= 0 ? T.g : T.r}
-                  sub={dre.receita > 0 ? `margem ${Math.round((dre.lucroFinal / dre.receita) * 1000) / 10}%` : undefined}
-                  ajuda="O que sobra de verdade: líquido do marketplace menos o imposto e o custo dos produtos. É a resposta que decide a compra. Ainda NÃO desconta o Mercado Ads (em breve). E fica otimista enquanto houver produto sem custo cadastrado ou envio ainda sem custo medido — ambos aparecem declarados nos cards acima." />
-                <Kpi label="Ticket médio" valor={brl(dre.vendas > 0 ? dre.receita / dre.vendas : 0)} cor={T.pur}
-                  ajuda="Faturamento dividido pelo número de vendas do período." />
-                <Kpi label="Retenção do ML" valor={dre.receita > 0 ? `${Math.round(((dre.tarifaVenda + dre.envio) / dre.receita) * 100)}%` : '—'} cor={T.a}
-                  sub="quanto o marketplace ficou"
-                  ajuda="A fatia do seu faturamento que o Mercado Livre reteve em tarifas e envios. Serve pra comparar com a Amazon na visão 'Tudo'." />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 13, marginBottom: 16 }}>
+                <Kpi label="Faturamento" valor={brl(fat)} cor={T.pur}
+                  ajuda="Tudo que os compradores pagaram nos pedidos válidos do período. Pedido cancelado não entra aqui (o painel do ML soma cancelado em 'vendas brutas')." />
+                <Kpi label="Líq. do Marketplace" valor={brl(liq)} cor={T.blue}
+                  ajuda="O que sobra DA VENDA depois da parte do ML: tarifa de venda real e custo real de cada envio. Antes de imposto, CMV e Ads." />
+                <Kpi label="Lucro Bruto" valor={cm ? brl(lucroBruto) : '—'} cor={T.g}
+                  ajuda="Líq. do Marketplace − imposto − CMV (custo dos produtos). É o lucro da VENDA, antes do anúncio. Fica '—' até você cadastrar algum custo." />
+                <Kpi label="Margem" valor={cm ? pc(margem) : '—'} cor={T.g}
+                  ajuda="Lucro Bruto ÷ faturamento. A mesma régua do card de cada produto." />
+                <Kpi label="Número de Vendas" valor={String(vendas)} cor={T.blue}
+                  ajuda="Pedidos que caíram no período (cancelados fora)." />
+                <Kpi label="Número de Unidades Vendidas" valor={String(dre.unidades)} cor={T.blue}
+                  ajuda="Total de unidades vendidas no período — a mesma contagem que o CMV usa." />
+                <Kpi label="Ticket Médio" valor={brl(ticket)} cor={T.g}
+                  ajuda="Faturamento ÷ número de vendas." />
+                <Kpi label="Retorno Sobre Investimento" valor={cm ? pc(roi) : '—'} cor={T.g}
+                  ajuda="Lucro Bruto ÷ CMV. Quanto cada real investido em mercadoria devolveu." />
+                <Kpi label="Valor em Ads" valor={dre.ads == null ? '—' : brl(dre.ads)} cor={T.g}
+                  ajuda={dre.adsConnected ? 'Gasto REAL de Mercado Ads no período (não estimativa) — somado dos anúncios da sua conta.' : ADS_TIP} />
+                <Kpi label="TACOS" valor={dre.tacos == null ? '—' : pc(dre.tacos)} cor={T.g}
+                  ajuda={dre.adsConnected ? 'Ads ÷ faturamento. Quanto do que você vendeu foi pro anúncio.' : ADS_TIP} />
+                <Kpi label="Lucro bruto pós ADS" valor={(dre.lucroPosAds == null || !cm) ? '—' : brl(dre.lucroPosAds)} cor={dre.lucroPosAds != null && dre.lucroPosAds < 0 ? T.r : T.g}
+                  ajuda={dre.adsConnected ? 'Lucro Bruto − gasto de Mercado Ads. É o que de fato sobrou depois do anúncio.' : ADS_TIP} />
+                <Kpi label="MPA" valor={(dre.mpa == null || !cm) ? '—' : pc(dre.mpa)} cor={T.g}
+                  ajuda={dre.adsConnected ? 'Margem Pós-Anúncio: lucro pós ads ÷ faturamento. A margem final da operação.' : ADS_TIP} />
               </div>
 
-              {/* Aviso honesto: de quanto é o buraco quando há produto sem custo. */}
+              {/* Aviso: de quanto é o buraco quando há produto sem custo. */}
               {dre.produtosSemCusto > 0 && (
-                <div style={{ fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 14, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                <div style={{ fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 16, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
                   <i className="ti ti-alert-triangle" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
                   <div>
                     <strong style={{ color: T.t1 }}>{dre.produtosSemCusto} produto{dre.produtosSemCusto === 1 ? '' : 's'} sem custo cadastrado</strong> — {brl(dre.receitaSemCusto)} de faturamento entram no lucro como se o custo fosse zero.
-                    O lucro acima está <strong>otimista</strong> até você cadastrar o custo desses anúncios na aba <button onClick={() => { irGrupo('result') }} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, textDecoration: 'underline' }}>Por produto</button>.
+                    Cadastre o custo desses anúncios na aba <button onClick={() => irGrupo('result')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, textDecoration: 'underline' }}>Por produto</button>.
                   </div>
                 </div>
               )}
 
-              {dre.canceladas.pedidos > 0 && (
-                <div style={{ fontSize: 12, color: T.t2, background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '11px 14px', marginBottom: 14, boxShadow: 'var(--elev1)' }}>
-                  <div style={{ fontWeight: 700, color: T.t1, marginBottom: 5 }}>Por que o painel do ML mostra outro número?</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'baseline', lineHeight: 1.7 }}>
-                    <span>Receita (dinheiro que entrou) <strong style={{ color: T.g }}>{brl(dre.receita)}</strong></span>
-                    <span style={{ color: T.t4 }}>+</span>
-                    <span>{dre.canceladas.pedidos} cancelado{dre.canceladas.pedidos === 1 ? '' : 's'} <strong style={{ color: T.r }}>{brl(dre.canceladas.valor)}</strong></span>
-                    <span style={{ color: T.t4 }}>=</span>
-                    <span><strong style={{ color: T.t1 }}>{brl(dre.vendasBrutas)}</strong> — é o "Vendas brutas" do ML</span>
-                  </div>
-                  <div style={{ fontSize: 10.5, color: T.t4, marginTop: 5 }}>
-                    O ML soma pedidos cancelados em "vendas brutas". O Oráculo mostra o que de fato entrou — por isso a diferença.
-                  </div>
+              {/* Gráfico "Resumo de Receitas" */}
+              <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, padding: '16px 16px 10px', marginBottom: 16, boxShadow: 'var(--elev1)' }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: T.t1 }}>Resumo de Receitas</span>
+                  <span style={{ fontSize: 11, color: T.t3 }}>últimos 30 dias{chart30?.netRatio != null ? ' · líquido proporcional ao período' : ''}</span>
                 </div>
-              )}
+                <div style={{ height: 300 }}>
+                  {chart30 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={chartData} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="mlgReceita" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={T.pur} stopOpacity={0.34} />
+                            <stop offset="100%" stopColor={T.pur} stopOpacity={0.02} />
+                          </linearGradient>
+                          <linearGradient id="mlgLiq" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={T.g} stopOpacity={0.3} />
+                            <stop offset="100%" stopColor={T.g} stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid stroke={tint(T.t4, 22)} vertical={false} />
+                        <XAxis dataKey="label" tick={{ fill: T.t3, fontSize: 11 }} interval="preserveStartEnd" minTickGap={28} tickMargin={8} />
+                        <YAxis tick={{ fill: T.t3, fontSize: 10.5 }} width={82} tickFormatter={(v: number) => 'R$ ' + Math.round(v).toLocaleString('pt-BR')} />
+                        <RTooltip contentStyle={{ background: T.modal, border: `1px solid ${T.line}`, borderRadius: 10, fontSize: 12 }} formatter={(v, n) => [brl(Number(v)), n === 'liq' ? 'Líq. do Marketplace' : 'Receita']} labelStyle={{ color: T.t2 }} />
+                        <Area type="monotone" dataKey="receita" name="Receita" stroke={T.pur} strokeWidth={2.4} fill="url(#mlgReceita)" dot={false} activeDot={{ r: 4 }} />
+                        {chart30.netRatio != null && <Area type="monotone" dataKey="liq" name="Líq. do Marketplace" stroke={T.g} strokeWidth={2.4} fill="url(#mlgLiq)" dot={false} activeDot={{ r: 4 }} />}
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.t4, fontSize: 12.5 }}>Carregando o gráfico…</div>
+                  )}
+                </div>
+              </div>
 
-              {dre.vendas === 0 && (
+              {/* Top 15 produtos vendidos */}
+              <div style={{ fontSize: 15, fontWeight: 700, color: T.t1, margin: '2px 0 10px' }}>Top 15 produtos vendidos</div>
+              {dre.produtos.length > 0 ? (
+                <TableH minWidth={1000} head={[
+                  { label: 'Produto', w: '22%' }, { label: 'Preço méd.', right: true }, { label: 'Custo un.', right: true },
+                  { label: 'Unid.', right: true }, { label: 'Faturado', right: true }, { label: 'Repres.', right: true },
+                  { label: 'Lucro', right: true }, { label: 'Margem', right: true }, { label: 'Custo Ads', right: true },
+                  { label: 'Lucro pós ADS', right: true }, { label: 'MPA', right: true }, { label: '', right: true, w: '48px' },
+                ]}>
+                  {dre.produtos.slice(0, 15).map(p => {
+                    const preco = p.qty > 0 ? p.receita / p.qty : 0
+                    const custoU = custos[p.itemId] ? Number(String(custos[p.itemId]).replace(',', '.')) : null
+                    const repres = fatTot > 0 ? p.receita / fatTot * 100 : 0
+                    const temLucro = p.temCusto && p.lucroFinal != null
+                    const mrg = temLucro && p.receita > 0 ? (p.lucroFinal as number) / p.receita * 100 : null
+                    return (
+                      <tr key={p.itemId}>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}` }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            <Thumb foto={p.foto} id={p.itemId} size={34} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 500, color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.titulo}</div>
+                              <div style={{ fontSize: 10, color: T.t3, marginTop: 1 }}>{p.itemId}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={cellNum}>{brl(preco)}</td>
+                        <td style={{ ...cellNum, color: custoU != null ? T.t1 : T.t3 }}>{custoU != null ? brl(custoU) : '—'}</td>
+                        <td style={cellNum}>{p.qty}</td>
+                        <td style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
+                        <td style={{ ...cellNum, color: T.t2 }}>{repres.toFixed(1)}%</td>
+                        <td style={{ ...cellNum, color: temLucro ? ((p.lucroFinal as number) >= 0 ? T.g : T.r) : T.t3 }}>{temLucro ? brl(p.lucroFinal as number) : '—'}</td>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{mrg != null ? <Pill kind={pillKind(mrg)}>{pc(mrg)}</Pill> : '—'}</td>
+                        <td style={{ ...cellNum, color: p.custoAds == null ? T.t3 : p.custoAds > 0 ? T.a : T.t3 }}>{p.custoAds == null ? '—' : p.custoAds > 0 ? `− ${brl(p.custoAds)}` : brl(0)}</td>
+                        <td style={{ ...cellNum, color: (p.temCusto && p.lucroPosAds != null) ? ((p.lucroPosAds as number) >= 0 ? T.g : T.r) : T.t3 }}>{(p.temCusto && p.lucroPosAds != null) ? brl(p.lucroPosAds as number) : '—'}</td>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{(p.temCusto && p.mpa != null) ? <Pill kind={pillKind(p.mpa as number)}>{pc(p.mpa as number)}</Pill> : '—'}</td>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}><ZoomBtn onClick={() => setDetail(p)} /></td>
+                      </tr>
+                    )
+                  })}
+                </TableH>
+              ) : (
                 <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                   Nenhuma venda em {perLabel.toLowerCase()}. Troque o período no canto superior direito.
                 </div>
               )}
+              <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
+                Lucro e Margem aparecem só nos produtos com custo cadastrado. As colunas de <strong>Ads</strong> (Custo Ads, Lucro pós ADS, MPA) vêm do <strong>Mercado Ads</strong> real da sua conta — item sem anúncio no período aparece como <strong>R$ 0,00</strong> medido (não como valor desconhecido). Clique na <i className="ti ti-zoom-money" style={{ fontSize: 12 }} /> pra ver a conta completa do produto.
+              </div>
             </>
           )}
 
-          {/* ── PEDIDOS ── cada pedido é um CARTÃO, cada item uma linha com foto
-              (mesma anatomia da aba Pedidos da Amazon). */}
+          {/* ── PEDIDOS ── cada pedido é um CARTÃO, cada item uma linha com foto ── */}
           {tab === 'pedidos' && (
             dre.pedidos.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
                 {dre.pedidos.map(o => (
                   <div key={o.orderId} style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: 'var(--elev1)', overflow: 'hidden' }}>
-                    {/* Cabeçalho do pedido */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${tint(T.line, 70)}`, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 9.5, fontWeight: 700, color: T.g, background: tint(T.g, 12), border: `1px solid ${tint(T.g, 30)}`, borderRadius: 5, padding: '2px 7px' }}>
                         {o.status === 'delivered' ? 'entregue' : o.status === 'shipped' ? 'enviado' : 'pago'}
@@ -404,7 +615,6 @@ export default function MLGestao() {
                         {o.liquido != null ? `você recebe ${brl(o.liquido)}` : brl(o.receita)}
                       </span>
                     </div>
-                    {/* Itens do pedido, cada um com foto */}
                     {o.itens.map((it, i) => (
                       <div key={`${it.itemId}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', borderTop: i > 0 ? `1px solid ${tint(T.line, 50)}` : 'none' }}>
                         <Thumb foto={it.foto} id={it.itemId} size={44} />
@@ -418,7 +628,6 @@ export default function MLGestao() {
                         </div>
                       </div>
                     ))}
-                    {/* Rodapé: a conta do pedido */}
                     <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end', flexWrap: 'wrap', padding: '8px 14px', borderTop: `1px solid ${tint(T.line, 70)}`, background: T.modal, fontSize: 11.5 }}>
                       <span style={{ color: T.t3 }}>Receita <strong style={{ color: T.t1 }}>{brl(o.receita)}</strong></span>
                       <span style={{ color: T.t3 }}>Tarifa <strong style={{ color: T.a }}>− {brl(o.tarifa)}</strong></span>
@@ -434,11 +643,10 @@ export default function MLGestao() {
             )
           )}
 
-          {/* ── POR PRODUTO ── */}
+          {/* ── POR PRODUTO ── a gestão de custo (todos os produtos, editável) ── */}
           {tab === 'produtos' && (
             dre.produtos.length > 0 ? (
               <>
-                {/* Imposto do seller (uma alíquota pra tudo) + estado do salvamento */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap', background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '10px 14px', boxShadow: 'var(--elev1)' }}>
                   <i className="ti ti-receipt-tax" style={{ fontSize: 16, color: T.a }} aria-hidden="true" />
                   <label htmlFor="ml-imposto" style={{ fontSize: 12.5, color: T.t2, fontWeight: 600 }}>Imposto sobre a venda</label>
@@ -456,56 +664,48 @@ export default function MLGestao() {
                   {salvando && <span style={{ marginLeft: 'auto', fontSize: 11, color: T.t4, display: 'flex', alignItems: 'center', gap: 5 }}><i className="ti ti-loader-2" style={{ fontSize: 13 }} aria-hidden="true" /> salvando…</span>}
                 </div>
 
-                <Tabela minWidth={900}>
-                  <thead>
-                    <tr>
-                      <th style={th}>Produto</th><th style={thR}>Un.</th><th style={thR}>Receita</th>
-                      <th style={thR}>Tarifa ML</th><th style={thR}>Envio</th><th style={thR}>Líquido</th>
-                      <th style={thR}>Custo un.</th><th style={thR}>CMV</th><th style={thR}>Lucro</th>
+                <TableH minWidth={920} head={[
+                  { label: 'Produto', w: '26%' }, { label: 'Un.', right: true }, { label: 'Receita', right: true },
+                  { label: 'Tarifa ML', right: true }, { label: 'Envio', right: true }, { label: 'Líquido', right: true },
+                  { label: 'Custo un.', right: true }, { label: 'CMV', right: true }, { label: 'Lucro', right: true },
+                ]}>
+                  {dre.produtos.map(p => (
+                    <tr key={p.itemId}>
+                      <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                          <Thumb foto={p.foto} id={p.itemId} size={34} />
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 500, color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.titulo}</div>
+                            <div style={{ fontSize: 10, color: T.t3 }}>{p.itemId} · {p.pedidos} pedido{p.pedidos === 1 ? '' : 's'}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={cellNum}>{p.qty}</td>
+                      <td style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
+                      <td style={{ ...cellNum, color: T.a }}>− {brl(p.tarifa)}</td>
+                      <td style={{ ...cellNum, color: p.envio != null ? T.a : T.t3 }}>{p.envio != null ? `− ${brl(p.envio)}` : '—'}{p.envioParcial && p.envio != null ? ' *' : ''}</td>
+                      <td style={{ ...cellNum, fontWeight: 700, color: p.liquido != null ? (p.liquido >= 0 ? T.g : T.r) : T.t3 }}>{p.liquido != null ? brl(p.liquido) : '—'}</td>
+                      <td style={{ padding: '6px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: `1px solid ${p.temCusto ? T.line : tint(T.a, 40)}`, borderRadius: 8, padding: '3px 6px', background: T.modal }}>
+                          <span style={{ fontSize: 10.5, color: T.t4 }}>R$</span>
+                          <input value={custos[p.itemId] ?? ''} onChange={e => salvarCusto(p.itemId, e.target.value)}
+                            inputMode="decimal" placeholder="0,00" aria-label={`Custo unitário de ${p.titulo}`}
+                            style={{ width: 56, textAlign: 'right' as const, background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: T.t1, fontVariantNumeric: 'tabular-nums' as const, fontFamily: 'inherit' }} />
+                        </span>
+                      </td>
+                      <td style={{ ...cellNum, color: p.cmv != null ? T.a : T.t3 }}>{p.cmv != null ? `− ${brl(p.cmv)}` : '—'}</td>
+                      <td style={{ ...cellNum, fontWeight: 700, color: p.lucroFinal == null ? T.t3 : !p.temCusto ? T.a : (p.lucroFinal >= 0 ? T.g : T.r) }}>
+                        {p.lucroFinal == null ? '—' : `${!p.temCusto ? '≈ ' : ''}${brl(p.lucroFinal)}`}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {dre.produtos.map(p => (
-                      <tr key={p.itemId} style={{ borderTop: `1px solid ${tint(T.line, 60)}` }}>
-                        <td style={{ ...td, color: T.t1, maxWidth: 300 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                            <Thumb foto={p.foto} id={p.itemId} size={38} />
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, fontWeight: 500 }}>{p.titulo}</div>
-                              <div style={{ fontSize: 9.5, color: T.t4 }}>{p.itemId} · {p.pedidos} pedido{p.pedidos === 1 ? '' : 's'}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td style={tdR}>{p.qty}</td>
-                        <td style={{ ...tdR, color: T.t1, fontWeight: 600 }}>{brl(p.receita)}</td>
-                        <td style={{ ...tdR, color: T.a }}>− {brl(p.tarifa)}</td>
-                        <td style={{ ...tdR, color: p.envio != null ? T.a : T.t4 }}>{p.envio != null ? `− ${brl(p.envio)}` : '—'}{p.envioParcial && p.envio != null ? ' *' : ''}</td>
-                        <td style={{ ...tdR, fontWeight: 800, color: p.liquido != null ? (p.liquido >= 0 ? T.g : T.r) : T.t4 }}>{p.liquido != null ? brl(p.liquido) : '—'}</td>
-                        {/* Custo por unidade — editável, salvo por anúncio (itemId) */}
-                        <td style={{ ...tdR, padding: '6px 8px' }}>
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: `1px solid ${p.temCusto ? T.line : tint(T.a, 40)}`, borderRadius: 8, padding: '3px 6px', background: T.modal }}>
-                            <span style={{ fontSize: 10.5, color: T.t4 }}>R$</span>
-                            <input value={custos[p.itemId] ?? ''} onChange={e => salvarCusto(p.itemId, e.target.value)}
-                              inputMode="decimal" placeholder="0,00" aria-label={`Custo unitário de ${p.titulo}`}
-                              style={{ width: 58, textAlign: 'right' as const, background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: T.t1, fontVariantNumeric: 'tabular-nums' as const, fontFamily: 'inherit' }} />
-                          </div>
-                        </td>
-                        {/* CMV do período pra este produto (custo un. × unidades) */}
-                        <td style={{ ...tdR, color: p.cmv != null ? T.a : T.t4 }}>{p.cmv != null ? `− ${brl(p.cmv)}` : '—'}</td>
-                        {/* Lucro: sólido quando há custo; ≈ (otimista) quando falta custo; — quando o líquido não fecha */}
-                        <td style={{ ...tdR, fontWeight: 800, color: p.lucroFinal == null ? T.t4 : !p.temCusto ? T.a : (p.lucroFinal >= 0 ? T.g : T.r) }}>
-                          {p.lucroFinal == null ? '—' : `${!p.temCusto ? '≈ ' : ''}${brl(p.lucroFinal)}`}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Tabela>
+                  ))}
+                </TableH>
                 <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
                   {dre.produtos.some(p => p.envioParcial) && (
-                    <div>* produto com pedido de vários itens ou envio ainda sem custo — o líquido só aparece quando TODO o custo foi medido. Não rateamos envio entre produtos: rateio é palpite com cara de número.</div>
+                    <div>* produto com pedido de vários itens ou envio ainda sem custo — o líquido só aparece quando TODO o custo foi medido. Não rateamos envio entre produtos.</div>
                   )}
                   {dre.produtos.some(p => !p.temCusto) && (
-                    <div><strong style={{ color: T.a }}>≈</strong> lucro <strong>otimista</strong>: falta cadastrar o custo do produto, então ele entra na conta como zero. Preencha o custo unitário pra fechar o lucro de verdade.</div>
+                    <div><strong style={{ color: T.a }}>≈</strong> lucro <strong>otimista</strong>: falta cadastrar o custo do produto (entra na conta como zero). Preencha o custo unitário pra fechar o lucro.</div>
                   )}
                 </div>
               </>
@@ -516,6 +716,12 @@ export default function MLGestao() {
             )
           )}
         </>
+      )}
+
+      {detail && dre && (
+        <ProdutoDetalhe produto={detail} pedidos={dre.pedidos} aliquota={dre.aliquota}
+          custoUn={custos[detail.itemId] ? Number(String(custos[detail.itemId]).replace(',', '.')) : null}
+          onClose={() => setDetail(null)} />
       )}
     </div>
   )
