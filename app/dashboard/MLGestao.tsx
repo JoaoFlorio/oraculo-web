@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Gestão MERCADO LIVRE — MESMO PADRÃO da Gestão Amazon (grupos + telas + seletor
@@ -28,10 +28,12 @@ type Dre = {
   vendas: number; unidades: number
   receita: number; tarifaVenda: number; envio: number; enviosPendentes: number
   liquidoML: number
+  aliquota: number; imposto: number; cmv: number; lucroFinal: number
+  produtosSemCusto: number; unidadesSemCusto: number; receitaSemCusto: number
   vendasBrutas: number
   canceladas: { pedidos: number; valor: number }
-  produtos: Array<{ itemId: string; titulo: string; foto: string | null; pedidos: number; qty: number; receita: number; tarifa: number; envio: number | null; envioParcial: boolean; liquido: number | null }>
-  pedidos: Array<{ orderId: string; data: string; status: string; titulo: string; foto: string | null; qty: number; receita: number; tarifa: number; envio: number | null; liquido: number | null; itens: Array<{ itemId: string; titulo: string; foto: string | null; qty: number; unitPrice: number; tarifa: number }> }>
+  produtos: Array<{ itemId: string; titulo: string; foto: string | null; pedidos: number; qty: number; receita: number; tarifa: number; envio: number | null; envioParcial: boolean; liquido: number | null; imposto: number; cmv: number | null; temCusto: boolean; lucroFinal: number | null }>
+  pedidos: Array<{ orderId: string; data: string; status: string; titulo: string; foto: string | null; qty: number; receita: number; tarifa: number; envio: number | null; liquido: number | null; imposto: number; cmv: number | null; lucroFinal: number | null; itens: Array<{ itemId: string; titulo: string; foto: string | null; qty: number; unitPrice: number; tarifa: number }> }>
   motivo?: string
 }
 
@@ -119,6 +121,16 @@ export default function MLGestao() {
   const [loading, setLoading] = useState(true)
   const [conectando, setConectando] = useState(false)
 
+  // Custo por ANÚNCIO (itemId) e alíquota de imposto — informados pelo seller,
+  // guardados no metadata do User (mesmo endpoint da Amazon). O custo do ML mora
+  // numa chave PRÓPRIA (ml_gestao_cmv) porque a DRE ML é por itemId e o pedido do
+  // ML não traz SKU — não dá pra reusar o custo por SKU da Amazon.
+  const [custos, setCustos] = useState<Record<string, string>>({})
+  const [imposto, setImposto] = useState<string>('')  // '' = herda o imposto da Amazon
+  const custoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const impTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [salvando, setSalvando] = useState(false)
+
   const carregar = useCallback(async (per: string) => {
     setLoading(true)
     try {
@@ -131,6 +143,61 @@ export default function MLGestao() {
     } catch { setDre(null) }
     finally { setLoading(false) }
   }, [])
+
+  // Recarrega SÓ a DRE (sem o spinner de página) — usado depois de salvar um custo
+  // ou o imposto, pra o lucro voltar recalculado pelo backend (fonte única da
+  // fórmula: o cliente nunca refaz a conta do lucro, só relê).
+  const recarregarDre = useCallback(async () => {
+    const dias = PERIODOS.find(p => p.id === periodo)?.dias ?? 7
+    const { from, to } = janela(dias)
+    try {
+      const r = await fetch(`/api/ml/gestao/dre?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+      setDre(await r.json())
+    } catch {} finally { setSalvando(false) }
+  }, [periodo])
+
+  // Carrega custos e imposto salvos (uma vez).
+  useEffect(() => {
+    fetch('/api/user/metadata?key=ml_gestao_cmv').then(r => r.json()).then(d => {
+      if (d?.value && typeof d.value === 'object') {
+        const m: Record<string, string> = {}
+        for (const k of Object.keys(d.value)) { const v = Number(d.value[k]); if (isFinite(v) && v > 0) m[k] = String(v) }
+        setCustos(m)
+      }
+    }).catch(() => {})
+    fetch('/api/user/metadata?key=ml_gestao_imposto').then(r => r.json()).then(d => {
+      const v = Number(d?.value); if (isFinite(v) && v > 0) setImposto(String(v))
+    }).catch(() => {})
+  }, [])
+
+  const salvarCusto = (itemId: string, valor: string) => {
+    const next = { ...custos }
+    if (valor.trim() === '') delete next[itemId]
+    else next[itemId] = valor
+    setCustos(next)
+    if (custoTimer.current) clearTimeout(custoTimer.current)
+    setSalvando(true)
+    custoTimer.current = setTimeout(async () => {
+      // Grava só números > 0 (0/vazio = "não sei", não zero) — casa com o backend.
+      // Aceita vírgula decimal (BR): "12,50" → 12.5.
+      const limpo: Record<string, number> = {}
+      for (const k of Object.keys(next)) { const v = Number(String(next[k]).replace(',', '.')); if (isFinite(v) && v > 0) limpo[k] = v }
+      await fetch('/api/user/metadata', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'ml_gestao_cmv', value: limpo }) }).catch(() => {})
+      recarregarDre()
+    }, 1000)
+  }
+
+  const salvarImposto = (valor: string) => {
+    setImposto(valor)
+    if (impTimer.current) clearTimeout(impTimer.current)
+    setSalvando(true)
+    impTimer.current = setTimeout(async () => {
+      const v = Number(String(valor).replace(',', '.'))
+      const value = isFinite(v) && v > 0 ? v : null   // vazio/0 → volta a herdar da Amazon
+      await fetch('/api/user/metadata', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'ml_gestao_imposto', value }) }).catch(() => {})
+      recarregarDre()
+    }, 1000)
+  }
 
   useEffect(() => {
     fetch('/api/ml/gestao/status').then(r => r.json()).then(st => {
@@ -265,12 +332,32 @@ export default function MLGestao() {
                 <Kpi label="Envios" valor={`− ${brl(dre.envio)}`} cor={T.a}
                   sub={dre.enviosPendentes > 0 ? `${dre.enviosPendentes} envio${dre.enviosPendentes === 1 ? '' : 's'} sem custo medido` : 'custo real dos envios'}
                   ajuda="O custo de envio que ficou com você (frete grátis que você banca ou a logística do ML). Envio ainda não medido aparece declarado — nunca somamos zero fingindo que medimos." />
+                <Kpi label="Imposto" valor={`− ${brl(dre.imposto)}`} cor={T.a}
+                  sub={`${dre.aliquota > 0 ? `${dre.aliquota}% sobre o faturamento` : 'sem alíquota configurada'}`}
+                  ajuda={`Imposto estimado sobre o faturamento do período à alíquota de ${dre.aliquota || 0}%. Configure a alíquota na aba "Por produto". Se você não definir uma alíquota só do ML, ela é herdada da sua configuração da Amazon.`} />
+                <Kpi label="CMV" valor={`− ${brl(dre.cmv)}`} cor={T.a}
+                  sub={dre.produtosSemCusto > 0 ? `${dre.produtosSemCusto} produto${dre.produtosSemCusto === 1 ? '' : 's'} sem custo` : 'custo dos produtos vendidos'}
+                  ajuda="O custo dos produtos que você vendeu (custo do anúncio × unidades). Só conta o produto com custo cadastrado — produto sem custo NÃO entra como zero, ele fica declarado acima e o lucro sai otimista até você cadastrar. Cadastre o custo na aba 'Por produto'." />
+                <Kpi label="Lucro final" valor={brl(dre.lucroFinal)} cor={dre.lucroFinal >= 0 ? T.g : T.r}
+                  sub={dre.receita > 0 ? `margem ${Math.round((dre.lucroFinal / dre.receita) * 1000) / 10}%` : undefined}
+                  ajuda="O que sobra de verdade: líquido do marketplace menos o imposto e o custo dos produtos. É a resposta que decide a compra. Ainda NÃO desconta o Mercado Ads (em breve). E fica otimista enquanto houver produto sem custo cadastrado ou envio ainda sem custo medido — ambos aparecem declarados nos cards acima." />
                 <Kpi label="Ticket médio" valor={brl(dre.vendas > 0 ? dre.receita / dre.vendas : 0)} cor={T.pur}
                   ajuda="Faturamento dividido pelo número de vendas do período." />
                 <Kpi label="Retenção do ML" valor={dre.receita > 0 ? `${Math.round(((dre.tarifaVenda + dre.envio) / dre.receita) * 100)}%` : '—'} cor={T.a}
                   sub="quanto o marketplace ficou"
                   ajuda="A fatia do seu faturamento que o Mercado Livre reteve em tarifas e envios. Serve pra comparar com a Amazon na visão 'Tudo'." />
               </div>
+
+              {/* Aviso honesto: de quanto é o buraco quando há produto sem custo. */}
+              {dre.produtosSemCusto > 0 && (
+                <div style={{ fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 14, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                  <i className="ti ti-alert-triangle" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
+                  <div>
+                    <strong style={{ color: T.t1 }}>{dre.produtosSemCusto} produto{dre.produtosSemCusto === 1 ? '' : 's'} sem custo cadastrado</strong> — {brl(dre.receitaSemCusto)} de faturamento entram no lucro como se o custo fosse zero.
+                    O lucro acima está <strong>otimista</strong> até você cadastrar o custo desses anúncios na aba <button onClick={() => { irGrupo('result') }} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, textDecoration: 'underline' }}>Por produto</button>.
+                  </div>
+                </div>
+              )}
 
               {dre.canceladas.pedidos > 0 && (
                 <div style={{ fontSize: 12, color: T.t2, background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '11px 14px', marginBottom: 14, boxShadow: 'var(--elev1)' }}>
@@ -351,17 +438,36 @@ export default function MLGestao() {
           {tab === 'produtos' && (
             dre.produtos.length > 0 ? (
               <>
-                <Tabela>
+                {/* Imposto do seller (uma alíquota pra tudo) + estado do salvamento */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap', background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '10px 14px', boxShadow: 'var(--elev1)' }}>
+                  <i className="ti ti-receipt-tax" style={{ fontSize: 16, color: T.a }} aria-hidden="true" />
+                  <label htmlFor="ml-imposto" style={{ fontSize: 12.5, color: T.t2, fontWeight: 600 }}>Imposto sobre a venda</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input id="ml-imposto" value={imposto} onChange={e => salvarImposto(e.target.value)}
+                      inputMode="decimal" placeholder={String(dre.aliquota || 0)}
+                      style={{ width: 64, textAlign: 'right' as const, background: T.modal, border: `1px solid ${T.line}`, borderRadius: 8, padding: '6px 8px', fontSize: 13, color: T.t1, outline: 'none', fontVariantNumeric: 'tabular-nums' as const }} />
+                    <span style={{ fontSize: 13, color: T.t3, fontWeight: 600 }}>%</span>
+                  </div>
+                  <span style={{ fontSize: 10.5, color: T.t4, lineHeight: 1.4 }}>
+                    {imposto.trim() === '' && dre.aliquota > 0
+                      ? `herdado da Amazon (${dre.aliquota}%) — mude aqui pra usar outra alíquota só no ML`
+                      : 'aplicado no lucro de todos os produtos. Vazio = herda o imposto da Amazon.'}
+                  </span>
+                  {salvando && <span style={{ marginLeft: 'auto', fontSize: 11, color: T.t4, display: 'flex', alignItems: 'center', gap: 5 }}><i className="ti ti-loader-2" style={{ fontSize: 13 }} aria-hidden="true" /> salvando…</span>}
+                </div>
+
+                <Tabela minWidth={900}>
                   <thead>
                     <tr>
                       <th style={th}>Produto</th><th style={thR}>Un.</th><th style={thR}>Receita</th>
                       <th style={thR}>Tarifa ML</th><th style={thR}>Envio</th><th style={thR}>Líquido</th>
+                      <th style={thR}>Custo un.</th><th style={thR}>CMV</th><th style={thR}>Lucro</th>
                     </tr>
                   </thead>
                   <tbody>
                     {dre.produtos.map(p => (
                       <tr key={p.itemId} style={{ borderTop: `1px solid ${tint(T.line, 60)}` }}>
-                        <td style={{ ...td, color: T.t1, maxWidth: 340 }}>
+                        <td style={{ ...td, color: T.t1, maxWidth: 300 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                             <Thumb foto={p.foto} id={p.itemId} size={38} />
                             <div style={{ minWidth: 0 }}>
@@ -375,15 +481,33 @@ export default function MLGestao() {
                         <td style={{ ...tdR, color: T.a }}>− {brl(p.tarifa)}</td>
                         <td style={{ ...tdR, color: p.envio != null ? T.a : T.t4 }}>{p.envio != null ? `− ${brl(p.envio)}` : '—'}{p.envioParcial && p.envio != null ? ' *' : ''}</td>
                         <td style={{ ...tdR, fontWeight: 800, color: p.liquido != null ? (p.liquido >= 0 ? T.g : T.r) : T.t4 }}>{p.liquido != null ? brl(p.liquido) : '—'}</td>
+                        {/* Custo por unidade — editável, salvo por anúncio (itemId) */}
+                        <td style={{ ...tdR, padding: '6px 8px' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: `1px solid ${p.temCusto ? T.line : tint(T.a, 40)}`, borderRadius: 8, padding: '3px 6px', background: T.modal }}>
+                            <span style={{ fontSize: 10.5, color: T.t4 }}>R$</span>
+                            <input value={custos[p.itemId] ?? ''} onChange={e => salvarCusto(p.itemId, e.target.value)}
+                              inputMode="decimal" placeholder="0,00" aria-label={`Custo unitário de ${p.titulo}`}
+                              style={{ width: 58, textAlign: 'right' as const, background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: T.t1, fontVariantNumeric: 'tabular-nums' as const, fontFamily: 'inherit' }} />
+                          </div>
+                        </td>
+                        {/* CMV do período pra este produto (custo un. × unidades) */}
+                        <td style={{ ...tdR, color: p.cmv != null ? T.a : T.t4 }}>{p.cmv != null ? `− ${brl(p.cmv)}` : '—'}</td>
+                        {/* Lucro: sólido quando há custo; ≈ (otimista) quando falta custo; — quando o líquido não fecha */}
+                        <td style={{ ...tdR, fontWeight: 800, color: p.lucroFinal == null ? T.t4 : !p.temCusto ? T.a : (p.lucroFinal >= 0 ? T.g : T.r) }}>
+                          {p.lucroFinal == null ? '—' : `${!p.temCusto ? '≈ ' : ''}${brl(p.lucroFinal)}`}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </Tabela>
-                {dre.produtos.some(p => p.envioParcial) && (
-                  <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.5 }}>
-                    * produto com pedido de vários itens ou envio ainda sem custo — o líquido só aparece quando TODO o custo foi medido. Não rateamos envio entre produtos: rateio é palpite com cara de número.
-                  </div>
-                )}
+                <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
+                  {dre.produtos.some(p => p.envioParcial) && (
+                    <div>* produto com pedido de vários itens ou envio ainda sem custo — o líquido só aparece quando TODO o custo foi medido. Não rateamos envio entre produtos: rateio é palpite com cara de número.</div>
+                  )}
+                  {dre.produtos.some(p => !p.temCusto) && (
+                    <div><strong style={{ color: T.a }}>≈</strong> lucro <strong>otimista</strong>: falta cadastrar o custo do produto, então ele entra na conta como zero. Preencha o custo unitário pra fechar o lucro de verdade.</div>
+                  )}
+                </div>
               </>
             ) : (
               <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
