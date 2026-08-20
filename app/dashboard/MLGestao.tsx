@@ -46,6 +46,7 @@ type Dre = {
   liquidoML: number
   aliquota: number; imposto: number; cmv: number; lucroFinal: number
   adsConnected: boolean; ads: number | null; tacos: number | null; lucroPosAds: number | null; mpa: number | null
+  adsSangria: { total: number; itens: Array<{ itemId: string; titulo: string; foto: string | null; gasto: number }> }
   produtosSemCusto: number; unidadesSemCusto: number; receitaSemCusto: number
   vendasBrutas: number
   daily: Array<{ date: string; receita: number }>
@@ -126,9 +127,11 @@ function Kpi({ label, valor, cor, ajuda }: { label: string; valor: string; cor: 
 
 // ── Navegação (espelha GRUPOS/TABS da Amazon) ──────────────────────────────────
 const TABS_ML = [
-  { id: 'resumo',   label: 'Resumo',      icon: 'ti-layout-dashboard' },
-  { id: 'pedidos',  label: 'Pedidos',     icon: 'ti-cash' },
-  { id: 'produtos', label: 'Por produto', icon: 'ti-chart-bar' },
+  { id: 'resumo',   label: 'Resumo',        icon: 'ti-layout-dashboard' },
+  { id: 'pedidos',  label: 'Pedidos',       icon: 'ti-cash' },
+  { id: 'produtos', label: 'Por produto',   icon: 'ti-chart-bar' },
+  { id: 'ads',      label: 'Ads',           icon: 'ti-speakerphone' },
+  { id: 'gerenc',   label: 'Gerenciamento', icon: 'ti-adjustments' },
 ] as const
 type TabMl = (typeof TABS_ML)[number]['id']
 
@@ -137,8 +140,14 @@ const GRUPOS_ML: Array<{ id: string; label: string; icon: string; pergunta: stri
     pergunta: 'Como está indo: o panorama do período e os pedidos um a um.',
     tabs: ['resumo', 'pedidos'] },
   { id: 'result', label: 'Resultado', icon: 'ti-chart-pie',
-    pergunta: 'O custo de cada produto e o lucro que ele rende depois das taxas do ML.',
+    pergunta: 'Quais produtos rendem de verdade depois das taxas do ML e do anúncio.',
     tabs: ['produtos'] },
+  { id: 'anuncio', label: 'Ads', icon: 'ti-speakerphone',
+    pergunta: 'Quanto o Mercado Ads custou e o que ele trouxe de volta.',
+    tabs: ['ads'] },
+  { id: 'ajuste', label: 'Ajustes', icon: 'ti-settings',
+    pergunta: 'Onde você informa o custo de cada produto e o imposto — é o que faz o lucro fechar.',
+    tabs: ['gerenc'] },
 ]
 
 const PERIODOS = [
@@ -505,7 +514,7 @@ export default function MLGestao() {
                   <i className="ti ti-alert-triangle" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
                   <div>
                     <strong style={{ color: T.t1 }}>{dre.produtosSemCusto} produto{dre.produtosSemCusto === 1 ? '' : 's'} sem custo cadastrado</strong> — {brl(dre.receitaSemCusto)} de faturamento entram no lucro como se o custo fosse zero.
-                    Cadastre o custo desses anúncios na aba <button onClick={() => irGrupo('result')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, textDecoration: 'underline' }}>Por produto</button>.
+                    Cadastre o custo desses anúncios na aba <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, textDecoration: 'underline' }}>Gerenciamento</button>.
                   </div>
                 </div>
               )}
@@ -643,10 +652,14 @@ export default function MLGestao() {
             )
           )}
 
-          {/* ── POR PRODUTO ── a gestão de custo (todos os produtos, editável) ── */}
-          {tab === 'produtos' && (
+          {/* ── GERENCIAMENTO (Ajustes) ── onde se INFORMA o custo/imposto → lucro ── */}
+          {tab === 'gerenc' && (
             dre.produtos.length > 0 ? (
               <>
+                <div style={{ fontSize: 12, color: T.t2, background: tint(T.gold, 7), border: `1px solid ${tint(T.gold, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 12, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                  <i className="ti ti-adjustments" style={{ fontSize: 16, color: T.gold, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
+                  <div>É aqui que o lucro fecha: informe o <strong>custo unitário</strong> de cada anúncio e a <strong>alíquota de imposto</strong>. O Oráculo já mede tarifa, envio e Ads — o custo do produto só você tem. Cada valor salva sozinho e recalcula o lucro na hora.</div>
+                </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap', background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '10px 14px', boxShadow: 'var(--elev1)' }}>
                   <i className="ti ti-receipt-tax" style={{ fontSize: 16, color: T.a }} aria-hidden="true" />
                   <label htmlFor="ml-imposto" style={{ fontSize: 12.5, color: T.t2, fontWeight: 600 }}>Imposto sobre a venda</label>
@@ -712,6 +725,140 @@ export default function MLGestao() {
             ) : (
               <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                 Nenhum produto vendido em {perLabel.toLowerCase()}.
+              </div>
+            )
+          )}
+
+          {/* ── POR PRODUTO (Resultado) ── o lucro de cada produto, leitura ── */}
+          {tab === 'produtos' && (
+            dre.produtos.length > 0 ? (
+              <>
+                <TableH minWidth={1020} head={[
+                  { label: 'Produto', w: '24%' }, { label: 'Un.', right: true }, { label: 'Faturado', right: true },
+                  { label: 'Líquido ML', right: true }, { label: 'Imposto', right: true }, { label: 'CMV', right: true },
+                  { label: 'Lucro', right: true }, { label: 'Margem', right: true }, { label: 'Custo Ads', right: true },
+                  { label: 'Lucro pós ADS', right: true }, { label: 'MPA', right: true }, { label: '', right: true, w: '48px' },
+                ]}>
+                  {dre.produtos.map(p => {
+                    const temLucro = p.temCusto && p.lucroFinal != null
+                    const mrg = temLucro && p.receita > 0 ? (p.lucroFinal as number) / p.receita * 100 : null
+                    return (
+                      <tr key={p.itemId}>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}` }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                            <Thumb foto={p.foto} id={p.itemId} size={34} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12.5, fontWeight: 500, color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.titulo}</div>
+                              <div style={{ fontSize: 10, color: T.t3 }}>{p.itemId} · {p.pedidos} pedido{p.pedidos === 1 ? '' : 's'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={cellNum}>{p.qty}</td>
+                        <td style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
+                        <td style={{ ...cellNum, color: p.liquido != null ? T.g : T.t3 }}>{p.liquido != null ? brl(p.liquido) : '—'}</td>
+                        <td style={{ ...cellNum, color: T.a }}>− {brl(p.imposto)}</td>
+                        <td style={{ ...cellNum, color: p.cmv != null ? T.a : T.t3 }}>{p.cmv != null ? `− ${brl(p.cmv)}` : '—'}</td>
+                        <td style={{ ...cellNum, color: temLucro ? ((p.lucroFinal as number) >= 0 ? T.g : T.r) : T.t3 }}>{temLucro ? brl(p.lucroFinal as number) : '—'}</td>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{mrg != null ? <Pill kind={pillKind(mrg)}>{pc(mrg)}</Pill> : '—'}</td>
+                        <td style={{ ...cellNum, color: p.custoAds == null ? T.t3 : p.custoAds > 0 ? T.a : T.t3 }}>{p.custoAds == null ? '—' : p.custoAds > 0 ? `− ${brl(p.custoAds)}` : brl(0)}</td>
+                        <td style={{ ...cellNum, color: (p.temCusto && p.lucroPosAds != null) ? ((p.lucroPosAds as number) >= 0 ? T.g : T.r) : T.t3 }}>{(p.temCusto && p.lucroPosAds != null) ? brl(p.lucroPosAds as number) : '—'}</td>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{(p.temCusto && p.mpa != null) ? <Pill kind={pillKind(p.mpa as number)}>{pc(p.mpa as number)}</Pill> : '—'}</td>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}><ZoomBtn onClick={() => setDetail(p)} /></td>
+                      </tr>
+                    )
+                  })}
+                </TableH>
+                <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
+                  Lucro, Margem e MPA aparecem nos produtos com custo cadastrado (informe em <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, textDecoration: 'underline' }}>Gerenciamento</button>). Clique na <i className="ti ti-zoom-money" style={{ fontSize: 12 }} /> pra ver a conta completa.
+                </div>
+              </>
+            ) : (
+              <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
+                Nenhum produto vendido em {perLabel.toLowerCase()}.
+              </div>
+            )
+          )}
+
+          {/* ── ADS (Mercado Ads) ── quanto o anúncio custou e o que trouxe ── */}
+          {tab === 'ads' && (
+            dre.adsConnected ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 13, marginBottom: 16 }}>
+                  <Kpi label="Valor em Ads" valor={dre.ads == null ? '—' : brl(dre.ads)} cor={T.a}
+                    ajuda="Gasto REAL de Mercado Ads no período, somado dos seus anúncios. Não é estimativa." />
+                  <Kpi label="TACOS" valor={dre.tacos == null ? '—' : pc(dre.tacos)} cor={T.a}
+                    ajuda="Ads ÷ faturamento. Quanto do que você vendeu foi pro anúncio." />
+                  <Kpi label="Lucro bruto pós ADS" valor={(dre.lucroPosAds == null || !cm) ? '—' : brl(dre.lucroPosAds)} cor={dre.lucroPosAds != null && dre.lucroPosAds < 0 ? T.r : T.g}
+                    ajuda="Lucro Bruto − gasto de Mercado Ads. O que de fato sobrou depois do anúncio." />
+                  <Kpi label="MPA" valor={(dre.mpa == null || !cm) ? '—' : pc(dre.mpa)} cor={T.g}
+                    ajuda="Margem Pós-Anúncio: lucro pós ads ÷ faturamento." />
+                </div>
+
+                {/* Sangria: gasto em item que NÃO vendeu no período */}
+                {(dre.adsSangria?.total || 0) > 0 && (
+                  <div style={{ background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 14, padding: '13px 16px', marginBottom: 16 }}>
+                    <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', marginBottom: dre.adsSangria?.itens?.length ? 10 : 0 }}>
+                      <i className="ti ti-droplet-off" style={{ fontSize: 17, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
+                      <div style={{ fontSize: 12.5, color: T.t2 }}>
+                        <strong style={{ color: T.a }}>{brl(dre.adsSangria?.total || 0)}</strong> em anúncios foram para produtos que <strong>não venderam</strong> no período. É gasto real que não virou receita nenhuma — vale revisar ou pausar essas campanhas.
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 6 }}>
+                      {(dre.adsSangria?.itens || []).map(it => (
+                        <div key={it.itemId} style={{ display: 'flex', alignItems: 'center', gap: 10, background: T.card, border: `1px solid ${T.line}`, borderRadius: 10, padding: '7px 11px' }}>
+                          <Thumb foto={it.foto} id={it.itemId} size={30} />
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: 12, color: T.t1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{it.titulo}</div>
+                            <div style={{ fontSize: 9.5, color: T.t4 }}>{it.itemId}</div>
+                          </div>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: T.a, fontVariantNumeric: 'tabular-nums' as const }}>− {brl(it.gasto)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Gasto por produto anunciado (o que vendeu, com retorno) */}
+                {dre.produtos.some(p => (p.custoAds || 0) > 0) ? (
+                  <>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.t1, margin: '2px 0 10px' }}>Produtos anunciados que venderam</div>
+                    <TableH minWidth={720} head={[
+                      { label: 'Produto', w: '34%' }, { label: 'Faturado', right: true }, { label: 'Gasto Ads', right: true },
+                      { label: 'Lucro pós ADS', right: true }, { label: 'MPA', right: true },
+                    ]}>
+                      {dre.produtos.filter(p => (p.custoAds || 0) > 0).sort((a, b) => (b.custoAds || 0) - (a.custoAds || 0)).map(p => (
+                        <tr key={p.itemId}>
+                          <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                              <Thumb foto={p.foto} id={p.itemId} size={34} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 500, color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.titulo}</div>
+                                <div style={{ fontSize: 10, color: T.t3 }}>{p.itemId}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
+                          <td style={{ ...cellNum, color: T.a }}>− {brl(p.custoAds as number)}</td>
+                          <td style={{ ...cellNum, color: (p.temCusto && p.lucroPosAds != null) ? ((p.lucroPosAds as number) >= 0 ? T.g : T.r) : T.t3 }}>{(p.temCusto && p.lucroPosAds != null) ? brl(p.lucroPosAds as number) : '—'}</td>
+                          <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{(p.temCusto && p.mpa != null) ? <Pill kind={pillKind(p.mpa as number)}>{pc(p.mpa as number)}</Pill> : '—'}</td>
+                        </tr>
+                      ))}
+                    </TableH>
+                  </>
+                ) : (
+                  (dre.adsSangria?.total || 0) === 0 && (
+                    <div style={{ padding: '30px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
+                      Nenhum gasto de Mercado Ads medido em {perLabel.toLowerCase()}.
+                    </div>
+                  )
+                )}
+              </>
+            ) : (
+              <div style={{ maxWidth: 520, margin: '10px auto', textAlign: 'center' as const, padding: '30px 20px', background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16 }}>
+                <i className="ti ti-speakerphone" style={{ fontSize: 26, color: T.gold, display: 'block', marginBottom: 10 }} aria-hidden="true" />
+                <div style={{ fontSize: 13.5, color: T.t2, lineHeight: 1.7 }}>
+                  Sua conta não tem <strong>Mercado Ads</strong> ativo (ou sem gasto no período). Quando houver anúncio, o gasto por produto, o TACOS e o lucro pós-anúncio aparecem aqui — com dado real, nunca estimado.
+                </div>
               </div>
             )
           )}
