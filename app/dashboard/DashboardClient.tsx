@@ -1382,7 +1382,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // então some do menu e o seletor de loja da Gestão nem aparece pra ele (a Gestão
   // fica exatamente como sempre foi: Amazon). Pra liberar geral, é só trocar esta
   // linha por `true` (ou por um plano/allowlist quando for a hora).
-  const mlEnabled = user?.role === 'admin'
+  // ML em obra: admin vê tudo; a conta DEMO também (dados fictícios do backend —
+  // é a conta de apresentação do lançamento). Cliente comum ainda não vê.
+  const mlEnabled = user?.role === 'admin' || user?.role === 'demo'
   const [nav,      setNav]      = useState(podeGestao ? 'financeiro' : 'bestsellers')
   // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
   const navGroups = NAV_GROUPS
