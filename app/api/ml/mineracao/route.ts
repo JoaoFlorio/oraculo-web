@@ -8,9 +8,14 @@ const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.u
 export async function GET(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  const category = req.nextUrl.searchParams.get('category') || ''
+  const sp = req.nextUrl.searchParams
+  // ⚠️ `page` (scroll infinito) e `bust` (botão Atualizar) precisam ATRAVESSAR o
+  // proxy — o bust vinha sendo engolido aqui, então "Atualizar" só relia o cache.
+  const qs = new URLSearchParams({ category: sp.get('category') || '' })
+  if (sp.get('page')) qs.set('page', sp.get('page') as string)
+  if (sp.get('bust') === '1') qs.set('bust', '1')
   try {
-    const r = await fetch(`${BACKEND}/api/ml/mineracao/?category=${encodeURIComponent(category)}`,
+    const r = await fetch(`${BACKEND}/api/ml/mineracao/?${qs.toString()}`,
       { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
     return NextResponse.json(await r.json(), { status: r.status })
   } catch {
