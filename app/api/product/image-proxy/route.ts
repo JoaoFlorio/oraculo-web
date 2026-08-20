@@ -19,12 +19,14 @@ export async function GET(req: NextRequest) {
 
   if (!url) return NextResponse.json({ error: 'url obrigatória' }, { status: 400 })
 
-  // Só aceita URLs da Amazon (segurança)
+  // Só aceita URLs da Amazon e do Mercado Livre (segurança)
   const allowed = [
     'images-na.ssl-images-amazon.com',
     'images-fe.ssl-images-amazon.com',
     'images-eu.ssl-images-amazon.com',
     'm.media-amazon.com',
+    // Imagens do ML (o modal de análise da Mineração ML baixa por aqui também)
+    'mlstatic.com',
   ]
   try {
     const host = new URL(url).hostname
@@ -36,12 +38,16 @@ export async function GET(req: NextRequest) {
   }
 
   // Troca resolução para máxima disponível
-  const hiResUrl = url
-    .replace(/_AC_SR\d+,\d+_/,  '_AC_SL2000_')
-    .replace(/_AC_UL\d+_/,      '_AC_SL2000_')
-    .replace(/_AC_SL\d+_/,      '_AC_SL2000_')
-    .replace(/_SL\d+_/,         '_SL2000_')
-    .replace(/\._.*?_\./,       '.')   // fallback: remove todos os modificadores
+  const ehML = /mlstatic\.com$/.test(new URL(url).hostname)
+  const hiResUrl = ehML
+    // ML: sufixo -I/-S = thumbnail, -O = original em tamanho cheio
+    ? url.replace(/-[IS]\.(jpg|webp|png)$/i, '-O.$1')
+    : url
+        .replace(/_AC_SR\d+,\d+_/,  '_AC_SL2000_')
+        .replace(/_AC_UL\d+_/,      '_AC_SL2000_')
+        .replace(/_AC_SL\d+_/,      '_AC_SL2000_')
+        .replace(/_SL\d+_/,         '_SL2000_')
+        .replace(/\._.*?_\./,       '.')   // fallback: remove todos os modificadores
 
   try {
     const res = await fetch(hiResUrl, {
