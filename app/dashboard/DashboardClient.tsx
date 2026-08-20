@@ -8,6 +8,7 @@ const GestaoUnificada = dynamic(()=>import('./GestaoUnificada'),{ssr:false,loadi
 const NeoChat = dynamic(()=>import('./neo/NeoChat'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Acordando o NEO…</div>})
 const MLCalculator = dynamic(()=>import('./MLCalculator'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando calculadora…</div>})
 const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando o garimpo…</div>})
+const MLRival = dynamic(()=>import('./MLRival'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando a análise…</div>})
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 const T = {
@@ -37,11 +38,11 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
-  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-calc','extension','agente','tutoriais','perfil'],                                                        modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
+  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','tutoriais','perfil'],                                                        modal:false, export:false },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 const GREENN: Record<string,string> = {
@@ -81,6 +82,8 @@ const NAV = [
   { id:'saved',       label:'Salvos'            },
   { id:'competitor',  label:'Análise Rival'     },
   { id:'ml-minera',   label:'Mineração ML'      },
+  { id:'ml-salvos',   label:'Salvos ML'         },
+  { id:'ml-rival',    label:'Análise Rival ML'  },
   { id:'ml-calc',     label:'Calculadora ML'    },
   { id:'agente',      label:'Agente NEO'        },
   { id:'extension',   label:'Extensão'          },
@@ -102,7 +105,7 @@ const TUTORIAIS: {title:string; desc:string; embed:string}[] = [
 const NAV_GROUPS = [
   { group:'Gestão',      ids:['financeiro'] },
   { group:'Mineração',   ids:['bestsellers','saved','competitor'] },
-  { group:'Mercado Livre', ids:['ml-minera','ml-calc'] },
+  { group:'Mercado Livre', ids:['ml-minera','ml-salvos','ml-rival','ml-calc'] },
   { group:'Ferramentas', ids:['agente','extension'] },
   { group:'Ajuda',       ids:['tutoriais'] },
   { group:'Conta',       ids:['perfil'] },
@@ -282,6 +285,8 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     tutoriais:  <><rect x="4" y="7" width="20" height="15" rx="3" stroke="currentColor" strokeWidth="1.5"/><path d="M12 11.5l5 3-5 3z" fill="currentColor"/></>,
     'ml-calc':  <><rect x="6" y="4" width="16" height="20" rx="2.5" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="7" width="10" height="4" rx="1" stroke="currentColor" strokeWidth="1.3"/><path d="M10 15h.01M14 15h.01M18 15h.01M10 19h.01M14 19h.01M18 19h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></>,
     'ml-minera': <><path d="M7 21l6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 6c3-2 8-2 10 1-2 0-4 .5-5.5 2M12 6c-2 3-2 8 1 10 0-2 .5-4 2-5.5M12 6l4.5 4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></>,
+    'ml-salvos': <><path d="M9 6.5A1.5 1.5 0 0 1 10.5 5h11A1.5 1.5 0 0 1 23 6.5V26l-7-4.2L9 26z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></>,
+    'ml-rival':  <><circle cx="16" cy="10" r="4" stroke="currentColor" strokeWidth="1.5"/><circle cx="10" cy="20" r="3" stroke="currentColor" strokeWidth="1.5"/><circle cx="22" cy="20" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13l-1.5 4M19 13l1.5 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></>,
   }
   return(
     <svg width="18" height="18" viewBox="0 0 28 28" fill="none" style={{flexShrink:0,color:c}}>
@@ -2317,6 +2322,8 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {/* Mineração ML — ranking BEST_SELLER oficial por categoria + líquido
                 real ("você recebe") por produto + buscas em alta. */}
             {nav==='ml-minera'&&mlEnabled&&(<MLMineracao/>)}
+            {nav==='ml-salvos'&&mlEnabled&&(<MLMineracao view="salvos"/>)}
+            {nav==='ml-rival'&&mlEnabled&&(<MLRival/>)}
 
             {/* Tutoriais — vídeos de ajuda (Panda Video). Player 16:9 responsivo;
                 a lista vem de TUTORIAIS (topo do arquivo). Visível em todo plano. */}
@@ -2615,7 +2622,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             )}
 
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&nav!=='perfil'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-minera'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='saved'&&nav!=='perfil'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-minera'&&nav!=='ml-salvos'&&nav!=='ml-rival'&&<>
             <div className="ora-phead" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
               <div style={{minWidth:0}}>
                 <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>

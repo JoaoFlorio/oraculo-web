@@ -24,7 +24,7 @@ const T = {
 const tint = (v: string, pct: number) => `color-mix(in srgb, ${v} ${pct}%, transparent)`
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-type Produto = {
+export type Produto = {
   pos: number; id: string; itemId: string | null; nome: string; foto: string | null
   preco: number; categoria: string | null; listingType: string | null; vendidos: number | null
   comissao: number | null; comissaoPct: number | null; envio: number | null
@@ -59,7 +59,7 @@ function ScoreRing({ score }: { score: number }) {
 // Pílula ao lado do hero (o equivalente do nível de demanda da Amazon).
 const mInfo = (m: number | null) => m == null ? null : m >= 70 ? { l: 'Margem Alta', c: T.g } : m >= 55 ? { l: 'Margem Boa', c: T.gold } : { l: 'Apertada', c: T.a }
 
-function CardProduto({ p, onOpen }: { p: Produto; onOpen: () => void }) {
+export function CardProduto({ p, onOpen, saved, onToggleSave }: { p: Produto; onOpen: () => void; saved?: boolean; onToggleSave?: () => void }) {
   const [hov, setHov] = useState(false)
   const score = mlScore(p)
   const dem = mInfo(p.margemPct)
@@ -76,6 +76,21 @@ function CardProduto({ p, onOpen }: { p: Produto; onOpen: () => void }) {
         display: 'flex', flexDirection: 'column' as const, position: 'relative' as const }}>
       {/* Score badge (igual Amazon) */}
       <div style={{ position: 'absolute', top: 10, right: 10, zIndex: 2 }}><ScoreRing score={score} /></div>
+      {/* Salvar / remover — a MESMA pílula da mineração Amazon, sobre a imagem */}
+      {onToggleSave && (
+        <button onClick={e => { e.stopPropagation(); onToggleSave() }}
+          title={saved ? 'Remover dos salvos' : 'Salvar este produto'} aria-label={saved ? 'Remover dos salvos' : 'Salvar este produto'} aria-pressed={saved}
+          style={{ position: 'absolute', top: 128, left: 10, zIndex: 3, display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 11px 5px 9px', borderRadius: 99, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700, letterSpacing: '0.01em',
+            border: `1px solid ${saved ? 'rgba(240,180,41,0.7)' : 'rgba(255,255,255,0.14)'}`,
+            background: saved ? 'var(--goldG)' : 'rgba(3,3,10,0.72)', color: saved ? '#1a1305' : '#F5F5FC',
+            backdropFilter: 'blur(6px)', boxShadow: '0 3px 10px rgba(0,0,0,0.4)', transition: 'transform .15s ease-out, background .15s' }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill={saved ? '#1a1305' : 'none'}>
+            <path d="M6.5 4.5h11a1 1 0 0 1 1 1V20l-6.5-3.8L5.5 20V5.5a1 1 0 0 1 1-1z" stroke={saved ? '#1a1305' : '#F5F5FC'} strokeWidth="1.7" strokeLinejoin="round" />
+          </svg>
+          {saved ? 'Salvo' : 'Salvar'}
+        </button>
+      )}
       {/* Badge GENÉRICO — idêntico ao da Amazon; marca vai na linha de meta */}
       {p.revendavel && <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 2, background: 'rgba(3,3,10,0.8)', backdropFilter: 'blur(4px)', border: `1px solid ${tint(T.pur, 21)}`, borderRadius: 4, padding: '2px 7px', fontSize: 8, fontWeight: 700, color: T.pur, letterSpacing: '0.1em' }}>GENÉRICO</div>}
       {/* Imagem */}
@@ -100,8 +115,8 @@ function CardProduto({ p, onOpen }: { p: Produto; onOpen: () => void }) {
         <p style={{ fontSize: 12, fontWeight: 500, color: T.t1, lineHeight: 1.58, flex: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden', marginBottom: 10 }}>{p.nome || '—'}</p>
         {/* Meta (o "BSR #x · marca" da Amazon): posição · preço · marca */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, minWidth: 0 }}>
-          <span style={{ fontSize: 10, color: T.t3, whiteSpace: 'nowrap' as const }}>{p.pos}º <strong style={{ color: T.t2, fontWeight: 600 }}>{p.fonteNome || 'no ranking'}</strong></span>
-          <span style={{ color: T.t3, fontSize: 10 }}>·</span>
+          {p.pos > 0 && <><span style={{ fontSize: 10, color: T.t3, whiteSpace: 'nowrap' as const }}>{p.pos}º <strong style={{ color: T.t2, fontWeight: 600 }}>{p.fonteNome || 'no ranking'}</strong></span>
+          <span style={{ color: T.t3, fontSize: 10 }}>·</span></>}
           <span style={{ fontSize: 10, color: T.t2, fontWeight: 600, whiteSpace: 'nowrap' as const }}>{p.preco > 0 ? brl(p.preco) : '—'}</span>
           {p.marca && <><span style={{ color: T.t3, fontSize: 10 }}>·</span><span style={{ fontSize: 10, color: T.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, maxWidth: 70 }}>{p.marca}</span></>}
         </div>
@@ -213,7 +228,7 @@ function MLImageDownloader({ images, itemId, titulo }: { images: string[]; itemI
   )
 }
 
-function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void }) {
+export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void }) {
   const [det, setDet] = useState<Detalhe | null>(null)
   const [price, setPrice] = useState(p.preco || 0)
   const [cost, setCost] = useState(0)
@@ -237,7 +252,13 @@ function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void }) {
   const meses = det?.dateCreated ? Math.max(1, Math.round((Date.now() - new Date(det.dateCreated).getTime()) / (30 * 86400_000))) : null
   // Giro médio REAL: vendidos totais ÷ meses de anúncio (os dois vêm da API).
   const estMensal = (vendidos != null && meses) ? Math.max(1, Math.round(vendidos / meses)) : null
-  const dem = p.pos <= 3 ? { l: 'Muito Alta', c: T.g } : p.pos <= 8 ? { l: 'Alta', c: T.g } : p.pos <= 14 ? { l: 'Média', c: T.a } : { l: 'Baixa', c: T.a }
+  // Demanda: no garimpo vem da POSIÇÃO no ranking oficial; na Análise Rival
+  // (pos 0, fora do ranking) vem do giro médio real — e sem giro, não se afirma.
+  const dem = p.pos > 0
+    ? (p.pos <= 3 ? { l: 'Muito Alta', c: T.g } : p.pos <= 8 ? { l: 'Alta', c: T.g } : p.pos <= 14 ? { l: 'Média', c: T.a } : { l: 'Baixa', c: T.a })
+    : (estMensal != null
+      ? (estMensal >= 400 ? { l: 'Muito Alta', c: T.g } : estMensal >= 150 ? { l: 'Alta', c: T.g } : estMensal >= 65 ? { l: 'Média', c: T.a } : { l: 'Baixa', c: T.a })
+      : { l: '—', c: T.t3 })
 
   // Simulador: comissão real (% da categoria) + envio real medido.
   const pct = p.comissaoPct ?? (p.preco > 0 && p.comissao != null ? +(p.comissao / p.preco * 100).toFixed(1) : 13)
@@ -252,7 +273,11 @@ function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void }) {
   const tituloLen = det?.tituloLen ?? (p.nome || '').length
   const nAttrs = det?.atributos ?? null
   const breakdown = [
-    { key: 'demanda', icon: 'ti-chart-bar', label: 'Demanda', score: p.pos <= 3 ? 30 : p.pos <= 8 ? 25 : p.pos <= 14 ? 18 : 12, max: 30, sub: `${p.pos}º do ranking oficial` },
+    { key: 'demanda', icon: 'ti-chart-bar', label: 'Demanda',
+      score: p.pos > 0 ? (p.pos <= 3 ? 30 : p.pos <= 8 ? 25 : p.pos <= 14 ? 18 : 12)
+        : (estMensal != null ? (estMensal >= 400 ? 30 : estMensal >= 150 ? 25 : estMensal >= 65 ? 18 : 10) : 12),
+      max: 30,
+      sub: p.pos > 0 ? `${p.pos}º do ranking oficial` : (estMensal != null ? `~${estMensal}/mês (média real)` : 'giro não publicado') },
     { key: 'imagens', icon: 'ti-photo', label: 'Imagens', score: det ? (nImgs >= 8 ? 20 : nImgs >= 6 ? 16 : nImgs >= 4 ? 10 : nImgs * 2) : 0, max: 20, sub: det ? `${nImgs} imagens` : 'carregando…' },
     { key: 'ficha', icon: 'ti-list-details', label: 'Ficha técnica', score: nAttrs != null ? (nAttrs >= 25 ? 20 : nAttrs >= 15 ? 16 : nAttrs >= 8 ? 10 : 5) : 0, max: 20, sub: nAttrs != null ? `${nAttrs} atributos` : 'carregando…' },
     { key: 'titulo', icon: 'ti-typography', label: 'Título', score: tituloLen >= 55 ? 15 : tituloLen >= 45 ? 12 : tituloLen >= 30 ? 8 : 4, max: 15, sub: `${tituloLen}/60 caracteres` },
@@ -288,7 +313,8 @@ function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void }) {
 
   const verdictDetails = (() => {
     const parts: string[] = []
-    parts.push(`${p.pos}º do ranking Mais Vendidos — demanda comprovada pelo próprio ML`)
+    if (p.pos > 0) parts.push(`${p.pos}º do ranking Mais Vendidos — demanda comprovada pelo próprio ML`)
+    else if (estMensal != null) parts.push(`~${fmtN(estMensal)}/mês de giro médio real`)
     if (p.margemPct != null) parts.push(p.margemPct >= 60 ? `líquido de ${p.margemPct}% após taxas reais` : `taxas comem ${100 - p.margemPct}% — margem apertada`)
     if (det && nImgs < 4) parts.push(`⚠️ só ${nImgs} imagem(ns) — ponto crítico`)
     if (p.revendavel) parts.push('nicho genérico sem marca dominante')
@@ -298,7 +324,11 @@ function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void }) {
   const verdict = score >= 75 ? { l: 'Excelente Oportunidade', c: T.g } : score >= 55 ? { l: 'Boa Oportunidade', c: T.g } : score >= 38 ? { l: 'Potencial Médio', c: T.a } : { l: 'Baixo Potencial', c: T.r }
 
   const imagens = det?.pictures?.length ? det.pictures : (p.foto ? [p.foto] : [])
+  // Link pro anúncio SEMPRE presente (igual a Amazon monta pela ASIN): permalink
+  // quando a API deu; senão a URL canônica da entidade (catálogo /p/ ou anúncio).
   const linkML = det?.permalink || p.permalink
+    || (p.id && p.id !== p.itemId ? `https://www.mercadolivre.com.br/p/${p.id}`
+      : p.itemId ? `https://produto.mercadolivre.com.br/${p.itemId.replace(/^MLB/, 'MLB-')}` : null)
 
   return (
     <div onClick={e => e.target === e.currentTarget && onClose()}
@@ -323,7 +353,7 @@ function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void }) {
         {/* KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderBottom: `1px solid ${T.line}` }}>
           {[
-            { v: `#${p.pos}`, l: 'Ranking do ML', c: T.t1, num: true },
+            { v: p.pos > 0 ? `#${p.pos}` : '—', l: 'Ranking do ML', c: T.t1, num: true },
             { v: estMensal != null ? `~${fmtN(estMensal)}/mês` : (vendidos != null ? `${fmtN(vendidos)}` : '—'), l: estMensal != null ? 'Média real de vendas' : (vendidos != null ? 'Vendidos (total)' : 'Vendas'), c: dem.c, num: true },
             { v: dem.l, l: 'Nível de Demanda', c: dem.c, num: false },
             { v: det ? `${score}/100` : '…', l: 'Score do Anúncio', c: sc, num: true },
@@ -369,17 +399,19 @@ function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void }) {
           </div>
         </div>
         <div style={{ padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 22 }}>
-          {/* Ranking gauge */}
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-              <Lbl>Ranking no Mercado Livre</Lbl>
-              <span style={{ fontSize: 10, color: T.t3 }}>posição menor = produto mais vendido</span>
+          {/* Ranking gauge (só quando o produto veio do ranking — a Análise Rival não tem posição) */}
+          {p.pos > 0 && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+                <Lbl>Ranking no Mercado Livre</Lbl>
+                <span style={{ fontSize: 10, color: T.t3 }}>posição menor = produto mais vendido</span>
+              </div>
+              <div style={{ height: 6, background: T.card, borderRadius: 99, position: 'relative', overflow: 'hidden' }}>
+                <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(to right,${T.g},${T.a},${T.r})`, opacity: .3 }} />
+                <div style={{ position: 'absolute', top: -3, left: `${Math.min(94, ((p.pos - 1) / 19) * 100)}%`, transform: 'translateX(-50%)', width: 12, height: 12, background: dem.c, borderRadius: '50%', border: `2px solid ${T.modal}`, boxShadow: `0 0 10px ${dem.c}` }} />
+              </div>
             </div>
-            <div style={{ height: 6, background: T.card, borderRadius: 99, position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(to right,${T.g},${T.a},${T.r})`, opacity: .3 }} />
-              <div style={{ position: 'absolute', top: -3, left: `${Math.min(94, ((p.pos - 1) / 19) * 100)}%`, transform: 'translateX(-50%)', width: 12, height: 12, background: dem.c, borderRadius: '50%', border: `2px solid ${T.modal}`, boxShadow: `0 0 10px ${dem.c}` }} />
-            </div>
-          </div>
+          )}
           {/* Simulador */}
           <div>
             <Lbl style={{ marginBottom: 14 }}>Simulador de Lucratividade</Lbl>
@@ -502,7 +534,7 @@ function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void }) {
   )
 }
 
-export default function MLMineracao() {
+export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | 'salvos' }) {
   const [categorias, setCategorias] = useState<Array<{ id: string; nome: string }>>([])
   const [subcats, setSubcats] = useState<Array<{ id: string; nome: string }>>([])
   const [trends, setTrends] = useState<Array<{ keyword: string; url: string }>>([])
@@ -519,19 +551,36 @@ export default function MLMineracao() {
   const [soOportunidades, setSoOportunidades] = useState(false)
   const [detail, setDetail] = useState<Produto | null>(null)
 
+  // ── Salvos ML (snapshot do garimpo, persistido em metadata — igual à Amazon) ──
+  const [salvos, setSalvos] = useState<Array<Produto & { savedAt?: string }>>([])
+  useEffect(() => {
+    fetch('/api/user/metadata?key=ml_minera_salvos').then(r => r.json())
+      .then(d => { if (Array.isArray(d?.value)) setSalvos(d.value) }).catch(() => {})
+  }, [])
+  const isSalvo = (id: string) => salvos.some(s => s.id === id)
+  const toggleSalvo = (p: Produto) => {
+    const list = isSalvo(p.id)
+      ? salvos.filter(s => s.id !== p.id)
+      : [{ ...p, savedAt: new Date().toISOString() }, ...salvos].slice(0, 60)
+    setSalvos(list)
+    fetch('/api/user/metadata', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'ml_minera_salvos', value: list }) }).catch(() => {})
+  }
+
   const catAtiva = sub || catRaiz
   const pageRef = useRef(0)
   const vistosRef = useRef<Set<string>>(new Set())
   const buscandoRef = useRef(false)
 
   useEffect(() => {
+    if (view === 'salvos') return
     fetch('/api/ml/mineracao/categorias').then(r => r.json()).then(d => setCategorias(d.categorias || [])).catch(() => {})
     fetch('/api/ml/mineracao/trends').then(r => r.json()).then(d => setTrends((d.trends || []).slice(0, 12))).catch(() => {})
-  }, [])
+  }, [view])
 
   useEffect(() => {
+    if (view === 'salvos') return
     fetch(`/api/ml/mineracao/subcategorias?cat=${encodeURIComponent(catRaiz)}`).then(r => r.json()).then(d => setSubcats(d.subcategorias || [])).catch(() => setSubcats([]))
-  }, [catRaiz])
+  }, [catRaiz, view])
 
   /** Busca UMA página do garimpo e ANEXA ao pool (dedupe por id). */
   const buscarPagina = useCallback(async (categoria: string, page: number, bust = false): Promise<boolean> => {
@@ -560,16 +609,17 @@ export default function MLMineracao() {
   }, [])
 
   useEffect(() => {
+    if (view === 'salvos') return
     try { localStorage.setItem('oraculo_ml_minera_cat', catRaiz) } catch {}
     vistosRef.current = new Set(); pageRef.current = 0; setFim(false); setProdutos([])
     buscarPagina(catAtiva, 0)
-  }, [catAtiva, buscarPagina]) // eslint-disable-line
+  }, [catAtiva, buscarPagina, view]) // eslint-disable-line
 
   // Scroll infinito (sentinela) — padrão do DashboardClient.
   const sentinelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = sentinelRef.current
-    if (!el || fim || loading || erro) return
+    if (!el || fim || loading || erro || view === 'salvos') return
     const io = new IntersectionObserver(entries => {
       if (entries[0]?.isIntersecting && !buscandoRef.current) buscarPagina(catAtiva, pageRef.current)
     }, { rootMargin: '600px 0px' })
@@ -604,6 +654,42 @@ export default function MLMineracao() {
 
   // Selects no MESMO estilo dos da Amazon (10.5px, cardHov, radius 8).
   const sel = (ativo: boolean): React.CSSProperties => ({ background: T.cardHov, border: `1px solid ${ativo ? T.lineG : T.line2}`, color: ativo ? T.gold : T.t2, fontWeight: 600, fontSize: 10.5, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.04em', outline: 'none', transition: 'all .15s' })
+
+  // ── SALVOS ML — a mesma página de Salvos da Amazon, com os cards do ML ──────
+  if (view === 'salvos') {
+    return (
+      <div style={{ width: '100%' }}>
+        <div className="ora-phead" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, color: T.t3, letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>Mercado Livre</span>
+              <span style={{ color: T.t3, fontSize: 9 }}>/</span>
+              <span style={{ fontSize: 9, fontWeight: 700, color: T.gold, letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>Salvos</span>
+            </div>
+            <h1 style={{ fontSize: 21, fontWeight: 800, color: T.t1, letterSpacing: '-0.03em', marginBottom: 6, lineHeight: 1 }}>Salvos ML</h1>
+            <p style={{ fontSize: 11, color: T.t3 }}>
+              <span className="ora-num" style={{ color: T.t4 }}>{salvos.length}</span> <span style={{ color: T.t4 }}>produto{salvos.length === 1 ? '' : 's'}</span>
+              {' · '}preço e ranking capturados no momento em que você salvou
+            </p>
+          </div>
+        </div>
+        {salvos.length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12 }}>
+            {salvos.map((p, i) => (
+              <div key={p.id} className="ora-card-in" style={{ animationDelay: `${(i % 12) * 40}ms` }}>
+                <CardProduto p={p} onOpen={() => setDetail(p)} saved onToggleSave={() => toggleSalvo(p)} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ padding: '48px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
+            Nada salvo ainda — na <strong style={{ color: T.t2 }}>Mineração ML</strong>, passe o mouse num produto e clique em <strong style={{ color: T.gold }}>Salvar</strong>.
+          </div>
+        )}
+        {detail && <MLDetalheModal p={detail} onClose={() => setDetail(null)} />}
+      </div>
+    )
+  }
 
   return (
     <div style={{ width: '100%' }}>
@@ -696,7 +782,7 @@ export default function MLMineracao() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12 }}>
           {visiveis.map((p, i) => (
             <div key={p.id} className="ora-card-in" style={{ animationDelay: `${(i % 12) * 40}ms` }}>
-              <CardProduto p={p} onOpen={() => setDetail(p)} />
+              <CardProduto p={p} onOpen={() => setDetail(p)} saved={isSalvo(p.id)} onToggleSave={() => toggleSalvo(p)} />
             </div>
           ))}
           {carregandoMais && Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={`m${i}`} i={i} />)}
