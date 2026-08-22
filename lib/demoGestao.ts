@@ -27,10 +27,10 @@ export type DemoConfig = {
 
 export const DEFAULT_DEMO_CONFIG: DemoConfig = {
   name: 'João Florio',
-  revToday: 16583.53,
-  revYesterday: 89872.40,
-  rev7d: 439549.95,
-  rev30d: 1883785.50,          // ~ rev7d/7 × 30
+  revToday: 7042.64,
+  revYesterday: 38166.72,
+  rev7d: 186666.67,
+  rev30d: 800000.00,          // ~R$800k/mês (Amazon) · ~ rev7d/7 × 30
   marginPct: 16,
   tacosPct: 8.5,
   commissionPct: 15,
