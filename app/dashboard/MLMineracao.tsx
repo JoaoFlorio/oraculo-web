@@ -236,7 +236,16 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    // Trava o scroll do fundo enquanto o modal está aberto (senão a página atrás
+    // rola e dá a sensação de "abriu lá em cima"). Restaura ao fechar.
+    const scrollY = window.scrollY
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prev
+      window.scrollTo(0, scrollY)
+    }
   }, [onClose])
   useEffect(() => {
     // `product` = id do ranking (catálogo, que o token de serviço LÊ);
@@ -272,6 +281,10 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
   const nImgs = det ? det.pictures.length : (p.foto ? 1 : 0)
   const tituloLen = det?.tituloLen ?? (p.nome || '').length
   const nAttrs = det?.atributos ?? null
+  // Produto de CATÁLOGO (o id do catálogo ≠ o id da oferta) → o "título" é o NOME
+  // do catálogo, que NÃO tem o limite de 60 e não é escrito pelo seller. Anúncio
+  // avulso → é o título do seller mesmo, aí o corte de 60 do ML vale.
+  const ehCatalogo = !!(p.itemId && p.id !== p.itemId)
   const breakdown = [
     { key: 'demanda', icon: 'ti-chart-bar', label: 'Demanda',
       score: p.pos > 0 ? (p.pos <= 3 ? 30 : p.pos <= 8 ? 25 : p.pos <= 14 ? 18 : 12)
@@ -280,8 +293,13 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
       sub: p.pos > 0 ? `${p.pos}º do ranking oficial` : (estMensal != null ? `~${estMensal}/mês (média real)` : 'giro não publicado') },
     { key: 'imagens', icon: 'ti-photo', label: 'Imagens', score: det ? (nImgs >= 8 ? 20 : nImgs >= 6 ? 16 : nImgs >= 4 ? 10 : nImgs * 2) : 0, max: 20, sub: det ? `${nImgs} imagens` : 'carregando…' },
     { key: 'ficha', icon: 'ti-list-details', label: 'Ficha técnica', score: nAttrs != null ? (nAttrs >= 25 ? 20 : nAttrs >= 15 ? 16 : nAttrs >= 8 ? 10 : 5) : 0, max: 20, sub: nAttrs != null ? `${nAttrs} atributos` : 'carregando…' },
-    { key: 'titulo', icon: 'ti-typography', label: 'Título', score: tituloLen >= 55 ? 15 : tituloLen >= 45 ? 12 : tituloLen >= 30 ? 8 : 4, max: 15, sub: `${tituloLen}/60 caracteres` },
-    { key: 'marca', icon: 'ti-tag', label: 'Marca', score: p.revendavel ? 15 : 6, max: 15, sub: p.revendavel ? 'Sem marca — PL mais fácil' : `Marca ${p.marca || 'estabelecida'}` },
+    { key: 'titulo', icon: 'ti-typography', label: 'Título',
+      score: ehCatalogo
+        ? (tituloLen >= 40 ? 15 : tituloLen >= 25 ? 11 : 6)                                   // nome do catálogo: rico é bom, sem corte de 60
+        : (tituloLen > 60 ? 9 : tituloLen >= 50 ? 15 : tituloLen >= 40 ? 12 : tituloLen >= 25 ? 8 : 4),  // título do seller: pico 50-60, cai se passa do corte
+      max: 15,
+      sub: ehCatalogo ? `${tituloLen} caracteres (nome do catálogo)` : `${tituloLen}/60 caracteres${tituloLen > 60 ? ' — passou do corte do ML' : ''}` },
+    { key: 'marca', icon: 'ti-tag', label: 'Marca', score: p.marca ? 6 : 15, max: 15, sub: p.marca ? `Marca ${p.marca}` : 'Sem marca dominante — PL mais fácil' },
   ]
   const score = breakdown.reduce((s, b) => s + b.score, 0)
   const sc = sColor(score)
