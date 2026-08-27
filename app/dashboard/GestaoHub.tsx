@@ -512,7 +512,11 @@ function KPI({label,value,color,hide,tip}:{label:string;value:string;delta?:stri
     return ()=>document.removeEventListener('click',fechar)
   },[aberto])
   return(
-    <div style={{background:t.card,border:`1.5px solid ${color}`,borderRadius:14,padding:'16px 14px 18px',textAlign:'center' as const,position:'relative' as const,minHeight:96,display:'flex',flexDirection:'column' as const,justifyContent:'center',boxShadow:'var(--elev1)'}}>
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'18px 14px 18px',textAlign:'center' as const,position:'relative' as const,minHeight:96,display:'flex',flexDirection:'column' as const,justifyContent:'center',boxShadow:'var(--elev1)'}}>
+      {/* Faixa de acento no topo — a MESMA em todo card (só a cor muda por métrica);
+          antes a cor ia na borda inteira e o azul/violeta sumiam no escuro enquanto
+          o verde brilhava, dando cara de layout quebrado. Agora o grid fica uniforme. */}
+      <div aria-hidden style={{position:'absolute' as const,top:0,left:0,right:0,height:3,background:color,borderTopLeftRadius:13,borderTopRightRadius:13}}/>
       {tip
         ? <button aria-label={`O que é ${label}`} onClick={e=>{e.stopPropagation();setAberto(v=>!v)}}
             style={{position:'absolute' as const,top:5,right:6,background:'transparent',border:'none',cursor:'pointer',padding:4,lineHeight:1}}>
