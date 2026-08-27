@@ -10,6 +10,7 @@ import { useState } from 'react'
 
 export default function AdminSaleSim() {
   const [valor, setValor] = useState('')
+  const [loja, setLoja] = useState<'amazon' | 'ml'>('amazon')
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'fail'>('idle')
 
   async function disparar() {
@@ -19,7 +20,7 @@ export default function AdminSaleSim() {
       const v = parseFloat(valor.replace(',', '.'))
       const r = await fetch('/api/push/test', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'sale', ...(isFinite(v) && v > 0 ? { valor: v } : {}) }),
+        body: JSON.stringify({ kind: 'sale', marketplace: loja, ...(isFinite(v) && v > 0 ? { valor: v } : {}) }),
       })
       const d = await r.json().catch(() => ({}))
       setState(r.ok && d.ok ? 'sent' : 'fail')
@@ -30,6 +31,17 @@ export default function AdminSaleSim() {
   return (
     <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px dashed rgba(100,116,139,0.3)' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: '#64748B', letterSpacing: '0.1em', marginBottom: 7 }}>ADMIN · SIMULAR CHA-CHING</div>
+      {/* Marketplace: define o sabor do aviso ("na Amazon 🎉" vs "no Mercado Livre 💛"). */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {([['amazon', 'Amazon'], ['ml', 'Mercado Livre']] as Array<['amazon' | 'ml', string]>).map(([k, lbl]) => (
+          <button key={k} onClick={() => setLoja(k)}
+            style={{ flex: 1, padding: '7px 8px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit', fontSize: 11, fontWeight: 700,
+              border: `1px solid ${loja === k ? 'rgba(52,211,153,0.5)' : 'rgba(100,116,139,0.35)'}`,
+              background: loja === k ? 'rgba(52,211,153,0.1)' : '#15151F', color: loja === k ? '#34D399' : '#94A3B8' }}>
+            {lbl}
+          </button>
+        ))}
+      </div>
       <div style={{ display: 'flex', gap: 8 }}>
         <div style={{ position: 'relative', flex: 1 }}>
           <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 11.5, color: '#64748B', pointerEvents: 'none' }}>R$</span>

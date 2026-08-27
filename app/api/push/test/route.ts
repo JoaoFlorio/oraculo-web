@@ -15,11 +15,12 @@ export async function POST(req: NextRequest) {
   // provocar) um "💰 Nova venda!" falso. Trava no servidor, não só na UI.
   const kind = body?.kind === 'sale' && user.role === 'admin' ? 'sale' : undefined
   const valor = kind === 'sale' ? Number(body?.valor) : undefined
+  const marketplace = String(body?.marketplace || '').toLowerCase().startsWith('m') ? 'ml' : 'amazon'
   try {
     const r = await fetch(`${BACKEND}/api/push/test`, {
       method: 'POST', cache: 'no-store',
       headers: { 'Content-Type': 'application/json', 'x-internal-key': process.env.INTERNAL_KEY || '' },
-      body: JSON.stringify({ email: user.email, kind, ...(isFinite(valor as number) && (valor as number) > 0 ? { valor } : {}) }),
+      body: JSON.stringify({ email: user.email, kind, marketplace, ...(isFinite(valor as number) && (valor as number) > 0 ? { valor } : {}) }),
     })
     return NextResponse.json(await r.json(), { status: r.status })
   } catch {
