@@ -325,7 +325,12 @@ export default function MLGestao() {
     const { from, to } = janela(periodo)
     try {
       const r = await fetch(`/api/ml/gestao/dre?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
-      setDre(await r.json())
+      const d = await r.json()
+      // ⚠️ NÃO derrubar a tela num soluço transitório do reload: se o recarregamento
+      // (que roda 1s depois de cada tecla no custo) voltar sem `connected` — token
+      // pestou, rede — manter a DRE atual. Antes, um `{connected:false}` momentâneo
+      // sumia com a tabela de Ajustes no meio da digitação (a "não consigo trocar").
+      if (d?.connected) setDre(d)
     } catch {} finally { setSalvando(false) }
   }, [periodo])
 
@@ -699,6 +704,7 @@ export default function MLGestao() {
                   <label htmlFor="ml-imposto" style={{ fontSize: 12.5, color: T.t2, fontWeight: 600 }}>Imposto sobre a venda</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <input id="ml-imposto" value={imposto} onChange={e => salvarImposto(e.target.value)}
+                      onFocus={e => e.currentTarget.select()}
                       inputMode="decimal" placeholder={String(dre.aliquota || 0)}
                       style={{ width: 64, textAlign: 'right' as const, background: T.modal, border: `1px solid ${T.line}`, borderRadius: 8, padding: '6px 8px', fontSize: 13, color: T.t1, outline: 'none', fontVariantNumeric: 'tabular-nums' as const }} />
                     <span style={{ fontSize: 13, color: T.t3, fontWeight: 600 }}>%</span>
@@ -736,8 +742,9 @@ export default function MLGestao() {
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: `1px solid ${p.temCusto ? T.line : tint(T.a, 40)}`, borderRadius: 8, padding: '3px 6px', background: T.modal }}>
                           <span style={{ fontSize: 10.5, color: T.t4 }}>R$</span>
                           <input value={custos[p.itemId] ?? ''} onChange={e => salvarCusto(p.itemId, e.target.value)}
+                            onFocus={e => e.currentTarget.select()}
                             inputMode="decimal" placeholder="0,00" aria-label={`Custo unitário de ${p.titulo}`}
-                            style={{ width: 56, textAlign: 'right' as const, background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: T.t1, fontVariantNumeric: 'tabular-nums' as const, fontFamily: 'inherit' }} />
+                            style={{ width: 60, textAlign: 'right' as const, background: 'transparent', border: 'none', outline: 'none', fontSize: 12.5, color: T.t1, fontVariantNumeric: 'tabular-nums' as const, fontFamily: 'inherit', cursor: 'text' }} />
                         </span>
                       </td>
                       <td style={{ ...cellNum, color: p.cmv != null ? T.a : T.t3 }}>{p.cmv != null ? `− ${brl(p.cmv)}` : '—'}</td>
