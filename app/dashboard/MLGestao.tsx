@@ -156,20 +156,41 @@ const GRUPOS_ML: Array<{ id: string; label: string; icon: string; pergunta: stri
     tabs: ['gerenc'] },
 ]
 
+// Os MESMOS 8 presets da Gestão Amazon (GestaoHub PRESETS), na mesma ordem.
 const PERIODOS = [
-  { id: 'hoje', label: 'Hoje', dias: 0 },
-  { id: '7d', label: 'Últimos 7 dias', dias: 7 },
-  { id: '15d', label: 'Últimos 15 dias', dias: 15 },
-  { id: '30d', label: 'Últimos 30 dias', dias: 30 },
+  { id: 'hoje', label: 'Hoje' },
+  { id: 'ontem', label: 'Ontem' },
+  { id: '7d', label: 'Últimos 7 dias' },
+  { id: '15d', label: 'Últimos 15 dias' },
+  { id: '30d', label: 'Últimos 30 dias' },
+  { id: 'mes', label: 'Esse mês' },
+  { id: 'mespass', label: 'Mês passado' },
+  { id: 'ano', label: 'Esse ano' },
 ]
 
-// Janela no fuso do seller (São Paulo) — regra da casa: nunca no fuso do servidor.
-function janela(dias: number): { from: string; to: string } {
+// Janela no fuso do seller (São Paulo, UTC−3 fixo — o Brasil não tem mais horário
+// de verão) — regra da casa: nunca no fuso do servidor. Espelha o computeRange da
+// Amazon, mas ancorado na meia-noite BR (não na do runtime).
+function janela(id: string): { from: string; to: string } {
   const agora = new Date()
-  const brMs = agora.getTime() - 3 * 3600_000
-  const meiaNoiteBR = new Date(Math.floor(brMs / 86400_000) * 86400_000 + 3 * 3600_000)
-  const from = dias === 0 ? meiaNoiteBR : new Date(meiaNoiteBR.getTime() - dias * 86400_000)
-  return { from: from.toISOString(), to: agora.toISOString() }
+  const OFF = 3 * 3600_000
+  const meiaNoiteBR = new Date(Math.floor((agora.getTime() - OFF) / 86400_000) * 86400_000 + OFF)
+  const to = agora.toISOString()
+  const brNow = new Date(agora.getTime() - OFF)   // getters UTC = relógio BR
+  const y = brNow.getUTCFullYear(), m = brNow.getUTCMonth()
+  const inicioMesBR = (yy: number, mm: number) => new Date(Date.UTC(yy, mm, 1, 3, 0, 0))  // 00:00 BR = 03:00 UTC
+  const menosDias = (n: number) => new Date(meiaNoiteBR.getTime() - n * 86400_000).toISOString()
+  switch (id) {
+    case 'hoje':    return { from: meiaNoiteBR.toISOString(), to }
+    case 'ontem':   return { from: menosDias(1), to: new Date(meiaNoiteBR.getTime() - 1).toISOString() }
+    case '7d':      return { from: menosDias(7), to }
+    case '15d':     return { from: menosDias(15), to }
+    case '30d':     return { from: menosDias(30), to }
+    case 'mes':     return { from: inicioMesBR(y, m).toISOString(), to }
+    case 'mespass': return { from: inicioMesBR(y, m - 1).toISOString(), to: new Date(inicioMesBR(y, m).getTime() - 1).toISOString() }
+    case 'ano':     return { from: new Date(Date.UTC(y, 0, 1, 3, 0, 0)).toISOString(), to }
+    default:        return { from: menosDias(7), to }
+  }
 }
 
 // ── Modal de detalhamento do produto (a lupa) — o waterfall até o lucro ─────────
@@ -280,8 +301,7 @@ export default function MLGestao() {
   const carregar = useCallback(async (per: string) => {
     setLoading(true)
     try {
-      const dias = PERIODOS.find(p => p.id === per)?.dias ?? 7
-      const { from, to } = janela(dias)
+      const { from, to } = janela(per)
       const r = await fetch(`/api/ml/gestao/dre?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
       const d = await r.json()
       setDre(d)
@@ -293,7 +313,7 @@ export default function MLGestao() {
   // Gráfico "Resumo de Receitas": janela FIXA de 30 dias (independente do filtro),
   // igual a Amazon. netRatio = líquido/receita do período (líquido proporcional).
   const carregarChart = useCallback(async () => {
-    const { from, to } = janela(30)
+    const { from, to } = janela('30d')
     try {
       const r = await fetch(`/api/ml/gestao/dre?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
       const d = await r.json()
@@ -302,8 +322,7 @@ export default function MLGestao() {
   }, [])
 
   const recarregarDre = useCallback(async () => {
-    const dias = PERIODOS.find(p => p.id === periodo)?.dias ?? 7
-    const { from, to } = janela(dias)
+    const { from, to } = janela(periodo)
     try {
       const r = await fetch(`/api/ml/gestao/dre?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
       setDre(await r.json())
@@ -488,7 +507,7 @@ export default function MLGestao() {
           {tab === 'resumo' && (
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 13, marginBottom: 16 }}>
-                <Kpi label="Faturamento" valor={brl(fat)} cor={T.pur}
+                <Kpi label="Faturamento" valor={brl(fat)} cor={T.blue}
                   ajuda="O valor dos anúncios (preço × unidades) nos pedidos válidos do período. O frete pago pelo comprador é repasse ao transportador — não entra. Pedido cancelado também não (o painel do ML soma cancelado em 'vendas brutas')." />
                 <Kpi label="Líq. do Marketplace" valor={brl(liq)} cor={T.blue}
                   ajuda="O que sobra DA VENDA depois da parte do ML: tarifa de venda real e custo real de cada envio. Antes de imposto, CMV e Ads." />
