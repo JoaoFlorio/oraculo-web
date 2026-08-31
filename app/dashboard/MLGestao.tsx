@@ -71,7 +71,7 @@ function Pill({ kind, children }: { kind: 'grn' | 'gold' | 'red'; children: Reac
   const cor = kind === 'grn' ? T.g : kind === 'gold' ? T.gold : T.r
   return <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px', borderRadius: 20, background: tint(cor, 15), color: cor, display: 'inline-block' }}>{children}</span>
 }
-const pillKind = (m: number): 'grn' | 'gold' | 'red' => m > 20 ? 'grn' : m > 0 ? 'gold' : 'red'
+const pillKind = (m: number): 'grn' | 'gold' | 'red' => m > 15 ? 'grn' : m > 0 ? 'gold' : 'red'   // mesmo corte da Amazon
 
 // Botão de lupa (abre o modal de detalhamento do produto).
 function ZoomBtn({ onClick }: { onClick: () => void }) {
@@ -503,6 +503,18 @@ export default function MLGestao() {
 
       {!loading && dre?.connected && (
         <>
+          {/* Aviso GLOBAL (todas as abas menos Gerenciamento, igual à Amazon): de
+              quanto é o buraco quando há produto sem custo cadastrado. */}
+          {dre.produtosSemCusto > 0 && tab !== 'gerenc' && (
+            <div style={{ fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 16, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+              <i className="ti ti-alert-triangle" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
+              <div>
+                <strong style={{ color: T.t1 }}>{dre.produtosSemCusto} produto{dre.produtosSemCusto === 1 ? '' : 's'} sem custo cadastrado</strong> — {brl(dre.receitaSemCusto)} de faturamento entram no lucro como se o custo fosse zero.
+                Cadastre o custo desses anúncios na aba <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, textDecoration: 'underline' }}>Gerenciamento</button>.
+              </div>
+            </div>
+          )}
+
           {/* ── RESUMO (paridade com a Amazon: 12 KPIs + gráfico + Top produtos) ── */}
           {tab === 'resumo' && (
             <>
@@ -532,17 +544,6 @@ export default function MLGestao() {
                 <Kpi label="MPA" valor={(dre.mpa == null || !cm) ? '—' : pc(dre.mpa)} cor={T.g}
                   ajuda={dre.adsConnected ? 'Margem Pós-Anúncio: lucro pós ads ÷ faturamento. A margem final da operação.' : ADS_TIP} />
               </div>
-
-              {/* Aviso: de quanto é o buraco quando há produto sem custo. */}
-              {dre.produtosSemCusto > 0 && (
-                <div style={{ fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 16, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                  <i className="ti ti-alert-triangle" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
-                  <div>
-                    <strong style={{ color: T.t1 }}>{dre.produtosSemCusto} produto{dre.produtosSemCusto === 1 ? '' : 's'} sem custo cadastrado</strong> — {brl(dre.receitaSemCusto)} de faturamento entram no lucro como se o custo fosse zero.
-                    Cadastre o custo desses anúncios na aba <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, textDecoration: 'underline' }}>Gerenciamento</button>.
-                  </div>
-                </div>
-              )}
 
               {/* Gráfico "Resumo de Receitas" */}
               <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, padding: '16px 16px 10px', marginBottom: 16, boxShadow: 'var(--elev1)' }}>
@@ -608,7 +609,12 @@ export default function MLGestao() {
                         <td style={{ ...cellNum, color: custoU != null ? T.t1 : T.t3 }}>{custoU != null ? brl(custoU) : '—'}</td>
                         <td style={cellNum}>{p.qty}</td>
                         <td style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
-                        <td style={{ ...cellNum, color: T.t2 }}>{repres.toFixed(1)}%</td>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' as const }}>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: T.t2, fontVariantNumeric: 'tabular-nums' as const }}>{repres.toFixed(1)}%</div>
+                          <div style={{ height: 3, borderRadius: 2, background: tint(T.t4, 12), marginTop: 4 }}>
+                            <div style={{ height: '100%', width: `${Math.min(100, repres)}%`, background: T.blue, borderRadius: 2 }} />
+                          </div>
+                        </td>
                         <td style={{ ...cellNum, color: temLucro ? ((p.lucroFinal as number) >= 0 ? T.g : T.r) : T.t3 }}>{temLucro ? brl(p.lucroFinal as number) : '—'}</td>
                         <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{mrg != null ? <Pill kind={pillKind(mrg)}>{pc(mrg)}</Pill> : '—'}</td>
                         <td style={{ ...cellNum, color: p.custoAds == null ? T.t3 : p.custoAds > 0 ? T.a : T.t3 }}>{p.custoAds == null ? '—' : p.custoAds > 0 ? `− ${brl(p.custoAds)}` : brl(0)}</td>
@@ -620,7 +626,7 @@ export default function MLGestao() {
                   })}
                 </TableH>
               ) : (
-                <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
+                <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                   Nenhuma venda em {perLabel.toLowerCase()}. Troque o período no canto superior direito.
                 </div>
               )}
@@ -674,7 +680,7 @@ export default function MLGestao() {
                 ))}
               </div>
             ) : (
-              <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
+              <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                 Nenhum pedido em {perLabel.toLowerCase()}.
               </div>
             )
@@ -751,7 +757,7 @@ export default function MLGestao() {
                 </div>
               </>
             ) : (
-              <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
+              <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                 Nenhum produto vendido em {perLabel.toLowerCase()}.
               </div>
             )
@@ -801,7 +807,7 @@ export default function MLGestao() {
                 </div>
               </>
             ) : (
-              <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
+              <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                 Nenhum produto vendido em {perLabel.toLowerCase()}.
               </div>
             )
@@ -875,14 +881,14 @@ export default function MLGestao() {
                   </>
                 ) : (
                   (dre.adsSangria?.total || 0) === 0 && (
-                    <div style={{ padding: '30px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
+                    <div style={{ padding: '30px 24px', textAlign: 'center' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                       Nenhum gasto de Mercado Ads medido em {perLabel.toLowerCase()}.
                     </div>
                   )
                 )}
               </>
             ) : (
-              <div style={{ maxWidth: 520, margin: '10px auto', textAlign: 'center' as const, padding: '30px 20px', background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16 }}>
+              <div style={{ maxWidth: 520, margin: '10px auto', textAlign: 'center' as const, padding: '30px 20px', background: T.card, border: `1px solid ${T.line}`, borderRadius: 16 }}>
                 <i className="ti ti-speakerphone" style={{ fontSize: 26, color: T.gold, display: 'block', marginBottom: 10 }} aria-hidden="true" />
                 <div style={{ fontSize: 13.5, color: T.t2, lineHeight: 1.7 }}>
                   Sua conta não tem <strong>Mercado Ads</strong> ativo (ou sem gasto no período). Quando houver anúncio, o gasto por produto, o TACOS e o lucro pós-anúncio aparecem aqui — com dado real, nunca estimado.
