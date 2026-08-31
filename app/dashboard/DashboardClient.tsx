@@ -1376,15 +1376,16 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // aqui (accessDenied bloqueia plan 'free'/vazio antes do painel). Todo mundo
   // que abre o dashboard tem plano pago e, portanto, Gestão.
   const podeGestao = gestaoEnabled
-  // 🚧 GATE DO MERCADO LIVRE — ADMIN APENAS (18/08/2026).
-  // O lado ML (Gestão, Mineração, Calculadora) está em construção ativa: contas
-  // batendo, telas mudando a cada sessão. Cliente não pode ver obra em andamento —
-  // então some do menu e o seletor de loja da Gestão nem aparece pra ele (a Gestão
-  // fica exatamente como sempre foi: Amazon). Pra liberar geral, é só trocar esta
-  // linha por `true` (ou por um plano/allowlist quando for a hora).
-  // ML em obra: admin vê tudo; a conta DEMO também (dados fictícios do backend —
-  // é a conta de apresentação do lançamento). Cliente comum ainda não vê.
-  const mlEnabled = user?.role === 'admin' || user?.role === 'demo'
+  // ✅ MERCADO LIVRE LIBERADO GERAL (31/08/2026) — após auditoria de prontidão.
+  // Antes era admin/demo apenas (obra em andamento). A auditoria fechou: sem
+  // IDOR (proxies forçam user.email da sessão), cliente sem conta ML vê o convite
+  // (não quebra), e o defeito-raiz de dinheiro (faturamento somava paid_amount c/
+  // frete do comprador) foi consertado — faturamento = valor do anúncio, header
+  // reconcilia com a coluna por construção. PUBLICAR anúncio segue ADMIN-ONLY
+  // (travado no backend, tools.ts) — não abre com este gate.
+  // Fast-follow pendente (não bloqueia): validar sale_fee×qty contra 1 pedido ML
+  // real multi-unidade no Seller Central (mlGestao.ts:102).
+  const mlEnabled = true
   const [nav,      setNav]      = useState(podeGestao ? 'financeiro' : 'bestsellers')
   // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
   const navGroups = NAV_GROUPS
