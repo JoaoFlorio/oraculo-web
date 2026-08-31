@@ -73,6 +73,16 @@ function Pill({ kind, children }: { kind: 'grn' | 'gold' | 'red'; children: Reac
 }
 const pillKind = (m: number): 'grn' | 'gold' | 'red' => m > 15 ? 'grn' : m > 0 ? 'gold' : 'red'   // mesmo corte da Amazon
 
+// Mini-KPI do período (chips do Analítico da Amazon). `money` marca .ml-money (borra no "ocultar valores").
+function Chip({ label, valor, cor, money }: { label: string; valor: string; cor?: string; money?: boolean }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 2, background: T.card, border: `1px solid ${T.line}`, borderRadius: 11, padding: '9px 13px', minWidth: 118 }}>
+      <span style={{ fontSize: 10, color: T.t3, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{label}</span>
+      <span className={money ? 'ml-money' : undefined} style={{ fontSize: 15, fontWeight: 700, color: cor || T.t1, fontVariantNumeric: 'tabular-nums' as const }}>{valor}</span>
+    </div>
+  )
+}
+
 // Botão de lupa (abre o modal de detalhamento do produto).
 function ZoomBtn({ onClick }: { onClick: () => void }) {
   return (
@@ -512,6 +522,11 @@ export default function MLGestao() {
                 color: on ? '#1c1606' : T.t2,
               }}>
               <i className={`ti ${gr.icon}`} style={{ fontSize: 15 }} aria-hidden="true" />{gr.label}
+              {/* Badge: quantos produtos estão sem custo cadastrado (igual à Amazon) */}
+              {gr.id === 'ajuste' && (dre?.produtosSemCusto || 0) > 0 && (
+                <span title={`${dre?.produtosSemCusto} produto(s) sem custo cadastrado`}
+                  style={{ marginLeft: 3, fontSize: 10, fontWeight: 800, minWidth: 16, height: 16, padding: '0 4px', borderRadius: 9, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: on ? '#1c1606' : T.a, color: on ? T.gold : '#1c1606' }}>{dre?.produtosSemCusto}</span>
+              )}
             </button>
           )
         })}
@@ -671,6 +686,16 @@ export default function MLGestao() {
               <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
                 Lucro e Margem aparecem só nos produtos com custo cadastrado. As colunas de <strong>Ads</strong> (Custo Ads, Lucro pós ADS, MPA) vêm do <strong>Mercado Ads</strong> real da sua conta — item sem anúncio no período aparece como <strong>R$ 0,00</strong> medido (não como valor desconhecido). Clique no <i className="ti ti-eye" style={{ fontSize: 13, color: T.gold }} /> pra ver a conta completa do produto.
               </div>
+              {/* Sangria de Ads também no Resumo (igual à Amazon): gasto em item que não vendeu. */}
+              {(dre.adsSangria?.total || 0) > 0 && (
+                <div style={{ marginTop: 14, fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                  <i className="ti ti-droplet-off" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
+                  <div>
+                    <strong className="ml-money" style={{ color: T.a }}>{brl(dre.adsSangria?.total || 0)}</strong> em Mercado Ads foram para produtos que <strong>não venderam</strong> no período — gasto que não virou receita.
+                    Veja quais na aba <button onClick={() => irGrupo('anuncio')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, textDecoration: 'underline' }}>Ads</button>.
+                  </div>
+                </div>
+              )}
             </>
           )}
 
@@ -693,19 +718,24 @@ export default function MLGestao() {
                         {o.liquido != null ? `você recebe ${brl(o.liquido)}` : brl(o.receita)}
                       </span>
                     </div>
-                    {o.itens.map((it, i) => (
-                      <div key={`${it.itemId}-${i}`} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', borderTop: i > 0 ? `1px solid ${tint(T.line, 50)}` : 'none' }}>
+                    {o.itens.map((it, i) => {
+                      const prod = dre.produtos.find(p => p.itemId === it.itemId)   // clicar abre a conta completa do produto (igual à Amazon)
+                      return (
+                      <div key={`${it.itemId}-${i}`} onClick={prod ? () => setDetail(prod) : undefined}
+                        title={prod ? 'Ver a conta completa deste produto' : undefined}
+                        style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', borderTop: i > 0 ? `1px solid ${tint(T.line, 50)}` : 'none', cursor: prod ? 'pointer' : 'default' }}>
                         <Thumb foto={it.foto} id={it.itemId} size={44} />
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontSize: 12.5, color: T.t1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{it.titulo}</div>
                           <div style={{ fontSize: 10, color: T.t4, marginTop: 1 }}>{it.itemId}{it.qty > 1 ? ` · ${it.qty} un.` : ''}</div>
                         </div>
                         <div style={{ textAlign: 'right' as const, flexShrink: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: T.t1, fontVariantNumeric: 'tabular-nums' as const }}>{brl(it.unitPrice * it.qty)}</div>
+                          <div className="ml-money" style={{ fontSize: 13, fontWeight: 700, color: T.t1, fontVariantNumeric: 'tabular-nums' as const }}>{brl(it.unitPrice * it.qty)}</div>
                           <div style={{ fontSize: 10, color: T.a }}>tarifa − {brl(it.tarifa)}</div>
                         </div>
+                        {prod && <i className="ti ti-eye" style={{ fontSize: 15, color: T.gold, opacity: 0.7, flexShrink: 0 }} aria-hidden="true" />}
                       </div>
-                    ))}
+                    )})}
                     <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end', flexWrap: 'wrap', padding: '8px 14px', borderTop: `1px solid ${tint(T.line, 70)}`, background: T.modal, fontSize: 11.5 }}>
                       <span style={{ color: T.t3 }}>Valor do anúncio <strong style={{ color: T.t1 }}>{brl(o.receita)}</strong></span>
                       {(o.freteComprador ?? 0) > 0 && (
@@ -807,6 +837,15 @@ export default function MLGestao() {
           {tab === 'produtos' && (
             dre.produtos.length > 0 ? (
               <>
+                {/* Mini-KPIs do período (chips do Analítico da Amazon) */}
+                <div style={{ display: 'flex', gap: 11, flexWrap: 'wrap' as const, marginBottom: 16 }}>
+                  <Chip label="Faturamento do período" valor={brl(fat)} money />
+                  <Chip label="Unidades" valor={String(dre.unidades)} />
+                  <Chip label="Produtos vendidos" valor={String(dre.produtos.length)} />
+                  <Chip label="Ticket médio" valor={brl(ticket)} money />
+                  <Chip label="Margem média" valor={cm ? pc(margem) : '—'} cor={cm ? (margem >= 0 ? T.g : T.r) : T.t3} money />
+                </div>
+                {!cm && <div style={{ fontSize: 10.5, color: T.t3, marginBottom: 14 }}>A margem média aparece quando você informa os custos (CMV) em Gerenciamento.</div>}
                 <TableH minWidth={1020} head={[
                   { label: 'Produto', w: '24%' }, { label: 'Un.', right: true }, { label: 'Faturado', right: true },
                   { label: 'Líquido ML', right: true }, { label: 'Imposto', right: true }, { label: 'CMV', right: true },
