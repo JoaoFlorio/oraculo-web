@@ -76,9 +76,9 @@ const pillKind = (m: number): 'grn' | 'gold' | 'red' => m > 20 ? 'grn' : m > 0 ?
 // Botão de lupa (abre o modal de detalhamento do produto).
 function ZoomBtn({ onClick }: { onClick: () => void }) {
   return (
-    <button onClick={onClick} title="Ver detalhamento"
-      style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${T.line2}`, background: T.card, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: T.t2 }}>
-      <i className="ti ti-zoom-money" style={{ fontSize: 15 }} aria-hidden="true" />
+    <button onClick={onClick} title="Ver detalhamento do produto"
+      style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${tint(T.gold, 45)}`, background: tint(T.gold, 14), cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: T.gold, flexShrink: 0 }}>
+      <i className="ti ti-eye" style={{ fontSize: 16 }} aria-hidden="true" />
     </button>
   )
 }
@@ -625,7 +625,7 @@ export default function MLGestao() {
                 </div>
               )}
               <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
-                Lucro e Margem aparecem só nos produtos com custo cadastrado. As colunas de <strong>Ads</strong> (Custo Ads, Lucro pós ADS, MPA) vêm do <strong>Mercado Ads</strong> real da sua conta — item sem anúncio no período aparece como <strong>R$ 0,00</strong> medido (não como valor desconhecido). Clique na <i className="ti ti-zoom-money" style={{ fontSize: 12 }} /> pra ver a conta completa do produto.
+                Lucro e Margem aparecem só nos produtos com custo cadastrado. As colunas de <strong>Ads</strong> (Custo Ads, Lucro pós ADS, MPA) vêm do <strong>Mercado Ads</strong> real da sua conta — item sem anúncio no período aparece como <strong>R$ 0,00</strong> medido (não como valor desconhecido). Clique no <i className="ti ti-eye" style={{ fontSize: 13, color: T.gold }} /> pra ver a conta completa do produto.
               </div>
             </>
           )}
@@ -797,7 +797,7 @@ export default function MLGestao() {
                   })}
                 </TableH>
                 <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
-                  Lucro, Margem e MPA aparecem nos produtos com custo cadastrado (informe em <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, textDecoration: 'underline' }}>Gerenciamento</button>). Clique na <i className="ti ti-zoom-money" style={{ fontSize: 12 }} /> pra ver a conta completa.
+                  Lucro, Margem e MPA aparecem nos produtos com custo cadastrado (informe em <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, textDecoration: 'underline' }}>Gerenciamento</button>). Clique no <i className="ti ti-eye" style={{ fontSize: 13, color: T.gold }} /> pra ver a conta completa.
                 </div>
               </>
             ) : (
