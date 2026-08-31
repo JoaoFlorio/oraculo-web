@@ -126,7 +126,7 @@ function Kpi({ label, valor, cor, ajuda }: { label: string; valor: string; cor: 
         </div>
       )}
       <div style={{ fontSize: 12.5, color: T.t2, fontWeight: 500, marginBottom: 9, lineHeight: 1.25 }}>{label}</div>
-      <div style={{ fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em', color: T.t1, fontVariantNumeric: 'tabular-nums' as const }}>{valor}</div>
+      <div className="ml-money" style={{ fontWeight: 700, fontSize: 25, letterSpacing: '-0.01em', color: T.t1, fontVariantNumeric: 'tabular-nums' as const }}>{valor}</div>
     </div>
   )
 }
@@ -283,6 +283,7 @@ function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { prod
 export default function MLGestao() {
   const [status, setStatus] = useState<{ connected: boolean; nickname?: string | null } | null>(null)
   const [periodo, setPeriodo] = useState('7d')
+  const [hide, setHide] = useState(false)   // olhinho: borra os valores em R$ (pra gravar vídeo/print)
   const [grupo, setGrupo] = useState('venda')
   const [tab, setTab] = useState<TabMl>('resumo')
   const [dre, setDre] = useState<Dre | null>(null)
@@ -439,7 +440,7 @@ export default function MLGestao() {
   const ADS_TIP = 'Vem do Mercado Ads da sua conta. Como não há gasto de anúncio medido no período, aparece como "—" — nunca é inventado nem zerado.'
 
   return (
-    <div style={{ width: '100%', paddingTop: 4 }}>
+    <div className={hide ? 'ml-oculto' : undefined} style={{ width: '100%', paddingTop: 4 }}>
       {/* Cabeçalho + seletor de período */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
         <div>
@@ -449,10 +450,18 @@ export default function MLGestao() {
             {status?.nickname && <span style={{ color: T.t4 }}> · conta {status.nickname}</span>}
           </div>
         </div>
-        <select value={periodo} onChange={e => setPeriodo(e.target.value)}
-          style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 11, padding: '10px 14px', fontSize: 13, color: T.t1, outline: 'none', cursor: 'pointer', fontWeight: 600 }}>
-          {PERIODOS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
-        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {/* Olhinho: oculta os valores em R$ (pra gravar vídeo/print sem expor números) */}
+          <button onClick={() => setHide(v => !v)} aria-label={hide ? 'Mostrar valores' : 'Ocultar valores'}
+            title={hide ? 'Mostrar valores' : 'Ocultar valores'}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 40, height: 40, borderRadius: 11, cursor: 'pointer', background: hide ? tint(T.gold, 16) : T.card, border: `1px solid ${hide ? tint(T.gold, 45) : T.line}`, color: hide ? T.gold : T.t2 }}>
+            <i className={`ti ${hide ? 'ti-eye-off' : 'ti-eye'}`} style={{ fontSize: 17 }} aria-hidden="true" />
+          </button>
+          <select value={periodo} onChange={e => setPeriodo(e.target.value)}
+            style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 11, padding: '10px 14px', fontSize: 13, color: T.t1, outline: 'none', cursor: 'pointer', fontWeight: 600 }}>
+            {PERIODOS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+          </select>
+        </div>
       </div>
 
       {/* Conexão */}
@@ -556,7 +565,7 @@ export default function MLGestao() {
                   <span style={{ fontSize: 15, fontWeight: 700, color: T.t1 }}>Resumo de Receitas</span>
                   <span style={{ fontSize: 11, color: T.t3 }}>últimos 30 dias{chart30?.netRatio != null ? ' · líquido proporcional ao período' : ''}</span>
                 </div>
-                <div style={{ height: 300 }}>
+                <div className="ml-money" style={{ height: 300 }}>
                   {chart30 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
@@ -613,14 +622,14 @@ export default function MLGestao() {
                         <td style={cellNum}>{brl(preco)}</td>
                         <td style={{ ...cellNum, color: custoU != null ? T.t1 : T.t3 }}>{custoU != null ? brl(custoU) : '—'}</td>
                         <td style={cellNum}>{p.qty}</td>
-                        <td style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
+                        <td className="ml-money" style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
                         <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' as const }}>
                           <div style={{ fontSize: 13, fontWeight: 500, color: T.t2, fontVariantNumeric: 'tabular-nums' as const }}>{repres.toFixed(1)}%</div>
                           <div style={{ height: 3, borderRadius: 2, background: tint(T.t4, 12), marginTop: 4 }}>
                             <div style={{ height: '100%', width: `${Math.min(100, repres)}%`, background: T.blue, borderRadius: 2 }} />
                           </div>
                         </td>
-                        <td style={{ ...cellNum, color: temLucro ? ((p.lucroFinal as number) >= 0 ? T.g : T.r) : T.t3 }}>{temLucro ? brl(p.lucroFinal as number) : '—'}</td>
+                        <td className="ml-money" style={{ ...cellNum, color: temLucro ? ((p.lucroFinal as number) >= 0 ? T.g : T.r) : T.t3 }}>{temLucro ? brl(p.lucroFinal as number) : '—'}</td>
                         <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{mrg != null ? <Pill kind={pillKind(mrg)}>{pc(mrg)}</Pill> : '—'}</td>
                         <td style={{ ...cellNum, color: p.custoAds == null ? T.t3 : p.custoAds > 0 ? T.a : T.t3 }}>{p.custoAds == null ? '—' : p.custoAds > 0 ? `− ${brl(p.custoAds)}` : brl(0)}</td>
                         <td style={{ ...cellNum, color: (p.temCusto && p.lucroPosAds != null) ? ((p.lucroPosAds as number) >= 0 ? T.g : T.r) : T.t3 }}>{(p.temCusto && p.lucroPosAds != null) ? brl(p.lucroPosAds as number) : '—'}</td>
@@ -656,7 +665,7 @@ export default function MLGestao() {
                         <span style={{ color: T.t4, fontWeight: 400 }}> · {new Date(o.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                       </span>
                       <span style={{ fontSize: 10, color: T.t4 }}>#{o.orderId}</span>
-                      <span style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 800, color: (o.liquido ?? 0) >= 0 ? T.g : T.r }}>
+                      <span className="ml-money" style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 800, color: (o.liquido ?? 0) >= 0 ? T.g : T.r }}>
                         {o.liquido != null ? `você recebe ${brl(o.liquido)}` : brl(o.receita)}
                       </span>
                     </div>
@@ -734,7 +743,7 @@ export default function MLGestao() {
                         </div>
                       </td>
                       <td style={cellNum}>{p.qty}</td>
-                      <td style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
+                      <td className="ml-money" style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
                       <td style={{ ...cellNum, color: T.a }}>− {brl(p.tarifa)}</td>
                       <td style={{ ...cellNum, color: p.envio != null ? T.a : T.t3 }}>{p.envio != null ? `− ${brl(p.envio)}` : '—'}{p.envioParcial && p.envio != null ? ' *' : ''}</td>
                       <td style={{ ...cellNum, fontWeight: 700, color: p.liquido != null ? (p.liquido >= 0 ? T.g : T.r) : T.t3 }}>{p.liquido != null ? brl(p.liquido) : '—'}</td>
@@ -795,11 +804,11 @@ export default function MLGestao() {
                           </div>
                         </td>
                         <td style={cellNum}>{p.qty}</td>
-                        <td style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
+                        <td className="ml-money" style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
                         <td style={{ ...cellNum, color: p.liquido != null ? T.g : T.t3 }}>{p.liquido != null ? brl(p.liquido) : '—'}</td>
                         <td style={{ ...cellNum, color: T.a }}>− {brl(p.imposto)}</td>
                         <td style={{ ...cellNum, color: p.cmv != null ? T.a : T.t3 }}>{p.cmv != null ? `− ${brl(p.cmv)}` : '—'}</td>
-                        <td style={{ ...cellNum, color: temLucro ? ((p.lucroFinal as number) >= 0 ? T.g : T.r) : T.t3 }}>{temLucro ? brl(p.lucroFinal as number) : '—'}</td>
+                        <td className="ml-money" style={{ ...cellNum, color: temLucro ? ((p.lucroFinal as number) >= 0 ? T.g : T.r) : T.t3 }}>{temLucro ? brl(p.lucroFinal as number) : '—'}</td>
                         <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{mrg != null ? <Pill kind={pillKind(mrg)}>{pc(mrg)}</Pill> : '—'}</td>
                         <td style={{ ...cellNum, color: p.custoAds == null ? T.t3 : p.custoAds > 0 ? T.a : T.t3 }}>{p.custoAds == null ? '—' : p.custoAds > 0 ? `− ${brl(p.custoAds)}` : brl(0)}</td>
                         <td style={{ ...cellNum, color: (p.temCusto && p.lucroPosAds != null) ? ((p.lucroPosAds as number) >= 0 ? T.g : T.r) : T.t3 }}>{(p.temCusto && p.lucroPosAds != null) ? brl(p.lucroPosAds as number) : '—'}</td>
@@ -878,7 +887,7 @@ export default function MLGestao() {
                               </div>
                             </div>
                           </td>
-                          <td style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
+                          <td className="ml-money" style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
                           <td style={{ ...cellNum, color: T.a }}>− {brl(p.custoAds as number)}</td>
                           <td style={{ ...cellNum, color: (p.temCusto && p.lucroPosAds != null) ? ((p.lucroPosAds as number) >= 0 ? T.g : T.r) : T.t3 }}>{(p.temCusto && p.lucroPosAds != null) ? brl(p.lucroPosAds as number) : '—'}</td>
                           <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{(p.temCusto && p.mpa != null) ? <Pill kind={pillKind(p.mpa as number)}>{pc(p.mpa as number)}</Pill> : '—'}</td>

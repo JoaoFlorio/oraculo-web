@@ -61,6 +61,11 @@ body {
 /* Placeholder da busca de Mais Vendidos — legível (o default do navegador some). */
 .ora-search::placeholder{ color:var(--t2); opacity:1; }
 
+/* Ocultar valores (olhinho da Gestão): borra só os elementos marcados .ml-money
+   quando o container ganha .ml-oculto — pra gravar vídeo/print sem expor números. */
+.ml-oculto .ml-money{ filter:blur(8px); user-select:none; transition:filter .15s ease; }
+.ml-money{ transition:filter .15s ease; }
+
 /* ════════════════════════════════════════════════════════════════════════
    LANDING / PÁGINA DE VENDAS (cinematográfica) — escopo .ora-landing
    ════════════════════════════════════════════════════════════════════════ */
