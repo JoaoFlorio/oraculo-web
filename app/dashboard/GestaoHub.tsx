@@ -950,7 +950,12 @@ function Vendas({realDre,costs,extras,imposto,hide,connected,adsReal,onDetail,aj
     const imp=receita*(imposto/100)
     const cmv=semPreco?0:custoDe(it.sku)*qty, custoExtra=semPreco?0:extraDe(it.sku)*qty
     const temCusto=!semPreco&&(custoDe(it.sku)>0||extraDe(it.sku)>0)
-    const lucro=(liq===null||!temCusto)?null:liq-imp-cmv-custoExtra
+    // 🚨 FBA: o frete que entrou (dentro de receita/liq) é da Amazon — ela estorna
+    // (ShippingChargeback). Neta SÓ no lucro, mantendo receita/líquido brutos (que
+    // batem com a conciliação e o card agregado). Sem isto o lucro do pedido FBA
+    // com frete saía inflado (o estorno vivia em "outras" e a lupa não o subtraía).
+    const freteFbaItem=(it._fba&&!estimado)?(Number(it.frete)||0):0
+    const lucro=(liq===null||!temCusto)?null:liq-imp-cmv-custoExtra-freteFbaItem
     return {ref,receita,qty,comissao,fba,liq,imp,cmv,custoExtra,temCusto,lucro,estimado,semPreco,
       margem:(lucro!==null&&receita>0)?lucro/receita*100:null}
   }
@@ -983,7 +988,10 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
   const meusAjustes=ajustesDoPedido(ajustes,pedido.orderId)
   const pend=/pending/i.test(pedido.status||'')
   const itens=(pedido.itens||[])
-  const c=itens.map(conta)
+  // FBA (AFN): o frete do comprador é da Amazon (ela credita e estorna). Passa pro
+  // `conta` netar no lucro por-item — assim item e pedido batem (ver comentário abaixo).
+  const isFba=/AFN/i.test(String(pedido?.channel||''))
+  const c=itens.map((it:any)=>conta({...it,_fba:isFba}))
   const som=(f:(x:any)=>number|null)=>c.reduce((s:number,x:any)=>s+(f(x)??0),0)
   const algumSemFee=c.some((x:any)=>x.liq===null)
   const algumSemCusto=c.some((x:any)=>!x.temCusto)
@@ -999,12 +1007,21 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
   const valorVenda=itens.reduce((s:number,it:any)=>s+(Number(it.precoItem)||0),0)
   const freteReceita=itens.reduce((s:number,it:any)=>s+(Number(it.frete)||0),0)
   const embrulhoReceita=itens.reduce((s:number,it:any)=>s+(Number(it.embrulho)||0),0)
+  // 🚨 MODALIDADE: no FBA (AFN) o frete que o comprador paga é da AMAZON (cobre a
+  // logística) — ela credita o frete e ESTORNA na mesma hora (ShippingChargeback).
+  // O comprador não-Prime num item barato paga frete, e ele NÃO é receita do seller.
+  // Só no FBM (envio próprio) o frete fica com o seller. Aqui o frete do FBA é
+  // "lavado": entra no Recebido bruto (= receitaDoItem, o que a conciliação usa) e
+  // sai numa linha logo abaixo, netando — assim o lucro do pedido fecha certo (antes
+  // o estorno vivia em "outras taxas" e a lupa do pedido não o subtraía → lucro FBA inflado).
+  const freteFbaLavado=isFba?freteReceita:0
   // Só decompõe quando fecha (item real, não estimado) e há algo pra separar.
   const temDecomp=!todosSemPreco&&!algumEstimado&&valorVenda>0.005&&(freteReceita>0.005||embrulhoReceita>0.005||(pedido?.desconto?.total||0)>0.005)
   // Lançamentos avulsos entram no lucro DO PEDIDO (e no do período, via
   // totaisDoPeriodo) — mas nunca no custo unitário do produto.
   const ajCred=meusAjustes.filter(a=>a.tipo==='credito').reduce((s,a)=>s+(Number(a.valor)||0),0)
   const ajCusto=meusAjustes.filter(a=>a.tipo==='custo').reduce((s,a)=>s+(Number(a.valor)||0),0)
+  // O frete-lavado do FBA já é netado no lucro por-item (contaItem), então aqui só soma.
   const lucroTot=(algumSemFee||algumSemCusto)?null:som(x=>x.lucro)+ajCred-ajCusto
   const d=new Date(pedido.date)
   const data=d.toLocaleDateString('pt-BR'), hora=d.toLocaleTimeString('pt-BR',{hour12:false})
@@ -1157,6 +1174,12 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
                 É este número que fecha com a conciliação/repasse — não o preço do anúncio. */}
             <LinhaPedido t={t} icone="ti-shopping-cart" cor={t.grn} rotulo={temDecomp?"Recebido da venda":"Total dos itens"} valor={todosSemPreco?null:tot.receita}
               sinal={temDecomp ? "=" : "+"} hide={hide}/>
+            {/* ⭐ FBA: o frete que entrou é da Amazon — ela credita e estorna na hora.
+                Mostra ele SAINDO (repassado), pra o seller ver que no FBA o frete não é
+                dele e o lucro fechar certo. No FBM esta linha não existe (o frete fica). */}
+            {freteFbaLavado>0.005 && (
+              <LinhaPedido t={t} icone="ti-truck-return" cor={t.t3} rotulo="Frete repassado à Amazon (FBA)" valor={freteFbaLavado} sinal="-" hide={hide}/>
+            )}
             <LinhaPedido t={t} icone="ti-percentage" cor={t.red} rotulo="Comissão" valor={tot.comissao} sinal="-" hide={hide} parcial={algumSemFee}/>
             <LinhaPedido t={t} icone="ti-package" cor={t.red} rotulo="Taxa FBA" valor={tot.fba} sinal="-" hide={hide} parcial={algumSemFee}/>
             {tot.imp>0.005 && <LinhaPedido t={t} icone="ti-receipt-tax" cor={t.red} rotulo="Imposto" valor={tot.imp} sinal="-" hide={hide}/>}
