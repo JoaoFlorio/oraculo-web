@@ -1954,6 +1954,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
            scroll horizontal. !important é necessário p/ vencer os estilos inline. */
         .ora-burger{display:none}
         .ora-backdrop{display:none}
+        /* Cabeçalho de página: a barra de ferramentas (flexShrink:0, larga) espremia
+           o título a ~0 e o texto quebrava letra por linha em telas médias/largas.
+           flex-wrap em QUALQUER largura faz a barra quebrar pra baixo em vez de esmagar
+           o título (bug 31/08 na aba Mineração ML). */
+        .ora-phead{flex-wrap:wrap}
         @media (max-width:920px){
           .ora-burger{display:flex}
           .ora-side{position:fixed!important;top:0;left:0;bottom:0;width:272px!important;z-index:1200!important;transform:translateX(-105%);transition:transform .25s ease!important;box-shadow:0 0 70px rgba(0,0,0,.55)}

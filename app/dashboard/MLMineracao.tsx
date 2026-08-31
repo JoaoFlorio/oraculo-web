@@ -712,15 +712,17 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
   return (
     <div style={{ width: '100%' }}>
       {/* ── Cabeçalho: cópia do "Mais Vendidos" da Amazon ── */}
-      <div className="ora-phead" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
-        <div style={{ minWidth: 0 }}>
+      <div className="ora-phead" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 24, flexWrap: 'wrap' as const }}>
+        {/* flex 1 + minWidth: sem isso a barra de ferramentas (flexShrink:0, larga)
+            espremia este bloco a ~0 e o texto quebrava letra por linha (bug 31/08). */}
+        <div style={{ minWidth: 220, flex: '1 1 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
             <span style={{ fontSize: 9, fontWeight: 700, color: T.t3, letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>Mineração</span>
             <span style={{ color: T.t3, fontSize: 9 }}>/</span>
             <span style={{ fontSize: 9, fontWeight: 700, color: T.gold, letterSpacing: '0.14em', textTransform: 'uppercase' as const }}>Mercado Livre</span>
           </div>
           <h1 style={{ fontSize: 21, fontWeight: 800, color: T.t1, letterSpacing: '-0.03em', marginBottom: 6, lineHeight: 1 }}>Mineração ML</h1>
-          <p style={{ fontSize: 11, color: T.t3 }}>
+          <p style={{ fontSize: 11, color: T.t3, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {busca ? <>Resultados para <span style={{ color: T.gold }}>“{busca}”</span></> : <>{catNome}{subNome ? ` · ${subNome}` : ''}</>}
             {produtos.length > 0 && <> · <span className="ora-num" style={{ color: T.t4 }}>{visiveis.length}</span> <span style={{ color: T.t4 }}>produtos{fim ? '' : '+'}</span></>}
             {produtos.length > 0 && !soOportunidades && <> · <span style={{ color: T.g }}>💡 {nOportunidades} genéricos</span></>}
