@@ -166,12 +166,13 @@ const PERIODOS = [
   { id: 'mes', label: 'Esse mês' },
   { id: 'mespass', label: 'Mês passado' },
   { id: 'ano', label: 'Esse ano' },
+  { id: 'custom', label: 'Personalizado' },
 ]
 
 // Janela no fuso do seller (São Paulo, UTC−3 fixo — o Brasil não tem mais horário
 // de verão) — regra da casa: nunca no fuso do servidor. Espelha o computeRange da
 // Amazon, mas ancorado na meia-noite BR (não na do runtime).
-function janela(id: string): { from: string; to: string } {
+function janela(id: string, custom?: { from: string; to: string }): { from: string; to: string } {
   const agora = new Date()
   const OFF = 3 * 3600_000
   const meiaNoiteBR = new Date(Math.floor((agora.getTime() - OFF) / 86400_000) * 86400_000 + OFF)
@@ -189,6 +190,11 @@ function janela(id: string): { from: string; to: string } {
     case 'mes':     return { from: inicioMesBR(y, m).toISOString(), to }
     case 'mespass': return { from: inicioMesBR(y, m - 1).toISOString(), to: new Date(inicioMesBR(y, m).getTime() - 1).toISOString() }
     case 'ano':     return { from: new Date(Date.UTC(y, 0, 1, 3, 0, 0)).toISOString(), to }
+    // Personalizado: datas YYYY-MM-DD do seller, sempre no fuso BR (00:00 → 23:59:59).
+    // Sem as duas datas ainda, cai nos últimos 7 dias (não quebra a tela).
+    case 'custom':  return (custom?.from && custom?.to)
+      ? { from: new Date(`${custom.from}T00:00:00-03:00`).toISOString(), to: new Date(`${custom.to}T23:59:59-03:00`).toISOString() }
+      : { from: menosDias(7), to }
     default:        return { from: menosDias(7), to }
   }
 }
@@ -284,6 +290,7 @@ export default function MLGestao() {
   const [status, setStatus] = useState<{ connected: boolean; nickname?: string | null } | null>(null)
   const [periodo, setPeriodo] = useState('7d')
   const [hide, setHide] = useState(false)   // olhinho: borra os valores em R$ (pra gravar vídeo/print)
+  const [customRange, setCustomRange] = useState<{ from: string; to: string }>({ from: '', to: '' })  // período "Personalizado" (YYYY-MM-DD)
   const [grupo, setGrupo] = useState('venda')
   const [tab, setTab] = useState<TabMl>('resumo')
   const [dre, setDre] = useState<Dre | null>(null)
@@ -302,14 +309,14 @@ export default function MLGestao() {
   const carregar = useCallback(async (per: string) => {
     setLoading(true)
     try {
-      const { from, to } = janela(per)
+      const { from, to } = janela(per, customRange)
       const r = await fetch(`/api/ml/gestao/dre?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
       const d = await r.json()
       setDre(d)
       setStatus({ connected: !!d.connected, nickname: d.nickname })
     } catch { setDre(null) }
     finally { setLoading(false) }
-  }, [])
+  }, [customRange])
 
   // Gráfico "Resumo de Receitas": janela FIXA de 30 dias (independente do filtro),
   // igual a Amazon. netRatio = líquido/receita do período (líquido proporcional).
@@ -323,7 +330,7 @@ export default function MLGestao() {
   }, [])
 
   const recarregarDre = useCallback(async () => {
-    const { from, to } = janela(periodo)
+    const { from, to } = janela(periodo, customRange)
     try {
       const r = await fetch(`/api/ml/gestao/dre?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
       const d = await r.json()
@@ -333,7 +340,7 @@ export default function MLGestao() {
       // sumia com a tabela de Ajustes no meio da digitação (a "não consigo trocar").
       if (d?.connected) setDre(d)
     } catch {} finally { setSalvando(false) }
-  }, [periodo])
+  }, [periodo, customRange])
 
   // Carrega custos e imposto salvos (uma vez).
   useEffect(() => {
@@ -384,7 +391,12 @@ export default function MLGestao() {
       else setLoading(false)
     }).catch(() => setLoading(false))
   }, []) // eslint-disable-line
-  useEffect(() => { if (status?.connected) carregar(periodo) }, [periodo]) // eslint-disable-line
+  // Recarrega ao trocar o período OU o range personalizado (só quando as 2 datas existem).
+  useEffect(() => {
+    if (!status?.connected) return
+    if (periodo === 'custom' && !(customRange.from && customRange.to)) return  // espera as 2 datas
+    carregar(periodo)
+  }, [periodo, customRange]) // eslint-disable-line
 
   const conectar = async () => {
     setConectando(true)
@@ -450,7 +462,7 @@ export default function MLGestao() {
             {status?.nickname && <span style={{ color: T.t4 }}> · conta {status.nickname}</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' as const, justifyContent: 'flex-end' }}>
           {/* Olhinho: oculta os valores em R$ (pra gravar vídeo/print sem expor números) */}
           <button onClick={() => setHide(v => !v)} aria-label={hide ? 'Mostrar valores' : 'Ocultar valores'}
             title={hide ? 'Mostrar valores' : 'Ocultar valores'}
@@ -461,6 +473,18 @@ export default function MLGestao() {
             style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 11, padding: '10px 14px', fontSize: 13, color: T.t1, outline: 'none', cursor: 'pointer', fontWeight: 600 }}>
             {PERIODOS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
+          {/* Período "Personalizado": intervalo de datas (fuso BR) */}
+          {periodo === 'custom' && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: T.card, border: `1px solid ${T.line}`, borderRadius: 11, padding: '5px 10px' }}>
+              <input type="date" value={customRange.from} max={customRange.to || undefined}
+                onChange={e => setCustomRange(r => ({ ...r, from: e.target.value }))} aria-label="Data inicial"
+                style={{ background: 'transparent', border: 'none', outline: 'none', color: T.t1, fontSize: 12.5, fontFamily: 'inherit' }} />
+              <span style={{ color: T.t4, fontSize: 12 }}>até</span>
+              <input type="date" value={customRange.to} min={customRange.from || undefined}
+                onChange={e => setCustomRange(r => ({ ...r, to: e.target.value }))} aria-label="Data final"
+                style={{ background: 'transparent', border: 'none', outline: 'none', color: T.t1, fontSize: 12.5, fontFamily: 'inherit' }} />
+            </span>
+          )}
         </div>
       </div>
 
