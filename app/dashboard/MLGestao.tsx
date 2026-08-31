@@ -7,8 +7,10 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, Resp
 // 12 KPIs, o MESMO gráfico "Resumo de Receitas", a MESMA tabela Top produtos (com
 // imagem, preço, custo, lucro, margem) e o MESMO modal de detalhamento (lupa).
 //
-// Os números são REAIS COBRADOS pelo ML: receita = pago no pedido · tarifa =
-// sale_fee real · envio = custo real do shipment. Nada recalculado.
+// Os números são REAIS COBRADOS pelo ML: receita = valor do anúncio (preço ×
+// unidades, NÃO o frete que o comprador paga) · tarifa = sale_fee real · envio =
+// custo real do shipment. Nada recalculado. O frete do comprador aparece como
+// linha separada "repasse" no cartão do pedido.
 //
 // ⚠️ Os campos de ADS (Valor em Ads, TACOS, MPA, Lucro pós ADS, Custo Ads) mostram
 // "—" até o Mercado Ads ser integrado — igual a Amazon mostra "—" quando o Ads não
@@ -37,7 +39,7 @@ function fillDaily(daily: Array<{ date: string; receita: number }> = [], fromISO
 }
 
 type Produto = { itemId: string; titulo: string; foto: string | null; pedidos: number; qty: number; receita: number; tarifa: number; envio: number | null; envioParcial: boolean; liquido: number | null; imposto: number; cmv: number | null; temCusto: boolean; lucroFinal: number | null; custoAds: number | null; lucroPosAds: number | null; mpa: number | null }
-type Pedido = { orderId: string; data: string; status: string; titulo: string; foto: string | null; qty: number; receita: number; tarifa: number; envio: number | null; liquido: number | null; imposto: number; cmv: number | null; lucroFinal: number | null; itens: Array<{ itemId: string; titulo: string; foto: string | null; qty: number; unitPrice: number; tarifa: number }> }
+type Pedido = { orderId: string; data: string; status: string; titulo: string; foto: string | null; qty: number; receita: number; freteComprador?: number; tarifa: number; envio: number | null; liquido: number | null; imposto: number; cmv: number | null; lucroFinal: number | null; itens: Array<{ itemId: string; titulo: string; foto: string | null; qty: number; unitPrice: number; tarifa: number }> }
 type Dre = {
   connected: boolean
   nickname?: string | null
@@ -209,7 +211,7 @@ function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { prod
 
         {/* Waterfall */}
         <div style={{ margin: '14px 16px', background: T.modal, border: `1px solid ${T.line}`, borderRadius: 12, padding: '6px 14px' }}>
-          <LinhaWF label={`Faturado (${p.qty} un.)`} val={brl(p.receita)} strong nota="o que os compradores pagaram por este anúncio no período" />
+          <LinhaWF label={`Faturado (${p.qty} un.)`} val={brl(p.receita)} strong nota="valor do anúncio (preço × unidades) no período — o frete que o comprador paga é repasse ao transportador e não entra aqui" />
           <LinhaWF label="Tarifa do Mercado Livre" val={brl(p.tarifa)} sign="-" cor={T.r} nota="sale_fee real cobrada em cada pedido" />
           <LinhaWF label="Envio" val={p.envio != null ? brl(p.envio) : 'medindo…'} sign={p.envio != null ? '-' : undefined} cor={p.envio != null ? T.r : T.t4} nota="custo real do frete que ficou com você (só de pedido mono-item; multi-item não rateamos)" />
           <LinhaWF label="Líq. do Marketplace" val={p.liquido != null ? brl(p.liquido) : '—'} sign="=" cor={p.liquido != null ? T.g : T.t4} strong />
@@ -483,7 +485,7 @@ export default function MLGestao() {
             <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 13, marginBottom: 16 }}>
                 <Kpi label="Faturamento" valor={brl(fat)} cor={T.pur}
-                  ajuda="Tudo que os compradores pagaram nos pedidos válidos do período. Pedido cancelado não entra aqui (o painel do ML soma cancelado em 'vendas brutas')." />
+                  ajuda="O valor dos anúncios (preço × unidades) nos pedidos válidos do período. O frete pago pelo comprador é repasse ao transportador — não entra. Pedido cancelado também não (o painel do ML soma cancelado em 'vendas brutas')." />
                 <Kpi label="Líq. do Marketplace" valor={brl(liq)} cor={T.blue}
                   ajuda="O que sobra DA VENDA depois da parte do ML: tarifa de venda real e custo real de cada envio. Antes de imposto, CMV e Ads." />
                 <Kpi label="Lucro Bruto" valor={cm ? brl(lucroBruto) : '—'} cor={T.g}
@@ -638,7 +640,10 @@ export default function MLGestao() {
                       </div>
                     ))}
                     <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end', flexWrap: 'wrap', padding: '8px 14px', borderTop: `1px solid ${tint(T.line, 70)}`, background: T.modal, fontSize: 11.5 }}>
-                      <span style={{ color: T.t3 }}>Receita <strong style={{ color: T.t1 }}>{brl(o.receita)}</strong></span>
+                      <span style={{ color: T.t3 }}>Valor do anúncio <strong style={{ color: T.t1 }}>{brl(o.receita)}</strong></span>
+                      {(o.freteComprador ?? 0) > 0 && (
+                        <span style={{ color: T.t4 }} title="O comprador pagou este frete direto ao transportador. Não é sua receita — por isso não soma no faturamento nem no imposto.">Frete do comprador <strong style={{ color: T.t4 }}>{brl(o.freteComprador as number)}</strong> · repasse</span>
+                      )}
                       <span style={{ color: T.t3 }}>Tarifa <strong style={{ color: T.a }}>− {brl(o.tarifa)}</strong></span>
                       <span style={{ color: T.t3 }}>Envio <strong style={{ color: o.envio != null ? T.a : T.t4 }}>{o.envio != null ? `− ${brl(o.envio)}` : 'medindo…'}</strong></span>
                     </div>
