@@ -991,6 +991,16 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
   const todosSemPreco=c.length>0&&c.every((x:any)=>x.semPreco)
   const tot={receita:som(x=>x.receita),comissao:som(x=>x.comissao),fba:som(x=>x.fba),
     imp:som(x=>x.imp),cmv:som(x=>x.cmv),extra:som(x=>x.custoExtra)}
+  // ⭐ VALOR DA VENDA = preço do ANÚNCIO (item puro), separado do frete que o
+  // comprador pagou. Era a raiz da confusão: um item de R$29,99 aparecia como R$38
+  // (o frete somado) e um de R$399 com cupom aparecia como R$365 (o cupom embutido).
+  // Agora o anúncio vem NOMEADO e frete/cupom viram LINHAS — a identidade fecha:
+  // valorVenda + frete + embrulho − desconto = Recebido (= tot.receita = receitaDoItem).
+  const valorVenda=itens.reduce((s:number,it:any)=>s+(Number(it.precoItem)||0),0)
+  const freteReceita=itens.reduce((s:number,it:any)=>s+(Number(it.frete)||0),0)
+  const embrulhoReceita=itens.reduce((s:number,it:any)=>s+(Number(it.embrulho)||0),0)
+  // Só decompõe quando fecha (item real, não estimado) e há algo pra separar.
+  const temDecomp=!todosSemPreco&&!algumEstimado&&valorVenda>0.005&&(freteReceita>0.005||embrulhoReceita>0.005||(pedido?.desconto?.total||0)>0.005)
   // Lançamentos avulsos entram no lucro DO PEDIDO (e no do período, via
   // totaisDoPeriodo) — mas nunca no custo unitário do produto.
   const ajCred=meusAjustes.filter(a=>a.tipo==='credito').reduce((s,a)=>s+(Number(a.valor)||0),0)
@@ -1033,8 +1043,8 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
           <thead><tr>
             <th style={{...th,textAlign:'left',width:'32%'}}>Item</th>
             <th style={{...th,textAlign:'right'}}>Qtd</th>
-            <th style={{...th,textAlign:'right'}}>Total</th>
-            <th style={{...th,textAlign:'right'}}>Preço unit.</th>
+            <th style={{...th,textAlign:'right'}}>Recebido</th>
+            <th style={{...th,textAlign:'right'}}>Preço do anúncio</th>
             <th style={{...th,textAlign:'right'}}>Líquido do marketplace</th>
             <th style={{...th,textAlign:'right'}}>Imposto</th>
             <th style={{...th,textAlign:'right'}}>Custo do produto</th>
@@ -1066,7 +1076,10 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
                       Amazon manda sem preço) — afirmar exatidão que não temos foi
                       o que fez o cha-ching anunciar R$37 numa venda de R$32. */}
                   <td style={{...td,fontWeight:700}}>{x.semPreco?dash:<>{x.estimado&&<span style={{color:t.t3,fontWeight:500}}>≈ </span>}{money(x.receita)}</>}</td>
-                  <td style={td}>{x.semPreco?dash:money(x.qty>0?x.receita/x.qty:0)}</td>
+                  {/* ⭐ Preço do ANÚNCIO por unidade (o que o seller reconhece), não a
+                      receita/qtd que inclui o frete. Fallback pra receita/qtd em dado
+                      antigo sem precoItem. */}
+                  <td style={td}>{x.semPreco?dash:money((Number(it.precoItem)>0?Number(it.precoItem):x.receita)/(x.qty>0?x.qty:1))}</td>
                   <td style={{...td,color:t.grn}}>{money(x.liq)}</td>
                   <td style={{...td,color:x.imp>0?t.red:t.t3}}>{x.semPreco?dash:money(x.imp)}</td>
                   <td style={{...td,color:x.cmv>0?t.red:t.t3}}>{x.temCusto?money(x.cmv):dash}</td>
@@ -1113,40 +1126,37 @@ function PedidoCard({pedido,conta,hide,expandido,onToggle,onProduto,ajustes,onAd
                 preço REAL) e `tot.receita` é calculado no front, que ESTIMA o item
                 pendente. Com fontes diferentes dos dois lados a subtração não
                 fecha — e uma decomposição que não fecha é pior que nenhuma. */}
-            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && !algumEstimado && (
-              /* ⚠️ SEM sinal: com "+" aqui e "+" no "Total dos itens" logo abaixo, a
-                 coluna deixa de somar — o olho lê duas entradas de receita onde há
-                 uma só. O preço de tabela é o PONTO DE PARTIDA, não uma parcela. */
-              <LinhaPedido t={t} icone="ti-tag" cor={t.t2} rotulo="Antes do desconto" valor={pedido.precoTabela} hide={hide}/>
+            {/* ⭐ O PREÇO DO ANÚNCIO vem PRIMEIRO e NOMEADO — o "valor da venda" que
+                o seller reconhece (399/29,99). SEM sinal: é o ponto de partida, não
+                uma parcela (com "+" aqui e "+" no Recebido a coluna deixaria de somar). */}
+            {temDecomp && (
+              <LinhaPedido t={t} icone="ti-tag" cor={t.t2} rotulo="Valor da venda (preço do anúncio)" valor={valorVenda} hide={hide}/>
+            )}
+            {/* ⭐ FRETE que o comprador pagou — entra como RECEITA (a Amazon deposita).
+                É a resposta do "29,99 virou 38": o frete é uma linha, não parte do preço. */}
+            {temDecomp && freteReceita>0.005 && (
+              <LinhaPedido t={t} icone="ti-truck-delivery" cor={t.t3} rotulo="Frete pago pelo comprador" valor={freteReceita} sinal="+" hide={hide}/>
+            )}
+            {temDecomp && embrulhoReceita>0.005 && (
+              <LinhaPedido t={t} icone="ti-gift" cor={t.t3} rotulo="Embrulho pra presente" valor={embrulhoReceita} sinal="+" hide={hide}/>
             )}
             {/* ⚠️ CUPOM e FRETE GRÁTIS separados: no frete grátis a Amazon cobra o
-                frete do comprador e devolve por aqui — os dois se anulam e o
-                líquido é ZERO. Juntá-los mostraria um custo que não existe. */}
-            {/* ⚠️ TODAS presas à MESMA âncora da linha de cima. Sem isso, num
-                pedido com item pendente (preço estimado no front, `precoTabela` 0
-                no backend) a dedução aparecia ÓRFÃ: uma subtração no meio de uma
-                lista aritmética, sem a linha de onde ela sai. */}
-            {/* ⚠️ `algumEstimado` fora: `pedido.precoTabela` vem do espelho (só
-                preço REAL) e `tot.receita` é calculado no front, que ESTIMA o item
-                pendente. Com fontes diferentes dos dois lados a subtração não
-                fecha — e uma decomposição que não fecha é pior que nenhuma. */}
-            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && !algumEstimado && (pedido?.desconto?.produto||0)>0.005 && (
+                frete do comprador e devolve por aqui — os dois se anulam, líquido ZERO. */}
+            {temDecomp && (pedido?.desconto?.produto||0)>0.005 && (
               <LinhaPedido t={t} icone="ti-discount-2" cor={t.gold}
                 rotulo={`Cupom / oferta${pedido.desconto.pctProduto?` (${String(pedido.desconto.pctProduto).replace('.',',')}%)`:''}`}
                 valor={pedido.desconto.produto} sinal="-" hide={hide}/>
             )}
-            {/* ⚠️ `algumEstimado` fora: `pedido.precoTabela` vem do espelho (só
-                preço REAL) e `tot.receita` é calculado no front, que ESTIMA o item
-                pendente. Com fontes diferentes dos dois lados a subtração não
-                fecha — e uma decomposição que não fecha é pior que nenhuma. */}
-            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && !algumEstimado && (pedido?.desconto?.frete||0)>0.005 && (
+            {temDecomp && (pedido?.desconto?.frete||0)>0.005 && (
               <LinhaPedido t={t} icone="ti-truck" cor={t.t3} rotulo="Desconto de frete" valor={pedido.desconto.frete} sinal="-" hide={hide}/>
             )}
-            {(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco && !algumEstimado && pedido?.desconto?.produto==null && (pedido?.desconto?.total||0)>0.005 && (
+            {temDecomp && pedido?.desconto?.produto==null && (pedido?.desconto?.total||0)>0.005 && (
               <LinhaPedido t={t} icone="ti-discount-2" cor={t.gold} rotulo="Desconto que você deu" valor={pedido.desconto.total} sinal="-" hide={hide}/>
             )}
-            <LinhaPedido t={t} icone="ti-shopping-cart" cor={t.grn} rotulo="Total dos itens" valor={todosSemPreco?null:tot.receita}
-              sinal={(pedido?.precoTabela||0) > (tot.receita||0) + 0.005 && !todosSemPreco ? "=" : "+"} hide={hide}/>
+            {/* Recebido da venda = o que de fato entrou (preço + frete + embrulho − desconto).
+                É este número que fecha com a conciliação/repasse — não o preço do anúncio. */}
+            <LinhaPedido t={t} icone="ti-shopping-cart" cor={t.grn} rotulo={temDecomp?"Recebido da venda":"Total dos itens"} valor={todosSemPreco?null:tot.receita}
+              sinal={temDecomp ? "=" : "+"} hide={hide}/>
             <LinhaPedido t={t} icone="ti-percentage" cor={t.red} rotulo="Comissão" valor={tot.comissao} sinal="-" hide={hide} parcial={algumSemFee}/>
             <LinhaPedido t={t} icone="ti-package" cor={t.red} rotulo="Taxa FBA" valor={tot.fba} sinal="-" hide={hide} parcial={algumSemFee}/>
             {tot.imp>0.005 && <LinhaPedido t={t} icone="ti-receipt-tax" cor={t.red} rotulo="Imposto" valor={tot.imp} sinal="-" hide={hide}/>}
