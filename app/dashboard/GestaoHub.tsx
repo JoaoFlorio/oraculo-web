@@ -182,9 +182,13 @@ function realProductMetrics(realDre:any, costs:Record<string,number>, aliquota=0
       custoUnit:costs[p.sku]||0,imposto:aliquota,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
     const base=M.lucro??M.lucroAntesAds??0
     return {id:p.sku,name:p.name||p.sku,sku:p.sku,asin:p.asin||'',image:p.image||'',
-      units:p.units,price:p.units>0?M.receitaBruta/p.units:0,unitCost:costs[p.sku]||0,
+      // ⭐ price/revenue = VALOR DA VENDA (preço do anúncio) quando o payload traz
+      // `principal` — a régua de 01/09; payload antigo cai na base de sempre. O
+      // lucro/margem continuam saindo de margemDoProduto (base recebida) — só a
+      // EXIBIÇÃO de venda muda.
+      units:p.units,price:p.units>0?((M.principal ?? M.receitaBruta))/p.units:0,unitCost:costs[p.sku]||0,
       adsSpend:M.ads||0,adsSales:0,refundUnits:M.devolucaoUnits,stockFBA:0,bsr:0,
-      revenue:M.receitaLiquida,commission:M.comissao||0,fbaFee:M.fba||0,cmv:M.cmv,tax:M.imposto,
+      revenue:(M.principal ?? M.receitaLiquida),commission:M.comissao||0,fbaFee:M.fba||0,cmv:M.cmv,tax:M.imposto,
       refundValue:M.devolucaoValor,grossProfit:base,acos:0,roas:0,
       margin:M.margem??0,roi:M.cmv>0?base/M.cmv*100:0,coverageDays:0} as ProductMetrics
   })
@@ -619,11 +623,14 @@ const MES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov'
 function fmtDM(ds:string){const p=ds.split('-');return `${p[2]} ${MES_ABR[(+p[1]||1)-1]}`}
 function nextDay(ds:string){const dt=new Date(ds+'T00:00:00Z');dt.setUTCDate(dt.getUTCDate()+1);return dt.toISOString().slice(0,10)}
 function fillDaily(daily:any[]=[],fromISO?:string,toISO?:string){
-  const map:Record<string,number>={}; for(const d of daily) map[d.date]=d.receita
+  // `principal` (valor da venda por dia) viaja junto quando o payload traz — é a
+  // série que o gráfico prefere; `receita` (com frete) fica pro ratio do líquido.
+  const map:Record<string,number>={}; const mapP:Record<string,number|undefined>={}
+  for(const d of daily){ map[d.date]=d.receita; mapP[d.date]=d.principal }
   const s=(fromISO||'').slice(0,10), e=(toISO||'').slice(0,10)
-  if(!s||!e) return (daily||[]).map((d:any)=>({label:fmtDM(d.date),date:d.date,receita:d.receita}))
-  const out:{label:string;date:string;receita:number}[]=[]; let cur=s, guard=0
-  while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0}); cur=nextDay(cur) }
+  if(!s||!e) return (daily||[]).map((d:any)=>({label:fmtDM(d.date),date:d.date,receita:d.receita,principal:d.principal}))
+  const out:{label:string;date:string;receita:number;principal?:number}[]=[]; let cur=s, guard=0
+  while(cur<=e && guard++<400){ out.push({label:fmtDM(cur),date:cur,receita:map[cur]||0,principal:mapP[cur]}); cur=nextDay(cur) }
   return out
 }
 function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,armazenagemMedida=0,semCusto=0,receitaSemCusto=0,adsReal,costs={},chart30,connected,adsConnected,imposto=0,onDetail,selo,diario,recon}:{hide:boolean;realDre?:any;cmv?:number;impostoTotal?:number;credito?:number;custoEventual?:number;armazenagemMedida?:number;semCusto?:number;receitaSemCusto?:number;adsReal?:any;costs?:Record<string,number>;chart30?:any;connected?:boolean|null;adsConnected?:boolean|null;imposto?:number;onDetail?:(p:any)=>void;selo?:SeloMaturidade;diario?:Diario|null;recon?:Reconciliacao|null}){
@@ -639,11 +646,19 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
     // devolve null justamente pra tela poder dizer "não sei".
     const ads: number|null = adsReal?.ready ? (Number(adsReal.spend)||0) : null
     const adsPending = adsConnected && !(adsReal?.ready)   // ads conectado mas ainda gerando relatório
-    const fat=L.receitaBruta||0, liq=realDre.liqMarketplace||0   // Faturamento = BRUTO (devoluções são linha à parte)
+    /* ⭐⭐ FATURAMENTO = VALOR DA VENDA (preço do anúncio, linhas.principal) — a
+       régua do Gestor, decidida pelo João em 01/09. O bruto-com-frete (receitaBruta)
+       fazia o KPI mostrar R$20,89 numa venda de R$11,99 (frete do comprador FBA).
+       O frete/embrulho/cupom seguem visíveis na decomposição (lupinha). Payload
+       antigo sem `principal` cai no bruto de sempre — nada some.
+       ⚠️ `fatBruto` continua alimentando margem/TACOS/denominadores (métricas de
+       rentabilidade NÃO mudaram de base — só o número de VENDA exibido). */
+    const fatBruto=L.receitaBruta||0
+    const fat=(L.principal ?? fatBruto)||0, liq=realDre.liqMarketplace||0
     // ⚠️ Denominador = receita LÍQUIDA, igual margemDoProduto. Dividir por bruto aqui
     // e por líquido no produto fazia a margem da capa nascer maior que a de todos os
     // produtos somados em qualquer período com devolução.
-    const base=(L.receitaLiquida ?? fat) || 0
+    const base=(L.receitaLiquida ?? fatBruto) || 0
     const vendas=realDre.vendas||0, unidades=realDre.unidades||0
     /* ⭐ UNIDADES LÍQUIDAS NO CARD. A primeira cliente pegou na primeira semana: o
        card dizia 23 com 1 reembolso, e o concorrente dizia 22. E a nossa própria
@@ -679,12 +694,12 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
       // (rótulo + porquê + ação) aplicada aos KPIs.
       kpis:[
         {label:'Faturamento',value:brl2(fat),icon:'ti-cash',color:t.vio,
-          /* ⚠️ Este texto dizia "já líquido de cupom/desconto concedido" e ERA
-             FALSO: o cupom nunca era lido (o relatório da Amazon é cego a ele),
-             então o faturamento saía CHEIO e o lucro alto pelo mesmo valor.
-             Agora é verdade para toda venda que o Oráculo enxergou o desconto —
-             e as linhas da DRE mostram quanto foi. */
-          tip:`Tudo que você vendeu no período, já líquido de todo desconto que o Oráculo enxergou (cupom, oferta, frete grátis).\n⚠️ Cupom em venda ANTIGA pode não estar aqui: a Amazon só informa o desconto pela API de pedidos, e o histórico só ganha esse dado quando é reprocessado.${devolucoesVal>0.005?`\nDevoluções: −${brl2(devolucoesVal)} → líquido de devolução: ${brl2(Math.max(0,fat-devolucoesVal))}.`:''}\nA devolução aparece como linha própria e já desconta do Lucro — aqui fica o bruto pra você ver o volume real de venda.`},
+          /* ⭐ O texto acompanha a régua (01/09): com `principal` no payload o KPI
+             é o VALOR DA VENDA (preço do anúncio); no payload antigo continua o
+             bruto — cada caso com a descrição verdadeira. */
+          tip: L.principal!=null
+            ? `Valor da VENDA: o preço do anúncio × unidades — o número que você reconhece.\nFrete pago pelo comprador, embrulho e cupom/desconto NÃO entram aqui: aparecem como linhas na lupinha de cada produto e pedido (valor da venda − desconto + frete + embrulho = recebido).${devolucoesVal>0.005?`\nDevoluções do período: −${brl2(devolucoesVal)} (linha própria, já descontam do Lucro).`:''}`
+            : `Tudo que você vendeu no período, já líquido de todo desconto que o Oráculo enxergou (cupom, oferta, frete grátis).\n⚠️ Cupom em venda ANTIGA pode não estar aqui: a Amazon só informa o desconto pela API de pedidos, e o histórico só ganha esse dado quando é reprocessado.${devolucoesVal>0.005?`\nDevoluções: −${brl2(devolucoesVal)} → líquido de devolução: ${brl2(Math.max(0,fat-devolucoesVal))}.`:''}\nA devolução aparece como linha própria e já desconta do Lucro — aqui fica o bruto pra você ver o volume real de venda.`},
         {label:'Líq. do Marketplace',value:brl2(liq),icon:'ti-building-bank',color:t.blue,
           tip:'O que sobra DA VENDA depois da parte da Amazon sobre o pedido: comissão, tarifa FBA, Taxa Amazon pra Todos e devoluções.\nArmazenagem e assinatura NÃO entram aqui — são custos MENSAIS da conta (estocagem por volume, mensalidade), aparecem no Repasse. Ainda não desconta seu custo de produto, imposto nem ads.'},
         {label:'Lucro Bruto',value:cm?brl2(lucroBruto):dash,icon:'ti-trending-up',color:t.grn,
@@ -702,7 +717,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
         {label:'Valor em Ads',value:adsPending?'…':(ads===null?dash:brl2(ads)),icon:'ti-speakerphone',color:t.grn,
           tip:'Gasto REAL de anúncio no período (relatório da Advertising API), não estimativa.'},
         {label:'TACOS',value:adsPending?'…':(tacos===null?dash:pc(tacos)),icon:'ti-target',color:t.grn,
-          tip:'Ads ÷ receita total. Quanto do seu faturamento o anúncio consome — TACOS subindo com faturamento parado é sinal de dependência.'},
+          tip:'Ads ÷ receita líquida do período (a receita recebida, com frete/embrulho — a mesma base da Margem e do MPA). Quanto da sua venda o anúncio consome — TACOS subindo com venda parada é sinal de dependência.'},
         {label:'Lucro bruto pós ADS',value:adsPending?'…':((cm&&lucroPosAds!==null)?brl2(lucroPosAds):dash),icon:'ti-coin',color:t.grn,
           tip:'Lucro Bruto − gasto de anúncio. É o que de fato sobrou no período.'},
         {label:'MPA',value:adsPending?'…':((cm&&mpa!==null)?pc(mpa):dash),icon:'ti-chart-pie',color:t.grn,
@@ -741,8 +756,13 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
   //     Chamar isso de "Lucro líquido" é a mesma doença de sempre.
   const rSrc = (cSrc?.linhas?.receitaBruta||0)>0 ? cSrc : realDre
   const netRatio = (rSrc?.linhas?.receitaBruta||0)>0 ? (rSrc.liqMarketplace||0)/rSrc.linhas.receitaBruta : null
+  // ⭐ A série "Receita" desenha o VALOR DA VENDA por dia (daily[].principal, sem o
+  // frete do comprador) — mesma régua do KPI (01/09). Payload antigo sem o campo
+  // cai na receita de sempre. O líquido proporcional aplica o ratio sobre a MESMA
+  // base bruta em que ele foi medido (senão a área verde encolheria sem motivo).
   const chartData:any[] = realChart
     ? fillDaily(cSrc.daily,cSrc.period?.from,cSrc.period?.to).map((x:any)=>({...x,
+        receita:(x.principal ?? x.receita),
         liq:netRatio===null?null:Math.round(x.receita*netRatio*100)/100}))
     : []   // não conectado / carregando → gráfico vazio (sem mock)
   const chartXKey = 'label'
@@ -756,10 +776,16 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
       custoUnit:costs[p.sku]||0,imposto,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
     const units=p.units||0
     return {p,units,
-      receita:M.receitaLiquida,                              // líquida de devolução
-      preco:units>0?M.receitaBruta/units:0,
+      // ⭐ Coluna "Faturado" = VALOR DA VENDA (preço do anúncio) — Σ das linhas
+      // fecha com o KPI por construção (ambos = principal). Payload antigo cai na
+      // régua líquida de sempre. Devolução/lucro seguem nas colunas próprias.
+      receita:(M.principal ?? M.receitaLiquida),
+      // "Preço méd." = preço do ANÚNCIO médio — era recebido/un e num FBA com
+      // frete mostrava R$14,96 num anúncio de R$11,99 (a queixa do cliente).
+      preco:units>0?((M.principal ?? M.receitaBruta))/units:0,
       custoU:costs[p.sku]||0,
-      repres:fatTot>0?M.receitaBruta/fatTot*100:0,
+      repres:(L.principal??0)>0&&M.principal!==null ? (M.principal/L.principal*100)
+            : (fatTot>0?M.receitaBruta/fatTot*100:0),
       devolucao:M.devolucaoValor,
       // ⚠️ A coluna "Margem" é ANTES do ads (pareia com "Lucro"); o pós-ads é a
       // coluna MPA. M.margem colapsava pro pós-ads quando havia ads medido, então
@@ -840,7 +866,13 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
                     Mostra o preço de tabela riscado quando houve desconto; a
                     decomposição completa (cupom/frete) segue no modal. */}
                 <NumTd strong hide={hide}>{brl2(r.receita)}
-                  {(r.p?.precoTabela||0) > r.receita + 0.005 && (
+                  {/* ⭐ Régua nova: o número JÁ é o valor da venda (preço do anúncio,
+                      antes do cupom) — o riscado com frete saiu. Se houve cupom, a
+                      dedução aparece como sub-linha nomeada (a conta completa na lupa). */}
+                  {((r.p?.descontoProduto||0)+(r.p?.descontoIndiviso||0)) > 0.005 && (
+                    <span style={{display:'block',fontSize:9.5,fontWeight:400,color:t.gold}} title="Cupom/desconto concedido no período — deduzido no 'Recebido da venda' (veja a lupa)">cupom −{brl2((r.p.descontoProduto||0)+(r.p.descontoIndiviso||0))}</span>
+                  )}
+                  {r.p?.principal===undefined && (r.p?.precoTabela||0) > r.receita + 0.005 && (
                     <span style={{display:'block',fontSize:9.5,fontWeight:400,color:t.t3,textDecoration:'line-through'}} title="Preço do anúncio antes do cupom/promoção — veja a decomposição na lupa">de {brl2(r.p.precoTabela)}</span>
                   )}
                 </NumTd>
@@ -1374,9 +1406,9 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
   const estPendUn=(p?.estimativa?.unit||0)>0?p.estimativa.unit:precoMedio
   const feesProduto=M.feeMedido?(M.comissao as number)+(M.fba as number)+M.taxaPrograma+M.outrasTaxas:null
 
-  const Row=({label,val,sign,strong,color,nota}:{label:string;val:number|null;sign?:'-'|'=';strong?:boolean;color?:string;hide?:boolean;nota?:string})=>(
+  const Row=({label,val,sign,strong,color,nota}:{label:string;val:number|null;sign?:'-'|'='|'+';strong?:boolean;color?:string;hide?:boolean;nota?:string})=>(
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',gap:12,padding:'8px 2px',borderBottom:`1px solid ${t.line}`,fontSize:strong?14:13}}>
-      <span style={{color:strong?t.t1:t.t2,fontWeight:strong?600:400}}>{sign==='='?'= ':sign==='-'?'(–) ':''}{label}
+      <span style={{color:strong?t.t1:t.t2,fontWeight:strong?600:400}}>{sign==='='?'= ':sign==='-'?'(–) ':sign==='+'?'(+) ':''}{label}
         {nota&&<span style={{display:'block',fontSize:10,color:t.t3,fontWeight:400,marginTop:1}}>{nota}</span>}</span>
       <span style={{color:val===null?t.t3:(color||t.t1),fontWeight:strong?700:500,fontFamily:FG,fontVariantNumeric:'tabular-nums',filter:hide&&val!==null?'blur(6px)':'none',whiteSpace:'nowrap'}}>{val===null?'—':brl2(val||0)}</span>
     </div>
@@ -1405,7 +1437,19 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
               conclui que a ferramenta errou. Agora o preço que o anúncio pedia
               vem PRIMEIRO e o desconto aparece como dedução nomeada, com a %.
               A identidade fecha por construção: tabela − desconto = Faturado. */}
-          {(p?.precoTabela||0) > (M.receitaBruta||0) + 0.005 && (
+          {/* ⭐⭐ A RÉGUA DO GESTOR (decidida pelo João, 01/09): o waterfall ABRE com o
+              VALOR DA VENDA = preço do ANÚNCIO — o número que o seller reconhece
+              ("vendo a R$11,99"). Cupom/campanha deduzem DELE; frete do comprador e
+              embrulho SOMAM como linhas próprias; "(=) Recebido da venda" fecha a
+              identidade com o antigo Faturado. Caso real que motivou (theethereashop,
+              01/09): anúncio R$11,99 + frete R$8,90 → a tela abria com "Faturado
+              R$20,89" e o seller concluía que o Oráculo inventa venda. Payload antigo
+              (sem `principal`) cai no formato anterior — nada some. */}
+          {M.principal!==null && (
+            <Row label={`Valor da venda (${units} un.)`} val={M.principal} strong hide={hide}
+                 nota="preço do anúncio × unidades — sem frete, embrulho ou desconto"/>
+          )}
+          {M.principal===null && (p?.precoTabela||0) > (M.receitaBruta||0) + 0.005 && (
             /* ⚠️ A NOTA DIZIA "o que o anúncio pedia" e ISSO ERA FALSO: o valor
                inclui frete e embrulho (é `price + frete + embrulho`), então num
                pedido com R$8,90 de frete o anúncio pedia 79,90 e a linha mostrava
@@ -1445,13 +1489,26 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
                        ? 'desconto sem campanha identificada pela Amazon'
                        : 'desconto que você concedeu — este dinheiro não entrou'}/>
           })()}
-          {(p?.descontoFrete||0)>0.005 && (
-            /* ⚠️ O texto AFIRMAVA "os dois se anulam, custo líquido zero" — e a
-               tela nunca compara este valor com o frete que foi cobrado. Quando
-               se anulam, anulam mesmo; quando não, a afirmação seria falsa e o
-               cliente não teria como saber. Diz-se o que o dado sustenta. */
+          {M.principal===null && (p?.descontoFrete||0)>0.005 && (
+            /* ⚠️ Só no formato ANTIGO: na cadeia nova o desconto de frete já está
+               dentro do "Frete pago pelo comprador" (líquido) — mostrá-lo de novo
+               deduziria duas vezes. */
             <Row label="Desconto de frete" val={p.descontoFrete} sign="-" color={t.t3} hide={hide}
                  nota="abatido do frete que a Amazon cobrou do comprador — no frete grátis os dois se anulam"/>
+          )}
+          {/* ⭐ FRETE DO COMPRADOR como linha PRÓPRIA (não escondido no faturado).
+              LÍQUIDO do desconto de frete: no frete grátis a Amazon cobra e devolve,
+              então aqui fica ~0 — como deve. No FBA o frete é da AMAZON (ela estorna
+              do seller depois, via chargeback em Outras taxas) — a nota avisa. */}
+          {M.principal!==null && (M.freteComprador||0)>0.005 && (
+            <Row label="Frete pago pelo comprador" val={M.freteComprador as number} sign="+" color={t.t3} hide={hide}
+                 nota={(p?.afn||0)>0
+                   ? 'no FBA este frete é da Amazon — entra aqui e sai em "Outras taxas" (não é sua receita)'
+                   : ((p?.descontoFrete||0)>0.005 ? `frete cobrado ${brl2(M.freteBruto||0)} − desconto de frete ${brl2(p.descontoFrete)}` : 'cobrado do comprador junto com o produto')}/>
+          )}
+          {M.principal!==null && M.embrulhoReceita>0.005 && (
+            <Row label="Embrulho pra presente" val={M.embrulhoReceita} sign="+" color={t.t3} hide={hide}
+                 nota="o comprador pagou pelo embrulho"/>
           )}
           {/* Desconto de pedido antigo, sem a divisão gravada. Uma linha só —
               dividir sem o dado seria chute, e chute aqui inventa um custo. */}
@@ -1472,9 +1529,11 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
             <Row label="Desconto que você deu" val={p.promo} color={t.gold} hide={hide}
                  nota="cupom, promoção ou frete grátis — já dentro do Faturado abaixo"/>
           )}
-          <Row label={`Faturado (${units} un.)`} val={M.receitaBruta} strong hide={hide}
-               sign={(p?.precoTabela||0) > (M.receitaBruta||0) + 0.005 ? '=' : undefined}
-               nota={semPreco>0?`+${semPreco} un. que a Amazon ainda não precificou — fora da conta, não zeradas`:undefined}/>
+          <Row label={M.principal!==null ? `Recebido da venda (${units} un.)` : `Faturado (${units} un.)`}
+               val={M.receitaBruta} strong hide={hide}
+               sign={M.principal!==null ? '=' : ((p?.precoTabela||0) > (M.receitaBruta||0) + 0.005 ? '=' : undefined)}
+               nota={semPreco>0?`+${semPreco} un. que a Amazon ainda não precificou — fora da conta, não zeradas`
+                     :(M.principal!==null?'valor da venda − descontos + frete + embrulho — é daqui que as taxas saem':undefined)}/>
           {M.devolucaoValor>0.005 && <Row label={`Devoluções (${M.devolucaoUnits} un.)`} val={M.devolucaoValor} sign="-" color={t.red} hide={hide}
                nota="estorno real do repasse — o custo dessas unidades também sai do CMV"/>}
           <Row label="Comissão Amazon" val={M.comissao} sign="-" color={t.red} hide={hide}
@@ -1533,7 +1592,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
         ) : (orders.orders||[]).length===0 ? (
           <div style={{color:t.t3,fontSize:11.5,fontFamily:FG,padding:'10px 0'}}>Nenhum pedido deste produto no período.</div>
         ) : (
-          <Table head={[{label:'Data',w:'20%'},{label:'Un.',right:true},{label:'Total',right:true},{label:'Líq. Mkt',right:true},...(imposto>0?[{label:'Imposto',right:true}]:[]),{label:'Custo',right:true},{label:'Lucro',right:true},{label:'Margem',right:true}]}>
+          <Table head={[{label:'Data',w:'20%'},{label:'Un.',right:true},{label:'Vl. venda',right:true},{label:'Líq. Mkt',right:true},...(imposto>0?[{label:'Imposto',right:true}]:[]),{label:'Custo',right:true},{label:'Lucro',right:true},{label:'Margem',right:true}]}>
             {(orders.orders||[]).map((o:any,i:number)=>{
               // ⭐ O PENDENTE ENTRA COM VALOR. Antes a linha ia toda a "—" enquanto o
               // card acima JÁ contava esse pedido pelo preço do anúncio — as duas
@@ -1543,6 +1602,10 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
               // e a soma das linhas fecha com "Faturado".
               const pend=/pending/i.test(o.status||'') || (o.receita||0)<=0
               const oReceita=(o.receita||0)>0?o.receita:estPendUn*(o.qty||0)
+              // ⭐ Coluna exibida = VALOR DA VENDA do pedido (Σ preço do anúncio,
+              // o.precoItens) — a régua de 01/09; o rateio de taxas/imposto/CMV
+              // continua sobre o RECEBIDO (oReceita), a base em que foram cobrados.
+              const oVenda=(Number(o.precoItens)||0)>0?Number(o.precoItens):oReceita
               const rShare=M.receitaBruta>0?oReceita/M.receitaBruta:0
               const oFees=feesProduto===null?null:feesProduto*rShare
               const oAds=M.ads===null?null:M.ads*rShare
@@ -1563,7 +1626,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
                     <div style={{fontSize:9.5,color:pend?t.gold:t.t3}}>{o.channel==='AFN'?'FBA':'FBM'}{pend?' · Pendente':''}</div>
                   </td>
                   <NumTd>{o.qty}</NumTd>
-                  <NumTd strong hide={hide}>{money(oReceita)}</NumTd>
+                  <NumTd strong hide={hide}>{money(oVenda)}</NumTd>
                   <NumTd color={t.t2} hide={hide}>{money(oLiq)}</NumTd>
                   {imposto>0 && <NumTd color={t.red} hide={hide}>{money(oImp)}</NumTd>}
                   <NumTd color={temCusto?t.t1:t.t3} hide={hide}>{temCusto?money(oCmv):dash}</NumTd>
@@ -1695,7 +1758,10 @@ function classificarABC(dre:any,costs:Record<string,number>,imposto:number,eixo:
     const M=margemDoProduto({linhas:L,produto:p,reembolsos:dre?.reembolsos,
       custoUnit:costs[p.sku]||0,imposto,ads:null,
       ajustes:ajustesDoProduto(ajustes,p.sku,from,to)})
-    return {sku:p.sku,receita:M.receitaLiquida,lucro:M.lucroAntesAds}
+    // ⭐ Eixo "receita" da ABC = VALOR DA VENDA (principal) quando o payload traz —
+    // a mesma régua exibida no Top 15/Analítico; os DOIS períodos comparados usam
+    // esta MESMA função, então a comparação segue maçã com maçã.
+    return {sku:p.sku,receita:(M.principal ?? M.receitaLiquida),lucro:M.lucroAntesAds}
   })
   const valorDe=(r:any)=>eixo==='lucro'?(r.lucro??null):r.receita
   const ord=base.filter((r:any)=>valorDe(r)!==null).sort((a:any,b:any)=>(valorDe(b)||0)-(valorDe(a)||0))
@@ -3113,6 +3179,11 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
      mais interessa numa tela de Ads, porque é onde o dinheiro some sem retorno. */
   const catalogo:AdsProdutoDre[]=(()=>{
     const map=new Map<string,AdsProdutoDre>()
+    /* ⚠️ AQUI FICA A RECEITA COM FRETE DE PROPÓSITO (01/09): ela é o DENOMINADOR
+       do TACoS por produto (lib/adsMetricas linhasPorProduto). Trocar pra
+       `principal` mudaria a métrica de todo mundo sem decisão do João — TACoS e
+       "Fat. total" da aba Ads seguem na base recebida até ele decidir (registrado
+       no handoff). O resto da Gestão já exibe o valor da venda. */
     for(const p of (realDre?.produtos||[])) map.set(p.sku,{sku:p.sku,asin:p.asin,name:p.name,image:p.image,units:p.units,receita:p.receita})
     for(const it of (inv?.inventario||[])){
       const at=map.get(it.sku)
@@ -3361,7 +3432,8 @@ function Analitico({realDre,hide,connected,mockM,costs={},imposto=0,adsReal}:{re
     for(const r of reembolsos){ const a=refBySku[r.sku]||(refBySku[r.sku]={units:0,valor:0}); a.units+=r.units||0; a.valor+=r.valor||0 }
     const totalDev = reembolsos.reduce((s,r)=>s+(r.valor||0),0)
     const totalDevUn = reembolsos.reduce((s,r)=>s+(r.units||0),0)
-    const receitaTotal = produtos.reduce((s,p)=>s+(p.receita||0),0)
+    // ⭐ Total do período na régua do VALOR DA VENDA (principal) quando disponível.
+    const receitaTotal = produtos.reduce((s,p)=>s+((p.principal ?? p.receita)||0),0)
     const unidadesTotal = produtos.reduce((s,p)=>s+(p.units||0),0)
     // Mesma fonte única do modal / Top 15 / Curva ABC. ⚠️ Antes esta aba exibia a
     // coluna "Reembolsos" ao lado de um "Lucro bruto" que ignorava esse mesmo
@@ -3371,17 +3443,22 @@ function Analitico({realDre,hide,connected,mockM,costs={},imposto=0,adsReal}:{re
       const M=margemDoProduto({linhas:L,produto:p,reembolsos:realDre?.reembolsos,
         custoUnit:costs[p.sku]||0,imposto,ads:adsDoProduto(adsReal,p.sku,p.asin).valor})
       const units=p.units||0
-      return {p,receita:M.receitaLiquida,units,
-        ticket:units>0?M.receitaBruta/units:0,
-        shareRec:receitaTotal>0?M.receitaBruta/receitaTotal*100:0,
+      // ⭐ Receita/ticket/share exibidos = VALOR DA VENDA (principal, fallback régua antiga).
+      return {p,receita:(M.principal ?? M.receitaLiquida),units,
+        ticket:units>0?((M.principal ?? M.receitaBruta))/units:0,
+        shareRec:receitaTotal>0?((M.principal ?? M.receitaBruta))/receitaTotal*100:0,
         custoTotal:M.cmv,temCusto:M.temCusto,
         // Margem ANTES do ads, pra parear com o Lucro (antes do ads) e com a
         // margemMedia ponderada logo abaixo — que também usa o lucro antes do ads.
         lucro:M.lucroAntesAds,margem:(M.lucroAntesAds!=null&&M.receitaLiquida>0)?M.lucroAntesAds/M.receitaLiquida*100:null,
+        // base da MARGEM MÉDIA (métrica): receita líquida — a mesma da margem por linha.
+        recLiq:M.receitaLiquida,
         ref:refBySku[p.sku]||{units:0,valor:0}}
     })
     const comCusto=rows.filter(r=>r.temCusto&&r.lucro!==null)
-    const recCusto=comCusto.reduce((s,r)=>s+r.receita,0)
+    // ⚠️ Denominador da margem média = receita LÍQUIDA (mesma base da margem por
+    // linha) — NÃO o valor-da-venda exibido, senão a média discorda das linhas.
+    const recCusto=comCusto.reduce((s,r)=>s+r.recLiq,0)
     const margemMedia = recCusto>0 ? comCusto.reduce((s,r)=>s+(r.lucro||0),0)/recCusto*100 : null
     if(produtos.length===0 && reembolsos.length===0)
       return <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px',textAlign:'center' as const,color:t.t3,fontSize:12.5,fontFamily:FG}}>Nenhuma venda no período selecionado — nada para analisar por aqui.</div>
@@ -3470,7 +3547,7 @@ function Gerenciamento({realDre,inv,costs,extras,onCost,onExtra,mockM,hide,conne
   const vendidos = (realDre.produtos||[]) as any[]
   const estoque = (inv?.inventario||[]) as any[]
   const porSku = new Map<string,any>()
-  for(const p of vendidos) porSku.set(p.sku,{sku:p.sku,name:p.name,image:p.image,units:p.units||0,receita:p.receita||0,emEstoque:0})
+  for(const p of vendidos) porSku.set(p.sku,{sku:p.sku,name:p.name,image:p.image,units:p.units||0,receita:(p.principal ?? p.receita)||0,emEstoque:0})
   for(const it of estoque){
     const emEstoque=(it.fulfillable||0)+(it.inbound||0)+(it.reserved||0)
     const atual=porSku.get(it.sku)
@@ -3643,7 +3720,7 @@ function Relatorio({realDre,inv,costs={},adsReal}:{realDre?:any;inv?:any;costs?:
   const L=realDre?.linhas||{}
   const reps:{label:string;icon:string;off:boolean;gen:()=>string;file:string}[]=[
     {label:'Produtos / Vendas',icon:'ti-list',off:!produtos.length,file:'produtos-vendas',
-      gen:()=>toCSV(['Produto','SKU','ASIN','Unidades','Faturado','Preço médio','Custo un. (produto + extras)'],produtos.map(p=>[p.name||p.sku,p.sku,p.asin||'',p.units,p.receita,p.units>0?(p.receita/p.units).toFixed(2):'0',costs[p.sku]||0]))},
+      gen:()=>toCSV(['Produto','SKU','ASIN','Unidades','Valor de venda (preço do anúncio)','Preço médio','Custo un. (produto + extras)'],produtos.map(p=>{const vv=(p.principal ?? p.receita)||0;return [p.name||p.sku,p.sku,p.asin||'',p.units,vv,p.units>0?(vv/p.units).toFixed(2):'0',costs[p.sku]||0]}))},
     {label:'Reembolsos',icon:'ti-arrow-back-up',off:!reembolsos.length,file:'reembolsos',
       gen:()=>toCSV(['Produto','SKU','Unidades devolvidas','R$ devolvido'],reembolsos.map(r=>[r.name||r.sku,r.sku,r.units,r.valor]))},
     {label:'Estoque FBA',icon:'ti-package',off:!inventario.length,file:'estoque-fba',
@@ -3653,7 +3730,10 @@ function Relatorio({realDre,inv,costs={},adsReal}:{realDre?:any;inv?:any;costs?:
       // real vem da Advertising API, como na tela) e omitia duas linhas que a DRE
       // desconta — Taxa Amazon pra Todos e Outras taxas. Resultado: a planilha não
       // fechava com a tela nem consigo mesma. Agora usa a MESMA expressão do card.
-      gen:()=>toCSV(['Linha','Valor (R$)'],[['Receita bruta',L.receitaBruta||0],['Devoluções',L.devolucoes||0],['Receita líquida',L.receitaLiquida||0],['Comissão',L.comissao||0],['Tarifa FBA',L.fba||0],['Taxa Amazon pra Todos',L.taxaPrograma||0],['Outras taxas',L.outrasTaxas||0],['Armazenagem',L.armazenagem||0],['Assinatura',L.assinatura||0],['Líq. Marketplace',realDre?.liqMarketplace||0],['Ads',adsReal?.ready?(Number(adsReal.spend)||0):''],['Reembolsos e ajustes',L.ajustes||0]])},
+      // ⭐ A decomposição do valor da venda abre a planilha (régua 01/09): valor da
+      // venda − descontos + frete + embrulho = recebido (receita bruta) — a mesma
+      // identidade da lupinha; payload antigo (sem principal) exporta '' nas novas.
+      gen:()=>toCSV(['Linha','Valor (R$)'],[['Valor da venda (preço do anúncio)',L.principal??''],['Cupom/desconto concedido',L.promocoes??''],['Frete pago pelo comprador',L.freteReceita??''],['Embrulho pra presente',L.embrulho??''],['Recebido da venda (receita bruta)',L.receitaBruta||0],['Devoluções',L.devolucoes||0],['Receita líquida',L.receitaLiquida||0],['Comissão',L.comissao||0],['Tarifa FBA',L.fba||0],['Taxa Amazon pra Todos',L.taxaPrograma||0],['Outras taxas',L.outrasTaxas||0],['Armazenagem',L.armazenagem||0],['Assinatura',L.assinatura||0],['Líq. Marketplace',realDre?.liqMarketplace||0],['Ads',adsReal?.ready?(Number(adsReal.spend)||0):''],['Reembolsos e ajustes',L.ajustes||0]])},
   ]
   return(<>
     <Hint>Relatórios reais exportáveis em CSV (abre direto no Excel).</Hint>

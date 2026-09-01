@@ -49,6 +49,13 @@ export interface LinhasDre {
 }
 export interface ProdutoDre {
   sku: string; asin?: string; units: number; receita: number
+  /**
+   * ⭐ VALOR DA VENDA = Σ preço do ANÚNCIO (sem frete/embrulho, ANTES do cupom).
+   * É o número que o seller reconhece ("vendo a R$11,99") — a `receita` acima é o
+   * RECEBIDO da venda (price + frete + embrulho − promo), que num FBA não-Prime
+   * chega a somar frete que nem é do seller. Ausente = payload antigo.
+   */
+  principal?: number
   comissao?: number | null; fba?: number | null
   taxaPrograma?: number | null; outrasTaxas?: number | null
   feeMedido?: boolean
@@ -60,6 +67,12 @@ export interface ProdutoDre {
   armazenagem?: number | null
   /** Desconto que o SELLER concedeu (cupom/promoção). Já está fora da `receita`. */
   promo?: number
+  /** Receita de embrulho pra presente deste produto (o comprador paga). */
+  embrulho?: number
+  /** A decomposição do desconto (ver backend): parte de produto, de frete e a indivisa. */
+  descontoProduto?: number
+  descontoFrete?: number
+  descontoIndiviso?: number
 }
 export interface Reembolso { sku: string; units: number; valor: number }
 
@@ -107,6 +120,19 @@ export function ajustesDoProduto(
 
 export interface MargemProduto {
   receitaBruta: number
+  /**
+   * ⭐ A CADEIA DO VALOR DA VENDA (régua do Gestor, decidida pelo João 01/09):
+   * `principal` = preço do anúncio (o que o seller reconhece) — vem PRIMEIRO na
+   * tela; frete/embrulho/cupom são LINHAS até chegar no `receitaBruta` (recebido).
+   * `null` = payload antigo sem a decomposição → a tela cai no formato velho.
+   * Identidade: principal − descontos + freteComprador(líq.) + embrulho = receitaBruta.
+   */
+  principal: number | null
+  /** Frete pago pelo comprador, LÍQUIDO do desconto de frete (no frete grátis ≈ 0). */
+  freteComprador: number | null
+  /** O frete BRUTO cobrado, antes do desconto de frete (pra nota explicativa). */
+  freteBruto: number | null
+  embrulhoReceita: number
   devolucaoValor: number; devolucaoUnits: number
   receitaLiquida: number
   comissao: number | null; fba: number | null
@@ -231,6 +257,18 @@ export function margemDoProduto(e: EntradaMargem): MargemProduto {
   const p = e.produto
   const receitaBruta = p?.receita || 0
   const units = p?.units || 0
+  const r2m = (n: number) => Math.round(n * 100) / 100
+
+  // ⭐ A decomposição do VALOR DA VENDA (só quando o payload traz `principal`).
+  // receita = principal + frete + embrulho − promo  →  frete = receita − principal
+  // − embrulho + promo. O exibível é o frete LÍQUIDO (bruto − desconto de frete):
+  // no "frete grátis" a Amazon cobra e devolve — o líquido fica ~0, como deve.
+  const temDecomp = p?.principal !== undefined && p?.principal !== null
+  const principal = temDecomp ? r2m(Number(p.principal) || 0) : null
+  const embrulhoReceita = r2m(Number(p?.embrulho) || 0)
+  const promoTotal = Number(p?.promo) || 0
+  const freteBruto = temDecomp ? r2m(receitaBruta - (principal as number) - embrulhoReceita + promoTotal) : null
+  const freteComprador = freteBruto !== null ? r2m(Math.max(0, freteBruto - (Number(p?.descontoFrete) || 0))) : null
 
   // Devolução REAL por SKU (vem do repasse, não é estimativa). Sem isto o SKU que
   // mais destrói caixa lidera o Top 15 com o lucro do faturamento bruto.
@@ -291,7 +329,8 @@ export function margemDoProduto(e: EntradaMargem): MargemProduto {
   const margem = (base !== null && receitaLiquida > 0) ? base / receitaLiquida * 100 : null
 
   return {
-    receitaBruta, devolucaoValor, devolucaoUnits, receitaLiquida,
+    receitaBruta, principal, freteComprador, freteBruto, embrulhoReceita,
+    devolucaoValor, devolucaoUnits, receitaLiquida,
     comissao, fba, taxaPrograma, outrasTaxas, taxasMedidas: medePrograma && medeOutras, feeMedido,
     liqMarketplace, ads, imposto, armazenagem, unitsLiquidas, cmv, temCusto, credito, custoEventual,
     lucroAntesAds, lucro, margem,

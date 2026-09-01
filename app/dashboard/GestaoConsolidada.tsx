@@ -149,7 +149,10 @@ export default function GestaoConsolidada() {
       { from: amz?.period?.from, to: amz?.period?.to })
     const liq = amz?.liqMarketplace || 0
     return {
-      fat: linhas.receitaBruta || 0,
+      // ⭐ Faturamento Amazon = VALOR DA VENDA (linhas.principal, régua 01/09) — o
+      // ML já entrega mercadoria, então a soma "Tudo" fica na MESMA régua nas duas
+      // lojas. Payload antigo sem `principal` cai no bruto.
+      fat: (linhas.principal ?? linhas.receitaBruta) || 0,
       liq,
       vendas: amz?.vendas || 0,
       unid: Math.max(0, (amz?.unidades || 0) - (amz?.reembolsos || []).reduce((s: number, r: any) => s + Math.abs(r.units || 0), 0)),
@@ -197,7 +200,9 @@ export default function GestaoConsolidada() {
   const produtos: LinhaProduto[] = [
     ...(amzOn ? (amz?.produtos || []).map((p: any): LinhaProduto => ({
       fonte: 'amazon', id: p.sku, titulo: p.name || p.sku, foto: p.image || null,
-      unidades: p.units || 0, receita: p.receita || 0,
+      // receita exibida = valor da venda (principal); o líquido continua saindo do
+      // recebido (as taxas foram cobradas sobre o pedido inteiro).
+      unidades: p.units || 0, receita: (p.principal ?? p.receita) || 0,
       taxas: (p.comissao || 0) + (p.fba || 0) + (p.taxaPrograma || 0) + (p.outrasTaxas || 0),
       liquido: p.feeMedido ? (p.receita || 0) - ((p.comissao || 0) + (p.fba || 0) + (p.taxaPrograma || 0) + (p.outrasTaxas || 0)) : null,
     })) : []),

@@ -248,7 +248,7 @@ function coreDre(cfg: DemoConfig, R: number) {
 export function demoFinance(cfg: DemoConfig, from: string, to: string, daily: boolean): any {
   if (daily) {
     const vals = dailyValues(cfg), dates = seriesDates(), ticket = avgTicket(cfg) || 1
-    const series = vals.map((v, i) => ({ date: mmdd(dates[i]), receita: v, pedidos: Math.max(1, Math.round(v / ticket)) }))
+    const series = vals.map((v, i) => ({ date: mmdd(dates[i]), receita: v, principal: v, pedidos: Math.max(1, Math.round(v / ticket)) }))
     return { connected: true, period: { from, to }, daily: series, receita: r2(vals.reduce((s, v) => s + v, 0)) }
   }
   const { revenue: R, daily: dailyArr } = periodRevenue(cfg, from, to)
@@ -267,14 +267,18 @@ export function demoFinance(cfg: DemoConfig, from: string, to: string, daily: bo
   return {
     connected: true,
     period: { from, to },
-    linhas: { receitaBruta: R, devolucoes, receitaLiquida, comissao: c.comissao, taxaPrograma: 0, fba: c.fba, armazenagem: 0, assinatura: 0, outrasTaxas: 0, ads: c.ads },
+    // ⭐ `principal` = valor da venda (preço do anúncio). Na demo não há frete de
+    // comprador, embrulho nem cupom → principal = receita, frete/promo = 0 — a
+    // identidade principal + freteReceita + embrulho − promocoes = receitaBruta
+    // fecha por construção (mesma régua do payload real, 01/09).
+    linhas: { receitaBruta: R, principal: R, freteReceita: 0, embrulho: 0, promocoes: 0, devolucoes, receitaLiquida, comissao: c.comissao, taxaPrograma: 0, fba: c.fba, armazenagem: 0, assinatura: 0, outrasTaxas: 0, ads: c.ads },
     liqMarketplace,
     vendas: c.vendas, unidades: c.unidades,
     faturamento: R,
     ticket: c.vendas > 0 ? r2(R / c.vendas) : 0,
-    produtos: c.produtos,
+    produtos: c.produtos.map((p: any) => ({ ...p, principal: p.receita, afn: p.units })),
     reembolsos,
-    daily: dailyArr,
+    daily: dailyArr.map((d: any) => ({ ...d, principal: d.receita })),
     demo: true,
   }
 }
@@ -388,7 +392,9 @@ export function demoOrders(cfg: DemoConfig, from: string, to: string, sku?: stri
         date: dia.toISOString(),
         status: (idx % 13 === 0) ? 'Pending' : 'Shipped',
         channel: 'AFN',
-        itens: [{ sku: p.sku, asin: p.asin, qty, receita, precoTabela: bruto }],
+        // precoItem = preço do anúncio (na demo não há frete, então = bruto). É o que
+        // faz a nova lupinha mostrar "valor da venda − cupom = recebido".
+        itens: [{ sku: p.sku, asin: p.asin, qty, receita, precoItem: bruto, precoTabela: bruto }],
         precoTabela: bruto,
         desconto: { produto: desc, frete: 0, total: desc, pctProduto: desc > 0 ? Math.round(desc / bruto * 1000) / 10 : null },
       })
