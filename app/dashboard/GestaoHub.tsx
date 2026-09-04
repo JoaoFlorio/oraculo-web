@@ -1536,9 +1536,25 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
                      :(M.principal!==null?'valor da venda − descontos + frete + embrulho — é daqui que as taxas saem':undefined)}/>
           {M.devolucaoValor>0.005 && <Row label={`Devoluções (${M.devolucaoUnits} un.)`} val={M.devolucaoValor} sign="-" color={t.red} hide={hide}
                nota="estorno real do repasse — o custo dessas unidades também sai do CMV"/>}
-          <Row label="Comissão Amazon" val={M.comissao} sign="-" color={t.red} hide={hide}
-               nota={M.feeMedido?undefined:'a Amazon não devolveu a tarifa deste produto agora'}/>
-          <Row label="Taxa FBA" val={M.fba} sign="-" color={t.red} hide={hide}/>
+          {/* ⭐ COMISSÃO ISENTA (conta em promoção de boas-vindas da Amazon — caso
+              vitraelgroup 03/09: margem 62% REAL e nada na tela explicava). Zero
+              MEDIDO + tarifa padrão conhecida → o selo diz quanto o benefício vale
+              e prepara o seller pro dia em que a promoção acabar. Mesmo padrão da
+              armazenagem isenta: mostrar R$0,00 e calar seria jogar fora a única
+              informação que este caso tem. */}
+          {M.comissao===0&&M.feeMedido&&(p?.tarifaPadrao?.comissao||0)>0.005 ? (
+            <Row label="Comissão Amazon" val={0} color={t.grn} hide={hide}
+                 nota={`ISENTA pela promoção da sua conta — a tarifa padrão seria ${brl2(p.tarifaPadrao.comissao)} (${brl2(p.tarifaPadrao.comissaoUn)}/un). Quando a promoção acabar, ela entra na sua margem.`}/>
+          ) : (
+            <Row label="Comissão Amazon" val={M.comissao} sign="-" color={t.red} hide={hide}
+                 nota={M.feeMedido?undefined:'a Amazon não devolveu a tarifa deste produto agora'}/>
+          )}
+          {M.fba===0&&M.feeMedido&&(p?.tarifaPadrao?.fba||0)>0.005 ? (
+            <Row label="Taxa FBA" val={0} color={t.grn} hide={hide}
+                 nota={`ISENTA pela promoção da sua conta — a tarifa padrão seria ${brl2(p.tarifaPadrao.fba)} (${brl2(p.tarifaPadrao.fbaUn)}/un)`}/>
+          ) : (
+            <Row label="Taxa FBA" val={M.fba} sign="-" color={t.red} hide={hide}/>
+          )}
           {M.taxaPrograma>0.005 && <Row label="Taxa Amazon pra Todos" val={M.taxaPrograma} sign="-" color={t.red} hide={hide}
                nota={M.taxasMedidas?'cobrada por item no seu repasse':'rateada por faturamento'}/>}
           {M.outrasTaxas>0.005 && <Row label="Outras taxas" val={M.outrasTaxas} sign="-" color={t.red} hide={hide}
