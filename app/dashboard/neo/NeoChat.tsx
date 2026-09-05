@@ -496,11 +496,50 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
     try { rec.start() } catch { setGravando(false) }
   }
 
+  /* ⭐ CATÁLOGO DE FORNECEDOR pelo CLIPE (Fase 2 do minerador, 05/09) — a visão
+     do João: "o cliente upa o catálogo dentro do Oráculo e o NEO varre e lê
+     tudo". PDF anexado (admin, por enquanto) NÃO vira mensagem: sobe pro
+     backend, o Gemini extrai os produtos e o card abaixo acompanha; pronto, é
+     só pedir "minera meu fornecedor". A AMOSTRA aparece pro usuário conferir o
+     preço de olho — foi assim que o João pegou o erro de leitura do Thor. */
+  const [catalogo, setCatalogo] = useState<any>(null)
+  const catPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => () => { if (catPollRef.current) clearInterval(catPollRef.current) }, [])
+  function vigiarCatalogo() {
+    if (catPollRef.current) clearInterval(catPollRef.current)
+    catPollRef.current = setInterval(async () => {
+      try {
+        const r = await fetch('/api/agent/fornecedor', { cache: 'no-store' })
+        const s = await r.json()
+        if (s?.status && s.status !== 'nenhum') setCatalogo(s)
+        if (s?.status === 'pronto' || s?.status === 'erro') { if (catPollRef.current) clearInterval(catPollRef.current); catPollRef.current = null }
+      } catch { /* tenta no próximo tick */ }
+    }, 8000)
+  }
+  async function subirCatalogo(f: File) {
+    setErro(null)
+    if (f.size > 200 * 1048576) { setErro('Esse PDF passa de 200MB. Comprime ou divide o catálogo.') ; return }
+    setCatalogo({ status: 'enviando', nome_arquivo: f.name })
+    try {
+      const r = await fetch(`/api/agent/fornecedor?nome=${encodeURIComponent(f.name)}`, { method: 'POST', body: f })
+      const j = await r.json()
+      if (!r.ok) { setCatalogo(null); setErro(j?.error || 'não consegui enviar o catálogo'); return }
+      setCatalogo({ status: 'extraindo', nome_arquivo: f.name })
+      vigiarCatalogo()
+    } catch { setCatalogo(null); setErro('falha ao enviar o catálogo — tenta de novo') }
+  }
+
   async function anexar(files: FileList | null) {
     if (!files?.length) return
     setErro(null)
     const novas: Img[] = []
     for (const f of Array.from(files)) {
+      // PDF = catálogo de fornecedor (admin): rota própria, não vira mensagem.
+      if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
+        if (isAdmin) { subirCatalogo(f); continue }
+        setErro('PDF ainda não é aceito aqui. Anexe uma foto (JPG, PNG ou do iPhone).')
+        continue
+      }
       if (pend.length + novas.length >= MAX_IMGS) break
       // ⚠️ Só aceita ARQUIVO DE IMAGEM. `accept="image/*"` no input não impede
       // arrastar um PDF pra cá — e aí a "conversão" viraria lixo.
@@ -1194,6 +1233,33 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
               </div>
             )}
 
+            {/* 📦 Card do catálogo de fornecedor (admin): acompanha o upload/extração
+                e, pronto, mostra a AMOSTRA pra conferência de preço + o convite pra
+                minerar. Dispensável no ×; o catálogo fica salvo no servidor. */}
+            {catalogo && (
+              <div style={{ margin: '0 0 8px', padding: '10px 12px', borderRadius: 12, border: '1px solid rgba(255,183,3,.25)', background: 'rgba(255,183,3,.06)', fontSize: 12, color: '#CFCFE8', position: 'relative' as const }}>
+                <button onClick={() => setCatalogo(null)} aria-label="fechar" style={{ position: 'absolute', top: 6, right: 8, background: 'transparent', border: 'none', color: '#8B8BAC', cursor: 'pointer', fontSize: 13 }}>×</button>
+                {catalogo.status === 'enviando' && <>📦 Enviando <b>{catalogo.nome_arquivo}</b>… (catálogo grande leva um minuto)</>}
+                {catalogo.status === 'extraindo' && <>📦 <b>{catalogo.nome_arquivo}</b>: lendo o catálogo página por página… (2–4 min num catálogo grande — pode continuar usando o chat)</>}
+                {catalogo.status === 'erro' && <>📦 <b>{catalogo.nome_arquivo}</b>: ❌ {catalogo.erro || 'não consegui extrair'} </>}
+                {catalogo.status === 'pronto' && (
+                  <>
+                    📦 <b>{catalogo.nome_arquivo}</b>: ✅ <b>{catalogo.total} produtos</b> extraídos.
+                    {Array.isArray(catalogo.amostra) && catalogo.amostra.length > 0 && (
+                      <div style={{ marginTop: 5, fontSize: 11, color: '#8B8BAC' }}>
+                        Confere a leitura: {catalogo.amostra.slice(0, 3).map((p: any) => `${p.nome} — R$ ${Number(p.custoUn).toFixed(2).replace('.', ',')}/un${p.pcx ? ` (${p.pcx}/cx)` : ''}`).join(' · ')}
+                      </div>
+                    )}
+                    <div style={{ marginTop: 6 }}>
+                      <button onClick={() => enviar('Minera meu fornecedor: pega os melhores produtos do catálogo que eu subi e aplica os 3 pilares na Amazon.')}
+                        style={{ background: 'rgba(255,183,3,.14)', border: '1px solid rgba(255,183,3,.35)', color: '#FFB703', fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>
+                        ⛏️ Minerar este catálogo
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {/* Barra de entrada */}
             <div className="neoBar">
              <div className="neoCol neoBarIn">
@@ -1205,8 +1271,8 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7m0 5h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
               )}
-              <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={(e) => anexar(e.target.files)} />
-              <button className="neoIconBtn" onClick={() => fileRef.current?.click()} disabled={loading || pend.length >= MAX_IMGS} title="Anexar imagem" aria-label="Anexar imagem">
+              <input ref={fileRef} type="file" accept={isAdmin ? 'image/*,application/pdf' : 'image/*'} multiple hidden onChange={(e) => anexar(e.target.files)} />
+              <button className="neoIconBtn" onClick={() => fileRef.current?.click()} disabled={loading || pend.length >= MAX_IMGS} title={isAdmin ? 'Anexar imagem ou catálogo (PDF)' : 'Anexar imagem'} aria-label="Anexar imagem">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 11.5 12.6 19a5.1 5.1 0 0 1-7.2-7.2l8-8a3.4 3.4 0 0 1 4.8 4.8l-7.8 7.8a1.7 1.7 0 0 1-2.4-2.4l7-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
               </button>
               {suportaMic && (
