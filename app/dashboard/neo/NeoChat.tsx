@@ -512,9 +512,38 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         const r = await fetch('/api/agent/fornecedor', { cache: 'no-store' })
         const s = await r.json()
         if (s?.status && s.status !== 'nenhum') setCatalogo(s)
-        if (s?.status === 'pronto' || s?.status === 'erro') { if (catPollRef.current) clearInterval(catPollRef.current); catPollRef.current = null }
+        // Continua o polling enquanto a EXTRAÇÃO ou a VARREDURA estiverem rodando.
+        const rodando = s?.status === 'extraindo' || s?.varredura?.status === 'rodando'
+        if (!rodando) { if (catPollRef.current) clearInterval(catPollRef.current); catPollRef.current = null }
       } catch { /* tenta no próximo tick */ }
     }, 8000)
+  }
+  /* ⚠️ F5 no meio da extração/varredura SOMIA com o card (achado da revisão de
+     05/09: o estado só nascia no upload). No mount, uma consulta recupera o que
+     estiver rodando — ou o resultado recente — e religa o polling se preciso. */
+  useEffect(() => {
+    if (!isAdmin) return
+    ;(async () => {
+      try {
+        const r = await fetch('/api/agent/fornecedor', { cache: 'no-store' })
+        const s = await r.json()
+        if (!s?.status || s.status === 'nenhum') return
+        const rodando = s.status === 'extraindo' || s?.varredura?.status === 'rodando'
+        const recente = Date.parse(s.criado_em || 0) > Date.now() - 48 * 3600 * 1000
+        if (rodando || (s.status === 'pronto' && recente) || (s.status === 'erro' && recente)) setCatalogo(s)
+        if (rodando) vigiarCatalogo()
+      } catch { /* sem card */ }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin])
+  async function dispararVarredura() {
+    try {
+      const r = await fetch('/api/agent/fornecedor?op=varrer', { method: 'POST' })
+      const j = await r.json()
+      if (!r.ok || !j?.ok) { setErro(j?.erro || j?.error || 'não consegui disparar a varredura'); return }
+      setCatalogo((c: any) => ({ ...(c || {}), varredura: { status: 'rodando', progresso: 0, total: j.total } }))
+      vigiarCatalogo()
+    } catch { setErro('falha ao disparar a varredura') }
   }
   async function subirCatalogo(f: File) {
     setErro(null)
@@ -1250,13 +1279,32 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
                         Confere a leitura: {catalogo.amostra.slice(0, 3).map((p: any) => `${p.nome} — R$ ${Number(p.custoUn).toFixed(2).replace('.', ',')}/un${p.pcx ? ` (${p.pcx}/cx)` : ''}`).join(' · ')}
                       </div>
                     )}
-                    <div style={{ marginTop: 6 }}>
+                    <div style={{ marginTop: 6, display: 'flex', gap: 8, flexWrap: 'wrap' as const, alignItems: 'center' }}>
                       <button onClick={() => enviar('Minera meu fornecedor: pega os melhores produtos do catálogo que eu subi e aplica os 3 pilares na Amazon.')}
                         style={{ background: 'rgba(255,183,3,.14)', border: '1px solid rgba(255,183,3,.35)', color: '#FFB703', fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>
                         ⛏️ Minerar este catálogo
                       </button>
+                      {/* Varredura COMPLETA: os N produtos contra a Amazon, em segundo plano. */}
+                      {!catalogo.varredura || catalogo.varredura.status === 'erro' ? (
+                        <button onClick={dispararVarredura}
+                          style={{ background: 'transparent', border: '1px solid rgba(255,183,3,.3)', color: '#CFCFE8', fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          🔍 Varrer o catálogo INTEIRO (~30 min)
+                        </button>
+                      ) : catalogo.varredura.status === 'rodando' ? (
+                        <span style={{ fontSize: 11, color: '#8B8BAC' }}>
+                          🔍 Varrendo na Amazon: <b>{catalogo.varredura.progresso}/{catalogo.varredura.total}</b>… (pode fechar, continua sozinho)
+                        </span>
+                      ) : (
+                        <button onClick={() => enviar('Me mostra o resultado da varredura completa do meu catálogo de fornecedor.')}
+                          style={{ background: 'rgba(34,197,94,.12)', border: '1px solid rgba(34,197,94,.35)', color: '#4ADE80', fontSize: 11, fontWeight: 700, padding: '5px 10px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>
+                          ✅ Varredura pronta: {Number(catalogo.varredura.oportunidades) || 0} oportunidades — ver resultado
+                        </button>
+                      )}
                     </div>
                   </>
+                )}
+                {catalogo.status === 'erro' && catalogo.varredura?.status === 'erro' && (
+                  <div style={{ marginTop: 4, fontSize: 10.5, color: '#8B8BAC' }}>{catalogo.varredura.erro}</div>
                 )}
               </div>
             )}

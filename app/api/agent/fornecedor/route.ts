@@ -15,6 +15,15 @@ export async function POST(req: NextRequest) {
   // ⚠️ ADMIN-ONLY enquanto o minerador está em teste (decisão do João: "começo só
   // na minha conta sem ninguém ver"). Liberar = tirar esta linha.
   if (user.role !== 'admin') return NextResponse.json({ error: 'minerador de fornecedor em teste (admin only)' }, { status: 403 })
+  // ?op=varrer → dispara a varredura completa do catálogo (sem body).
+  if (req.nextUrl.searchParams.get('op') === 'varrer') {
+    try {
+      const res = await fetch(`${BACKEND}/api/fornecedor/varrer?email=${encodeURIComponent(user.email)}`, {
+        method: 'POST', headers: { 'x-internal-key': KEY }, signal: AbortSignal.timeout(20_000),
+      })
+      return NextResponse.json(await res.json().catch(() => ({ error: 'resposta inválida' })), { status: res.status })
+    } catch { return NextResponse.json({ error: 'falha ao disparar a varredura' }, { status: 502 }) }
+  }
   const nome = encodeURIComponent(req.nextUrl.searchParams.get('nome') || 'catalogo.pdf')
   try {
     const body = Buffer.from(await req.arrayBuffer())
