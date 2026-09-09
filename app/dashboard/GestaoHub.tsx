@@ -3183,7 +3183,14 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
   const [carregando,setCarregando]=useState(true)
   const [feitos,setFeitos]=useState<Record<string,'ok'|'erro'|'indo'>>({})
   const [objetivo,setObjetivo]=useState<string>('equilibrar')
+  const [gerencia,setGerencia]=useState<Record<string,boolean>>({})   // toggle por produto (otimista)
   const chave=(r:any)=>`${r.tipo}:${r.campaignId}:${r.keywordId||r.termo}`
+  // "NEO gerencia esse produto" ↔ "eu cuido dele" — persiste no backend, otimista na UI.
+  function alternarProduto(sku:string,valorAtual:boolean){
+    const novo=!valorAtual
+    setGerencia(g=>({...g,[sku]:novo}))
+    fetch('/api/ads/produto-config',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sku,gerenciar:novo})}).catch(()=>{ setGerencia(g=>({...g,[sku]:valorAtual})) })
+  }
   useEffect(()=>{
     let vivo=true
     const url='/api/ads/copiloto'+(margem!=null&&isFinite(margem)?`?margem=${margem}`:'')
@@ -3248,6 +3255,24 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
     'desligar-sem-estoque':{cor:t.red,rot:'Desligar (sem estoque)',btn:'Desligar'},
   }
   const produtos:any[] = d.temMapaProduto ? (d.produtos||[]) : []
+  // Cor + ícone por CAUSA raiz do diagnóstico (a alma do método: fala a causa).
+  const CAUSA:Record<string,{cor:string;icon:string}>={
+    'sem-estoque':{cor:t.red,icon:'ti-box-off'},
+    'nao-gasta':{cor:t.gold,icon:'ti-eye-off'},
+    'vitrine':{cor:t.gold,icon:'ti-photo'},
+    'pagina':{cor:t.gold,icon:'ti-file-description'},
+    'lance-alto':{cor:t.red,icon:'ti-trending-down'},
+    'saudavel':{cor:t.grn,icon:'ti-circle-check'},
+    'sem-dado':{cor:t.t3,icon:'ti-hourglass'},
+  }
+  // Uma métrica do m19: valor + rótulo. Honesto — mostra "—" quando é null.
+  const Metrica=({rot,val,cor}:{rot:string;val:string;cor?:string})=>(
+    <div style={{textAlign:'center' as const,minWidth:52}}>
+      <div style={{fontSize:14,fontWeight:800,color:cor||t.t1,fontFamily:FG,lineHeight:1.1}}>{val}</div>
+      <div style={{fontSize:9.5,color:t.t3,marginTop:2,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>{rot}</div>
+    </div>
+  )
+  const num=(v:any,suf='')=>v==null?'—':(typeof v==='number'?(Math.round(v*100)/100):v)+suf
 
   return(
     <div style={{...card,padding:'20px 22px'}}>
@@ -3278,24 +3303,52 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
             O NEO revisou suas campanhas e separou <b style={{color:t.t1}}>{totalAcoes} {totalAcoes===1?'ação':'ações'}</b> por produto.{gastoVaza>0.005?<> Tem <b style={{color:t.red}}>{brl2(gastoVaza)}</b> escorrendo em cliques que não vendem.</>:null} {isAdmin?'Revise e toque em aplicar — o NEO executa na sua campanha.':'Veja abaixo o que fazer em cada produto.'}
           </div>}
 
-      {/* ── VISÃO POR PRODUTO (nova) ─────────────────────────────────────── */}
+      {/* ── VISÃO POR PRODUTO (m19): métricas + diagnóstico + toggle ──────── */}
       {produtos.length>0 ? produtos.map((g:any,gi:number)=>{
         const acoes:any[]=g.acoes||[]
+        const dg=g.diagnostico||{}; const cz=CAUSA[dg.causa]||CAUSA['sem-dado']
+        const me=g.metricas||{}
+        const geren = g.sku in gerencia ? gerencia[g.sku] : (g.gerenciar!==false)
         return(
-          <div key={gi} style={{border:`1px solid ${g.semEstoque?tint(t.red,30):t.line}`,borderRadius:13,padding:'13px 15px',marginBottom:11,background:g.semEstoque?tint(t.red,4):(t.dark?'rgba(255,255,255,0.015)':'#FCFCFD')}}>
-            {/* Header do produto */}
-            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:acoes.length?9:2,flexWrap:'wrap' as const}}>
-              <span style={{fontSize:14.5,fontWeight:700,color:t.t1,flex:1,minWidth:0}}>{g.nome}</span>
+          <div key={gi} style={{border:`1px solid ${g.semEstoque?tint(t.red,30):t.line}`,borderRadius:14,padding:'15px 16px',marginBottom:12,background:g.semEstoque?tint(t.red,4):(t.dark?'rgba(255,255,255,0.015)':'#FCFCFD'),opacity:geren?1:0.72}}>
+            {/* Header: nome + estoque + toggle "NEO gerencia / eu cuido" */}
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:11,flexWrap:'wrap' as const}}>
+              <span style={{fontSize:15,fontWeight:700,color:t.t1,flex:1,minWidth:0}}>{g.nome}</span>
               {g.estoque && (g.semEstoque
                 ? <span style={{fontSize:10.5,fontWeight:700,color:t.red,background:tint(t.red,10),padding:'3px 9px',borderRadius:99,whiteSpace:'nowrap'}}>SEM ESTOQUE</span>
                 : <span style={{fontSize:10.5,fontWeight:600,color:t.grn,background:tint(t.grn,10),padding:'3px 9px',borderRadius:99,whiteSpace:'nowrap'}}>{g.estoque.fulfillable} em estoque</span>)}
-              <span style={{fontSize:11,color:t.t3,whiteSpace:'nowrap'}}>ads {brl2(g.gastoMes)}</span>
+              <button onClick={()=>alternarProduto(g.sku,geren)} title={geren?'O NEO está no comando deste produto — clique para você mesmo cuidar':'Você cuida deste produto — clique para devolver ao NEO'}
+                style={{display:'flex',alignItems:'center',gap:6,background:geren?tint(t.gold,12):'transparent',border:`1.5px solid ${geren?t.gold:t.line}`,borderRadius:99,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
+                <span style={{width:8,height:8,borderRadius:99,background:geren?t.gold:t.t3}}/>
+                <span style={{fontSize:11,fontWeight:700,color:geren?t.gold:t.t3}}>{geren?'NEO gerencia':'Eu cuido'}</span>
+              </button>
             </div>
-            {g.aviso && <div style={{fontSize:11.5,color:t.gold,marginBottom:9,lineHeight:1.4}}>{g.aviso}</div>}
-            {acoes.map((r:any,i:number)=>{
+            {/* Faixa das 6 métricas do m19 (ACoS/ROAS/CPC/CTR/vendas/TACoS) — honesta */}
+            <div style={{display:'flex',flexWrap:'wrap' as const,gap:'10px 18px',padding:'11px 13px',marginBottom:11,background:t.dark?'rgba(255,255,255,0.03)':'#fff',border:`1px solid ${t.line}`,borderRadius:11}}>
+              <Metrica rot="ACoS" val={num(me.acos,'%')} cor={me.acos==null?t.t3:me.acos<=d.acosAlvo?t.grn:t.red}/>
+              <Metrica rot="ROAS" val={me.roas==null?'—':num(me.roas)+'x'} cor={t.t1}/>
+              <Metrica rot="CTR" val={num(me.ctr,'%')} cor={me.ctr==null?t.t3:me.ctr<2?t.red:t.grn}/>
+              <Metrica rot="CPC" val={me.cpc==null?'—':brl2(me.cpc)} cor={t.t1}/>
+              <Metrica rot="Vendas" val={brl2(g.vendasMes)} cor={t.t1}/>
+              <Metrica rot="Ads" val={brl2(g.gastoMes)} cor={t.t1}/>
+              <Metrica rot="TACoS" val={num(me.tacos,'%')} cor={me.tacos==null?t.t3:t.t1}/>
+            </div>
+            {/* ⭐ O DIAGNÓSTICO — a CAUSA, não o sintoma (a alma do método do João) */}
+            {dg.texto && <div style={{display:'flex',gap:10,padding:'11px 13px',marginBottom:acoes.length?11:2,background:tint(cz.cor,7),border:`1px solid ${tint(cz.cor,22)}`,borderRadius:11}}>
+              <i className={`ti ${cz.icon}`} style={{fontSize:17,color:cz.cor,marginTop:1,flexShrink:0}} aria-hidden="true"/>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:11,fontWeight:800,color:cz.cor,textTransform:'uppercase' as const,letterSpacing:'0.04em',marginBottom:3}}>{dg.titulo}</div>
+                <div style={{fontSize:12.5,color:t.t2,lineHeight:1.45}}>{dg.texto}</div>
+                <div style={{fontSize:12.5,color:t.t1,fontWeight:600,marginTop:5,lineHeight:1.45}}>→ {dg.acao}</div>
+              </div>
+            </div>}
+            {g.aviso && <div style={{fontSize:12,color:t.gold,marginBottom:9,lineHeight:1.4}}>{g.aviso}</div>}
+            {/* As ações concretas só aparecem quando o NEO gerencia o produto */}
+            {geren && acoes.map((r:any,i:number)=>{
               const cfg=REC[r.tipo]||REC['ajustar-lance']
               return <Acao key={i} r={r} cor={cfg.cor} rotulo={cfg.rot} acaoTxt={cfg.btn}/>
             })}
+            {!geren && <div style={{fontSize:11,color:t.t3,paddingTop:6,borderTop:`1px solid ${t.line}`}}>Você está cuidando deste produto — o NEO só observa e mostra o diagnóstico, sem mexer nas campanhas.</div>}
           </div>
         )
       }) : (
