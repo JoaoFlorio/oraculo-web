@@ -5398,8 +5398,10 @@ export function BarraGestao({grupo,tab,semCusto,onGrupo,onTab}:{
 
 const THEME_KEY='oraculo_theme'
 
-export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmin=false}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null;userEmail?:string;theme?:'dark'|'light';isAdmin?:boolean}){
-  const [tab,setTab]=useState<string>(TELA_INICIAL)
+export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmin=false,soAds=false}:{promoActive?:boolean;promoType?:'comissao'|'fba'|'ambas'|null;userEmail?:string;theme?:'dark'|'light';isAdmin?:boolean;soAds?:boolean}){
+  // soAds: hub de Ads standalone (menu esquerdo "Ads Amazon") — reusa TODA a
+  // engrenagem de dados do GestaoHub e mostra só a view de Ads, sem a barra da Gestão.
+  const [tab,setTab]=useState<string>(soAds?'ads':TELA_INICIAL)
   const [hide,setHide]=useState(false)
   const [themeKey,setThemeKey]=useState('dark')
   const [amazonConnected,setAmazonConnected]=useState<boolean|null>(null)
@@ -5722,8 +5724,10 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {/* Header */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
           <div>
-            <h2 style={{fontFamily:FG,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>Gestão</h2>
-            <p style={{fontSize:12,color:t.t2,marginTop:1}}>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':amazonConnected?'carregando dados reais…':'conecte sua conta para ver seus dados'}</span></p>
+            <h2 style={{fontFamily:FG,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>{soAds?'Ads · Amazon':'Gestão'}</h2>
+            <p style={{fontSize:12,color:t.t2,marginTop:1}}>{soAds
+              ? <>O NEO no comando dos seus anúncios · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':amazonConnected?'carregando dados reais…':'conecte sua conta para começar'}</span></>
+              : <>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':amazonConnected?'carregando dados reais…':'conecte sua conta para ver seus dados'}</span></>}</p>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <button onClick={()=>setHide(v=>!v)} title="Ocultar valores"
@@ -5767,7 +5771,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
           </div>
         )}
 
-        <BarraGestao grupo={grupo} tab={tab} semCusto={semCusto.length} onGrupo={goGrupo} onTab={goTab}/>
+        {!soAds && <BarraGestao grupo={grupo} tab={tab} semCusto={semCusto.length} onGrupo={goGrupo} onTab={goTab}/>}
 
         {/* O AVISO DA TARIFA FBA SAIU EM 01/08/2026, no dia da virada.
             Ele existiu pra dar tempo de rever preço ANTES da mudança; a partir
@@ -5781,7 +5785,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {/* ⚠️ Produtos vendidos SEM custo informado → Lucro/Margem/ROI/Lucro pós
             ADS/MPA aparecem como "—". Era a dúvida nº1 dos clientes ("os números
             não aparecem"): a Amazon informa o que você VENDEU, não o que PAGOU. */}
-        {semCusto.length>0 && tab!=='gerenc' && (
+        {!soAds && semCusto.length>0 && tab!=='gerenc' && (
           <div style={{display:'flex',alignItems:'flex-start',gap:12,flexWrap:'wrap' as const,background:t.dark?'rgba(240,180,41,0.07)':'#FFFBEB',border:`1px solid ${t.dark?'rgba(240,180,41,0.3)':'#FDE68A'}`,borderRadius:12,padding:'13px 15px',marginBottom:16}}>
             <i className="ti ti-alert-triangle" style={{fontSize:17,color:t.gold,marginTop:1,flexShrink:0}} aria-hidden="true"/>
             <div style={{flex:1,minWidth:200}}>

@@ -2,9 +2,12 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
+import { SeloML } from './SelosMarketplace'
 // A aba Gestão agora monta o SELETOR DE LOJA (Tudo/Amazon/ML). O GestaoHub da
 // Amazon segue intacto — o wrapper só escolhe qual componente renderizar.
 const GestaoUnificada = dynamic(()=>import('./GestaoUnificada'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Gestão…</div>})
+// Ads Amazon = o GestaoHub em modo `soAds` (reusa toda a engrenagem + a view de Ads).
+const AdsAmazon = dynamic(()=>import('./GestaoHub'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Ads…</div>})
 const NeoChat = dynamic(()=>import('./neo/NeoChat'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Acordando o NEO…</div>})
 const MLCalculator = dynamic(()=>import('./MLCalculator'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando calculadora…</div>})
 const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando o garimpo…</div>})
@@ -39,10 +42,10 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
   free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','tutoriais','perfil'],                                                        modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','tutoriais','perfil'], modal:true,  export:true  },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 const GREENN: Record<string,string> = {
@@ -78,6 +81,8 @@ const CATS = [
 ]
 const NAV = [
   { id:'financeiro',  label:'Gestão'            },
+  { id:'ads',         label:'Ads Amazon'        },
+  { id:'ads-ml',      label:'Ads Mercado Livre' },
   { id:'bestsellers', label:'Mais Vendidos'     },
   { id:'saved',       label:'Salvos'            },
   { id:'competitor',  label:'Análise Rival'     },
@@ -104,6 +109,7 @@ const TUTORIAIS: {title:string; desc:string; embed:string}[] = [
 // (As rotas do backend seguem existindo — só não há mais UI chamando.)
 const NAV_GROUPS = [
   { group:'Gestão',      ids:['financeiro'] },
+  { group:'Ads',         ids:['ads','ads-ml'] },
   { group:'Mineração',   ids:['bestsellers','saved','competitor'] },
   { group:'Mercado Livre', ids:['ml-minera','ml-salvos','ml-rival','ml-calc'] },
   { group:'Ferramentas', ids:['agente','extension'] },
@@ -1389,7 +1395,10 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const [nav,      setNav]      = useState(podeGestao ? 'financeiro' : 'bestsellers')
   // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
   const navGroups = NAV_GROUPS
-    .map(g=>({...g, ids: g.ids.filter(id=> (id!=='financeiro' || gestaoEnabled) && (!id.startsWith('ml-') || mlEnabled))}))
+    .map(g=>({...g, ids: g.ids.filter(id=>
+      ((id!=='financeiro' && id!=='ads') || gestaoEnabled)      // Ads Amazon usa a conta de seller
+      && ((!id.startsWith('ml-') && id!=='ads-ml') || mlEnabled) // Ads Mercado Livre só com ML ligado
+    )}))
     .filter(g=>g.ids.length>0)
   const [cat,      setCat]      = useState('all')
   const [prods,    setProds]    = useState<any[]>([])
@@ -2579,6 +2588,37 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {nav==='financeiro'&&gestaoEnabled&&(
               <div style={{padding:'0 4px'}}>
                 <GestaoUnificada promoActive={promo.active} promoType={promo.type} theme={theme} isAdmin={user.role==='admin'} mlEnabled={mlEnabled}/>
+              </div>
+            )}
+
+            {/* Ads Amazon — frente própria (o GestaoHub em modo soAds reusa a view de Ads) */}
+            {nav==='ads'&&gestaoEnabled&&(
+              <div style={{padding:'0 4px'}}>
+                <AdsAmazon promoActive={promo.active} promoType={promo.type} theme={theme} isAdmin={user.role==='admin'} soAds/>
+              </div>
+            )}
+
+            {/* Ads Mercado Livre — em construção (automação de ads ML ainda não existe) */}
+            {nav==='ads-ml'&&mlEnabled&&(
+              <div style={{padding:'8px 4px',maxWidth:760}}>
+                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
+                  <SeloML size={18}/>
+                  <h2 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em'}}>Ads · Mercado Livre</h2>
+                </div>
+                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:16,padding:'22px 22px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:11,marginBottom:10}}>
+                    <i className="ti ti-rocket" style={{fontSize:24,color:T.gold}} aria-hidden="true"/>
+                    <div style={{fontSize:16,fontWeight:700,color:T.t1}}>O Piloto NEO está chegando no Mercado Livre</div>
+                  </div>
+                  <p style={{fontSize:13,color:T.t2,lineHeight:1.6,margin:0}}>
+                    Hoje o Oráculo já <b>lê o gasto do Mercado Ads</b> e joga no seu DRE (TACoS, lucro pós-ads, sangria por produto). A automação — criar campanha, ajustar lance, cortar o que só queima — está sendo construída pra funcionar igual ao lado Amazon: você escolhe o objetivo, o NEO toma conta.
+                  </p>
+                  <div style={{marginTop:14,display:'flex',flexWrap:'wrap' as const,gap:8}}>
+                    {['Diagnóstico por produto','Criar campanha','Bot diário','Cortar o que só gasta'].map(x=>(
+                      <span key={x} style={{fontSize:11,fontWeight:600,color:T.t3,background:'var(--cardHov,rgba(255,255,255,0.03))',border:`1px solid ${T.line}`,borderRadius:99,padding:'5px 11px'}}>{x} · em breve</span>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 

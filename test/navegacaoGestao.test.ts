@@ -83,14 +83,15 @@ test('a Gestão abre no Resumo, e o Resumo está no primeiro grupo', () => {
   assert.equal(primeiraDoGrupo(GRUPOS[0].id), TELA_INICIAL)
 })
 
-/* ⭐ ADS SOZINHO É DECISÃO, NÃO SOBRA. É frente de trabalho própria e vai
-   crescer; como quarta sub-aba de Resultado, ficaria escondido justamente o que
-   mais vai mudar. O teste guarda isso do próximo que for "só juntar o que ficou
-   solto" — se um dia entrar Keywords ou Campanhas, entram AQUI. */
-test('Ads é grupo de primeiro nível', () => {
-  const anuncio = GRUPOS.find(g => g.id === 'anuncio')!
-  assert.deepEqual(anuncio.tabs, ['ads'])
-  assert.equal(grupoDaTab('ads'), 'anuncio', 'Ads não pode voltar pra dentro de outro grupo')
+/* ⭐ ADS SAIU DA GESTÃO (09/09): virou frente de trabalho PRÓPRIA no menu
+   esquerdo (Ads Amazon / Ads Mercado Livre), reusando a view <Ads/> em modo
+   `soAds`. O teste guarda que ele NÃO voltou pra dentro da Gestão — nem como
+   tela, nem como grupo. Se um dia Ads virar sub-aba da Gestão de novo, foi
+   descuido, não decisão. */
+test('Ads não vive mais dentro da Gestão', () => {
+  assert.ok(!TABS.some(t => (t.id as string) === 'ads'), 'a tela "ads" não pode estar nas TABS da Gestão')
+  assert.ok(!GRUPOS.some(g => g.id === 'anuncio'), 'o grupo "anuncio" não pode existir na Gestão')
+  assert.equal(grupoDaTab('ads'), 'result', 'sem grupo próprio, "ads" cai no fallback (não quebra)')
 })
 
 test('Repasses mora no Resultado', () => {

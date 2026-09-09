@@ -10,10 +10,11 @@
                    segue nos pedidos um a um e no estoque.
      · RESULTADO — "o que sobrou". Curva ABC e Analítico (o período por produto)
                    mais os Repasses (o que a Amazon depositou de fato).
-     · ADS       — tela única, de propósito: o anúncio é frente de trabalho
-                   própria e vai crescer. Enterrá-lo como quarta sub-aba de
-                   Resultado esconderia justamente o que mais vai mudar.
      · AJUSTES   — onde se INFORMA em vez de consultar: custo, CSV, planilha.
+
+   ⚠️ ADS não vive mais aqui (09/09): virou item próprio do menu esquerdo
+   (Ads Amazon / Ads Mercado Livre), porque o Piloto NEO cresceu demais pra ser
+   sub-aba da Gestão. A view de Ads segue reusada em modo `soAds` do GestaoHub.
 
    ⚠️ A barra mostra só os NOMES. A maturidade do período (🟡 aberto · 🟠 em
    liquidação · 🟢 fechado) continua viva onde ela explica o que significa: no
@@ -27,7 +28,6 @@ export const TABS = [
   { id: 'resumo',  label: 'Resumo',        icon: 'ti-layout-dashboard' },
   { id: 'vendas',  label: 'Pedidos',       icon: 'ti-cash' },
   { id: 'abc',     label: 'Curva ABC',     icon: 'ti-chart-bar' },
-  { id: 'ads',     label: 'Ads',           icon: 'ti-speakerphone' },
   { id: 'analit',  label: 'Analítico',     icon: 'ti-chart-dots' },
   { id: 'gerenc',  label: 'Gerenciamento', icon: 'ti-adjustments' },
   { id: 'fulfil',  label: 'Estoque FBA',   icon: 'ti-truck-delivery' },
@@ -60,13 +60,10 @@ export const GRUPOS: GrupoGestao[] = [
     pergunta: 'Quais produtos rendem de verdade — e quanto a Amazon depositou.',
     tabs: ['abc', 'analit', 'repasse'],
   },
-  {
-    // ⚠️ id 'anuncio', não 'ads': 'ads' já é o id da TELA, e grupo com o mesmo
-    // id de uma tela confunde quem for ler o `goTab(x)` da próxima vez.
-    id: 'anuncio', label: 'Ads', icon: 'ti-speakerphone',
-    pergunta: 'Quanto o anúncio custou e o que ele trouxe de volta.',
-    tabs: ['ads'],
-  },
+  // ⚠️ ADS SAIU DA GESTÃO (09/09): virou frente de trabalho PRÓPRIA no menu
+  // esquerdo (Ads Amazon / Ads Mercado Livre), com sub-menus no topo — o Piloto
+  // NEO/Estratégias vão crescer demais pra ficar como sub-aba da Gestão. A view de
+  // Ads (componente <Ads/> no GestaoHub) é reusada em modo `soAds`.
   {
     id: 'ajuste', label: 'Ajustes', icon: 'ti-settings',
     pergunta: 'Seus custos, suas exportações e a DRE por planilha.',
