@@ -3229,44 +3229,74 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
     )
   }
   async function aplicarTudo(lista:any[]){ for(const r of lista){ if(feitos[chave(r)]!=='ok') await aplicar(r) } }
+  // hex → rgba translúcido (fundos/bordas suaves por produto).
+  const tint=(hex:string,a:number)=>{const h=hex.replace('#','');const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a/100})`}
+  // Rótulo/cor por tipo de ação (linguagem simples pra leigo).
+  const REC:Record<string,{cor:string;rot:string;btn:string}>={
+    negativar:{cor:t.red,rot:'Cortar palavra que só gasta',btn:'Cortar'},
+    promover:{cor:t.grn,rot:'Transformar em palavra certeira',btn:'Criar'},
+    'ajustar-lance':{cor:t.gold,rot:'Acertar o lance',btn:'Ajustar'},
+    'pausar-keyword':{cor:t.gold,rot:'Pausar palavra sem venda',btn:'Pausar'},
+    'desligar-sem-estoque':{cor:t.red,rot:'Desligar (sem estoque)',btn:'Desligar'},
+  }
+  const produtos:any[] = d.temMapaProduto ? (d.produtos||[]) : []
 
   return(
-    <div style={card}>
-      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:4}}>
-        <IrisNeo tam={34} sev={totalAcoes?'atencao':'ok'} carga={Math.min(1,totalAcoes/10)}/>
+    <div style={{...card,padding:'20px 22px'}}>
+      {/* Cabeçalho */}
+      <div style={{display:'flex',alignItems:'center',gap:13,marginBottom:12}}>
+        <IrisNeo tam={38} sev={totalAcoes?'atencao':'ok'} carga={Math.min(1,totalAcoes/10)}/>
         <div style={{flex:1}}>
-          <div style={{fontFamily:FH,fontSize:16,fontWeight:700,color:t.t1}}>Piloto NEO</div>
-          <div style={{fontSize:11.5,color:t.t3}}>Meta de ACoS: <b style={{color:t.gold}}>{d.acosAlvo}%</b> · {d.origemAlvo}</div>
+          <div style={{fontFamily:FH,fontSize:18,fontWeight:800,color:t.t1,letterSpacing:'-0.02em'}}>Piloto NEO</div>
+          <div style={{fontSize:12,color:t.t3,marginTop:1}}>Meta de ACoS <b style={{color:t.gold}}>{d.acosAlvo}%</b> — o teto pra cada venda ainda dar lucro.</div>
         </div>
       </div>
       {totalAcoes===0
-        ? <div style={{fontSize:12.5,color:t.grn,padding:'10px 0 2px'}}>✓ Está tudo na régua — nenhuma ação urgente agora. O NEO segue de olho e te avisa quando algo mudar.</div>
-        : <div style={{fontSize:12.5,color:t.t2,padding:'6px 0 10px',lineHeight:1.45}}>
-            Achei <b style={{color:t.t1}}>{totalAcoes} {totalAcoes===1?'ação':'ações'}</b> pra melhorar sua conta{gastoVaza>0.005?<> — <b style={{color:t.red}}>{brl2(gastoVaza)}</b> saindo em cliques que não vendem</>:null}{vendasCapturar>0.005?<> e <b style={{color:t.grn}}>{brl2(vendasCapturar)}</b> em vendas pra capturar melhor</>:null}. {isAdmin?'Confira e clique em aplicar — o NEO faz na sua campanha.':'Confira abaixo o que o NEO faria.'}
+        ? <div style={{fontSize:13.5,color:t.grn,padding:'6px 0'}}>✓ Tudo na régua — nenhuma ação urgente agora. O NEO segue de olho.</div>
+        : <div style={{fontSize:13.5,color:t.t2,padding:'2px 0 14px',lineHeight:1.5}}>
+            O NEO revisou suas campanhas e separou <b style={{color:t.t1}}>{totalAcoes} {totalAcoes===1?'ação':'ações'}</b> por produto.{gastoVaza>0.005?<> Tem <b style={{color:t.red}}>{brl2(gastoVaza)}</b> escorrendo em cliques que não vendem.</>:null} {isAdmin?'Revise e toque em aplicar — o NEO executa na sua campanha.':'Veja abaixo o que fazer em cada produto.'}
           </div>}
 
-      {neg.length>0&&<div style={{marginTop:8}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <div style={{fontSize:12,fontWeight:700,color:t.t1}}>🛑 Parar de gastar à toa <span style={{color:t.t3,fontWeight:400}}>({neg.length})</span></div>
-          {isAdmin&&neg.length>1&&<button onClick={()=>aplicarTudo(neg)} style={{fontSize:10.5,color:t.red,background:'none',border:`1px solid ${t.red}`,borderRadius:7,padding:'4px 9px',cursor:'pointer',fontFamily:'inherit'}}>negativar todas</button>}
-        </div>
-        {neg.slice(0,8).map((r,i)=><Acao key={i} r={r} cor={t.red} rotulo="Negativar" acaoTxt="Negativar"/>)}
-      </div>}
+      {/* ── VISÃO POR PRODUTO (nova) ─────────────────────────────────────── */}
+      {produtos.length>0 ? produtos.map((g:any,gi:number)=>{
+        const acoes:any[]=g.acoes||[]
+        return(
+          <div key={gi} style={{border:`1px solid ${g.semEstoque?tint(t.red,30):t.line}`,borderRadius:13,padding:'13px 15px',marginBottom:11,background:g.semEstoque?tint(t.red,4):(t.dark?'rgba(255,255,255,0.015)':'#FCFCFD')}}>
+            {/* Header do produto */}
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:acoes.length?9:2,flexWrap:'wrap' as const}}>
+              <span style={{fontSize:14.5,fontWeight:700,color:t.t1,flex:1,minWidth:0}}>{g.nome}</span>
+              {g.estoque && (g.semEstoque
+                ? <span style={{fontSize:10.5,fontWeight:700,color:t.red,background:tint(t.red,10),padding:'3px 9px',borderRadius:99,whiteSpace:'nowrap'}}>SEM ESTOQUE</span>
+                : <span style={{fontSize:10.5,fontWeight:600,color:t.grn,background:tint(t.grn,10),padding:'3px 9px',borderRadius:99,whiteSpace:'nowrap'}}>{g.estoque.fulfillable} em estoque</span>)}
+              <span style={{fontSize:11,color:t.t3,whiteSpace:'nowrap'}}>ads {brl2(g.gastoMes)}</span>
+            </div>
+            {g.aviso && <div style={{fontSize:11.5,color:t.gold,marginBottom:9,lineHeight:1.4}}>{g.aviso}</div>}
+            {acoes.map((r:any,i:number)=>{
+              const cfg=REC[r.tipo]||REC['ajustar-lance']
+              return <Acao key={i} r={r} cor={cfg.cor} rotulo={cfg.rot} acaoTxt={cfg.btn}/>
+            })}
+          </div>
+        )
+      }) : (
+        /* ── FALLBACK: mapa de produto ainda sincronizando → grupos simples ── */
+        <>
+          {(!d.temMapaProduto && totalAcoes>0) && <div style={{fontSize:11,color:t.t3,marginBottom:8}}>Organizando por produto… (na 1ª vez leva alguns minutos; recarregue em instantes)</div>}
+          {neg.length>0&&<div style={{marginTop:6}}>
+            <div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:2}}>🛑 Cortar o que só gasta <span style={{color:t.t3,fontWeight:400}}>({neg.length})</span></div>
+            {neg.slice(0,8).map((r:any,i:number)=><Acao key={i} r={r} cor={t.red} rotulo="Cortar" acaoTxt="Cortar"/>)}
+          </div>}
+          {prom.length>0&&<div style={{marginTop:14}}>
+            <div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:2}}>⭐ Capturar quem já vende <span style={{color:t.t3,fontWeight:400}}>({prom.length})</span></div>
+            {prom.slice(0,8).map((r:any,i:number)=><Acao key={i} r={r} cor={t.grn} rotulo="Criar exata" acaoTxt="Criar"/>)}
+          </div>}
+          {lan.length>0&&<div style={{marginTop:14}}>
+            <div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:2}}>📉 Acertar os lances <span style={{color:t.t3,fontWeight:400}}>({lan.length})</span></div>
+            {lan.slice(0,8).map((r:any,i:number)=><Acao key={i} r={r} cor={t.gold} rotulo={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'} acaoTxt={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'}/>)}
+          </div>}
+        </>
+      )}
 
-      {prom.length>0&&<div style={{marginTop:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <div style={{fontSize:12,fontWeight:700,color:t.t1}}>⭐ Capturar quem já vende <span style={{color:t.t3,fontWeight:400}}>({prom.length})</span></div>
-          {isAdmin&&prom.length>1&&<button onClick={()=>aplicarTudo(prom)} style={{fontSize:10.5,color:t.grn,background:'none',border:`1px solid ${t.grn}`,borderRadius:7,padding:'4px 9px',cursor:'pointer',fontFamily:'inherit'}}>criar todas</button>}
-        </div>
-        {prom.slice(0,8).map((r,i)=><Acao key={i} r={r} cor={t.grn} rotulo="Criar exata" acaoTxt="Criar"/>)}
-      </div>}
-
-      {lan.length>0&&<div style={{marginTop:16}}>
-        <div style={{fontSize:12,fontWeight:700,color:t.t1}}>📉 Acertar os lances <span style={{color:t.t3,fontWeight:400}}>({lan.length})</span></div>
-        {lan.slice(0,8).map((r,i)=><Acao key={i} r={r} cor={t.gold} rotulo={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'} acaoTxt={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'}/>)}
-      </div>}
-
-      {!isAdmin&&totalAcoes>0&&<div style={{fontSize:10.5,color:t.t3,marginTop:14,paddingTop:10,borderTop:`1px solid ${t.line}`}}>O aplicar automático está em teste final. Por enquanto, você faz esses ajustes na sua conta de anúncios da Amazon — ou peça no chat do NEO.</div>}
+      {!isAdmin&&totalAcoes>0&&<div style={{fontSize:11,color:t.t3,marginTop:12,paddingTop:11,borderTop:`1px solid ${t.line}`}}>O aplicar com 1 toque está em teste final. Por ora, faça esses ajustes no seu painel de anúncios da Amazon — ou peça no chat do NEO.</div>}
     </div>
   )
 }
