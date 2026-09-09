@@ -3184,7 +3184,16 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
   const [feitos,setFeitos]=useState<Record<string,'ok'|'erro'|'indo'>>({})
   const [objetivo,setObjetivo]=useState<string>('equilibrar')
   const [gerencia,setGerencia]=useState<Record<string,boolean>>({})   // toggle por produto (otimista)
+  const [bot,setBot]=useState<any>(null)   // estado do bot diário: automatico, lastRunAt, lastResult
   const chave=(r:any)=>`${r.tipo}:${r.campaignId}:${r.keywordId||r.termo}`
+  // Liga/desliga o bot diário (ligar é admin-only no proxy — em teste).
+  function alternarBot(){
+    const novo=!(bot?.automatico)
+    setBot((b:any)=>({...b,automatico:novo}))
+    fetch('/api/ads/autopilot',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({automatico:novo})})
+      .then(r=>r.json()).then(x=>{ if(x&&typeof x.automatico==='boolean') setBot((b:any)=>({...b,automatico:x.automatico})); else setBot((b:any)=>({...b,automatico:!novo})) })
+      .catch(()=>setBot((b:any)=>({...b,automatico:!novo})))
+  }
   // "NEO gerencia esse produto" ↔ "eu cuido dele" — persiste no backend, otimista na UI.
   function alternarProduto(sku:string,valorAtual:boolean){
     const novo=!valorAtual
@@ -3195,7 +3204,7 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
     let vivo=true
     const url='/api/ads/copiloto'+(margem!=null&&isFinite(margem)?`?margem=${margem}`:'')
     fetch(url,{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo) setD(x) }).catch(()=>{}).finally(()=>{ if(vivo)setCarregando(false) })
-    fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo) setObjetivo(x.objetivo) }).catch(()=>{})
+    fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo){ setObjetivo(x.objetivo); setBot({automatico:!!x.automatico,lastRunAt:x.lastRunAt||null,lastResult:x.lastResult||null}) } }).catch(()=>{})
     return ()=>{vivo=false}
   },[margem])
   function escolherObjetivo(o:string){ setObjetivo(o); fetch('/api/ads/autopilot',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({objetivo:o})}).catch(()=>{}) }
@@ -3300,6 +3309,19 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
           )})}
         </div>
       </div>
+      {/* 🤖 BOT DIÁRIO — o "olha todo dia sozinho" do m19. Ligar é admin-only (teste). */}
+      {(isAdmin || bot?.automatico) && <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14,padding:'12px 14px',borderRadius:12,background:bot?.automatico?tint(t.grn,7):(t.dark?'rgba(255,255,255,0.02)':'#FCFCFD'),border:`1.5px solid ${bot?.automatico?tint(t.grn,30):t.line}`}}>
+        <i className={`ti ti-robot`} style={{fontSize:20,color:bot?.automatico?t.grn:t.t3}} aria-hidden="true"/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:700,color:t.t1}}>Bot diário {bot?.automatico?<span style={{color:t.grn}}>· ligado</span>:<span style={{color:t.t3}}>· desligado</span>}</div>
+          <div style={{fontSize:11,color:t.t3,marginTop:1,lineHeight:1.35}}>
+            {bot?.automatico
+              ? <>O NEO revisa e ajusta seus lances sozinho, 1×/dia, pela sua régua.{bot?.lastRunAt?<> Última passada: <b style={{color:t.t2}}>{new Date(bot.lastRunAt).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</b>{bot?.lastResult?` — ${bot.lastResult}`:''}.</>:<> Ainda não rodou a 1ª passada.</>}</>
+              : 'O NEO só recomenda; ligue pra ele executar sozinho todo dia (respeita "eu cuido" por produto, estoque e teto de lance).'}
+          </div>
+        </div>
+        {isAdmin && <button onClick={alternarBot} style={{fontSize:11.5,fontWeight:700,color:bot?.automatico?t.red:(t.dark?'#1c1606':'#3a2a05'),background:bot?.automatico?'none':t.grn,border:bot?.automatico?`1px solid ${t.red}`:'none',borderRadius:9,padding:'7px 13px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{bot?.automatico?'Desligar':'Ligar bot diário'}</button>}
+      </div>}
       {totalAcoes===0
         ? <div style={{fontSize:13.5,color:t.grn,padding:'6px 0'}}>✓ Tudo na régua pro seu objetivo — nenhuma ação urgente agora. O NEO segue de olho.</div>
         : <div style={{fontSize:13.5,color:t.t2,padding:'2px 0 14px',lineHeight:1.5}}>
