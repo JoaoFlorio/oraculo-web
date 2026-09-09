@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getSession } from '@/lib/auth'
+import { getSessionOrExpired } from '@/lib/auth'
 import { prisma } from '@/lib/db'
 import { TERMS_VERSION } from '@/lib/terms'
 import DashboardClient from './DashboardClient'
@@ -10,7 +10,9 @@ import VersionGuard from './VersionGuard'
 import AssistenteFab from './AssistenteFab'
 
 export default async function DashboardPage() {
-  const user = await getSession()
+  // Vencido ENTRA (pra ver o overlay "venceu + pagar") em vez de ir pro /login;
+  // sem conta/inativo/sem plano → login. As APIs seguem barrando o vencido (401).
+  const { user } = await getSessionOrExpired()
   if (!user) redirect('/login')
   // Gate da Gestão: LIBERADO PARA TODOS (19/07/2026). O gate existia enquanto o
   // app SP-API estava em Draft; com as aprovações da Amazon saídas e sem plano

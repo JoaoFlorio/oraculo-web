@@ -43,8 +43,12 @@ export async function verifyToken(token: string) {
   }
 }
 
-// Folga após o vencimento (evita travar exatamente na hora da renovação recorrente).
-const GRACE_MS = 2 * 24 * 60 * 60 * 1000
+// Folga após o vencimento. ZERO (09/09/2026, decisão do João): venceu, bloqueia
+// NA HORA. A proteção contra "cortar quem está renovando" agora é outra: o
+// vencido não é DESLOGADO — ele entra e vê a tela "seu acesso venceu + pagar"
+// (getSessionOrExpired), e o pagamento libera na hora via webhook. Antes o grace
+// de 2 dias mascarava o vencimento e o overlay de renovação nem aparecia.
+const GRACE_MS = 0
 
 type AccessUser = { active?: boolean; plan?: string; expiresAt?: Date | null; role?: string }
 // Regra de acesso do Oráculo: NÃO existe plano grátis. Sem pagamento = sem acesso.
@@ -76,6 +80,31 @@ export async function getSession() {
     select: { id: true, name: true, email: true, plan: true, active: true, expiresAt: true, role: true, phone: true },
   })
   return user && !accessDenied(user) ? user : null
+}
+
+/* Como getSession, MAS deixa o VENCIDO entrar (marcado `expired: true`) pra ver a
+ * tela "seu acesso venceu + pagar" — em vez de ser jogado pro /login sem entender
+ * por quê (09/09/2026). Só 'expired' entra; sem conta / inativo (reembolso) / sem
+ * plano / sessão inválida continuam barrados (user: null → login).
+ * ⚠️ NÃO usar isto pra servir DADOS: as APIs seguem no getSession() (o vencido
+ * leva 401). Isto é só pra a CASCA do dashboard renderizar o overlay bloqueante. */
+export async function getSessionOrExpired(): Promise<{ user: Awaited<ReturnType<typeof getSession>>; expired: boolean }> {
+  const cookieStore = await cookies()
+  const token = cookieStore.get(COOKIE)?.value
+  if (!token) return { user: null, expired: false }
+  const payload = await verifyToken(token)
+  if (!payload) return { user: null, expired: false }
+  const session = await prisma.session.findUnique({ where: { token } })
+  if (!session || session.expiresAt < new Date()) return { user: null, expired: false }
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    select: { id: true, name: true, email: true, plan: true, active: true, expiresAt: true, role: true, phone: true },
+  })
+  if (!user) return { user: null, expired: false }
+  const deny = accessDenied(user)
+  if (!deny) return { user, expired: false }
+  if (deny === 'expired') return { user, expired: true }   // entra só pra ver a tela de pagar
+  return { user: null, expired: false }                     // notfound/inactive/free → login
 }
 
 // Sessão de equipe (admin/staff) — usada pelas rotas /api/admin e pela página /admin.

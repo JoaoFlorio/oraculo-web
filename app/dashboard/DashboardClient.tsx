@@ -1588,12 +1588,12 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   const isLifetime = user.plan === 'lifetime'
   const expiresAt  = user.expiresAt ? new Date(user.expiresAt) : null
   const daysLeft   = expiresAt ? Math.ceil((expiresAt.getTime()-Date.now())/(1000*60*60*24)) : null
-  // Bloqueio total só após a MESMA folga do servidor (GRACE_MS = 2 dias em lib/auth):
-  // a renovação recorrente pode demorar a cair via webhook — não travar na virada.
-  const expired      = !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= -2
-  // Entre o vencimento e a folga: banner forte NÃO-bloqueante (renovação processando)
-  const renewGrace   = !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 0 && daysLeft > -2
-  const expiringSoon = !expired && !renewGrace && !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 5 && daysLeft > 0
+  // Bloqueio IMEDIATO ao vencer (GRACE_MS = 0 em lib/auth, decisão do João 09/09):
+  // venceu → overlay total "seu acesso venceu + pagar". Sem folga: o vencido entra
+  // só pra ver essa tela (getSessionOrExpired), e o pagamento libera na hora.
+  const expired      = !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 0
+  const renewGrace   = false   // não há mais janela de folga — venceu já é `expired`
+  const expiringSoon = !expired && !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 5 && daysLeft > 0
 
   // ASINs já mostrados, por aba+categoria → garante novidade a cada "Atualizar"
   const seenRef = useRef<Record<string, Set<string>>>({})
