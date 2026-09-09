@@ -3185,7 +3185,18 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
   const [objetivo,setObjetivo]=useState<string>('equilibrar')
   const [gerencia,setGerencia]=useState<Record<string,boolean>>({})   // toggle por produto (otimista)
   const [bot,setBot]=useState<any>(null)   // estado do bot diário: automatico, lastRunAt, lastResult
+  const [criando,setCriando]=useState<Record<string,'indo'|'ok'|'erro'>>({})   // criação de campanha por sku
   const chave=(r:any)=>`${r.tipo}:${r.campaignId}:${r.keywordId||r.termo}`
+  // Cria a campanha automática do produto (admin-only no proxy). Gasta na conta.
+  async function criarCampanha(p:any){
+    if(criando[p.sku]==='indo'||criando[p.sku]==='ok') return
+    setCriando(c=>({...c,[p.sku]:'indo'}))
+    try{
+      const r=await fetch('/api/ads/criar-campanha',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sku:p.sku,asin:p.asin,nome:p.nome})})
+      const j=await r.json()
+      setCriando(c=>({...c,[p.sku]:j?.ok?'ok':'erro'}))
+    }catch{ setCriando(c=>({...c,[p.sku]:'erro'})) }
+  }
   // Liga/desliga o bot diário (ligar é admin-only no proxy — em teste).
   function alternarBot(){
     const novo=!(bot?.automatico)
@@ -3341,13 +3352,17 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
                   <span style={{flex:1,minWidth:0,color:t.t1,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{p.nome}</span>
                   <span style={{fontSize:10.5,color:t.grn,background:tint(t.grn,10),padding:'2px 8px',borderRadius:99,whiteSpace:'nowrap'}}>{p.fulfillable} un</span>
                   {isAdmin
-                    ? <button title="Criar campanha automática pra esse produto" style={{fontSize:11,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:8,padding:'5px 11px',cursor:'not-allowed',opacity:0.55,fontFamily:'inherit',whiteSpace:'nowrap'}} disabled>Criar campanha</button>
+                    ? (criando[p.sku]==='ok'
+                        ? <span style={{fontSize:11,color:t.grn,fontWeight:700,whiteSpace:'nowrap'}}>✓ criada</span>
+                        : criando[p.sku]==='erro'
+                        ? <button onClick={()=>criarCampanha(p)} style={{fontSize:11,color:t.red,background:'none',border:`1px solid ${t.red}`,borderRadius:8,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>tentar de novo</button>
+                        : <button onClick={()=>criarCampanha(p)} disabled={criando[p.sku]==='indo'} title="Criar campanha automática pra esse produto (~R$0,55, R$25/dia)" style={{fontSize:11,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:8,padding:'5px 11px',cursor:criando[p.sku]==='indo'?'default':'pointer',opacity:criando[p.sku]==='indo'?0.6:1,fontFamily:'inherit',whiteSpace:'nowrap'}}>{criando[p.sku]==='indo'?'criando…':'Criar campanha'}</button>)
                     : <span style={{fontSize:10,color:t.t3,whiteSpace:'nowrap'}}>o NEO pode criar</span>}
                 </div>
               ))}
               {d.semCampanha.length>6&&<div style={{fontSize:11,color:t.t3}}>+{d.semCampanha.length-6} outros</div>}
             </div>
-            <div style={{fontSize:10.5,color:t.t3,marginTop:8,fontStyle:'italic' as const}}>Criação de campanha em ativação final — o João está validando os padrões. Já já o botão liga.</div>
+            {isAdmin&&<div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Cria campanha automática (lance R$0,55, R$25/dia, lance dinâmico só pra baixo). O Piloto otimiza depois.</div>}
           </div>
         </div>
       </div>}
