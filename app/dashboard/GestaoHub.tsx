@@ -3418,7 +3418,10 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
     </div>}
     </div>
     </details>
-    {isAdmin && <AdsAdmin margem={margemAds}/>}
+    {/* Painel antigo ADMIN·GERENCIAR CAMPANHAS removido (08/09): o Piloto NEO
+        substituiu com folga (recomendações acionáveis + meta pela margem real).
+        A definição de AdsAdmin fica no arquivo caso o pausar-campanha/orçamento
+        precise migrar pro Piloto depois. */}
   </>)
 }
 /* ── ADMIN · ARMAZENAGEM POR SKU ─────────────────────────────────────────────
