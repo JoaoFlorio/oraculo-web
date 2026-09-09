@@ -3255,16 +3255,19 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
     'desligar-sem-estoque':{cor:t.red,rot:'Desligar (sem estoque)',btn:'Desligar'},
   }
   const produtos:any[] = d.temMapaProduto ? (d.produtos||[]) : []
-  // Cor + ícone por CAUSA raiz do diagnóstico (a alma do método: fala a causa).
-  const CAUSA:Record<string,{cor:string;icon:string}>={
-    'sem-estoque':{cor:t.red,icon:'ti-box-off'},
-    'nao-gasta':{cor:t.gold,icon:'ti-eye-off'},
-    'vitrine':{cor:t.gold,icon:'ti-photo'},
-    'pagina':{cor:t.gold,icon:'ti-file-description'},
-    'lance-alto':{cor:t.red,icon:'ti-trending-down'},
-    'saudavel':{cor:t.grn,icon:'ti-circle-check'},
-    'sem-dado':{cor:t.t3,icon:'ti-hourglass'},
+  // Ícone por CAUSA raiz (a alma do método: fala a causa: vitrine/página/lance).
+  const CAUSA:Record<string,{icon:string}>={
+    'sem-estoque':{icon:'ti-box-off'}, 'nao-gasta':{icon:'ti-eye-off'},
+    'vitrine':{icon:'ti-photo'}, 'pagina':{icon:'ti-file-description'},
+    'lance-alto':{icon:'ti-trending-down'}, 'saudavel':{icon:'ti-circle-check'},
+    'sem-dado':{icon:'ti-hourglass'},
   }
+  // Cor pela SEVERIDADE (a régua absoluta de ACoS do João): saudável<10 verde,
+  // alerta 10-20 amarelo, sangrando 20-30 vermelho, prejuízo 30+ vermelho-escuro.
+  const corSev=(sev?:string|null)=> sev==='saudavel'?t.grn : sev==='alerta'?t.gold
+    : sev==='sangrando'?t.red : sev==='prejuizo'?(t.dark?'#ff5470':'#c81e3a') : t.t3
+  // Cor de um valor de ACoS pela mesma régua (pro número na faixa de métricas).
+  const corAcos=(a:number|null)=> a==null?t.t3 : a<10?t.grn : a<20?t.gold : a<30?t.red : (t.dark?'#ff5470':'#c81e3a')
   // Uma métrica do m19: valor + rótulo. Honesto — mostra "—" quando é null.
   const Metrica=({rot,val,cor}:{rot:string;val:string;cor?:string})=>(
     <div style={{textAlign:'center' as const,minWidth:52}}>
@@ -3281,7 +3284,7 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
         <IrisNeo tam={38} sev={totalAcoes?'atencao':'ok'} carga={Math.min(1,totalAcoes/10)}/>
         <div style={{flex:1}}>
           <div style={{fontFamily:FH,fontSize:18,fontWeight:800,color:t.t1,letterSpacing:'-0.02em'}}>Piloto NEO</div>
-          <div style={{fontSize:12,color:t.t3,marginTop:1}}>Meta de ACoS <b style={{color:t.gold}}>{d.acosAlvo}%</b> — o teto pra cada venda ainda dar lucro.</div>
+          <div style={{fontSize:12,color:t.t3,marginTop:1}}>ACoS bom é <b style={{color:t.grn}}>abaixo de 10%</b> — quanto menor, melhor. <span style={{color:t.gold}}>10-20 alerta</span>, <span style={{color:t.red}}>20-30 sangrando</span>, <span style={{color:t.dark?'#ff5470':'#c81e3a'}}>30+ prejuízo</span>.</div>
         </div>
       </div>
       {/* ⭐ OBJETIVO — o cliente diz o que quer, o NEO otimiza por isso (autonomia m19) */}
@@ -3306,7 +3309,8 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
       {/* ── VISÃO POR PRODUTO (m19): métricas + diagnóstico + toggle ──────── */}
       {produtos.length>0 ? produtos.map((g:any,gi:number)=>{
         const acoes:any[]=g.acoes||[]
-        const dg=g.diagnostico||{}; const cz=CAUSA[dg.causa]||CAUSA['sem-dado']
+        const dg=g.diagnostico||{}; const czIcon=(CAUSA[dg.causa]||CAUSA['sem-dado']).icon
+        const cz={cor:dg.severidade?corSev(dg.severidade):(dg.causa==='saudavel'?t.grn:dg.causa==='sem-dado'||dg.causa==='nao-gasta'?t.t3:t.gold),icon:czIcon}
         const me=g.metricas||{}
         const geren = g.sku in gerencia ? gerencia[g.sku] : (g.gerenciar!==false)
         return(
@@ -3325,7 +3329,7 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
             </div>
             {/* Faixa das 6 métricas do m19 (ACoS/ROAS/CPC/CTR/vendas/TACoS) — honesta */}
             <div style={{display:'flex',flexWrap:'wrap' as const,gap:'10px 18px',padding:'11px 13px',marginBottom:11,background:t.dark?'rgba(255,255,255,0.03)':'#fff',border:`1px solid ${t.line}`,borderRadius:11}}>
-              <Metrica rot="ACoS" val={num(me.acos,'%')} cor={me.acos==null?t.t3:me.acos<=d.acosAlvo?t.grn:t.red}/>
+              <Metrica rot="ACoS" val={num(me.acos,'%')} cor={corAcos(me.acos)}/>
               <Metrica rot="ROAS" val={me.roas==null?'—':num(me.roas)+'x'} cor={t.t1}/>
               <Metrica rot="CTR" val={num(me.ctr,'%')} cor={me.ctr==null?t.t3:me.ctr<2?t.red:t.grn}/>
               <Metrica rot="CPC" val={me.cpc==null?'—':brl2(me.cpc)} cor={t.t1}/>
