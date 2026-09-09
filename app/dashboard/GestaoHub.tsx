@@ -3182,13 +3182,21 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
   const [d,setD]=useState<any>(null)
   const [carregando,setCarregando]=useState(true)
   const [feitos,setFeitos]=useState<Record<string,'ok'|'erro'|'indo'>>({})
+  const [objetivo,setObjetivo]=useState<string>('equilibrar')
   const chave=(r:any)=>`${r.tipo}:${r.campaignId}:${r.keywordId||r.termo}`
   useEffect(()=>{
     let vivo=true
     const url='/api/ads/copiloto'+(margem!=null&&isFinite(margem)?`?margem=${margem}`:'')
     fetch(url,{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo) setD(x) }).catch(()=>{}).finally(()=>{ if(vivo)setCarregando(false) })
+    fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo) setObjetivo(x.objetivo) }).catch(()=>{})
     return ()=>{vivo=false}
   },[margem])
+  function escolherObjetivo(o:string){ setObjetivo(o); fetch('/api/ads/autopilot',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({objetivo:o})}).catch(()=>{}) }
+  const OBJS=[
+    {id:'economizar',emoji:'🛡️',rot:'Economizar',sub:'ACoS baixo, protege a margem'},
+    {id:'equilibrar',emoji:'⚖️',rot:'Equilibrar',sub:'crescer com o pé no chão'},
+    {id:'escalar',emoji:'🚀',rot:'Escalar',sub:'vender mais, gastar mais'},
+  ]
   async function aplicar(r:any){
     const k=chave(r); if(feitos[k]==='indo'||feitos[k]==='ok') return
     setFeitos(f=>({...f,[k]:'indo'}))
@@ -3251,8 +3259,21 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
           <div style={{fontSize:12,color:t.t3,marginTop:1}}>Meta de ACoS <b style={{color:t.gold}}>{d.acosAlvo}%</b> — o teto pra cada venda ainda dar lucro.</div>
         </div>
       </div>
+      {/* ⭐ OBJETIVO — o cliente diz o que quer, o NEO otimiza por isso (autonomia m19) */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11.5,color:t.t3,marginBottom:7}}>Qual é o seu objetivo? O NEO otimiza tudo por ele.</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
+          {OBJS.map(o=>{const on=objetivo===o.id;return(
+            <button key={o.id} onClick={()=>escolherObjetivo(o.id)}
+              style={{textAlign:'left' as const,background:on?tint(t.gold,12):(t.dark?'rgba(255,255,255,0.02)':'#FCFCFD'),border:`1.5px solid ${on?t.gold:t.line}`,borderRadius:11,padding:'10px 11px',cursor:'pointer',fontFamily:'inherit',transition:'all .15s'}}>
+              <div style={{fontSize:13,fontWeight:700,color:on?t.gold:t.t1}}>{o.emoji} {o.rot}</div>
+              <div style={{fontSize:10.5,color:t.t3,marginTop:2,lineHeight:1.3}}>{o.sub}</div>
+            </button>
+          )})}
+        </div>
+      </div>
       {totalAcoes===0
-        ? <div style={{fontSize:13.5,color:t.grn,padding:'6px 0'}}>✓ Tudo na régua — nenhuma ação urgente agora. O NEO segue de olho.</div>
+        ? <div style={{fontSize:13.5,color:t.grn,padding:'6px 0'}}>✓ Tudo na régua pro seu objetivo — nenhuma ação urgente agora. O NEO segue de olho.</div>
         : <div style={{fontSize:13.5,color:t.t2,padding:'2px 0 14px',lineHeight:1.5}}>
             O NEO revisou suas campanhas e separou <b style={{color:t.t1}}>{totalAcoes} {totalAcoes===1?'ação':'ações'}</b> por produto.{gastoVaza>0.005?<> Tem <b style={{color:t.red}}>{brl2(gastoVaza)}</b> escorrendo em cliques que não vendem.</>:null} {isAdmin?'Revise e toque em aplicar — o NEO executa na sua campanha.':'Veja abaixo o que fazer em cada produto.'}
           </div>}
