@@ -3328,6 +3328,30 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
             O NEO revisou suas campanhas e separou <b style={{color:t.t1}}>{totalAcoes} {totalAcoes===1?'ação':'ações'}</b> por produto.{gastoVaza>0.005?<> Tem <b style={{color:t.red}}>{brl2(gastoVaza)}</b> escorrendo em cliques que não vendem.</>:null} {isAdmin?'Revise e toque em aplicar — o NEO executa na sua campanha.':'Veja abaixo o que fazer em cada produto.'}
           </div>}
 
+      {/* 🆕 PRODUTOS SEM CAMPANHA — "não vai vender porque não anuncia" (m19 style) */}
+      {Array.isArray(d.semCampanha)&&d.semCampanha.length>0&&<div style={{marginBottom:14,padding:'13px 15px',borderRadius:13,background:tint(t.gold,7),border:`1.5px solid ${tint(t.gold,30)}`}}>
+        <div style={{display:'flex',gap:9,alignItems:'flex-start'}}>
+          <i className="ti ti-rocket" style={{fontSize:18,color:t.gold,marginTop:1}} aria-hidden="true"/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13.5,fontWeight:700,color:t.t1}}>{d.semCampanha.length} produto{d.semCampanha.length>1?'s':''} com estoque SEM campanha</div>
+            <div style={{fontSize:12,color:t.t2,marginTop:2,lineHeight:1.4}}>Sem anúncio, esses produtos quase não vendem. O NEO cria uma campanha automática pra cada um (lance inicial ~R$0,55, deixa coletar dado e otimiza sozinho).</div>
+            <div style={{marginTop:8,display:'flex',flexDirection:'column' as const,gap:6}}>
+              {d.semCampanha.slice(0,6).map((p:any,i:number)=>(
+                <div key={i} style={{display:'flex',alignItems:'center',gap:9,fontSize:12.5}}>
+                  <span style={{flex:1,minWidth:0,color:t.t1,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{p.nome}</span>
+                  <span style={{fontSize:10.5,color:t.grn,background:tint(t.grn,10),padding:'2px 8px',borderRadius:99,whiteSpace:'nowrap'}}>{p.fulfillable} un</span>
+                  {isAdmin
+                    ? <button title="Criar campanha automática pra esse produto" style={{fontSize:11,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:8,padding:'5px 11px',cursor:'not-allowed',opacity:0.55,fontFamily:'inherit',whiteSpace:'nowrap'}} disabled>Criar campanha</button>
+                    : <span style={{fontSize:10,color:t.t3,whiteSpace:'nowrap'}}>o NEO pode criar</span>}
+                </div>
+              ))}
+              {d.semCampanha.length>6&&<div style={{fontSize:11,color:t.t3}}>+{d.semCampanha.length-6} outros</div>}
+            </div>
+            <div style={{fontSize:10.5,color:t.t3,marginTop:8,fontStyle:'italic' as const}}>Criação de campanha em ativação final — o João está validando os padrões. Já já o botão liga.</div>
+          </div>
+        </div>
+      </div>}
+
       {/* ── VISÃO POR PRODUTO (m19): métricas + diagnóstico + toggle ──────── */}
       {produtos.length>0 ? produtos.map((g:any,gi:number)=>{
         const acoes:any[]=g.acoes||[]
