@@ -1883,13 +1883,13 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {/* Renovação */}
             <div style={{padding:'24px 28px 20px',display:'flex',flexDirection:'column',gap:10}}>
               {user.plan!=='annual'&&(
-                <a href={GREENN[user.plan]??GREENN.monthly} target="_blank" rel="noreferrer"
+                <a href={`${GREENN[user.plan]??GREENN.monthly}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
                   style={{display:'block',textAlign:'center' as const,background:T.goldG,color:'#02020A',fontWeight:800,fontSize:12,padding:'14px',borderRadius:10,textDecoration:'none',letterSpacing:'0.08em',textTransform:'uppercase' as const,boxShadow:'0 4px 20px rgba(240,180,41,0.3)',transition:'transform .15s'}}>
                   Renovar {cfg.label} — {PLAN_PRICE[user.plan]??PLAN_PRICE.monthly}
                 </a>
               )}
               {/* Anual destacado — economia REAL */}
-              <a href={GREENN.annual} target="_blank" rel="noreferrer"
+              <a href={`${GREENN.annual}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
                 style={{position:'relative' as const,display:'block',textAlign:'center' as const,textDecoration:'none',borderRadius:12,padding:'16px 14px 14px',
                   background:user.plan==='annual'?T.goldG:tint(T.gold,4),
                   border:`1px solid ${user.plan==='annual'?'transparent':tint(T.gold,30)}`,
@@ -2167,7 +2167,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               <span style={{fontSize:11,color:T.t1,flex:1,minWidth:220}}>
                 Seu plano <strong style={{color:T.r}}>{cfg.label}</strong> venceu{expiresAt?<> em <strong className="ora-num" style={{color:T.r}}>{expiresAt.toLocaleDateString('pt-BR')}</strong></>:null}. Se você já renovou, a confirmação chega em instantes — caso contrário, renove agora para não perder o acesso.
               </span>
-              <a href={GREENN[user.plan] ?? GREENN.monthly} target="_blank" rel="noreferrer"
+              <a href={`${GREENN[user.plan] ?? GREENN.monthly}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
                 style={{fontSize:10,fontWeight:800,color:'#02020A',background:T.goldG,padding:'6px 14px',borderRadius:6,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0,boxShadow:'0 2px 12px rgba(240,180,41,0.3)'}}>
                 Renovar agora
               </a>
@@ -2180,12 +2180,12 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               <span style={{fontSize:11,color:T.t1,flex:1,minWidth:220}}>
                 Seu plano <strong style={{color:T.a}}>{cfg.label}</strong> vence em <strong className="ora-num" style={{color:T.a}}>{daysLeft} {daysLeft===1?'dia':'dias'}</strong>{expiresAt?<> ({expiresAt.toLocaleDateString('pt-BR')})</>:null}. Renove para não perder o acesso.
               </span>
-              <a href={GREENN[user.plan] ?? GREENN.monthly} target="_blank" rel="noreferrer"
+              <a href={`${GREENN[user.plan] ?? GREENN.monthly}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
                 style={{fontSize:10,fontWeight:800,color:'#02020A',background:T.goldG,padding:'6px 14px',borderRadius:6,textDecoration:'none',letterSpacing:'0.06em',textTransform:'uppercase' as const,flexShrink:0,boxShadow:'0 2px 12px rgba(240,180,41,0.3)'}}>
                 Renovar agora
               </a>
               {user.plan!=='annual'&&(
-                <a href={GREENN.annual} target="_blank" rel="noreferrer"
+                <a href={`${GREENN.annual}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
                   style={{fontSize:10,fontWeight:700,color:T.gold,background:T.goldSub,border:`1px solid ${tint(T.gold,25)}`,padding:'5px 12px',borderRadius:99,textDecoration:'none',flexShrink:0}}>
                   Vire Anual e economize {ANNUAL_ECON_PCT}%
                 </a>
