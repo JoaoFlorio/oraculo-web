@@ -3172,6 +3172,105 @@ function ProdutosDaCampanha({produtos}:{produtos:{sku:string;name:string;image:s
     </div>
   )
 }
+/* ═══ PILOTO NEO — o "m19 do Oráculo" (08/09/2026) ════════════════════════════
+   A virada que o João pediu: a aba de Ads deixa de ESPELHAR o que a Amazon já
+   mostra e passa a AGIR. O NEO lê a conta, entrega as decisões prontas (parar
+   vazamento, capturar termo que vende, acertar lance) e a pessoa — mesmo leiga —
+   só dá o OK. As tabelas técnicas descem pra um "ver detalhes" recolhido. */
+function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:number|null}){
+  const t=useT()
+  const [d,setD]=useState<any>(null)
+  const [carregando,setCarregando]=useState(true)
+  const [feitos,setFeitos]=useState<Record<string,'ok'|'erro'|'indo'>>({})
+  const chave=(r:any)=>`${r.tipo}:${r.campaignId}:${r.keywordId||r.termo}`
+  useEffect(()=>{
+    let vivo=true
+    const url='/api/ads/copiloto'+(margem!=null&&isFinite(margem)?`?margem=${margem}`:'')
+    fetch(url,{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo) setD(x) }).catch(()=>{}).finally(()=>{ if(vivo)setCarregando(false) })
+    return ()=>{vivo=false}
+  },[margem])
+  async function aplicar(r:any){
+    const k=chave(r); if(feitos[k]==='indo'||feitos[k]==='ok') return
+    setFeitos(f=>({...f,[k]:'indo'}))
+    try{
+      const res=await fetch('/api/ads/aplicar',{method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({tipo:r.tipo,campaignId:r.campaignId,adGroupId:r.adGroupId,keywordId:r.keywordId,termo:r.termo,lance:r.lanceSugerido})})
+      const j=await res.json()
+      setFeitos(f=>({...f,[k]:j?.ok?'ok':'erro'}))
+    }catch{ setFeitos(f=>({...f,[k]:'erro'})) }
+  }
+  const card:React.CSSProperties={background:t.card,border:`1px solid ${t.line}`,borderRadius:16,padding:'18px 20px',marginBottom:16}
+  if(carregando) return <div style={{...card,display:'flex',alignItems:'center',gap:11,color:t.t3,fontSize:12.5}}><IrisNeo tam={30} sev="ok" carga={0}/>O NEO está lendo suas campanhas…</div>
+  if(!d) return null
+  if(d.connected===false) return null   // o aviso de conectar já aparece fora
+  if(!d.pronto) return <div style={{...card,display:'flex',alignItems:'center',gap:11,color:t.t2,fontSize:12.5}}><IrisNeo tam={30} sev="ok" carga={0.3}/>{d.msg||'Preparando sua análise de anúncios…'}</div>
+
+  const neg:any[]=d.negativar||[], prom:any[]=d.promover||[], lan:any[]=d.lances||[]
+  const totalAcoes=neg.length+prom.length+lan.length
+  const gastoVaza=Number(d.totais?.gastoSemVenda)||0
+  const vendasCapturar=Number(d.totais?.vendasDeTermosPromoviveis)||0
+
+  const Acao=({r,cor,rotulo,acaoTxt}:{r:any;cor:string;rotulo:string;acaoTxt:string})=>{
+    const st=feitos[chave(r)]
+    return(
+      <div style={{display:'flex',alignItems:'flex-start',gap:12,padding:'11px 0',borderTop:`1px solid ${t.line}`}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:600,color:t.t1}}>
+            <span style={{color:cor}}>{rotulo}</span> {r.termo||''}
+            {r.lanceSugerido?<span style={{color:t.t2,fontWeight:400}}> · lance R$ {brl2(r.lanceSugerido).replace('R$','').trim()}</span>:null}
+          </div>
+          <div style={{fontSize:11,color:t.t3,marginTop:2,lineHeight:1.35}}>{r.motivo}</div>
+        </div>
+        {st==='ok'?<span style={{fontSize:11,color:t.grn,fontWeight:700,whiteSpace:'nowrap',paddingTop:2}}>✓ feito</span>
+         :st==='erro'?<button onClick={()=>aplicar(r)} style={{fontSize:11,color:t.red,background:'none',border:`1px solid ${t.red}`,borderRadius:8,padding:'5px 10px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>tentar de novo</button>
+         :isAdmin?<button onClick={()=>aplicar(r)} disabled={st==='indo'} style={{fontSize:11,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:cor,border:'none',borderRadius:8,padding:'6px 12px',cursor:st==='indo'?'default':'pointer',fontFamily:'inherit',whiteSpace:'nowrap',opacity:st==='indo'?0.6:1}}>{st==='indo'?'aplicando…':acaoTxt}</button>
+         :<span style={{fontSize:10,color:t.t3,whiteSpace:'nowrap',paddingTop:2}}>em breve</span>}
+      </div>
+    )
+  }
+  async function aplicarTudo(lista:any[]){ for(const r of lista){ if(feitos[chave(r)]!=='ok') await aplicar(r) } }
+
+  return(
+    <div style={card}>
+      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:4}}>
+        <IrisNeo tam={34} sev={totalAcoes?'atencao':'ok'} carga={Math.min(1,totalAcoes/10)}/>
+        <div style={{flex:1}}>
+          <div style={{fontFamily:FH,fontSize:16,fontWeight:700,color:t.t1}}>Piloto NEO</div>
+          <div style={{fontSize:11.5,color:t.t3}}>Meta de ACoS: <b style={{color:t.gold}}>{d.acosAlvo}%</b> · {d.origemAlvo}</div>
+        </div>
+      </div>
+      {totalAcoes===0
+        ? <div style={{fontSize:12.5,color:t.grn,padding:'10px 0 2px'}}>✓ Está tudo na régua — nenhuma ação urgente agora. O NEO segue de olho e te avisa quando algo mudar.</div>
+        : <div style={{fontSize:12.5,color:t.t2,padding:'6px 0 10px',lineHeight:1.45}}>
+            Achei <b style={{color:t.t1}}>{totalAcoes} {totalAcoes===1?'ação':'ações'}</b> pra melhorar sua conta{gastoVaza>0.005?<> — <b style={{color:t.red}}>{brl2(gastoVaza)}</b> saindo em cliques que não vendem</>:null}{vendasCapturar>0.005?<> e <b style={{color:t.grn}}>{brl2(vendasCapturar)}</b> em vendas pra capturar melhor</>:null}. {isAdmin?'Confira e clique em aplicar — o NEO faz na sua campanha.':'Confira abaixo o que o NEO faria.'}
+          </div>}
+
+      {neg.length>0&&<div style={{marginTop:8}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div style={{fontSize:12,fontWeight:700,color:t.t1}}>🛑 Parar de gastar à toa <span style={{color:t.t3,fontWeight:400}}>({neg.length})</span></div>
+          {isAdmin&&neg.length>1&&<button onClick={()=>aplicarTudo(neg)} style={{fontSize:10.5,color:t.red,background:'none',border:`1px solid ${t.red}`,borderRadius:7,padding:'4px 9px',cursor:'pointer',fontFamily:'inherit'}}>negativar todas</button>}
+        </div>
+        {neg.slice(0,8).map((r,i)=><Acao key={i} r={r} cor={t.red} rotulo="Negativar" acaoTxt="Negativar"/>)}
+      </div>}
+
+      {prom.length>0&&<div style={{marginTop:16}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div style={{fontSize:12,fontWeight:700,color:t.t1}}>⭐ Capturar quem já vende <span style={{color:t.t3,fontWeight:400}}>({prom.length})</span></div>
+          {isAdmin&&prom.length>1&&<button onClick={()=>aplicarTudo(prom)} style={{fontSize:10.5,color:t.grn,background:'none',border:`1px solid ${t.grn}`,borderRadius:7,padding:'4px 9px',cursor:'pointer',fontFamily:'inherit'}}>criar todas</button>}
+        </div>
+        {prom.slice(0,8).map((r,i)=><Acao key={i} r={r} cor={t.grn} rotulo="Criar exata" acaoTxt="Criar"/>)}
+      </div>}
+
+      {lan.length>0&&<div style={{marginTop:16}}>
+        <div style={{fontSize:12,fontWeight:700,color:t.t1}}>📉 Acertar os lances <span style={{color:t.t3,fontWeight:400}}>({lan.length})</span></div>
+        {lan.slice(0,8).map((r,i)=><Acao key={i} r={r} cor={t.gold} rotulo={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'} acaoTxt={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'}/>)}
+      </div>}
+
+      {!isAdmin&&totalAcoes>0&&<div style={{fontSize:10.5,color:t.t3,marginTop:14,paddingTop:10,borderTop:`1px solid ${t.line}`}}>O aplicar automático está em teste final. Por enquanto, você faz esses ajustes na sua conta de anúncios da Amazon — ou peça no chat do NEO.</div>}
+    </div>
+  )
+}
+
 function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,inv}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean;isAdmin?:boolean;margemAds?:number|null;realDre?:any;inv?:any}){
   const t=useT()
   // Não conectou a conta de Ads ainda
@@ -3236,7 +3335,16 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
         {k.label==='TACoS'&&tacosConta==null&&<div style={noteStyle}>{mesmoPeriodo?'sem faturamento no período':'o anúncio ainda responde por outro intervalo'}</div>}
       </div>)}
     </div>
-    <NeoAds hide={hide}/>
+    {/* ⭐ O NEO NO COMANDO (08/09): o Piloto entrega as decisões prontas e a
+        pessoa só dá o OK. É a estrela da aba agora — o resto virou "detalhes". */}
+    <PilotoNeo hide={hide} isAdmin={isAdmin} margem={margemAds}/>
+    {/* Tudo abaixo é o detalhe técnico (as tabelas que espelham a Amazon) —
+        RECOLHIDO por padrão pra não poluir. Quem quer conferir, abre. */}
+    <details style={{marginTop:4}}>
+      <summary style={{cursor:'pointer',fontSize:12.5,color:t.t2,fontFamily:FG,padding:'8px 0',userSelect:'none' as const}}>
+        Ver todos os números e campanhas (detalhe técnico)
+      </summary>
+    <div style={{marginTop:10}}>
     {/* ⚠️ Isto era uma faixa de texto corrido numa linha só — o João não
         conseguia ler. Virou três blocos: as duas siglas lado a lado e a régua
         embaixo, que é a parte que muda decisão. */}
@@ -3308,6 +3416,8 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
     {upd && <div style={{fontSize:10.5,color:t.t3,marginTop:10,display:'flex',gap:6,alignItems:'center'}}>
       <i className="ti ti-refresh" style={{fontSize:12}} aria-hidden="true"/>Atualizado {upd.toLocaleString('pt-BR')} · dado real da Advertising API{adsReal.stale?' · revalidando no fundo':''}
     </div>}
+    </div>
+    </details>
     {isAdmin && <AdsAdmin margem={margemAds}/>}
   </>)
 }
