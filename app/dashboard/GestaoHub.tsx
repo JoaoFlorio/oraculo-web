@@ -3177,7 +3177,7 @@ function ProdutosDaCampanha({produtos}:{produtos:{sku:string;name:string;image:s
    mostra e passa a AGIR. O NEO lê a conta, entrega as decisões prontas (parar
    vazamento, capturar termo que vende, acertar lance) e a pessoa — mesmo leiga —
    só dá o OK. As tabelas técnicas descem pra um "ver detalhes" recolhido. */
-function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:number|null}){
+function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;margem?:number|null;fotos?:Record<string,{image?:string;name?:string}>}){
   const t=useT()
   const [d,setD]=useState<any>(null)
   const [carregando,setCarregando]=useState(true)
@@ -3186,7 +3186,7 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
   const [gerencia,setGerencia]=useState<Record<string,boolean>>({})   // toggle por produto (otimista)
   const [bot,setBot]=useState<any>(null)   // estado do bot diário: automatico, lastRunAt, lastResult
   const [criando,setCriando]=useState<Record<string,'indo'|'ok'|'erro'>>({})   // criação de campanha por sku
-  const [filtro,setFiltro]=useState<'acao'|'saudavel'|'todos'>('acao')   // filtro da lista de produtos
+  const [filtro,setFiltro]=useState<'acao'|'saudavel'|'estoque'|'todos'>('acao')   // filtro da lista de produtos
   const [cfgAberta,setCfgAberta]=useState(false)   // objetivo/bot recolhidos por padrão (menos poluição)
   const [abertos,setAbertos]=useState<Record<string,boolean>>({})   // ações por produto recolhidas por padrão
   const chave=(r:any)=>`${r.tipo}:${r.campaignId}:${r.keywordId||r.termo}`
@@ -3278,15 +3278,18 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
     'desligar-sem-estoque':{cor:t.red,rot:'Desligar (sem estoque)',btn:'Desligar'},
   }
   const produtos:any[] = d.temMapaProduto ? (d.produtos||[]) : []
-  // Classifica pra o FILTRO (evita a "bíblia" — por padrão só o que precisa de ação).
-  const precisaAcao=(g:any)=> g.semEstoque
-    || ['alerta','sangrando','prejuizo'].includes(g.diagnostico?.severidade)
+  // Classifica pra o FILTRO. Sem-estoque tem grupo PRÓPRIO (não é pra otimizar, é
+  // pra desligar) — por isso sai do "precisam de ação". Evita a "bíblia".
+  const precisaAcao=(g:any)=> !g.semEstoque && (
+       ['alerta','sangrando','prejuizo'].includes(g.diagnostico?.severidade)
     || ['vitrine','pagina','lance-alto','nao-gasta'].includes(g.diagnostico?.causa)
-    || (g.acoes?.length>0)
+    || (g.acoes?.length>0))
   const nAcao=produtos.filter(precisaAcao).length
-  const nSaudavel=produtos.filter((g:any)=>g.diagnostico?.causa==='saudavel').length
+  const nSaudavel=produtos.filter((g:any)=>!g.semEstoque && g.diagnostico?.causa==='saudavel').length
+  const nSemEstoque=produtos.filter((g:any)=>g.semEstoque).length
   const listaProdutos = filtro==='acao' ? produtos.filter(precisaAcao)
-    : filtro==='saudavel' ? produtos.filter((g:any)=>g.diagnostico?.causa==='saudavel')
+    : filtro==='saudavel' ? produtos.filter((g:any)=>!g.semEstoque && g.diagnostico?.causa==='saudavel')
+    : filtro==='estoque' ? produtos.filter((g:any)=>g.semEstoque)
     : produtos
   // Ícone por CAUSA raiz (a alma do método: fala a causa: vitrine/página/lance).
   const CAUSA:Record<string,{icon:string}>={
@@ -3398,6 +3401,7 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
           {[
             {id:'acao' as const,rot:'Precisam de ação',n:nAcao,cor:t.gold},
             {id:'saudavel' as const,rot:'Saudáveis',n:nSaudavel,cor:t.grn},
+            ...(nSemEstoque>0?[{id:'estoque' as const,rot:'Sem estoque',n:nSemEstoque,cor:t.red}]:[]),
             {id:'todos' as const,rot:'Todos',n:produtos.length,cor:t.t2},
           ].map(f=>{const on=filtro===f.id;return(
             <button key={f.id} onClick={()=>setFiltro(f.id)}
@@ -3417,38 +3421,55 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
         const cz={cor:dg.severidade?corSev(dg.severidade):(dg.causa==='saudavel'?t.grn:dg.causa==='sem-dado'||dg.causa==='nao-gasta'?t.t3:t.gold),icon:czIcon}
         const me=g.metricas||{}
         const geren = g.sku in gerencia ? gerencia[g.sku] : (g.gerenciar!==false)
+        const foto=fotos?.[g.sku]?.image
+        const barra=cz.cor   // cor da faixa lateral = severidade/causa (leitura de 1 relance)
         return(
-          <div key={gi} style={{border:`1px solid ${g.semEstoque?tint(t.red,30):t.line}`,borderRadius:14,padding:'15px 16px',marginBottom:12,background:g.semEstoque?tint(t.red,4):(t.dark?'rgba(255,255,255,0.015)':'#FCFCFD'),opacity:geren?1:0.72}}>
-            {/* Header: nome + estoque + toggle "NEO gerencia / eu cuido" */}
-            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:11,flexWrap:'wrap' as const}}>
-              <span style={{fontSize:15,fontWeight:700,color:t.t1,flex:1,minWidth:0}}>{g.nome}</span>
-              {g.estoque && (g.semEstoque
-                ? <span style={{fontSize:10.5,fontWeight:700,color:t.red,background:tint(t.red,10),padding:'3px 9px',borderRadius:99,whiteSpace:'nowrap'}}>SEM ESTOQUE</span>
-                : <span style={{fontSize:10.5,fontWeight:600,color:t.grn,background:tint(t.grn,10),padding:'3px 9px',borderRadius:99,whiteSpace:'nowrap'}}>{g.estoque.fulfillable} em estoque</span>)}
-              <button onClick={()=>alternarProduto(g.sku,geren)} title={geren?'O NEO está no comando deste produto — clique para você mesmo cuidar':'Você cuida deste produto — clique para devolver ao NEO'}
-                style={{display:'flex',alignItems:'center',gap:6,background:geren?tint(t.gold,12):'transparent',border:`1.5px solid ${geren?t.gold:t.line}`,borderRadius:99,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
-                <span style={{width:8,height:8,borderRadius:99,background:geren?t.gold:t.t3}}/>
+          <div key={gi} style={{position:'relative' as const,overflow:'hidden',border:`1px solid ${g.semEstoque?tint(t.red,28):t.line}`,borderRadius:16,padding:'15px 16px 15px 18px',marginBottom:12,background:t.dark?'rgba(255,255,255,0.02)':'#fff',opacity:geren?1:0.66,boxShadow:t.dark?'none':'0 1px 2px rgba(20,20,40,0.04)'}}>
+            {/* Faixa lateral colorida pela causa — dá o "estado" num relance, sem ler */}
+            <div style={{position:'absolute' as const,left:0,top:0,bottom:0,width:4,background:barra}}/>
+            {/* Header: FOTO + nome (título) + chips coloridos + toggle */}
+            <div style={{display:'flex',alignItems:'flex-start',gap:13,marginBottom:13}}>
+              <div style={{width:56,height:56,borderRadius:12,overflow:'hidden',flexShrink:0,background:t.dark?'rgba(255,255,255,0.05)':'#f3f3f7',border:`1px solid ${t.line}`,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {foto?<img src={foto} alt="" style={{width:'100%',height:'100%',objectFit:'cover' as const,filter:hide?'blur(7px)':'none'}}/>:<i className="ti ti-package" style={{fontSize:24,color:t.t3}} aria-hidden="true"/>}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14.5,fontWeight:700,color:t.t1,lineHeight:1.32,letterSpacing:'-0.01em',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as const,overflow:'hidden'}}>{g.nome}</div>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginTop:7,alignItems:'center'}}>
+                  {/* Chip de ESTADO (a causa, colorida) — o m19 não tem isso */}
+                  {dg.titulo && <span style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:10.5,fontWeight:800,color:cz.cor,background:tint(cz.cor,13),padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.03em',whiteSpace:'nowrap' as const}}><i className={`ti ${cz.icon}`} style={{fontSize:12}} aria-hidden="true"/>{dg.titulo}</span>}
+                  {/* Chip de ESTOQUE */}
+                  {g.estoque && (g.semEstoque
+                    ? <span style={{fontSize:10,fontWeight:700,color:t.red,background:tint(t.red,10),padding:'3px 8px',borderRadius:99,whiteSpace:'nowrap' as const}}>sem estoque</span>
+                    : <span style={{fontSize:10,fontWeight:600,color:t.t3,background:t.dark?'rgba(255,255,255,0.04)':'#f1f1f4',padding:'3px 8px',borderRadius:99,whiteSpace:'nowrap' as const}}>{g.estoque.fulfillable} em estoque</span>)}
+                  {/* Chip de CAMPANHA */}
+                  <span style={{fontSize:10,fontWeight:600,color:t.grn,background:tint(t.grn,9),padding:'3px 8px',borderRadius:99,whiteSpace:'nowrap' as const}}>anunciando</span>
+                </div>
+              </div>
+              <button onClick={()=>alternarProduto(g.sku,geren)} title={geren?'O NEO está no comando — clique para você mesmo cuidar':'Você cuida deste — clique para devolver ao NEO'}
+                style={{display:'flex',alignItems:'center',gap:6,flexShrink:0,background:geren?tint(t.gold,12):'transparent',border:`1.5px solid ${geren?t.gold:t.line}`,borderRadius:99,padding:'5px 11px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' as const}}>
+                <span style={{width:7,height:7,borderRadius:99,background:geren?t.gold:t.t3}}/>
                 <span style={{fontSize:11,fontWeight:700,color:geren?t.gold:t.t3}}>{geren?'NEO gerencia':'Eu cuido'}</span>
               </button>
             </div>
-            {/* Faixa das 6 métricas do m19 (ACoS/ROAS/CPC/CTR/vendas/TACoS) — honesta */}
-            <div style={{display:'flex',flexWrap:'wrap' as const,gap:'10px 18px',padding:'11px 13px',marginBottom:11,background:t.dark?'rgba(255,255,255,0.03)':'#fff',border:`1px solid ${t.line}`,borderRadius:11}}>
-              <Metrica rot="ACoS" val={num(me.acos,'%')} cor={corAcos(me.acos)}/>
-              <Metrica rot="ROAS" val={me.roas==null?'—':num(me.roas)+'x'} cor={t.t1}/>
-              <Metrica rot="CTR" val={num(me.ctr,'%')} cor={me.ctr==null?t.t3:me.ctr<2?t.red:t.grn}/>
-              <Metrica rot="CPC" val={me.cpc==null?'—':brl2(me.cpc)} cor={t.t1}/>
-              <Metrica rot="Vendas" val={brl2(g.vendasMes)} cor={t.t1}/>
-              <Metrica rot="Ads" val={brl2(g.gastoMes)} cor={t.t1}/>
-              <Metrica rot="TACoS" val={num(me.tacos,'%')} cor={me.tacos==null?t.t3:t.t1}/>
-            </div>
-            {/* ⭐ O DIAGNÓSTICO — a CAUSA, não o sintoma (a alma do método do João) */}
-            {dg.texto && <div style={{display:'flex',gap:10,padding:'11px 13px',marginBottom:acoes.length?11:2,background:tint(cz.cor,7),border:`1px solid ${tint(cz.cor,22)}`,borderRadius:11}}>
-              <i className={`ti ${cz.icon}`} style={{fontSize:17,color:cz.cor,marginTop:1,flexShrink:0}} aria-hidden="true"/>
-              <div style={{minWidth:0}}>
-                <div style={{fontSize:11,fontWeight:800,color:cz.cor,textTransform:'uppercase' as const,letterSpacing:'0.04em',marginBottom:3}}>{dg.titulo}</div>
-                <div style={{fontSize:12.5,color:t.t2,lineHeight:1.45}}>{dg.texto}</div>
-                <div style={{fontSize:12.5,color:t.t1,fontWeight:600,marginTop:5,lineHeight:1.45}}>→ {dg.acao}</div>
+            {/* Métricas: ACoS é o HERÓI (grande, colorido); o resto é apoio (menor). */}
+            <div style={{display:'flex',alignItems:'stretch',gap:12,marginBottom:12,flexWrap:'wrap' as const}}>
+              <div style={{display:'flex',flexDirection:'column' as const,justifyContent:'center',padding:'8px 16px 8px 0',borderRight:`1px solid ${t.line}`,minWidth:96}}>
+                <div style={{fontSize:26,fontWeight:800,color:corAcos(me.acos),fontFamily:FG,lineHeight:1,letterSpacing:'-0.02em'}}>{num(me.acos,'%')}</div>
+                <div style={{fontSize:9.5,color:t.t3,marginTop:4,textTransform:'uppercase' as const,letterSpacing:'0.06em',fontWeight:600}}>ACoS</div>
               </div>
+              <div style={{flex:1,display:'flex',flexWrap:'wrap' as const,gap:'8px 20px',alignItems:'center'}}>
+                <Metrica rot="ROAS" val={me.roas==null?'—':num(me.roas)+'x'} cor={t.t1}/>
+                <Metrica rot="CTR" val={num(me.ctr,'%')} cor={me.ctr==null?t.t3:me.ctr<2?t.red:t.grn}/>
+                <Metrica rot="CPC" val={me.cpc==null?'—':brl2(me.cpc)} cor={t.t2}/>
+                <Metrica rot="Vendas" val={brl2(g.vendasMes)} cor={t.grn}/>
+                <Metrica rot="Ads" val={brl2(g.gastoMes)} cor={t.t2}/>
+                <Metrica rot="TACoS" val={num(me.tacos,'%')} cor={me.tacos==null?t.t3:t.t2}/>
+              </div>
+            </div>
+            {/* ⭐ O DIAGNÓSTICO — a CAUSA (o chip acima já dá o rótulo; aqui o porquê + ação) */}
+            {dg.texto && <div style={{padding:'11px 13px',marginBottom:acoes.length?11:2,background:tint(cz.cor,6),borderRadius:12,borderLeft:`3px solid ${cz.cor}`}}>
+              <div style={{fontSize:12.5,color:t.t2,lineHeight:1.5}}>{dg.texto}</div>
+              <div style={{fontSize:13,color:t.t1,fontWeight:700,marginTop:6,lineHeight:1.45,display:'flex',gap:6}}><span style={{color:cz.cor}}>→</span><span>{dg.acao}</span></div>
             </div>}
             {g.aviso && <div style={{fontSize:12,color:t.gold,marginBottom:9,lineHeight:1.4}}>{g.aviso}</div>}
             {/* Ações RECOLHIDAS por produto (tira o paredão): resumo + aplicar todas + ver detalhes */}
@@ -3686,7 +3707,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
     </div>
     {/* ⭐ O NEO NO COMANDO (08/09): o Piloto entrega as decisões prontas e a
         pessoa só dá o OK. É a estrela da aba agora — o resto virou "detalhes". */}
-    <PilotoNeo hide={hide} isAdmin={isAdmin} margem={margemAds}/>
+    <PilotoNeo hide={hide} isAdmin={isAdmin} margem={margemAds} fotos={Object.fromEntries(catalogo.map(c=>[c.sku,{image:c.image,name:c.name}]))}/>
     </>}
     {subaba==='numeros' && <>
     {/* As tabelas que espelham a Amazon — agora numa sub-aba própria (m19). */}
