@@ -4,6 +4,16 @@ import { getSession } from '@/lib/auth'
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
 const KEY = process.env.INTERNAL_KEY || ''
 
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const user = await getSession()
+  if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const { id } = await params
+  try {
+    const r = await fetch(`${BACKEND}/api/ads/estrategias/${encodeURIComponent(id)}?email=${encodeURIComponent(user.email)}`,
+      { cache: 'no-store', headers: { 'x-internal-key': KEY }, signal: AbortSignal.timeout(15_000) })
+    return NextResponse.json(await r.json().catch(() => ({})), { status: r.status })
+  } catch { return NextResponse.json({ error: 'falha' }, { status: 502 }) }
+}
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })

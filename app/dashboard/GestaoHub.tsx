@@ -3539,8 +3539,31 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
   const [valor,setValor]=useState('')
   const [erro,setErro]=useState('')
   const [salvando,setSalvando]=useState(false)
+  const [catalogo,setCatalogo]=useState<any[]>([])   // produtos da loja (com imagem) pro picker
+  const [picker,setPicker]=useState<number|null>(null)   // id da estratégia com o picker aberto
+  const [sel,setSel]=useState<Set<string>>(new Set())    // SKUs selecionados no picker
+  const [buscaProd,setBuscaProd]=useState('')
+  const [salvandoProd,setSalvandoProd]=useState(false)
   function carregar(){ fetch('/api/ads/estrategias',{cache:'no-store'}).then(r=>r.json()).then(x=>setLista(x?.estrategias||[])).catch(()=>setLista([])) }
   useEffect(()=>{ carregar() },[])
+  // Catálogo da loja (com IMAGEM) — base do "montar o grupo de produtos" do m19.
+  useEffect(()=>{ fetch('/api/amazon/inventory',{cache:'no-store'}).then(r=>r.json()).then(x=>setCatalogo((x?.inventario||[]).map((it:any)=>({sku:it.sku,name:it.name||it.sku,image:it.image,fulfillable:Number(it.fulfillable)||0})))).catch(()=>{}) },[])
+  async function abrirPicker(id:number){
+    if(picker===id){ setPicker(null); return }
+    setPicker(id); setBuscaProd(''); setSel(new Set())
+    try{ const e=await fetch(`/api/ads/estrategias/${id}`,{cache:'no-store'}).then(r=>r.json()); setSel(new Set(e?.skus||[])) }catch{}
+  }
+  function toggleSku(sku:string){ setSel(s=>{const n=new Set(s); n.has(sku)?n.delete(sku):n.add(sku); return n}) }
+  async function salvarProdutos(id:number){
+    setSalvandoProd(true)
+    try{
+      const produtos=[...sel].map(sku=>{const c=catalogo.find(x=>x.sku===sku); return {sku,asin:c?.asin}})
+      await fetch(`/api/ads/estrategias/${id}/produtos`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({produtos})})
+      setPicker(null); carregar()
+    }catch{} finally{ setSalvandoProd(false) }
+  }
+  const imgDe=(sku:string)=>catalogo.find(x=>x.sku===sku)?.image
+  const tint=(hex:string,a:number)=>{const h=hex.replace('#','');const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a/100})`}
   async function salvar(){
     setErro('')
     if(!nome.trim()){ setErro('dê um nome pra estratégia'); return }
@@ -3605,16 +3628,59 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
       {/* Lista */}
       {lista===null && <div style={{color:t.t3,fontSize:12.5,padding:'8px 2px'}}>Carregando estratégias…</div>}
       {lista!==null && lista.length===0 && !criando && <div style={{color:t.t3,fontSize:12.5,padding:'8px 2px'}}>Nenhuma estratégia ainda. Crie a primeira acima.</div>}
-      {lista!==null && lista.map((e:any)=>(
-        <div key={e.id} style={{...card,marginBottom:10,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const}}>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:14.5,fontWeight:700,color:t.t1}}>{e.nome}</div>
-            <div style={{fontSize:12,color:t.t3,marginTop:2}}>{descAlg(e.algoritmo,e.param)} · {e.numProdutos||0} produto{(e.numProdutos||0)===1?'':'s'}</div>
+      {lista!==null && lista.map((e:any)=>{
+        const skus:string[]=e.skus||[]
+        const aberto=picker===e.id
+        const cat=buscaProd.trim()?catalogo.filter(c=>(c.name||'').toLowerCase().includes(buscaProd.toLowerCase())||(c.sku||'').toLowerCase().includes(buscaProd.toLowerCase())):catalogo
+        return(
+        <div key={e.id} style={{...card,marginBottom:10,padding:'15px 17px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const}}>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:15,fontWeight:700,color:t.t1}}>{e.nome}</div>
+              <div style={{fontSize:12,color:t.t3,marginTop:2}}>{descAlg(e.algoritmo,e.param)} · {e.numProdutos||0} produto{(e.numProdutos||0)===1?'':'s'}</div>
+            </div>
+            <span style={{fontSize:10.5,fontWeight:700,color:e.automatico?t.grn:t.t3,background:e.automatico?(t.dark?'rgba(34,197,94,0.1)':'#ECFDF5'):'transparent',border:`1px solid ${e.automatico?t.grn:t.line}`,padding:'4px 10px',borderRadius:99,whiteSpace:'nowrap'}}>{e.automatico?'piloto ligado':'piloto desligado'}</span>
+            <button onClick={()=>excluir(e.id)} title="Excluir estratégia" style={{background:'none',border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t3,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><i className="ti ti-trash" style={{fontSize:16}} aria-hidden="true"/></button>
           </div>
-          <span style={{fontSize:10.5,fontWeight:700,color:e.automatico?t.grn:t.t3,background:e.automatico?(t.dark?'rgba(34,197,94,0.1)':'#ECFDF5'):'transparent',border:`1px solid ${e.automatico?t.grn:t.line}`,padding:'4px 10px',borderRadius:99,whiteSpace:'nowrap'}}>{e.automatico?'piloto ligado':'piloto desligado'}</span>
-          <button onClick={()=>excluir(e.id)} title="Excluir estratégia" style={{background:'none',border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t3,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><i className="ti ti-trash" style={{fontSize:16}} aria-hidden="true"/></button>
+          {/* Grupo de produtos: thumbnails + gerenciar (o "montar o grupo" do m19) */}
+          <div style={{display:'flex',alignItems:'center',gap:8,marginTop:12,flexWrap:'wrap' as const}}>
+            {skus.slice(0,10).map((sku:string)=>{const img=imgDe(sku);return(
+              <div key={sku} title={sku} style={{width:38,height:38,borderRadius:8,overflow:'hidden',flexShrink:0,background:t.dark?'rgba(255,255,255,0.05)':'#f3f3f7',border:`1px solid ${t.line}`,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                {img?<img src={img} alt="" style={{width:'100%',height:'100%',objectFit:'cover' as const}}/>:<i className="ti ti-package" style={{fontSize:15,color:t.t3}} aria-hidden="true"/>}
+              </div>
+            )})}
+            {skus.length>10 && <span style={{fontSize:11,color:t.t3}}>+{skus.length-10}</span>}
+            {skus.length===0 && <span style={{fontSize:11.5,color:t.t3}}>Nenhum produto neste grupo ainda.</span>}
+            <button onClick={()=>abrirPicker(e.id)} style={{marginLeft:'auto',fontSize:11.5,fontWeight:700,color:aberto?t.gold:t.t2,background:aberto?tint(t.gold,10):'transparent',border:`1px solid ${aberto?t.gold:t.line}`,borderRadius:9,padding:'6px 12px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' as const}}>
+              <i className="ti ti-photo" style={{fontSize:14,marginRight:5}} aria-hidden="true"/>{aberto?'fechar':'gerenciar produtos'}
+            </button>
+          </div>
+          {/* Picker: grade de TODOS os produtos da loja (com imagem) + seleção */}
+          {aberto && <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${t.line}`}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10,flexWrap:'wrap' as const}}>
+              <input value={buscaProd} onChange={ev=>setBuscaProd(ev.target.value)} placeholder="Buscar produto…"
+                style={{flex:1,minWidth:160,fontSize:12.5,padding:'8px 11px',borderRadius:9,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.03)':'#fff',color:t.t1,fontFamily:'inherit'}}/>
+              <span style={{fontSize:11.5,color:t.t3}}>{sel.size} selecionado{sel.size===1?'':'s'}</span>
+              <button onClick={()=>salvarProdutos(e.id)} disabled={salvandoProd} style={{fontSize:12,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:9,padding:'8px 15px',cursor:salvandoProd?'default':'pointer',opacity:salvandoProd?0.6:1,fontFamily:'inherit'}}>{salvandoProd?'salvando…':'Salvar grupo'}</button>
+            </div>
+            {catalogo.length===0 && <div style={{fontSize:12,color:t.t3,padding:'6px 0'}}>Carregando seus produtos…</div>}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:8,maxHeight:320,overflowY:'auto' as const}}>
+              {cat.map((c:any)=>{const on=sel.has(c.sku);return(
+                <button key={c.sku} onClick={()=>toggleSku(c.sku)} style={{display:'flex',alignItems:'center',gap:9,textAlign:'left' as const,padding:'8px 10px',borderRadius:10,cursor:'pointer',fontFamily:'inherit',background:on?tint(t.gold,10):(t.dark?'rgba(255,255,255,0.02)':'#FCFCFD'),border:`1.5px solid ${on?t.gold:t.line}`}}>
+                  <div style={{width:36,height:36,borderRadius:7,overflow:'hidden',flexShrink:0,background:t.dark?'rgba(255,255,255,0.05)':'#f3f3f7',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    {c.image?<img src={c.image} alt="" style={{width:'100%',height:'100%',objectFit:'cover' as const}}/>:<i className="ti ti-package" style={{fontSize:15,color:t.t3}} aria-hidden="true"/>}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11.5,fontWeight:600,color:t.t1,lineHeight:1.25,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as const,overflow:'hidden'}}>{c.name}</div>
+                    <div style={{fontSize:9.5,color:c.fulfillable>0?t.t3:t.red,marginTop:2}}>{c.fulfillable>0?`${c.fulfillable} em estoque`:'sem estoque'}</div>
+                  </div>
+                  {on && <i className="ti ti-circle-check-filled" style={{fontSize:16,color:t.gold,flexShrink:0}} aria-hidden="true"/>}
+                </button>
+              )})}
+            </div>
+          </div>}
         </div>
-      ))}
+      )})}
     </div>
   )
 }
