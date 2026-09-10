@@ -3539,6 +3539,7 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
   const [valor,setValor]=useState('')
   const [erro,setErro]=useState('')
   const [salvando,setSalvando]=useState(false)
+  const [editId,setEditId]=useState<number|null>(null)   // id em edição (null = criando)
   const [catalogo,setCatalogo]=useState<any[]>([])   // produtos da loja (com imagem) pro picker
   const [picker,setPicker]=useState<number|null>(null)   // id da estratégia com o picker aberto
   const [sel,setSel]=useState<Set<string>>(new Set())    // SKUs selecionados no picker
@@ -3564,6 +3565,12 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
   }
   const imgDe=(sku:string)=>catalogo.find(x=>x.sku===sku)?.image
   const tint=(hex:string,a:number)=>{const h=hex.replace('#','');const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a/100})`}
+  function fecharForm(){ setCriando(false); setEditId(null); setNome(''); setValor(''); setAlg('acos'); setErro('') }
+  function abrirEdicao(e:any){
+    setEditId(e.id); setNome(e.nome); setAlg(e.algoritmo)
+    const v=e.param?.acosAlvoPct ?? e.param?.orcamentoMensalReais ?? e.param?.lanceFixo ?? ''
+    setValor(String(v).replace('.',',')); setCriando(true); setErro('')
+  }
   async function salvar(){
     setErro('')
     if(!nome.trim()){ setErro('dê um nome pra estratégia'); return }
@@ -3571,10 +3578,12 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
     if(!isFinite(v)||v<=0){ setErro('informe o número do objetivo'); return }
     setSalvando(true)
     try{
-      const r=await fetch('/api/ads/estrategias',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({nome:nome.trim(),algoritmo:alg,valor:v})})
+      const editando=editId!=null
+      const r=await fetch(editando?`/api/ads/estrategias/${editId}`:'/api/ads/estrategias',
+        {method:editando?'PUT':'POST',headers:{'content-type':'application/json'},body:JSON.stringify({nome:nome.trim(),algoritmo:alg,valor:v})})
       const j=await r.json()
-      if(j?.ok){ setCriando(false); setNome(''); setValor(''); setAlg('acos'); carregar() }
-      else setErro(j?.error||'não deu pra criar')
+      if(j?.ok){ fecharForm(); carregar() }
+      else setErro(j?.error||'não deu pra salvar')
     }catch{ setErro('falha de conexão') } finally{ setSalvando(false) }
   }
   async function excluir(id:number){
@@ -3603,7 +3612,7 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
         <i className="ti ti-plus" style={{fontSize:16}} aria-hidden="true"/>Criar estratégia
       </button>}
       {criando && <div style={{...card,marginBottom:14}}>
-        <div style={{fontSize:13.5,fontWeight:700,color:t.t1,marginBottom:11}}>Nova estratégia</div>
+        <div style={{fontSize:13.5,fontWeight:700,color:t.t1,marginBottom:11}}>{editId!=null?'Editar estratégia':'Nova estratégia'}</div>
         <input value={nome} onChange={e=>setNome(e.target.value)} placeholder="Nome (ex: Meus campeões, Lançamentos…)"
           style={{width:'100%',boxSizing:'border-box' as const,fontSize:13,padding:'10px 12px',borderRadius:10,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.03)':'#fff',color:t.t1,marginBottom:12,fontFamily:'inherit'}}/>
         <div style={{fontSize:11.5,color:t.t3,marginBottom:7}}>Objetivo</div>
@@ -3620,7 +3629,7 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
           <input value={valor} onChange={e=>setValor(e.target.value)} placeholder={algSel.ph} inputMode="decimal"
             style={{width:130,fontSize:14,fontWeight:700,padding:'10px 12px',borderRadius:10,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.03)':'#fff',color:t.t1,fontFamily:'inherit'}}/>
           <button onClick={salvar} disabled={salvando} style={{fontSize:13,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:10,padding:'10px 18px',cursor:salvando?'default':'pointer',opacity:salvando?0.6:1,fontFamily:'inherit'}}>{salvando?'salvando…':'Criar'}</button>
-          <button onClick={()=>{setCriando(false);setErro('')}} style={{fontSize:12.5,color:t.t3,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit'}}>cancelar</button>
+          <button onClick={fecharForm} style={{fontSize:12.5,color:t.t3,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit'}}>cancelar</button>
         </div>
         {erro && <div style={{fontSize:12,color:t.red,marginTop:9}}>{erro}</div>}
       </div>}
@@ -3640,6 +3649,7 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
               <div style={{fontSize:12,color:t.t3,marginTop:2}}>{descAlg(e.algoritmo,e.param)} · {e.numProdutos||0} produto{(e.numProdutos||0)===1?'':'s'}</div>
             </div>
             <span style={{fontSize:10.5,fontWeight:700,color:e.automatico?t.grn:t.t3,background:e.automatico?(t.dark?'rgba(34,197,94,0.1)':'#ECFDF5'):'transparent',border:`1px solid ${e.automatico?t.grn:t.line}`,padding:'4px 10px',borderRadius:99,whiteSpace:'nowrap'}}>{e.automatico?'piloto ligado':'piloto desligado'}</span>
+            <button onClick={()=>abrirEdicao(e)} title="Editar objetivo/meta" style={{background:'none',border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t3,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><i className="ti ti-pencil" style={{fontSize:16}} aria-hidden="true"/></button>
             <button onClick={()=>excluir(e.id)} title="Excluir estratégia" style={{background:'none',border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t3,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><i className="ti ti-trash" style={{fontSize:16}} aria-hidden="true"/></button>
           </div>
           {/* Grupo de produtos: thumbnails + gerenciar (o "montar o grupo" do m19) */}
