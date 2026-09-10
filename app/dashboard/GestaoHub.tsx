@@ -3186,6 +3186,9 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
   const [gerencia,setGerencia]=useState<Record<string,boolean>>({})   // toggle por produto (otimista)
   const [bot,setBot]=useState<any>(null)   // estado do bot diário: automatico, lastRunAt, lastResult
   const [criando,setCriando]=useState<Record<string,'indo'|'ok'|'erro'>>({})   // criação de campanha por sku
+  const [filtro,setFiltro]=useState<'acao'|'saudavel'|'todos'>('acao')   // filtro da lista de produtos
+  const [cfgAberta,setCfgAberta]=useState(false)   // objetivo/bot recolhidos por padrão (menos poluição)
+  const [abertos,setAbertos]=useState<Record<string,boolean>>({})   // ações por produto recolhidas por padrão
   const chave=(r:any)=>`${r.tipo}:${r.campaignId}:${r.keywordId||r.termo}`
   // Cria a campanha automática do produto (admin-only no proxy). Gasta na conta.
   async function criarCampanha(p:any){
@@ -3275,6 +3278,16 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
     'desligar-sem-estoque':{cor:t.red,rot:'Desligar (sem estoque)',btn:'Desligar'},
   }
   const produtos:any[] = d.temMapaProduto ? (d.produtos||[]) : []
+  // Classifica pra o FILTRO (evita a "bíblia" — por padrão só o que precisa de ação).
+  const precisaAcao=(g:any)=> g.semEstoque
+    || ['alerta','sangrando','prejuizo'].includes(g.diagnostico?.severidade)
+    || ['vitrine','pagina','lance-alto','nao-gasta'].includes(g.diagnostico?.causa)
+    || (g.acoes?.length>0)
+  const nAcao=produtos.filter(precisaAcao).length
+  const nSaudavel=produtos.filter((g:any)=>g.diagnostico?.causa==='saudavel').length
+  const listaProdutos = filtro==='acao' ? produtos.filter(precisaAcao)
+    : filtro==='saudavel' ? produtos.filter((g:any)=>g.diagnostico?.causa==='saudavel')
+    : produtos
   // Ícone por CAUSA raiz (a alma do método: fala a causa: vitrine/página/lance).
   const CAUSA:Record<string,{icon:string}>={
     'sem-estoque':{icon:'ti-box-off'}, 'nao-gasta':{icon:'ti-eye-off'},
@@ -3307,6 +3320,16 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
           <div style={{fontSize:12,color:t.t3,marginTop:1}}>ACoS bom é <b style={{color:t.grn}}>abaixo de 10%</b> — quanto menor, melhor. <span style={{color:t.gold}}>10-20 alerta</span>, <span style={{color:t.red}}>20-30 sangrando</span>, <span style={{color:t.dark?'#ff5470':'#c81e3a'}}>30+ prejuízo</span>.</div>
         </div>
       </div>
+      {/* Resumo compacto + toggle dos ajustes (menos poluição: abre nos produtos) */}
+      <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,marginBottom:cfgAberta?12:14,padding:'9px 12px',borderRadius:11,background:t.dark?'rgba(255,255,255,0.02)':'#FCFCFD',border:`1px solid ${t.line}`}}>
+        <i className="ti ti-adjustments-horizontal" style={{fontSize:16,color:t.t3}} aria-hidden="true"/>
+        <div style={{flex:1,minWidth:0,fontSize:12,color:t.t2}}>
+          Objetivo: <b style={{color:t.gold}}>{OBJS.find(o=>o.id===objetivo)?.rot||objetivo}</b>
+          {(isAdmin||bot?.automatico)&&<> · Bot diário: <b style={{color:bot?.automatico?t.grn:t.t3}}>{bot?.automatico?'ligado':'desligado'}</b></>}
+        </div>
+        <button onClick={()=>setCfgAberta(v=>!v)} style={{fontSize:11.5,fontWeight:700,color:t.t2,background:'none',border:`1px solid ${t.line}`,borderRadius:9,padding:'6px 11px',cursor:'pointer',fontFamily:'inherit'}}>{cfgAberta?'ocultar ajustes':'ajustar'}</button>
+      </div>
+      {cfgAberta && <>
       {/* ⭐ OBJETIVO — o cliente diz o que quer, o NEO otimiza por isso (autonomia m19) */}
       <div style={{marginBottom:14}}>
         <div style={{fontSize:11.5,color:t.t3,marginBottom:7}}>Qual é o seu objetivo? O NEO otimiza tudo por ele.</div>
@@ -3333,6 +3356,7 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
         </div>
         {isAdmin && <button onClick={alternarBot} style={{fontSize:11.5,fontWeight:700,color:bot?.automatico?t.red:(t.dark?'#1c1606':'#3a2a05'),background:bot?.automatico?'none':t.grn,border:bot?.automatico?`1px solid ${t.red}`:'none',borderRadius:9,padding:'7px 13px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{bot?.automatico?'Desligar':'Ligar bot diário'}</button>}
       </div>}
+      </>}
       {totalAcoes===0
         ? <div style={{fontSize:13.5,color:t.grn,padding:'6px 0'}}>✓ Tudo na régua pro seu objetivo — nenhuma ação urgente agora. O NEO segue de olho.</div>
         : <div style={{fontSize:13.5,color:t.t2,padding:'2px 0 14px',lineHeight:1.5}}>
@@ -3367,8 +3391,27 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
         </div>
       </div>}
 
+      {/* ── SEUS PRODUTOS — cabeçalho de seção + filtro (tira a "bíblia") ──── */}
+      {produtos.length>0 && <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,margin:'6px 0 12px',paddingTop:14,borderTop:`1px solid ${t.line}`}}>
+        <div style={{fontFamily:FH,fontSize:15,fontWeight:800,color:t.t1,letterSpacing:'-0.01em',flex:1,minWidth:120}}>Seus produtos</div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
+          {[
+            {id:'acao' as const,rot:'Precisam de ação',n:nAcao,cor:t.gold},
+            {id:'saudavel' as const,rot:'Saudáveis',n:nSaudavel,cor:t.grn},
+            {id:'todos' as const,rot:'Todos',n:produtos.length,cor:t.t2},
+          ].map(f=>{const on=filtro===f.id;return(
+            <button key={f.id} onClick={()=>setFiltro(f.id)}
+              style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:700,padding:'6px 11px',borderRadius:99,cursor:'pointer',fontFamily:'inherit',
+                background:on?tint(f.cor,14):'transparent',border:`1px solid ${on?f.cor:t.line}`,color:on?f.cor:t.t3}}>
+              {f.rot}<span style={{fontSize:10.5,opacity:0.85}}>{f.n}</span>
+            </button>
+          )})}
+        </div>
+      </div>}
+
       {/* ── VISÃO POR PRODUTO (m19): métricas + diagnóstico + toggle ──────── */}
-      {produtos.length>0 ? produtos.map((g:any,gi:number)=>{
+      {produtos.length>0 && listaProdutos.length===0 && <div style={{fontSize:12.5,color:t.grn,padding:'10px 2px'}}>✓ Nenhum produto {filtro==='acao'?'precisa de ação agora':filtro==='saudavel'?'saudável neste momento':'aqui'} — {filtro==='acao'?'tudo no ponto.':'troque o filtro pra ver os outros.'}</div>}
+      {produtos.length>0 ? listaProdutos.map((g:any,gi:number)=>{
         const acoes:any[]=g.acoes||[]
         const dg=g.diagnostico||{}; const czIcon=(CAUSA[dg.causa]||CAUSA['sem-dado']).icon
         const cz={cor:dg.severidade?corSev(dg.severidade):(dg.causa==='saudavel'?t.grn:dg.causa==='sem-dado'||dg.causa==='nao-gasta'?t.t3:t.gold),icon:czIcon}
@@ -3408,11 +3451,23 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
               </div>
             </div>}
             {g.aviso && <div style={{fontSize:12,color:t.gold,marginBottom:9,lineHeight:1.4}}>{g.aviso}</div>}
-            {/* As ações concretas só aparecem quando o NEO gerencia o produto */}
-            {geren && acoes.map((r:any,i:number)=>{
-              const cfg=REC[r.tipo]||REC['ajustar-lance']
-              return <Acao key={i} r={r} cor={cfg.cor} rotulo={cfg.rot} acaoTxt={cfg.btn}/>
-            })}
+            {/* Ações RECOLHIDAS por produto (tira o paredão): resumo + aplicar todas + ver detalhes */}
+            {geren && acoes.length>0 && (()=>{
+              const aberto=!!abertos[g.sku]
+              const cont:Record<string,number>={}; for(const r of acoes) cont[r.tipo]=(cont[r.tipo]||0)+1
+              const resumo=Object.entries(cont).map(([tp,n])=>`${n} ${(REC[tp]?.rot||tp).toLowerCase()}`).join(' · ')
+              return(<>
+                <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,paddingTop:9,borderTop:`1px solid ${t.line}`}}>
+                  <div style={{flex:1,minWidth:0,fontSize:12,color:t.t2}}><b style={{color:t.t1}}>{acoes.length} {acoes.length===1?'ação':'ações'}</b> — {resumo}</div>
+                  {isAdmin && <button onClick={()=>aplicarTudo(acoes)} style={{fontSize:11.5,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:9,padding:'6px 12px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>Aplicar todas</button>}
+                  <button onClick={()=>setAbertos(a=>({...a,[g.sku]:!aberto}))} style={{fontSize:11.5,fontWeight:600,color:t.t2,background:'none',border:`1px solid ${t.line}`,borderRadius:9,padding:'6px 11px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{aberto?'ocultar':'ver ações'}</button>
+                </div>
+                {aberto && <div style={{marginTop:2}}>{acoes.map((r:any,i:number)=>{
+                  const cfg=REC[r.tipo]||REC['ajustar-lance']
+                  return <Acao key={i} r={r} cor={cfg.cor} rotulo={cfg.rot} acaoTxt={cfg.btn}/>
+                })}</div>}
+              </>)
+            })()}
             {!geren && <div style={{fontSize:11,color:t.t3,paddingTop:6,borderTop:`1px solid ${t.line}`}}>Você está cuidando deste produto — o NEO só observa e mostra o diagnóstico, sem mexer nas campanhas.</div>}
           </div>
         )
