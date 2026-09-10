@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { SeloML } from './SelosMarketplace'
 // A aba Gestão agora monta o SELETOR DE LOJA (Tudo/Amazon/ML). O GestaoHub da
 // Amazon segue intacto — o wrapper só escolhe qual componente renderizar.
 const GestaoUnificada = dynamic(()=>import('./GestaoUnificada'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Gestão…</div>})
 // Ads Amazon = o GestaoHub em modo `soAds` (reusa toda a engrenagem + a view de Ads).
 const AdsAmazon = dynamic(()=>import('./GestaoHub'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Ads…</div>})
+// Ads Mercado Livre = o MLGestao em modo `soAds` (reusa a tela de Mercado Ads).
+const AdsML = dynamic(()=>import('./MLGestao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Ads ML…</div>})
 const NeoChat = dynamic(()=>import('./neo/NeoChat'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Acordando o NEO…</div>})
 const MLCalculator = dynamic(()=>import('./MLCalculator'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando calculadora…</div>})
 const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando o garimpo…</div>})
@@ -2598,27 +2599,10 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               </div>
             )}
 
-            {/* Ads Mercado Livre — em construção (automação de ads ML ainda não existe) */}
+            {/* Ads Mercado Livre — a tela de Mercado Ads (MLGestao em modo soAds) */}
             {nav==='ads-ml'&&mlEnabled&&(
-              <div style={{padding:'8px 4px',maxWidth:760}}>
-                <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
-                  <SeloML size={18}/>
-                  <h2 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em'}}>Ads · Mercado Livre</h2>
-                </div>
-                <div style={{background:T.card,border:`1px solid ${T.line}`,borderRadius:16,padding:'22px 22px'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:11,marginBottom:10}}>
-                    <i className="ti ti-rocket" style={{fontSize:24,color:T.gold}} aria-hidden="true"/>
-                    <div style={{fontSize:16,fontWeight:700,color:T.t1}}>O Piloto NEO está chegando no Mercado Livre</div>
-                  </div>
-                  <p style={{fontSize:13,color:T.t2,lineHeight:1.6,margin:0}}>
-                    Hoje o Oráculo já <b>lê o gasto do Mercado Ads</b> e joga no seu DRE (TACoS, lucro pós-ads, sangria por produto). A automação — criar campanha, ajustar lance, cortar o que só queima — está sendo construída pra funcionar igual ao lado Amazon: você escolhe o objetivo, o NEO toma conta.
-                  </p>
-                  <div style={{marginTop:14,display:'flex',flexWrap:'wrap' as const,gap:8}}>
-                    {['Diagnóstico por produto','Criar campanha','Bot diário','Cortar o que só gasta'].map(x=>(
-                      <span key={x} style={{fontSize:11,fontWeight:600,color:T.t3,background:'var(--cardHov,rgba(255,255,255,0.03))',border:`1px solid ${T.line}`,borderRadius:99,padding:'5px 11px'}}>{x} · em breve</span>
-                    ))}
-                  </div>
-                </div>
+              <div style={{padding:'0 4px'}}>
+                <AdsML soAds/>
               </div>
             )}
 

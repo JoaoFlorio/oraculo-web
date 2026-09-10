@@ -296,13 +296,15 @@ function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { prod
   )
 }
 
-export default function MLGestao() {
+export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
+  // soAds: hub de "Ads Mercado Livre" (menu esquerdo) — abre no Mercado Ads e
+  // esconde a barra da Gestão ML, reusando toda a tela de Ads que já existe.
   const [status, setStatus] = useState<{ connected: boolean; nickname?: string | null } | null>(null)
   const [periodo, setPeriodo] = useState('7d')
   const [hide, setHide] = useState(false)   // olhinho: borra os valores em R$ (pra gravar vídeo/print)
   const [customRange, setCustomRange] = useState<{ from: string; to: string }>({ from: '', to: '' })  // período "Personalizado" (YYYY-MM-DD)
-  const [grupo, setGrupo] = useState('venda')
-  const [tab, setTab] = useState<TabMl>('resumo')
+  const [grupo, setGrupo] = useState(soAds ? 'anuncio' : 'venda')
+  const [tab, setTab] = useState<TabMl>(soAds ? 'ads' : 'resumo')
   const [dre, setDre] = useState<Dre | null>(null)
   const [chart30, setChart30] = useState<{ daily: Dre['daily']; from: string; to: string; netRatio: number | null } | null>(null)
   const [detail, setDetail] = useState<Produto | null>(null)
@@ -509,7 +511,8 @@ export default function MLGestao() {
         </button>
       </div>
 
-      {/* Barra de grupos + telas */}
+      {/* Barra de grupos + telas — escondida no modo Ads (hub próprio) */}
+      {!soAds && <>
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' as const, marginBottom: 11 }}>
         {GRUPOS_ML.map(gr => {
           const on = grupo === gr.id
@@ -551,6 +554,7 @@ export default function MLGestao() {
         </div>
       )}
       <div style={{ borderBottom: `1px solid ${T.line}`, marginBottom: 18, paddingTop: 9 }} />
+      </>}
 
       {loading && <div style={{ padding: 40, textAlign: 'center' as const, color: T.t3, fontSize: 13 }}>Carregando suas vendas do ML…</div>}
 
