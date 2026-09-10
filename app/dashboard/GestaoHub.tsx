@@ -3440,8 +3440,112 @@ function PilotoNeo({hide,isAdmin,margem}:{hide:boolean;isAdmin?:boolean;margem?:
   )
 }
 
+/* ⭐ ESTRATÉGIAS (v2 — o coração do m19). Uma Estratégia = 1 algoritmo + 1 meta +
+   produtos. Por ora: listar e criar (o NEO passa a executar por estratégia numa
+   fase seguinte). É ADITIVO — não mexe no Piloto atual. */
+const ALGS=[
+  {id:'acos',emoji:'🎯',rot:'Meta de ACoS',sub:'quero um ACoS de…',campo:'ACoS-alvo (%)',ph:'ex: 10',suf:'%'},
+  {id:'orcamento',emoji:'💰',rot:'Orçamento mensal',sub:'tenho R$X/mês pra gastar',campo:'Orçamento mensal (R$)',ph:'ex: 500',suf:''},
+  {id:'visibilidade',emoji:'🚀',rot:'Forçar visibilidade',sub:'empurrar produto novo',campo:'Lance fixo (R$)',ph:'ex: 0,55',suf:''},
+]
+function descAlg(a:string,p:any):string{
+  if(a==='acos') return `Meta de ACoS ${p?.acosAlvoPct??'—'}%`
+  if(a==='orcamento') return `Orçamento R$${p?.orcamentoMensalReais??'—'}/mês`
+  if(a==='visibilidade') return `Forçar visibilidade · lance R$${p?.lanceFixo??'—'}`
+  return a
+}
+function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
+  const t=useT()
+  const [lista,setLista]=useState<any[]|null>(null)
+  const [criando,setCriando]=useState(false)
+  const [nome,setNome]=useState('')
+  const [alg,setAlg]=useState('acos')
+  const [valor,setValor]=useState('')
+  const [erro,setErro]=useState('')
+  const [salvando,setSalvando]=useState(false)
+  function carregar(){ fetch('/api/ads/estrategias',{cache:'no-store'}).then(r=>r.json()).then(x=>setLista(x?.estrategias||[])).catch(()=>setLista([])) }
+  useEffect(()=>{ carregar() },[])
+  async function salvar(){
+    setErro('')
+    if(!nome.trim()){ setErro('dê um nome pra estratégia'); return }
+    const v=Number(String(valor).replace(',','.'))
+    if(!isFinite(v)||v<=0){ setErro('informe o número do objetivo'); return }
+    setSalvando(true)
+    try{
+      const r=await fetch('/api/ads/estrategias',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({nome:nome.trim(),algoritmo:alg,valor:v})})
+      const j=await r.json()
+      if(j?.ok){ setCriando(false); setNome(''); setValor(''); setAlg('acos'); carregar() }
+      else setErro(j?.error||'não deu pra criar')
+    }catch{ setErro('falha de conexão') } finally{ setSalvando(false) }
+  }
+  async function excluir(id:number){
+    if(!confirm('Excluir esta estratégia? (não mexe nas campanhas da Amazon)')) return
+    await fetch(`/api/ads/estrategias/${id}`,{method:'DELETE'}).catch(()=>{})
+    carregar()
+  }
+  const card:React.CSSProperties={background:t.card,border:`1px solid ${t.line}`,borderRadius:16,padding:'18px 20px'}
+  const algSel=ALGS.find(a=>a.id===alg)!
+  return(
+    <div>
+      {/* Cabeçalho explicando o conceito (m19) */}
+      <div style={{...card,marginBottom:14,borderColor:t.gold}}>
+        <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
+          <i className="ti ti-target" style={{fontSize:20,color:t.gold}} aria-hidden="true"/>
+          <div style={{fontFamily:FH,fontSize:16,fontWeight:800,color:t.t1}}>Estratégias</div>
+        </div>
+        <div style={{fontSize:12.5,color:t.t2,lineHeight:1.55}}>
+          Uma estratégia é um <b>grupo de produtos</b> com <b>um objetivo</b> — igual ao m19. Você dá um nome, escolhe o objetivo (ACoS-alvo, orçamento do mês ou forçar visibilidade) e diz quais produtos entram. O NEO cuida do resto.
+          <br/><span style={{color:t.t3,fontSize:11.5}}>Em ativação: por enquanto você monta as estratégias; a execução por estratégia entra logo (hoje o Piloto NEO já otimiza sua conta toda).</span>
+        </div>
+      </div>
+
+      {/* Botão criar / formulário */}
+      {!criando && <button onClick={()=>setCriando(true)} style={{display:'flex',alignItems:'center',gap:8,fontSize:13,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:11,padding:'10px 16px',cursor:'pointer',fontFamily:'inherit',marginBottom:14}}>
+        <i className="ti ti-plus" style={{fontSize:16}} aria-hidden="true"/>Criar estratégia
+      </button>}
+      {criando && <div style={{...card,marginBottom:14}}>
+        <div style={{fontSize:13.5,fontWeight:700,color:t.t1,marginBottom:11}}>Nova estratégia</div>
+        <input value={nome} onChange={e=>setNome(e.target.value)} placeholder="Nome (ex: Meus campeões, Lançamentos…)"
+          style={{width:'100%',boxSizing:'border-box' as const,fontSize:13,padding:'10px 12px',borderRadius:10,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.03)':'#fff',color:t.t1,marginBottom:12,fontFamily:'inherit'}}/>
+        <div style={{fontSize:11.5,color:t.t3,marginBottom:7}}>Objetivo</div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:8,marginBottom:12}}>
+          {ALGS.map(a=>{const on=alg===a.id;return(
+            <button key={a.id} onClick={()=>setAlg(a.id)} style={{textAlign:'left' as const,background:on?(t.dark?'rgba(240,180,41,0.12)':'#FFF8E6'):(t.dark?'rgba(255,255,255,0.02)':'#FCFCFD'),border:`1.5px solid ${on?t.gold:t.line}`,borderRadius:11,padding:'10px 11px',cursor:'pointer',fontFamily:'inherit'}}>
+              <div style={{fontSize:13,fontWeight:700,color:on?t.gold:t.t1}}>{a.emoji} {a.rot}</div>
+              <div style={{fontSize:10.5,color:t.t3,marginTop:2}}>{a.sub}</div>
+            </button>
+          )})}
+        </div>
+        <div style={{fontSize:11.5,color:t.t3,marginBottom:6}}>{algSel.campo}</div>
+        <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const}}>
+          <input value={valor} onChange={e=>setValor(e.target.value)} placeholder={algSel.ph} inputMode="decimal"
+            style={{width:130,fontSize:14,fontWeight:700,padding:'10px 12px',borderRadius:10,border:`1px solid ${t.line}`,background:t.dark?'rgba(255,255,255,0.03)':'#fff',color:t.t1,fontFamily:'inherit'}}/>
+          <button onClick={salvar} disabled={salvando} style={{fontSize:13,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:10,padding:'10px 18px',cursor:salvando?'default':'pointer',opacity:salvando?0.6:1,fontFamily:'inherit'}}>{salvando?'salvando…':'Criar'}</button>
+          <button onClick={()=>{setCriando(false);setErro('')}} style={{fontSize:12.5,color:t.t3,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit'}}>cancelar</button>
+        </div>
+        {erro && <div style={{fontSize:12,color:t.red,marginTop:9}}>{erro}</div>}
+      </div>}
+
+      {/* Lista */}
+      {lista===null && <div style={{color:t.t3,fontSize:12.5,padding:'8px 2px'}}>Carregando estratégias…</div>}
+      {lista!==null && lista.length===0 && !criando && <div style={{color:t.t3,fontSize:12.5,padding:'8px 2px'}}>Nenhuma estratégia ainda. Crie a primeira acima.</div>}
+      {lista!==null && lista.map((e:any)=>(
+        <div key={e.id} style={{...card,marginBottom:10,display:'flex',alignItems:'center',gap:12,flexWrap:'wrap' as const}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:14.5,fontWeight:700,color:t.t1}}>{e.nome}</div>
+            <div style={{fontSize:12,color:t.t3,marginTop:2}}>{descAlg(e.algoritmo,e.param)} · {e.numProdutos||0} produto{(e.numProdutos||0)===1?'':'s'}</div>
+          </div>
+          <span style={{fontSize:10.5,fontWeight:700,color:e.automatico?t.grn:t.t3,background:e.automatico?(t.dark?'rgba(34,197,94,0.1)':'#ECFDF5'):'transparent',border:`1px solid ${e.automatico?t.grn:t.line}`,padding:'4px 10px',borderRadius:99,whiteSpace:'nowrap'}}>{e.automatico?'piloto ligado':'piloto desligado'}</span>
+          <button onClick={()=>excluir(e.id)} title="Excluir estratégia" style={{background:'none',border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t3,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><i className="ti ti-trash" style={{fontSize:16}} aria-hidden="true"/></button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,inv}:{m:ProductMetrics[];hide:boolean;adsReal?:any;adsConnected?:boolean|null;adsLoading?:boolean;isAdmin?:boolean;margemAds?:number|null;realDre?:any;inv?:any}){
   const t=useT()
+  const [subaba,setSubaba]=useState<'piloto'|'estrategias'|'numeros'>('piloto')   // sub-abas no topo do Ads (estilo m19)
   // Não conectou a conta de Ads ainda
   if(adsConnected===false) return(
     <div style={{background:t.card,border:`1px solid ${t.gold}`,borderRadius:14,padding:'22px 20px',textAlign:'center' as const}}>
@@ -3451,13 +3555,32 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
       <a href="/api/ads/connect" style={{background:t.gold,color:t.dark?'#1c1606':'#3a2a05',fontWeight:600,fontSize:12.5,padding:'10px 18px',borderRadius:9,textDecoration:'none'}}>Conectar Ads</a>
     </div>
   )
-  // Conectado mas o relatório ainda está sendo gerado no fundo
-  if(!adsReal?.ready) return(
+  // Barra de sub-abas (m19): Piloto NEO · Estratégias · Campanhas & Números.
+  const SUBABAS=[
+    {id:'piloto' as const,label:'Piloto NEO',icon:'ti-rocket'},
+    {id:'estrategias' as const,label:'Estratégias',icon:'ti-target'},
+    {id:'numeros' as const,label:'Campanhas & Números',icon:'ti-table'},
+  ]
+  const subNav=(
+    <div style={{display:'flex',gap:7,flexWrap:'wrap' as const,marginBottom:16,borderBottom:`1px solid ${t.line}`,paddingBottom:10}}>
+      {SUBABAS.map(s=>{const on=subaba===s.id;return(
+        <button key={s.id} onClick={()=>setSubaba(s.id)}
+          style={{display:'flex',alignItems:'center',gap:7,fontSize:12.5,fontWeight:700,padding:'8px 14px',borderRadius:10,cursor:'pointer',fontFamily:'inherit',transition:'all .15s',
+            background:on?(t.dark?'rgba(240,180,41,0.12)':'#FFF8E6'):'transparent',border:`1px solid ${on?t.gold:t.line}`,color:on?t.gold:t.t3}}>
+          <i className={`ti ${s.icon}`} style={{fontSize:15}} aria-hidden="true"/>{s.label}
+        </button>
+      )})}
+    </div>
+  )
+  // Estratégias tem dados próprios — funciona mesmo sem o relatório de ads pronto.
+  if(subaba==='estrategias') return(<>{subNav}<EstrategiasAds isAdmin={isAdmin}/></>)
+  // Piloto e Números precisam do relatório; se ainda gera, mostra o aviso sob a barra.
+  if(!adsReal?.ready) return(<>{subNav}
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'22px 20px',textAlign:'center' as const,color:t.t2,fontSize:12.5}}>
       <i className={`ti ti-${adsLoading?'loader-2':'clock'}`} style={{fontSize:24,color:t.gold,display:'block',marginBottom:8}} aria-hidden="true"/>
       {adsLoading?'Gerando o relatório de ads na Amazon… na 1ª vez leva alguns minutos; depois fica instantâneo (atualiza no fundo).':'Relatório de ads indisponível no momento. Tente atualizar em instantes.'}
     </div>
-  )
+  </>)
   /* Catálogo pra foto e nome: quem VENDEU no período (DRE) ∪ quem tem ESTOQUE.
      Produto anunciado que não vendeu não aparece na DRE — e é justamente ele que
      mais interessa numa tela de Ads, porque é onde o dinheiro some sem retorno. */
@@ -3498,6 +3621,8 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
   const upd=adsReal.updatedAt?new Date(adsReal.updatedAt):null
   const noteStyle:React.CSSProperties={fontSize:10,color:t.t3,marginTop:5,textAlign:'center' as const,fontFamily:FG,lineHeight:1.3}
   return(<>
+    {subNav}
+    {subaba==='piloto' && <>
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:11,marginBottom:16,alignItems:'start'}}>
       {tot.map((k,i)=><div key={i}>
         <KPI {...k} hide={hide}/>
@@ -3507,13 +3632,10 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
     {/* ⭐ O NEO NO COMANDO (08/09): o Piloto entrega as decisões prontas e a
         pessoa só dá o OK. É a estrela da aba agora — o resto virou "detalhes". */}
     <PilotoNeo hide={hide} isAdmin={isAdmin} margem={margemAds}/>
-    {/* Tudo abaixo é o detalhe técnico (as tabelas que espelham a Amazon) —
-        RECOLHIDO por padrão pra não poluir. Quem quer conferir, abre. */}
-    <details style={{marginTop:4}}>
-      <summary style={{cursor:'pointer',fontSize:12.5,color:t.t2,fontFamily:FG,padding:'8px 0',userSelect:'none' as const}}>
-        Ver todos os números e campanhas (detalhe técnico)
-      </summary>
-    <div style={{marginTop:10}}>
+    </>}
+    {subaba==='numeros' && <>
+    {/* As tabelas que espelham a Amazon — agora numa sub-aba própria (m19). */}
+    <div style={{marginTop:2}}>
     {/* ⚠️ Isto era uma faixa de texto corrido numa linha só — o João não
         conseguia ler. Virou três blocos: as duas siglas lado a lado e a régua
         embaixo, que é a parte que muda decisão. */}
@@ -3586,7 +3708,7 @@ function Ads({m,hide,adsReal,adsConnected,adsLoading,isAdmin,margemAds,realDre,i
       <i className="ti ti-refresh" style={{fontSize:12}} aria-hidden="true"/>Atualizado {upd.toLocaleString('pt-BR')} · dado real da Advertising API{adsReal.stale?' · revalidando no fundo':''}
     </div>}
     </div>
-    </details>
+    </>}
     {/* Painel antigo ADMIN·GERENCIAR CAMPANHAS removido (08/09): o Piloto NEO
         substituiu com folga (recomendações acionáveis + meta pela margem real).
         A definição de AdsAdmin fica no arquivo caso o pausar-campanha/orçamento
