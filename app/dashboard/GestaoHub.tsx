@@ -3549,6 +3549,16 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
   useEffect(()=>{ carregar() },[])
   // Catálogo da loja (com IMAGEM) — base do "montar o grupo de produtos" do m19.
   useEffect(()=>{ fetch('/api/amazon/inventory',{cache:'no-store'}).then(r=>r.json()).then(x=>setCatalogo((x?.inventario||[]).map((it:any)=>({sku:it.sku,name:it.name||it.sku,image:it.image,fulfillable:Number(it.fulfillable)||0})))).catch(()=>{}) },[])
+  // Saúde real por produto (do copiloto) — pra cada grupo mostrar ACoS/gasto/estado.
+  const [prodMap,setProdMap]=useState<Record<string,any>>({})
+  useEffect(()=>{ fetch('/api/ads/copiloto',{cache:'no-store'}).then(r=>r.json()).then(x=>{const m:Record<string,any>={};for(const p of (x?.produtos||[]))m[p.sku]=p;setProdMap(m)}).catch(()=>{}) },[])
+  function statsDe(skus:string[]){
+    let gasto=0,vendas=0,sangrando=0,comDado=0
+    for(const sku of skus){const p=prodMap[sku];if(!p)continue;comDado++;gasto+=Number(p.gastoMes)||0;vendas+=Number(p.vendasMes)||0;if(['sangrando','prejuizo'].includes(p.diagnostico?.severidade))sangrando++}
+    const acos=vendas>0?gasto/vendas*100:null
+    return {gasto,vendas,acos,sangrando,comDado}
+  }
+  const corAcosLocal=(a:number|null)=>a==null?t.t3:a<10?t.grn:a<20?t.gold:a<30?t.red:(t.dark?'#ff5470':'#c81e3a')
   async function abrirPicker(id:number){
     if(picker===id){ setPicker(null); return }
     setPicker(id); setBuscaProd(''); setSel(new Set())
@@ -3640,6 +3650,7 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
       {lista!==null && lista.map((e:any)=>{
         const skus:string[]=e.skus||[]
         const aberto=picker===e.id
+        const st=statsDe(skus)
         const cat=buscaProd.trim()?catalogo.filter(c=>(c.name||'').toLowerCase().includes(buscaProd.toLowerCase())||(c.sku||'').toLowerCase().includes(buscaProd.toLowerCase())):catalogo
         return(
         <div key={e.id} style={{...card,marginBottom:10,padding:'15px 17px'}}>
@@ -3652,6 +3663,16 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
             <button onClick={()=>abrirEdicao(e)} title="Editar objetivo/meta" style={{background:'none',border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t3,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><i className="ti ti-pencil" style={{fontSize:16}} aria-hidden="true"/></button>
             <button onClick={()=>excluir(e.id)} title="Excluir estratégia" style={{background:'none',border:`1px solid ${t.line}`,borderRadius:9,width:34,height:34,color:t.t3,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}><i className="ti ti-trash" style={{fontSize:16}} aria-hidden="true"/></button>
           </div>
+          {/* Saúde real do grupo (do copiloto) — ACoS médio, gasto, vendas, alertas */}
+          {st.comDado>0 && <div style={{display:'flex',alignItems:'center',gap:'6px 20px',flexWrap:'wrap' as const,marginTop:11,padding:'10px 13px',borderRadius:11,background:t.dark?'rgba(255,255,255,0.02)':'#FCFCFD',border:`1px solid ${t.line}`}}>
+            <div style={{display:'flex',flexDirection:'column' as const}}>
+              <span style={{fontSize:16,fontWeight:800,color:corAcosLocal(st.acos),fontFamily:FG,lineHeight:1}}>{st.acos==null?'—':(Math.round(st.acos*10)/10)+'%'}</span>
+              <span style={{fontSize:9,color:t.t3,marginTop:3,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>ACoS do grupo</span>
+            </div>
+            <div style={{display:'flex',flexDirection:'column' as const}}><span style={{fontSize:13,fontWeight:700,color:t.grn}}>{brl2(st.vendas)}</span><span style={{fontSize:9,color:t.t3,marginTop:3,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>vendas</span></div>
+            <div style={{display:'flex',flexDirection:'column' as const}}><span style={{fontSize:13,fontWeight:700,color:t.t2}}>{brl2(st.gasto)}</span><span style={{fontSize:9,color:t.t3,marginTop:3,textTransform:'uppercase' as const,letterSpacing:'0.05em'}}>gasto ads</span></div>
+            {st.sangrando>0 && <span style={{marginLeft:'auto',fontSize:10.5,fontWeight:700,color:t.red,background:tint(t.red,10),padding:'4px 10px',borderRadius:99,whiteSpace:'nowrap' as const}}>{st.sangrando} sangrando</span>}
+          </div>}
           {/* Grupo de produtos: thumbnails + gerenciar (o "montar o grupo" do m19) */}
           <div style={{display:'flex',alignItems:'center',gap:8,marginTop:12,flexWrap:'wrap' as const}}>
             {skus.slice(0,10).map((sku:string)=>{const img=imgDe(sku);return(
