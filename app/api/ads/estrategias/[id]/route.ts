@@ -19,6 +19,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const { id } = await params
   const b = await req.json().catch(() => ({}))
+  // Ligar o automático (gasta sozinho) é admin-only — mesmo gate do /autopilot. (auditoria 11/09)
+  if (b?.automatico === true && user.role !== 'admin') return NextResponse.json({ error: 'ligar o automático está em teste (admin only)' }, { status: 403 })
   try {
     const r = await fetch(`${BACKEND}/api/ads/estrategias/${encodeURIComponent(id)}`, {
       method: 'PUT', headers: { 'content-type': 'application/json', 'x-internal-key': KEY },

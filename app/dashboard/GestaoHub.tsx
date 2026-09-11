@@ -3598,6 +3598,7 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
   const [editId,setEditId]=useState<number|null>(null)   // id em edição (null = criando)
   const [catalogo,setCatalogo]=useState<any[]>([])   // produtos da loja (com imagem) pro picker
   const [picker,setPicker]=useState<number|null>(null)   // id da estratégia com o picker aberto
+  const pickerRef=useRef<number|null>(null)              // versão síncrona pra evitar race no carregamento dos SKUs
   const [detalhe,setDetalhe]=useState<number|null>(null)   // id da estratégia com as estatísticas por produto abertas
   const [sel,setSel]=useState<Set<string>>(new Set())    // SKUs selecionados no picker
   const [buscaProd,setBuscaProd]=useState('')
@@ -3605,7 +3606,7 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
   function carregar(){ fetch('/api/ads/estrategias',{cache:'no-store'}).then(r=>r.json()).then(x=>setLista(x?.estrategias||[])).catch(()=>setLista([])) }
   useEffect(()=>{ carregar() },[])
   // Catálogo da loja (com IMAGEM) — base do "montar o grupo de produtos" do m19.
-  useEffect(()=>{ fetch('/api/amazon/inventory',{cache:'no-store'}).then(r=>r.json()).then(x=>setCatalogo((x?.inventario||[]).map((it:any)=>({sku:it.sku,name:it.name||it.sku,image:it.image,fulfillable:Number(it.fulfillable)||0})))).catch(()=>{}) },[])
+  useEffect(()=>{ fetch('/api/amazon/inventory',{cache:'no-store'}).then(r=>r.json()).then(x=>setCatalogo((x?.inventario||[]).map((it:any)=>({sku:it.sku,name:it.name||it.sku,image:it.image,asin:it.asin||'',fulfillable:Number(it.fulfillable)||0})))).catch(()=>{}) },[])
   // Saúde real por produto (do copiloto) — pra cada grupo mostrar ACoS/gasto/estado.
   const [prodMap,setProdMap]=useState<Record<string,any>>({})
   useEffect(()=>{ fetch('/api/ads/copiloto',{cache:'no-store'}).then(r=>r.json()).then(x=>{const m:Record<string,any>={};for(const p of (x?.produtos||[]))m[p.sku]=p;setProdMap(m)}).catch(()=>{}) },[])
@@ -3617,9 +3618,11 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
   }
   const corAcosLocal=(a:number|null)=>a==null?t.t3:a<10?t.grn:a<20?t.gold:a<30?t.red:(t.dark?'#ff5470':'#c81e3a')
   async function abrirPicker(id:number){
-    if(picker===id){ setPicker(null); return }
-    setPicker(id); setBuscaProd(''); setSel(new Set())
-    try{ const e=await fetch(`/api/ads/estrategias/${id}`,{cache:'no-store'}).then(r=>r.json()); setSel(new Set(e?.skus||[])) }catch{}
+    if(picker===id){ setPicker(null); pickerRef.current=null; return }
+    setPicker(id); pickerRef.current=id; setBuscaProd(''); setSel(new Set())
+    try{ const e=await fetch(`/api/ads/estrategias/${id}`,{cache:'no-store'}).then(r=>r.json())
+      // Só aplica se o picker ainda for ESTE grupo (troca rápida A→B não sobrescreve o de B com os SKUs de A).
+      if(pickerRef.current===id) setSel(new Set(e?.skus||[])) }catch{}
   }
   function toggleSku(sku:string){ setSel(s=>{const n=new Set(s); n.has(sku)?n.delete(sku):n.add(sku); return n}) }
   async function salvarProdutos(id:number){

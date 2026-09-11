@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
+  // Ligar execução automática (gasta dinheiro sozinho) é admin-only — mesmo gate do
+  // /autopilot. Latente hoje (o loop ainda lê ads_autopilot_config), mas fecha o furo
+  // ANTES de a v2 migrar o loop pra ler ads_estrategia.automatico. (auditoria 11/09)
+  if (b?.automatico === true && user.role !== 'admin') return NextResponse.json({ error: 'ligar o automático está em teste (admin only)' }, { status: 403 })
   try {
     const r = await fetch(`${BACKEND}/api/ads/estrategias`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-key': KEY },
