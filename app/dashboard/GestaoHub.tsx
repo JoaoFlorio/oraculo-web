@@ -3542,6 +3542,7 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
   const [editId,setEditId]=useState<number|null>(null)   // id em edição (null = criando)
   const [catalogo,setCatalogo]=useState<any[]>([])   // produtos da loja (com imagem) pro picker
   const [picker,setPicker]=useState<number|null>(null)   // id da estratégia com o picker aberto
+  const [detalhe,setDetalhe]=useState<number|null>(null)   // id da estratégia com as estatísticas por produto abertas
   const [sel,setSel]=useState<Set<string>>(new Set())    // SKUs selecionados no picker
   const [buscaProd,setBuscaProd]=useState('')
   const [salvandoProd,setSalvandoProd]=useState(false)
@@ -3682,10 +3683,32 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
             )})}
             {skus.length>10 && <span style={{fontSize:11,color:t.t3}}>+{skus.length-10}</span>}
             {skus.length===0 && <span style={{fontSize:11.5,color:t.t3}}>Nenhum produto neste grupo ainda.</span>}
-            <button onClick={()=>abrirPicker(e.id)} style={{marginLeft:'auto',fontSize:11.5,fontWeight:700,color:aberto?t.gold:t.t2,background:aberto?tint(t.gold,10):'transparent',border:`1px solid ${aberto?t.gold:t.line}`,borderRadius:9,padding:'6px 12px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' as const}}>
-              <i className="ti ti-photo" style={{fontSize:14,marginRight:5}} aria-hidden="true"/>{aberto?'fechar':'gerenciar produtos'}
-            </button>
+            <div style={{marginLeft:'auto',display:'flex',gap:7,flexWrap:'wrap' as const}}>
+              {st.comDado>0 && <button onClick={()=>setDetalhe(d=>d===e.id?null:e.id)} style={{fontSize:11.5,fontWeight:700,color:detalhe===e.id?t.gold:t.t2,background:detalhe===e.id?tint(t.gold,10):'transparent',border:`1px solid ${detalhe===e.id?t.gold:t.line}`,borderRadius:9,padding:'6px 12px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' as const}}>
+                <i className="ti ti-chart-bar" style={{fontSize:14,marginRight:5}} aria-hidden="true"/>{detalhe===e.id?'fechar':'estatísticas'}
+              </button>}
+              <button onClick={()=>abrirPicker(e.id)} style={{fontSize:11.5,fontWeight:700,color:aberto?t.gold:t.t2,background:aberto?tint(t.gold,10):'transparent',border:`1px solid ${aberto?t.gold:t.line}`,borderRadius:9,padding:'6px 12px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' as const}}>
+                <i className="ti ti-photo" style={{fontSize:14,marginRight:5}} aria-hidden="true"/>{aberto?'fechar':'gerenciar produtos'}
+              </button>
+            </div>
           </div>
+          {/* Estatísticas por produto do grupo (m19) — do pior ACoS pro melhor */}
+          {detalhe===e.id && <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${t.line}`}}>
+            {skus.map(sku=>prodMap[sku]).filter(Boolean).sort((a,b)=>(b?.metricas?.acos??-1)-(a?.metricas?.acos??-1)).map((p:any,i:number)=>{
+              const ac=p.metricas?.acos, sev=p.diagnostico?.severidade
+              const cor=ac==null?t.t3:ac<10?t.grn:ac<20?t.gold:ac<30?t.red:(t.dark?'#ff5470':'#c81e3a')
+              return(
+                <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderTop:i?`1px solid ${t.line}`:'none'}}>
+                  <div style={{width:32,height:32,borderRadius:7,overflow:'hidden',flexShrink:0,background:t.dark?'rgba(255,255,255,0.05)':'#f3f3f7',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    {imgDe(p.sku)?<img src={imgDe(p.sku)} alt="" style={{width:'100%',height:'100%',objectFit:'cover' as const}}/>:<i className="ti ti-package" style={{fontSize:14,color:t.t3}} aria-hidden="true"/>}
+                  </div>
+                  <span style={{flex:1,minWidth:0,fontSize:12.5,color:t.t1,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{p.nome}</span>
+                  {p.diagnostico?.titulo && <span style={{fontSize:9.5,fontWeight:700,color:cor,background:tint(cor,12),padding:'2px 8px',borderRadius:99,whiteSpace:'nowrap' as const,textTransform:'uppercase' as const}}>{p.diagnostico.titulo}</span>}
+                  <span style={{fontSize:14,fontWeight:800,color:cor,fontFamily:FG,minWidth:52,textAlign:'right' as const}}>{ac==null?'—':(Math.round(ac*10)/10)+'%'}</span>
+                </div>
+              )
+            })}
+          </div>}
           {/* Picker: grade de TODOS os produtos da loja (com imagem) + seleção */}
           {aberto && <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${t.line}`}}>
             <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10,flexWrap:'wrap' as const}}>
