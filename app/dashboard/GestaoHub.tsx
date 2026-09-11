@@ -3257,7 +3257,7 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
   const plano=(()=>{
     // Preferir a simulação REAL do motor (o que o bot de fato faria) quando ela chegou.
     if(simReal){
-      const c:any={criar:simReal.criou||0,promover:simReal.promoveu||0,negativar:simReal.negativou||0,lance:(simReal.baixar||0)+(simReal.subir||0),pausar:simReal.pausar||0}
+      const c:any={criar:simReal.criou||0,promover:simReal.promoveu||0,negativar:simReal.negativou||0,lance:(simReal.baixar||0)+(simReal.subir||0),pausar:(simReal.pausar||0)+(simReal.campanhasPausadas||0),desligarCamp:simReal.campanhasPausadas||0}
       c.total=c.criar+c.promover+c.negativar+c.lance+c.pausar
       c.real=true
       return c
