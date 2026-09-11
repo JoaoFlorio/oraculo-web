@@ -4,12 +4,14 @@ import { getSession } from '@/lib/auth'
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
 const KEY = process.env.INTERNAL_KEY || ''
 
-// Roda o autopilot. ADMIN-ONLY (executa/preveê mudança real). ?dry=1 = só prevê.
+// Roda o autopilot. dry (só simula, não gasta) = qualquer cliente pode ver o preview;
+// real (aplica de verdade) = ADMIN-ONLY.
 export async function POST(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  if (user.role !== 'admin') return NextResponse.json({ error: 'autopilot em teste (admin only)' }, { status: 403 })
   const b = await req.json().catch(() => ({}))
+  const dry = b?.dry !== false
+  if (!dry && user.role !== 'admin') return NextResponse.json({ error: 'aplicar de verdade está em teste (admin only)' }, { status: 403 })
   try {
     const r = await fetch(`${BACKEND}/api/ads/autopilot/run`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-key': KEY },

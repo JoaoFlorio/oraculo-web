@@ -3189,6 +3189,7 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
   const [filtro,setFiltro]=useState<'acao'|'saudavel'|'estoque'|'todos'>('acao')   // filtro da lista de produtos
   const [cfgAberta,setCfgAberta]=useState(false)   // objetivo/bot recolhidos por padrão (menos poluição)
   const [abertos,setAbertos]=useState<Record<string,boolean>>({})   // ações por produto recolhidas por padrão
+  const [simReal,setSimReal]=useState<any>(null)   // simulação REAL do motor (autopilot dry) — o preview exato
   const chave=(r:any)=>`${r.tipo}:${r.campaignId}:${r.keywordId||r.termo}`
   // Cria a campanha automática do produto (admin-only no proxy). Gasta na conta.
   async function criarCampanha(p:any){
@@ -3219,6 +3220,9 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
     const url='/api/ads/copiloto'+(margem!=null&&isFinite(margem)?`?margem=${margem}`:'')
     fetch(url,{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo) setD(x) }).catch(()=>{}).finally(()=>{ if(vivo)setCarregando(false) })
     fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo){ setObjetivo(x.objetivo); setBot({automatico:!!x.automatico,lastRunAt:x.lastRunAt||null,lastResult:x.lastResult||null}) } }).catch(()=>{})
+    // ⭐ Simulação REAL do motor (dry, não gasta): o preview passa a mostrar EXATAMENTE
+    // o que o bot faria — não a estimativa do copiloto. Chamada pesada; roda no fundo.
+    fetch('/api/ads/autopilot/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({dry:true,margem})}).then(r=>r.json()).then(x=>{ if(vivo&&x&&typeof x.mudancas==='number') setSimReal(x) }).catch(()=>{})
     return ()=>{vivo=false}
   },[margem])
   function escolherObjetivo(o:string){ setObjetivo(o); fetch('/api/ads/autopilot',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({objetivo:o})}).catch(()=>{}) }
@@ -3251,6 +3255,13 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
   // consolidado por tipo. É o copiloto (que já é a simulação) apresentado como plano.
   const nCriar=Array.isArray(d.semCampanha)?d.semCampanha.length:0
   const plano=(()=>{
+    // Preferir a simulação REAL do motor (o que o bot de fato faria) quando ela chegou.
+    if(simReal){
+      const c:any={criar:simReal.criou||0,promover:simReal.promoveu||0,negativar:simReal.negativou||0,lance:(simReal.baixar||0)+(simReal.subir||0),pausar:simReal.pausar||0}
+      c.total=c.criar+c.promover+c.negativar+c.lance+c.pausar
+      c.real=true
+      return c
+    }
     const c:any={criar:nCriar,promover:0,negativar:0,lance:0,pausar:0}
     const src=(d.produtos&&d.produtos.length)?d.produtos.flatMap((g:any)=>g.acoes||[]):[...neg,...prom,...lan]
     for(const a of src){
@@ -3382,7 +3393,7 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
             <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:10,flexWrap:'wrap' as const}}>
               <i className="ti ti-wand" style={{fontSize:18,color:t.gold}} aria-hidden="true"/>
               <div style={{fontSize:14.5,fontWeight:800,color:t.t1,fontFamily:FH,letterSpacing:'-0.01em'}}>Com autonomia total, o NEO faria <span style={{color:t.gold}}>{plano.total} {plano.total===1?'ação':'ações'}</span> agora</div>
-              <span style={{fontSize:9.5,fontWeight:700,color:t.t3,background:t.dark?'rgba(255,255,255,0.05)':'#f1f1f4',padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>simulação · nada foi aplicado</span>
+              <span style={{fontSize:9.5,fontWeight:700,color:plano.real?t.grn:t.t3,background:plano.real?tint(t.grn,10):(t.dark?'rgba(255,255,255,0.05)':'#f1f1f4'),padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>{plano.real?'plano real do bot · nada aplicado':(simReal===null?'calculando o plano real…':'simulação · nada foi aplicado')}</span>
             </div>
             {/* Quebra por tipo de ação */}
             <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,marginBottom:11}}>
