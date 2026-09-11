@@ -5769,7 +5769,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   const [themeKey,setThemeKey]=useState('dark')
   const [amazonConnected,setAmazonConnected]=useState<boolean|null>(null)
   const [realDre,setRealDre]=useState<any>(null)
-  const [period,setPeriod]=useState('hoje')
+  const [period,setPeriod]=useState(soAds?'30d':'hoje')   // Ads abre em 30 dias (anúncio precisa de janela; "Hoje" mostraria vazio)
   const [customRange,setCustomRange]=useState<{from:Date;to:Date}|null>(null)
   const range=useMemo(()=>computeRange(period,customRange),[period,customRange])
   // Curva ABC abre em 30 dias (ABC de 1 dia não faz sentido), mas isso NÃO deve
