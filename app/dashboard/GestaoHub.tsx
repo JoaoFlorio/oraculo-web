@@ -3247,6 +3247,21 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
   const totalAcoes=neg.length+prom.length+lan.length
   const gastoVaza=Number(d.totais?.gastoSemVenda)||0
   const vendasCapturar=Number(d.totais?.vendasDeTermosPromoviveis)||0
+  // ⭐ SIMULAÇÃO (dry-run): tudo que o NEO faria SOZINHO no modo automático,
+  // consolidado por tipo. É o copiloto (que já é a simulação) apresentado como plano.
+  const nCriar=Array.isArray(d.semCampanha)?d.semCampanha.length:0
+  const plano=(()=>{
+    const c:any={criar:nCriar,promover:0,negativar:0,lance:0,pausar:0}
+    const src=(d.produtos&&d.produtos.length)?d.produtos.flatMap((g:any)=>g.acoes||[]):[...neg,...prom,...lan]
+    for(const a of src){
+      if(a.tipo==='promover')c.promover++
+      else if(a.tipo==='negativar')c.negativar++
+      else if(a.tipo==='ajustar-lance')c.lance++
+      else if(a.tipo==='pausar-keyword'||a.tipo==='desligar-sem-estoque')c.pausar++
+    }
+    c.total=c.criar+c.promover+c.negativar+c.lance+c.pausar
+    return c
+  })()
 
   const Acao=({r,cor,rotulo,acaoTxt}:{r:any;cor:string;rotulo:string;acaoTxt:string})=>{
     const st=feitos[chave(r)]
@@ -3360,10 +3375,40 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
         {isAdmin && <button onClick={alternarBot} style={{fontSize:11.5,fontWeight:700,color:bot?.automatico?t.red:(t.dark?'#1c1606':'#3a2a05'),background:bot?.automatico?'none':t.grn,border:bot?.automatico?`1px solid ${t.red}`:'none',borderRadius:9,padding:'7px 13px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{bot?.automatico?'Desligar':'Ligar bot diário'}</button>}
       </div>}
       </>}
-      {totalAcoes===0
+      {plano.total===0
         ? <div style={{fontSize:13.5,color:t.grn,padding:'6px 0'}}>✓ Tudo na régua pro seu objetivo — nenhuma ação urgente agora. O NEO segue de olho.</div>
-        : <div style={{fontSize:13.5,color:t.t2,padding:'2px 0 14px',lineHeight:1.5}}>
-            O NEO revisou suas campanhas e separou <b style={{color:t.t1}}>{totalAcoes} {totalAcoes===1?'ação':'ações'}</b> por produto.{gastoVaza>0.005?<> Tem <b style={{color:t.red}}>{brl2(gastoVaza)}</b> escorrendo em cliques que não vendem.</>:null} {isAdmin?'Revise e toque em aplicar — o NEO executa na sua campanha.':'Veja abaixo o que fazer em cada produto.'}
+        : <div style={{marginBottom:14,padding:'15px 16px',borderRadius:14,background:t.dark?'rgba(240,180,41,0.05)':'#FFFCF3',border:`1.5px solid ${tint(t.gold,28)}`}}>
+            {/* 🔮 SIMULAÇÃO (dry-run): o plano completo que o NEO executaria sozinho */}
+            <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:10,flexWrap:'wrap' as const}}>
+              <i className="ti ti-wand" style={{fontSize:18,color:t.gold}} aria-hidden="true"/>
+              <div style={{fontSize:14.5,fontWeight:800,color:t.t1,fontFamily:FH,letterSpacing:'-0.01em'}}>Com autonomia total, o NEO faria <span style={{color:t.gold}}>{plano.total} {plano.total===1?'ação':'ações'}</span> agora</div>
+              <span style={{fontSize:9.5,fontWeight:700,color:t.t3,background:t.dark?'rgba(255,255,255,0.05)':'#f1f1f4',padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>simulação · nada foi aplicado</span>
+            </div>
+            {/* Quebra por tipo de ação */}
+            <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,marginBottom:11}}>
+              {[
+                {n:plano.criar,ic:'ti-rocket',rot:'criar campanha',cor:t.gold},
+                {n:plano.promover,ic:'ti-star',rot:'promover palavra',cor:t.grn},
+                {n:plano.negativar,ic:'ti-ban',rot:'cortar o que só gasta',cor:t.red},
+                {n:plano.lance,ic:'ti-adjustments',rot:'ajustar lance',cor:t.gold},
+                {n:plano.pausar,ic:'ti-player-pause',rot:'pausar/desligar',cor:t.red},
+              ].filter(x=>x.n>0).map((x,i)=>(
+                <div key={i} style={{display:'flex',alignItems:'center',gap:7,padding:'7px 12px',borderRadius:10,background:tint(x.cor,8),border:`1px solid ${tint(x.cor,22)}`}}>
+                  <i className={`ti ${x.ic}`} style={{fontSize:15,color:x.cor}} aria-hidden="true"/>
+                  <span style={{fontSize:15,fontWeight:800,color:x.cor,fontFamily:FG}}>{x.n}</span>
+                  <span style={{fontSize:11.5,color:t.t2}}>{x.rot}</span>
+                </div>
+              ))}
+            </div>
+            {/* Impacto estimado */}
+            <div style={{fontSize:12.5,color:t.t2,lineHeight:1.5}}>
+              {gastoVaza>0.005 && <>Estanca <b style={{color:t.red}}>{brl2(gastoVaza)}</b> que estão escorrendo em cliques que não vendem. </>}
+              {vendasCapturar>0.005 && <>Captura melhor <b style={{color:t.grn}}>{brl2(vendasCapturar)}</b> de vendas que já vêm de termos certos. </>}
+              {gastoVaza<=0.005&&vendasCapturar<=0.005 && <>São ajustes finos de lance e estrutura pra manter o ACoS na régua. </>}
+            </div>
+            <div style={{fontSize:11,color:t.t3,marginTop:9,paddingTop:9,borderTop:`1px solid ${t.line}`,lineHeight:1.5}}>
+              Hoje o bot diário já ajusta <b style={{color:t.t2}}>lance</b> e <b style={{color:t.t2}}>pausa</b> sozinho; <b style={{color:t.t2}}>promover, negativar e criar campanha</b> você aprova por produto abaixo. A autonomia total (o NEO fazendo tudo isto sozinho) é o próximo passo — <b style={{color:t.gold}}>este é o preview do que ele faria</b>.
+            </div>
           </div>}
 
       {/* 🆕 PRODUTOS SEM CAMPANHA — "não vai vender porque não anuncia" (m19 style) */}
