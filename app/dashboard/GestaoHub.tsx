@@ -3418,7 +3418,9 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
               {gastoVaza<=0.005&&vendasCapturar<=0.005 && <>São ajustes finos de lance e estrutura pra manter o ACoS na régua. </>}
             </div>
             <div style={{fontSize:11,color:t.t3,marginTop:9,paddingTop:9,borderTop:`1px solid ${t.line}`,lineHeight:1.5}}>
-              Hoje o bot diário já ajusta <b style={{color:t.t2}}>lance</b> e <b style={{color:t.t2}}>pausa</b> sozinho; <b style={{color:t.t2}}>promover, negativar e criar campanha</b> você aprova por produto abaixo. A autonomia total (o NEO fazendo tudo isto sozinho) é o próximo passo — <b style={{color:t.gold}}>este é o preview do que ele faria</b>.
+              {bot?.automatico
+                ? <>Com o bot diário <b style={{color:t.grn}}>ligado</b>, o NEO aplica tudo isto <b style={{color:t.t2}}>sozinho</b> — ajustar lance, pausar, cortar (negativar), promover e criar campanha — dentro dos tetos de segurança, ~1×/dia. Este card é o <b style={{color:t.gold}}>preview ao vivo do próximo ciclo</b>; nada aqui espera aprovação sua.</>
+                : <><b style={{color:t.gold}}>Este é o preview do que o NEO faria</b> — nada foi aplicado. Ligue o bot diário acima e ele passa a executar tudo isto sozinho (lance, pausa, negativar, promover e criar campanha), dentro dos tetos de segurança, ~1×/dia.</>}
             </div>
           </div>}
 
