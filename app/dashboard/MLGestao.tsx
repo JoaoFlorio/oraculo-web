@@ -468,9 +468,9 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
       {/* Cabeçalho + seletor de período */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
         <div>
-          <h1 style={{ fontSize: 27, fontWeight: 800, color: T.t1, letterSpacing: '-0.03em', lineHeight: 1.1 }}>Gestão</h1>
+          <h1 style={{ fontSize: 27, fontWeight: 800, color: T.t1, letterSpacing: '-0.03em', lineHeight: 1.1 }}>{soAds ? 'Ads · Mercado Livre' : 'Gestão'}</h1>
           <div style={{ fontSize: 12.5, color: T.t3, marginTop: 5 }}>
-            Visão financeira da sua operação no Mercado Livre · <span style={{ color: T.g }}>dados reais do ML</span>
+            {soAds ? 'O gasto real do Mercado Ads no seu resultado' : 'Visão financeira da sua operação no Mercado Livre'} · <span style={{ color: T.g }}>dados reais do ML</span>
             {status?.nickname && <span style={{ color: T.t4 }}> · conta {status.nickname}</span>}
           </div>
         </div>
