@@ -3525,10 +3525,26 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
                 <Metrica rot="TACoS" val={num(me.tacos,'%')} cor={me.tacos==null?t.t3:t.t2}/>
               </div>
             </div>
-            {/* ⭐ O DIAGNÓSTICO — a CAUSA (o chip acima já dá o rótulo; aqui o porquê + ação) */}
-            {dg.texto && <div style={{padding:'11px 13px',marginBottom:acoes.length?11:2,background:tint(cz.cor,6),borderRadius:12,borderLeft:`3px solid ${cz.cor}`}}>
-              <div style={{fontSize:12.5,color:t.t2,lineHeight:1.5}}>{dg.texto}</div>
-              <div style={{fontSize:13,color:t.t1,fontWeight:700,marginTop:6,lineHeight:1.45,display:'flex',gap:6}}><span style={{color:cz.cor}}>→</span><span>{dg.acao}</span></div>
+            {/* ⭐ O DIAGNÓSTICO (a CAUSA) + o PLANO pra baixar o ACoS (ordenado, 🤖 NEO / 👤 você) */}
+            {(dg.texto || (Array.isArray(g.plano)&&g.plano.length>0)) && <div style={{padding:'11px 13px',marginBottom:acoes.length?11:2,background:tint(cz.cor,6),borderRadius:12,borderLeft:`3px solid ${cz.cor}`}}>
+              {dg.texto && <div style={{fontSize:12.5,color:t.t2,lineHeight:1.5,marginBottom:(Array.isArray(g.plano)&&g.plano.length>0)?10:0}}>{dg.texto}</div>}
+              {Array.isArray(g.plano) && g.plano.length>0 ? <>
+                <div style={{fontSize:10,fontWeight:700,color:t.t3,textTransform:'uppercase' as const,letterSpacing:'0.04em',marginBottom:7}}>Plano pra baixar o ACoS</div>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                  {g.plano.map((p:any,i:number)=>{const neo=p.quem==='neo'; return(
+                    <div key={i} style={{display:'flex',gap:9,alignItems:'flex-start'}}>
+                      <span style={{flexShrink:0,width:19,height:19,borderRadius:6,background:tint(cz.cor,15),color:cz.cor,fontSize:11,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',marginTop:1,fontFamily:FG}}>{i+1}</span>
+                      <div style={{minWidth:0,flex:1}}>
+                        <div style={{fontSize:12.5,color:t.t1,fontWeight:700,lineHeight:1.4,display:'flex',gap:7,flexWrap:'wrap' as const,alignItems:'center'}}>
+                          <span>{p.titulo}</span>
+                          <span style={{fontSize:8.5,fontWeight:700,padding:'1px 7px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.03em',color:neo?t.grn:t.gold,background:neo?tint(t.grn,13):tint(t.gold,13),whiteSpace:'nowrap' as const}}>{neo?'🤖 NEO faz':'👤 você'}</span>
+                        </div>
+                        <div style={{fontSize:11,color:t.t3,lineHeight:1.45,marginTop:1}}>{p.detalhe}</div>
+                      </div>
+                    </div>
+                  )})}
+                </div>
+              </> : dg.acao && <div style={{fontSize:13,color:t.t1,fontWeight:700,marginTop:6,lineHeight:1.45,display:'flex',gap:6}}><span style={{color:cz.cor}}>→</span><span>{dg.acao}</span></div>}
             </div>}
             {g.aviso && <div style={{fontSize:12,color:t.gold,marginBottom:9,lineHeight:1.4}}>{g.aviso}</div>}
             {/* Ações RECOLHIDAS por produto (tira o paredão): resumo + aplicar todas + ver detalhes */}
