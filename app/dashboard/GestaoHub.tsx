@@ -3392,8 +3392,8 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
             {/* 🔮 SIMULAÇÃO (dry-run): o plano completo que o NEO executaria sozinho */}
             <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:10,flexWrap:'wrap' as const}}>
               <i className="ti ti-wand" style={{fontSize:18,color:t.gold}} aria-hidden="true"/>
-              <div style={{fontSize:14.5,fontWeight:800,color:t.t1,fontFamily:FH,letterSpacing:'-0.01em'}}>Com autonomia total, o NEO faria <span style={{color:t.gold}}>{plano.total} {plano.total===1?'ação':'ações'}</span> agora</div>
-              <span style={{fontSize:9.5,fontWeight:700,color:plano.real?t.grn:t.t3,background:plano.real?tint(t.grn,10):(t.dark?'rgba(255,255,255,0.05)':'#f1f1f4'),padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>{plano.real?'plano real do bot · nada aplicado':(simReal===null?'calculando o plano real…':'simulação · nada foi aplicado')}</span>
+              <div style={{fontSize:14.5,fontWeight:800,color:t.t1,fontFamily:FH,letterSpacing:'-0.01em'}}>Se rodasse agora, o NEO faria <span style={{color:t.gold}}>{plano.total} {plano.total===1?'ação':'ações'}</span> sozinho</div>
+              <span style={{fontSize:9.5,fontWeight:700,color:plano.real?t.grn:t.t3,background:plano.real?tint(t.grn,10):(t.dark?'rgba(255,255,255,0.05)':'#f1f1f4'),padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>{plano.real?'prévia do bot · nada foi aplicado':(simReal===null?'calculando a prévia…':'prévia · nada foi aplicado')}</span>
             </div>
             {/* Quebra por tipo de ação */}
             <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,marginBottom:11}}>
@@ -3418,9 +3418,10 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
               {gastoVaza<=0.005&&vendasCapturar<=0.005 && <>São ajustes finos de lance e estrutura pra manter o ACoS na régua. </>}
             </div>
             <div style={{fontSize:11,color:t.t3,marginTop:9,paddingTop:9,borderTop:`1px solid ${t.line}`,lineHeight:1.5}}>
+              <div style={{marginBottom:6,color:t.t2}}><i className="ti ti-info-circle" style={{fontSize:13,color:t.gold,marginRight:5}} aria-hidden="true"/><b>Você não precisa criar nada nem preencher Estratégias.</b> O NEO monta essa lista sozinho a partir das suas campanhas e do <b>objetivo</b> acima — é só escolher o objetivo e ligar o bot.</div>
               {bot?.automatico
-                ? <>Com o bot diário <b style={{color:t.grn}}>ligado</b>, o NEO aplica tudo isto <b style={{color:t.t2}}>sozinho</b> — ajustar lance, pausar, cortar (negativar), promover e criar campanha — dentro dos tetos de segurança, ~1×/dia. Este card é o <b style={{color:t.gold}}>preview ao vivo do próximo ciclo</b>; nada aqui espera aprovação sua.</>
-                : <><b style={{color:t.gold}}>Este é o preview do que o NEO faria</b> — nada foi aplicado. Ligue o bot diário acima e ele passa a executar tudo isto sozinho (lance, pausa, negativar, promover e criar campanha), dentro dos tetos de segurança, ~1×/dia.</>}
+                ? <>Com o bot diário <b style={{color:t.grn}}>ligado</b>, o NEO aplica tudo isto <b style={{color:t.t2}}>sozinho</b> — ajustar lance, pausar, cortar (negativar), promover e criar campanha — dentro dos tetos de segurança, ~1×/dia. Este card é a <b style={{color:t.gold}}>prévia do próximo ciclo</b>; nada aqui espera aprovação sua.</>
+                : <><b style={{color:t.gold}}>Isto é só uma prévia</b> — nada foi aplicado. Ligue o bot diário no <b>“ajustar”</b> acima e ele passa a executar tudo isto sozinho (lance, pausa, negativar, promover e criar campanha), dentro dos tetos de segurança, ~1×/dia.</>}
             </div>
           </div>}
 
@@ -3671,11 +3672,13 @@ function EstrategiasAds({isAdmin}:{isAdmin?:boolean}){
       <div style={{...card,marginBottom:14,borderColor:t.gold}}>
         <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:6}}>
           <i className="ti ti-target" style={{fontSize:20,color:t.gold}} aria-hidden="true"/>
-          <div style={{fontFamily:FH,fontSize:16,fontWeight:800,color:t.t1}}>Estratégias</div>
+          <div style={{fontFamily:FH,fontSize:16,fontWeight:800,color:t.t1}}>Estratégias <span style={{fontSize:11,fontWeight:700,color:t.t3,background:tint(t.t3,12),padding:'2px 8px',borderRadius:99,verticalAlign:'middle'}}>opcional</span></div>
+        </div>
+        <div style={{fontSize:12,color:t.t2,lineHeight:1.55,background:tint(t.gold,7),border:`1px solid ${tint(t.gold,22)}`,borderRadius:10,padding:'9px 12px',marginBottom:8}}>
+          <b>Não precisa preencher isto pra ligar o bot.</b> O Piloto NEO já otimiza sua conta inteira só com o <b>objetivo</b> (na aba Piloto NEO). Estratégias é um refinamento <b>opcional</b> pra quem quer dar objetivos <b>diferentes por grupo de produtos</b> — e a execução por estratégia entra em breve.
         </div>
         <div style={{fontSize:12.5,color:t.t2,lineHeight:1.55}}>
           Uma estratégia é um <b>grupo de produtos</b> com <b>um objetivo</b> — igual ao m19. Você dá um nome, escolhe o objetivo (ACoS-alvo, orçamento do mês ou forçar visibilidade) e diz quais produtos entram. O NEO cuida do resto.
-          <br/><span style={{color:t.t3,fontSize:11.5}}>Em ativação: por enquanto você monta as estratégias; a execução por estratégia entra logo (hoje o Piloto NEO já otimiza sua conta toda).</span>
         </div>
       </div>
 
