@@ -307,6 +307,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
   const [tab, setTab] = useState<TabMl>(soAds ? 'ads' : 'resumo')
   const [dre, setDre] = useState<Dre | null>(null)
   const [chart30, setChart30] = useState<{ daily: Dre['daily']; from: string; to: string; netRatio: number | null } | null>(null)
+  const [pilotoMl, setPilotoMl] = useState<any>(null)   // Piloto NEO do Mercado Ads (admin): recomendações de ROI, sempre 30d
   const [detail, setDetail] = useState<Produto | null>(null)
   const [loading, setLoading] = useState(true)
   const [conectando, setConectando] = useState(false)
@@ -339,6 +340,19 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
       const d = await r.json()
       if (d?.connected) setChart30({ daily: d.daily || [], from, to, netRatio: d.receita > 0 ? d.liquidoML / d.receita : null })
     } catch {}
+  }, [])
+
+  // Piloto NEO do Mercado Ads (admin): recomendações de ROI por campanha, janela FIXA
+  // de 30d (recomendação é diagnóstico, precisa de janela longa — igual a Amazon). O
+  // proxy é admin-only (403 → fica null → bloco não renderiza pro cliente comum).
+  const carregarPiloto = useCallback(async () => {
+    const { from, to } = janela('30d')
+    try {
+      const r = await fetch(`/api/ml/gestao/ads-piloto?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+      if (!r.ok) { setPilotoMl(null); return }
+      const d = await r.json()
+      setPilotoMl(d?.connected ? d : null)
+    } catch { setPilotoMl(null) }
   }, [])
 
   const recarregarDre = useCallback(async () => {
@@ -399,7 +413,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
   useEffect(() => {
     fetch('/api/ml/gestao/status').then(r => r.json()).then(st => {
       setStatus(st)
-      if (st.connected) { carregar(periodo); carregarChart() }
+      if (st.connected) { carregar(periodo); carregarChart(); carregarPiloto() }
       else setLoading(false)
     }).catch(() => setLoading(false))
   }, []) // eslint-disable-line
@@ -910,6 +924,73 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                   <Kpi label="MPA" valor={(dre.mpa == null || !cm) ? '—' : pc(dre.mpa)} cor={T.g}
                     ajuda="Margem Pós-Anúncio: lucro pós ads ÷ faturamento." />
                 </div>
+
+                {/* 🔮 PILOTO NEO (admin) — recomendação de ROI por campanha (MPA = margem − ACOS) */}
+                {pilotoMl?.campanhas?.length > 0 && (() => {
+                  const ACAO: Record<string, { lbl: string; cor: string; ic: string }> = {
+                    'pausar': { lbl: 'pausar', cor: T.r, ic: 'ti-player-pause' },
+                    'baixar-meta': { lbl: 'baixar meta', cor: T.a, ic: 'ti-arrow-down-right' },
+                    'subir-orcamento': { lbl: 'escalar', cor: T.g, ic: 'ti-trending-up' },
+                    'cadastrar-custo': { lbl: 'cadastrar custo', cor: T.gold, ic: 'ti-alert-triangle' },
+                    'manter': { lbl: 'saudável', cor: T.t3, ic: 'ti-check' },
+                  }
+                  const corMpa = (m: number | null) => m == null ? T.t3 : m < 0 ? T.r : T.g
+                  return (
+                    <div style={{ background: T.card, border: `1.5px solid ${tint(T.gold, 26)}`, borderRadius: 16, padding: '15px 16px', marginBottom: 16, boxShadow: 'var(--elev1)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' as const, marginBottom: 4 }}>
+                        <i className="ti ti-wand" style={{ fontSize: 18, color: T.gold }} aria-hidden="true" />
+                        <span style={{ fontSize: 15, fontWeight: 800, color: T.t1, letterSpacing: '-0.01em' }}>Piloto NEO · Mercado Ads</span>
+                        <span style={{ fontSize: 9.5, fontWeight: 700, color: T.t3, background: tint(T.t3, 12), padding: '3px 9px', borderRadius: 99, textTransform: 'uppercase' as const, letterSpacing: '0.04em' }}>recomenda · nada aplicado</span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: T.t3, marginBottom: 12, lineHeight: 1.5 }}>
+                        No ML o NEO mira <b style={{ color: T.t2 }}>ROI</b>, não faixa de ACOS. A régua é a sua margem: <b style={{ color: T.t2 }}>MPA = margem − ACOS</b>. Acima da margem = prejuízo (baixa a meta ou pausa); com folga = escala. Janela: últimos 30 dias.
+                        {pilotoMl.totais?.precisamAcao > 0 && <> <b style={{ color: T.r }}>{pilotoMl.totais.precisamAcao} precisam de ação.</b></>}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
+                        {pilotoMl.campanhas.map((c: any) => {
+                          const a = ACAO[c.acao] || ACAO['manter']
+                          return (
+                            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' as const, background: T.line2, border: `1px solid ${T.line}`, borderRadius: 11, padding: '10px 13px' }}>
+                              <div style={{ minWidth: 150, flex: 1 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 600, color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{c.nome}</div>
+                                <div style={{ fontSize: 10, color: T.t4, marginTop: 1 }}>{c.status === 'active' ? 'ativa' : c.status} · gasto {brl(c.gasto)} · vendas {brl(c.vendas)}</div>
+                              </div>
+                              <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' as const, fontVariantNumeric: 'tabular-nums' as const }}>
+                                <div style={{ textAlign: 'center' as const }}>
+                                  <div style={{ fontSize: 9, color: T.t4, textTransform: 'uppercase' as const, letterSpacing: '0.03em' }}>ACOS real</div>
+                                  <div style={{ fontSize: 12.5, fontWeight: 700, color: T.t2 }}>{c.acos == null ? (c.gasto > 0 ? 's/ venda' : '—') : pc(c.acos)}</div>
+                                </div>
+                                <div style={{ textAlign: 'center' as const }}>
+                                  <div style={{ fontSize: 9, color: T.t4, textTransform: 'uppercase' as const, letterSpacing: '0.03em' }}>Margem</div>
+                                  <div style={{ fontSize: 12.5, fontWeight: 700, color: c.margem == null ? T.gold : T.t2 }}>{c.margem == null ? 's/ custo' : pc(c.margem)}</div>
+                                </div>
+                                <div style={{ textAlign: 'center' as const }}>
+                                  <div style={{ fontSize: 9, color: T.t4, textTransform: 'uppercase' as const, letterSpacing: '0.03em' }}>MPA</div>
+                                  <div style={{ fontSize: 13, fontWeight: 800, color: corMpa(c.mpa) }}>{c.mpa == null ? '—' : (c.mpa > 0 ? '+' : '') + pc(c.mpa)}</div>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7, background: tint(a.cor, 10), border: `1px solid ${tint(a.cor, 26)}`, borderRadius: 9, padding: '6px 11px', minWidth: 132 }}>
+                                <i className={`ti ${a.ic}`} style={{ fontSize: 15, color: a.cor }} aria-hidden="true" />
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 800, color: a.cor, textTransform: 'capitalize' as const }}>{a.lbl}</div>
+                                  {(c.sugestao?.acosAlvoNovo != null || c.sugestao?.orcamentoNovo != null) && (
+                                    <div style={{ fontSize: 10, color: T.t3 }}>
+                                      {c.sugestao.acosAlvoNovo != null && <>meta {c.acosAlvo != null ? pc(c.acosAlvo) : '—'} → <b style={{ color: T.t2 }}>{pc(c.sugestao.acosAlvoNovo)}</b></>}
+                                      {c.sugestao.orcamentoNovo != null && <>orç {c.orcamentoDiario != null ? brl(c.orcamentoDiario) : '—'} → <b style={{ color: T.t2 }}>{brl(c.sugestao.orcamentoNovo)}</b></>}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: T.t4, marginTop: 11, lineHeight: 1.5 }}>
+                        Por enquanto o NEO <b style={{ color: T.t3 }}>recomenda</b>; aplicar em 1 clique (baixar meta / escalar / pausar) entra na próxima fase, com auditoria e confirmação.
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Sangria: gasto em item que NÃO vendeu no período */}
                 {(dre.adsSangria?.total || 0) > 0 && (
