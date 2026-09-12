@@ -308,6 +308,8 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
   const [dre, setDre] = useState<Dre | null>(null)
   const [chart30, setChart30] = useState<{ daily: Dre['daily']; from: string; to: string; netRatio: number | null } | null>(null)
   const [pilotoMl, setPilotoMl] = useState<any>(null)   // Piloto NEO do Mercado Ads (admin): recomendações de ROI, sempre 30d
+  const [aplicandoMl, setAplicandoMl] = useState<string | null>(null)   // id da campanha aplicando
+  const [feedbackMl, setFeedbackMl] = useState<{ id: string; ok: boolean; msg: string } | null>(null)
   const [detail, setDetail] = useState<Produto | null>(null)
   const [loading, setLoading] = useState(true)
   const [conectando, setConectando] = useState(false)
@@ -354,6 +356,26 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
       setPilotoMl(d?.connected ? d : null)
     } catch { setPilotoMl(null) }
   }, [])
+
+  // Aplica UMA recomendação (admin). Confirma nomeando de/para, chama o backend
+  // (que tem os caps + relê-e-confere), e recarrega o piloto pra refletir o real.
+  const aplicarMl = useCallback(async (c: any) => {
+    const acao = c.acao as string
+    const valor = acao === 'baixar-meta' ? c.sugestao?.acosAlvoNovo : acao === 'subir-orcamento' ? c.sugestao?.orcamentoNovo : undefined
+    const desc = acao === 'pausar' ? `PAUSAR a campanha "${c.nome}"`
+      : acao === 'baixar-meta' ? `baixar a meta de ACOS de "${c.nome}" de ${pc(c.acosAlvo)} para ${pc(valor)}`
+      : acao === 'subir-orcamento' ? `subir o orçamento de "${c.nome}" de ${brl(c.orcamentoDiario)} para ${brl(valor)}/dia`
+      : ''
+    if (!desc || !confirm(`Confirmar: ${desc}?`)) return
+    setAplicandoMl(c.id); setFeedbackMl(null)
+    try {
+      const r = await fetch('/api/ml/gestao/ads-aplicar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ campaignId: c.id, acao, valor }) })
+      const d = await r.json().catch(() => ({}))
+      setFeedbackMl({ id: c.id, ok: !!d?.ok, msg: d?.ok ? 'aplicado ✓' : (d?.erro || 'falhou') })
+      if (d?.ok) carregarPiloto()
+    } catch { setFeedbackMl({ id: c.id, ok: false, msg: 'falha de rede' }) }
+    finally { setAplicandoMl(null) }
+  }, [carregarPiloto])
 
   const recarregarDre = useCallback(async () => {
     const { from, to } = janela(periodo, customRange)
@@ -981,12 +1003,23 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                                   )}
                                 </div>
                               </div>
+                              {['pausar', 'baixar-meta', 'subir-orcamento'].includes(c.acao) && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <button onClick={() => aplicarMl(c)} disabled={aplicandoMl === c.id}
+                                    style={{ fontSize: 11.5, fontWeight: 700, color: '#fff', background: a.cor, border: 'none', borderRadius: 8, padding: '7px 13px', cursor: aplicandoMl === c.id ? 'default' : 'pointer', fontFamily: 'inherit', opacity: aplicandoMl === c.id ? 0.6 : 1, whiteSpace: 'nowrap' as const }}>
+                                    {aplicandoMl === c.id ? 'aplicando…' : 'aplicar'}
+                                  </button>
+                                  {feedbackMl && feedbackMl.id === c.id && (
+                                    <span style={{ fontSize: 10.5, fontWeight: 600, color: feedbackMl.ok ? T.g : T.r, maxWidth: 150 }}>{feedbackMl.msg}</span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )
                         })}
                       </div>
                       <div style={{ fontSize: 10.5, color: T.t4, marginTop: 11, lineHeight: 1.5 }}>
-                        Por enquanto o NEO <b style={{ color: T.t3 }}>recomenda</b>; aplicar em 1 clique (baixar meta / escalar / pausar) entra na próxima fase, com auditoria e confirmação.
+                        <b style={{ color: T.t3 }}>Admin</b> · o NEO recomenda e você aplica em 1 clique — cada ação confirma o de/para, respeita os limites de segurança, relê a campanha pra conferir e vai pra auditoria. Só na sua conta enquanto o ML está em teste.
                       </div>
                     </div>
                   )
