@@ -10,6 +10,7 @@ const AdsAmazon = dynamic(()=>import('./GestaoHub'),{ssr:false,loading:()=><div 
 // Ads Mercado Livre = o MLGestao em modo `soAds` (reusa a tela de Mercado Ads).
 const AdsML = dynamic(()=>import('./MLGestao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Ads ML…</div>})
 const NeoChat = dynamic(()=>import('./neo/NeoChat'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Acordando o NEO…</div>})
+const CatalogoFornecedor = dynamic(()=>import('./CatalogoFornecedor'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando…</div>})
 const MLCalculator = dynamic(()=>import('./MLCalculator'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando calculadora…</div>})
 const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando o garimpo…</div>})
 const MLRival = dynamic(()=>import('./MLRival'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando a análise…</div>})
@@ -43,10 +44,10 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
   free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','tutoriais','perfil'],                                                        modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 const GREENN: Record<string,string> = {
@@ -85,6 +86,7 @@ const NAV = [
   { id:'ads',         label:'Ads Amazon'        },
   { id:'ads-ml',      label:'Ads Mercado Livre' },
   { id:'bestsellers', label:'Mais Vendidos'     },
+  { id:'catalogo',    label:'Analisar Catálogo' },
   { id:'saved',       label:'Salvos'            },
   { id:'competitor',  label:'Análise Rival'     },
   { id:'ml-minera',   label:'Mineração ML'      },
@@ -111,7 +113,7 @@ const TUTORIAIS: {title:string; desc:string; embed:string}[] = [
 const NAV_GROUPS = [
   { group:'Gestão',      ids:['financeiro'] },
   { group:'Ads',         ids:['ads','ads-ml'] },
-  { group:'Mineração',   ids:['bestsellers','saved','competitor'] },
+  { group:'Mineração',   ids:['bestsellers','catalogo','saved','competitor'] },
   { group:'Mercado Livre', ids:['ml-minera','ml-salvos','ml-rival','ml-calc'] },
   { group:'Ferramentas', ids:['agente','extension'] },
   { group:'Ajuda',       ids:['tutoriais'] },
@@ -1399,6 +1401,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     .map(g=>({...g, ids: g.ids.filter(id=>
       ((id!=='financeiro' && id!=='ads') || gestaoEnabled)      // Ads Amazon usa a conta de seller
       && ((!id.startsWith('ml-') && id!=='ads-ml') || mlEnabled) // Ads Mercado Livre só com ML ligado
+      && (id!=='catalogo' || user.role==='admin')                // Analisar Catálogo: admin-only (em teste)
     )}))
     .filter(g=>g.ids.length>0)
   const [cat,      setCat]      = useState('all')
@@ -2618,6 +2621,13 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               </div>
             )}
 
+            {/* Analisar Catálogo — o NEO lê o PDF do fornecedor e devolve os produtos que valem (admin) */}
+            {nav==='catalogo'&&user.role==='admin'&&(
+              <div style={{padding:'0 4px'}}>
+                <CatalogoFornecedor marketplace="amazon"/>
+              </div>
+            )}
+
             {/* Ads Mercado Livre — a tela de Mercado Ads (MLGestao em modo soAds) */}
             {nav==='ads-ml'&&mlEnabled&&(
               <div style={{padding:'0 4px'}}>
@@ -2673,7 +2683,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             )}
 
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='ads'&&nav!=='ads-ml'&&nav!=='saved'&&nav!=='perfil'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-minera'&&nav!=='ml-salvos'&&nav!=='ml-rival'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='ads'&&nav!=='ads-ml'&&nav!=='catalogo'&&nav!=='saved'&&nav!=='perfil'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-minera'&&nav!=='ml-salvos'&&nav!=='ml-rival'&&<>
             <div className="ora-phead" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
               <div style={{minWidth:0}}>
                 <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>

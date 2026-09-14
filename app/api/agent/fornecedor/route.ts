@@ -39,14 +39,16 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET /api/agent/fornecedor → status do catálogo mais recente (polling do card)
-export async function GET(_req: NextRequest) {
+// GET /api/agent/fornecedor            → status do catálogo mais recente (polling do card)
+// GET /api/agent/fornecedor?resultados=1 → resultados completos da varredura (cards da Mineração)
+export async function GET(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   if (user.role !== 'admin') return NextResponse.json({ status: 'nenhum' })
+  const endpoint = req.nextUrl.searchParams.get('resultados') === '1' ? 'resultados' : 'status'
   try {
-    const res = await fetch(`${BACKEND}/api/fornecedor/status?email=${encodeURIComponent(user.email)}`, {
-      cache: 'no-store', headers: { 'x-internal-key': KEY }, signal: AbortSignal.timeout(20_000),
+    const res = await fetch(`${BACKEND}/api/fornecedor/${endpoint}?email=${encodeURIComponent(user.email)}`, {
+      cache: 'no-store', headers: { 'x-internal-key': KEY }, signal: AbortSignal.timeout(30_000),
     })
     return NextResponse.json(await res.json().catch(() => ({ error: 'resposta inválida' })), { status: res.status })
   } catch {
