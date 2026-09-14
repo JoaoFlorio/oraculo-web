@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { cookies } from 'next/headers'
 import { SignJWT } from 'jose'
 import { prisma } from '@/lib/db'
-import { COOKIE, verifyToken } from '@/lib/auth'
+import { COOKIE, verifyToken, accessDenied } from '@/lib/auth'
 
 const SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'oraculo-secret-dev-only')
 const RENEW_AFTER_MS = 7 * 24 * 60 * 60 * 1000   // renova quando a sessão tem >7 dias
@@ -23,6 +23,16 @@ export async function POST() {
 
   const session = await prisma.session.findUnique({ where: { token } })
   if (!session || session.expiresAt < new Date()) return NextResponse.json({ ok: false }, { status: 401 })
+
+  // 🚨 BLINDAGEM (14/09): não DESLIZA a sessão de quem está bloqueado (mensal vencido
+  // que não pagou, inativo, etc.). Sem isto, o vencido mantinha a sessão viva +30d a
+  // cada abertura do PWA. Os dados já são barrados no getSession, mas manter a sessão
+  // de um não-pagante rodando é justamente o "assina e não paga" que a gente quer cortar.
+  const user = await prisma.user.findUnique({
+    where: { id: payload.userId },
+    select: { active: true, plan: true, expiresAt: true, role: true },
+  })
+  if (!user || accessDenied(user)) return NextResponse.json({ ok: false, blocked: true }, { status: 401 })
 
   if (Date.now() - session.createdAt.getTime() < RENEW_AFTER_MS) {
     return NextResponse.json({ ok: true, renewed: false })
