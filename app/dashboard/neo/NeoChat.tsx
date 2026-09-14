@@ -1269,7 +1269,26 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
               <div style={{ margin: '0 0 8px', padding: '10px 12px', borderRadius: 12, border: '1px solid rgba(255,183,3,.25)', background: 'rgba(255,183,3,.06)', fontSize: 12, color: '#CFCFE8', position: 'relative' as const }}>
                 <button onClick={() => setCatalogo(null)} aria-label="fechar" style={{ position: 'absolute', top: 6, right: 8, background: 'transparent', border: 'none', color: '#8B8BAC', cursor: 'pointer', fontSize: 13 }}>×</button>
                 {catalogo.status === 'enviando' && <>📦 Enviando <b>{catalogo.nome_arquivo}</b>… (catálogo grande leva um minuto)</>}
-                {catalogo.status === 'extraindo' && <>📦 <b>{catalogo.nome_arquivo}</b>: lendo o catálogo página por página… (2–4 min num catálogo grande — pode continuar usando o chat)</>}
+                {catalogo.status === 'extraindo' && (() => {
+                  const pt = Number(catalogo.paginas_total) || 0, pl = Number(catalogo.paginas_lidas) || 0
+                  const pct = pt > 0 ? Math.min(100, Math.round((pl / pt) * 100)) : null
+                  const txt = catalogo.etapa === 'subindo'
+                    ? 'subindo o PDF pro NEO…'
+                    : pt > 0 ? `lendo página ${pl}/${pt}…` : 'lendo o catálogo…'
+                  return (
+                    <>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <span className="ora-spin" style={{ display: 'inline-block', width: 11, height: 11, border: '2px solid rgba(255,183,3,.35)', borderTopColor: '#FFB703', borderRadius: '50%' }} />
+                        📦 <b>{catalogo.nome_arquivo}</b>: {txt} <span style={{ color: '#8B8BAC' }}>(pode continuar usando o chat)</span>
+                      </span>
+                      {pct != null && (
+                        <div style={{ marginTop: 6, height: 4, borderRadius: 99, background: 'rgba(255,183,3,.15)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: '#FFB703', transition: 'width .4s ease' }} />
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
                 {catalogo.status === 'erro' && <>📦 <b>{catalogo.nome_arquivo}</b>: ❌ {catalogo.erro || 'não consegui extrair'} </>}
                 {catalogo.status === 'pronto' && (
                   <>
