@@ -1602,6 +1602,10 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // venceu → overlay total "seu acesso venceu + pagar". Sem folga: o vencido entra
   // só pra ver essa tela (getSessionOrExpired), e o pagamento libera na hora.
   const expired      = !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 0
+  // Vencido = paywall 100% bloqueante: trava o scroll do app por trás (mobile) enquanto
+  // o overlay está aberto. O acesso a DADOS já é barrado no servidor (401); isto fecha
+  // a interação visual — sem assinar, não dá pra mexer em nada.
+  useEffect(()=>{ if(!expired) return; const prev=document.body.style.overflow; document.body.style.overflow='hidden'; return ()=>{document.body.style.overflow=prev} },[expired])
   const renewGrace   = false   // não há mais janela de folga — venceu já é `expired`
   const expiringSoon = !expired && !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 5 && daysLeft > 0
 
@@ -1884,43 +1888,44 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                   <OracleMark size={30}/>
                 </div>
               </div>
-              <h2 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Seu acesso venceu</h2>
-              <p style={{fontSize:12.5,color:T.t2,lineHeight:1.65,maxWidth:380,margin:'0 auto'}}>
-                O plano <strong style={{color:T.t1}}>{cfg.label}</strong> venceu em <strong style={{color:T.a}}>{expiresAt?.toLocaleDateString('pt-BR')}</strong>.
-                Renove agora para voltar a garimpar — seus produtos salvos continuam guardados.
+              <h2 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Sua assinatura venceu</h2>
+              <p style={{fontSize:12.5,color:T.t2,lineHeight:1.65,maxWidth:400,margin:'0 auto'}}>
+                O plano <strong style={{color:T.t1}}>{cfg.label}</strong> venceu em <strong style={{color:T.a}}>{expiresAt?.toLocaleDateString('pt-BR')}</strong> e a renovação não foi paga.
+                O acesso está <strong style={{color:T.a}}>bloqueado</strong> — <strong style={{color:T.t1}}>assine um plano abaixo para voltar a usar</strong> (seus produtos salvos continuam guardados). A liberação é automática assim que o pagamento cai.
               </p>
             </div>
-            {/* Renovação */}
-            <div style={{padding:'24px 28px 20px',display:'flex',flexDirection:'column',gap:10}}>
-              {user.plan!=='annual'&&(
-                <a href={`${GREENN[user.plan]??GREENN.monthly}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
-                  style={{display:'block',textAlign:'center' as const,background:T.goldG,color:'#02020A',fontWeight:800,fontSize:12,padding:'14px',borderRadius:10,textDecoration:'none',letterSpacing:'0.08em',textTransform:'uppercase' as const,boxShadow:'0 4px 20px rgba(240,180,41,0.3)',transition:'transform .15s'}}>
-                  Renovar {cfg.label} — {PLAN_PRICE[user.plan]??PLAN_PRICE.monthly}
+            {/* Os 3 planos — assinatura recorrente (mensal · semestral · anual). Escolha reabre o acesso quando o pagamento é aprovado. */}
+            <div style={{padding:'22px 28px 8px',display:'flex',flexDirection:'column',gap:10}}>
+              {[
+                {id:'monthly', nome:'Mensal',    preco:'R$ 79,90',  ciclo:'/mês',       extra:'',                                                          melhor:false},
+                {id:'biannual',nome:'Semestral', preco:'R$ 397',    ciclo:'/semestre',  extra:'2 meses grátis vs mensal',                                  melhor:false},
+                {id:'annual',  nome:'Anual',     preco:'R$ 597',    ciclo:'/ano',       extra:`economize R$ ${ANNUAL_ECON_FMT}/ano (${ANNUAL_ECON_PCT}%)`, melhor:true},
+              ].map(p=>(
+                <a key={p.id} href={`${GREENN[p.id]}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
+                  style={{position:'relative' as const,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,textDecoration:'none',borderRadius:12,padding:'14px 16px',
+                    background:p.melhor?T.goldG:tint(T.gold,4),
+                    border:`1px solid ${p.melhor?'transparent':tint(T.gold,28)}`,
+                    boxShadow:p.melhor?'0 6px 22px rgba(240,180,41,0.32)':'none',transition:'transform .15s'}}>
+                  {p.melhor&&<span style={{position:'absolute',top:-9,left:16,background:T.gold,color:'#02020A',fontSize:8,fontWeight:800,padding:'3px 10px',borderRadius:99,letterSpacing:'0.12em',whiteSpace:'nowrap' as const}}>MELHOR VALOR</span>}
+                  <div style={{textAlign:'left' as const}}>
+                    <div style={{fontSize:13,fontWeight:800,letterSpacing:'0.04em',textTransform:'uppercase' as const,color:p.melhor?'#02020A':T.t1}}>{p.nome}</div>
+                    {p.extra&&<div className="ora-num" style={{fontSize:10,marginTop:2,color:p.melhor?'rgba(2,2,10,0.75)':T.g}}>{p.extra}</div>}
+                  </div>
+                  <div className="ora-num" style={{textAlign:'right' as const,whiteSpace:'nowrap' as const}}>
+                    <span style={{fontSize:15,fontWeight:800,color:p.melhor?'#02020A':T.gold}}>{p.preco}</span>
+                    <span style={{fontSize:10,color:p.melhor?'rgba(2,2,10,0.7)':T.t3}}>{p.ciclo}</span>
+                  </div>
                 </a>
-              )}
-              {/* Anual destacado — economia REAL */}
-              <a href={`${GREENN.annual}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
-                style={{position:'relative' as const,display:'block',textAlign:'center' as const,textDecoration:'none',borderRadius:12,padding:'16px 14px 14px',
-                  background:user.plan==='annual'?T.goldG:tint(T.gold,4),
-                  border:`1px solid ${user.plan==='annual'?'transparent':tint(T.gold,30)}`,
-                  boxShadow:user.plan==='annual'?'0 4px 20px rgba(240,180,41,0.3)':`0 0 24px ${tint(T.gold,8)}`,transition:'transform .15s'}}>
-                <span style={{position:'absolute',top:-9,left:'50%',transform:'translateX(-50%)',background:T.gold,color:'#02020A',fontSize:8,fontWeight:800,padding:'3px 10px',borderRadius:99,letterSpacing:'0.12em',whiteSpace:'nowrap' as const}}>MELHOR VALOR</span>
-                <span style={{display:'block',fontSize:12,fontWeight:800,letterSpacing:'0.08em',textTransform:'uppercase' as const,color:user.plan==='annual'?'#02020A':T.gold,marginBottom:3}}>
-                  {user.plan==='annual'?'Renovar Anual — R$ 597/ano':'Vire Anual — R$ 597/ano'}
-                </span>
-                <span className="ora-num" style={{display:'block',fontSize:10.5,color:user.plan==='annual'?'rgba(2,2,10,0.75)':T.t2}}>
-                  economize R$ {ANNUAL_ECON_FMT}/ano ({ANNUAL_ECON_PCT}%) vs mensal
-                </span>
-              </a>
+              ))}
             </div>
-            {/* Suporte + sair */}
-            <div style={{padding:'0 28px 26px',display:'flex',flexDirection:'column',gap:12,alignItems:'center'}}>
+            {/* Suporte + sair (sair só encerra a sessão — não abre o app) */}
+            <div style={{padding:'8px 28px 24px',display:'flex',flexDirection:'column',gap:11,alignItems:'center'}}>
               <a href={WA_LINK} target="_blank" rel="noreferrer"
                 style={{display:'inline-flex',alignItems:'center',gap:7,fontSize:11.5,fontWeight:600,color:T.g,textDecoration:'none'}}>
-                <WaIcon size={15} c={T.g}/> Precisa de ajuda? Fale com o suporte
+                <WaIcon size={15} c={T.g}/> Dúvida no pagamento? Fale com o suporte
               </a>
               <button onClick={async()=>{await fetch('/api/auth/logout',{method:'POST'});router.push('/login')}}
-                style={{background:'none',border:'none',color:T.t3,cursor:'pointer',fontSize:11,fontFamily:'inherit',letterSpacing:'0.04em',textDecoration:'underline',textUnderlineOffset:3}}>
+                style={{background:'none',border:'none',color:T.t4,cursor:'pointer',fontSize:10.5,fontFamily:'inherit',letterSpacing:'0.04em',textDecoration:'underline',textUnderlineOffset:3}}>
                 Sair da conta
               </button>
             </div>
