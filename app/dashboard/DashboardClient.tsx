@@ -1459,6 +1459,11 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
 
   /* ── Saudação real por hora local (setada no client p/ evitar mismatch SSR) ── */
   const [greet, setGreet] = useState('Olá')
+  // Atualizar tudo: no app (PWA) não há o botão de refresh do navegador, então o
+  // cliente não sabe se está vendo o dado mais novo. Um recarregar discreto no topo
+  // resolve — recarrega a página inteira (re-busca tudo) com um giro de feedback.
+  const [atualizando, setAtualizando] = useState(false)
+  const atualizarTudo = () => { setAtualizando(true); try { window.location.reload() } catch { setAtualizando(false) } }
   useEffect(()=>{
     const h = new Date().getHours()
     setGreet(h<12?'Bom dia':h<18?'Boa tarde':'Boa noite')
@@ -2232,6 +2237,15 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               </div>
             )}
             <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:14}}>
+              {/* Atualizar — discreto, sempre visível ao lado do tema (elegante, PWA-friendly) */}
+              <button onClick={atualizarTudo} title="Atualizar" aria-label="Atualizar dados"
+                style={{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:9,background:T.card,border:`1px solid ${T.line}`,color:T.t2,cursor:'pointer',transition:'all .15s'}}
+                onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
+                onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t2}}>
+                <svg className={atualizando?'ora-spin':''} width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M20 12a8 8 0 1 1-2.34-5.66M20 4.5V10h-5.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
               <button onClick={toggleTheme} title={theme==='dark'?'Tema claro':'Tema escuro'} aria-label="Alternar tema"
                 style={{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:9,background:T.card,border:`1px solid ${T.line}`,color:T.t2,cursor:'pointer',transition:'all .15s'}}
                 onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.lineG;el.style.color=T.gold}}
