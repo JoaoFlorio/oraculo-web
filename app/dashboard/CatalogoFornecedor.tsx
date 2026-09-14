@@ -33,17 +33,17 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
 
   const carregarStatus = useCallback(async () => {
     try {
-      const r = await fetch('/api/agent/fornecedor', { cache: 'no-store' })
+      const r = await fetch(`/api/agent/fornecedor?marketplace=${marketplace}`, { cache: 'no-store' })
       const d = await r.json().catch(() => null)
       if (d && d.status !== 'nenhum') setCat(d); else setCat(null)
       // Varredura pronta → puxa os resultados completos pros cards.
       if (d?.varredura?.status === 'pronta') {
-        const rr = await fetch('/api/agent/fornecedor?resultados=1', { cache: 'no-store' })
+        const rr = await fetch(`/api/agent/fornecedor?resultados=1&marketplace=${marketplace}`, { cache: 'no-store' })
         const dd = await rr.json().catch(() => null)
         if (Array.isArray(dd?.resultados)) setResultados(dd.resultados)
       }
     } catch {}
-  }, [])
+  }, [marketplace])
 
   // Poll enquanto extrai/varre; para quando assenta.
   useEffect(() => {
@@ -70,7 +70,7 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
   }
   async function varrer() {
     setErro(null)
-    try { await fetch('/api/agent/fornecedor?op=varrer', { method: 'POST' }); await carregarStatus() }
+    try { await fetch(`/api/agent/fornecedor?op=varrer&marketplace=${marketplace}`, { method: 'POST' }); await carregarStatus() }
     catch { setErro('falha ao iniciar a varredura') }
   }
 
@@ -152,7 +152,7 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
             ))}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 13 }}>
-            {mostrados.map((r, i) => <CardResultado key={(r.match?.asin || r.cod || i) + ':' + i} r={r} card={card} />)}
+            {mostrados.map((r, i) => <CardResultado key={(r.match?.asin || r.cod || i) + ':' + i} r={r} card={card} marketplace={marketplace} />)}
           </div>
         </>
       )}
@@ -168,8 +168,12 @@ function Barra({ pct }: { pct: number }) {
   )
 }
 
-function CardResultado({ r, card }: { r: Resultado; card: React.CSSProperties }) {
-  const v = VEREDITO[r.veredito] || VEREDITO['sem-match']
+function CardResultado({ r, card, marketplace = 'amazon' }: { r: Resultado; card: React.CSSProperties; marketplace?: 'amazon' | 'ml' }) {
+  const ml = marketplace === 'ml'
+  const praca = ml ? 'ML' : 'Amazon'
+  const base = VEREDITO[r.veredito] || VEREDITO['sem-match']
+  // 'sem-match' cita a praça — no ML o texto genérico "na Amazon" mentiria.
+  const v = r.veredito === 'sem-match' ? { ...base, rot: `Sem match no ${praca}` } : base
   const m = r.match
   const dem = r.demanda
   const corMargem = r.margemPct == null ? 'var(--t3)' : r.margemPct >= 15 ? 'var(--g)' : r.margemPct >= 0 ? 'var(--gold)' : 'var(--r)'
@@ -188,10 +192,13 @@ function CardResultado({ r, card }: { r: Resultado; card: React.CSSProperties })
         {v.ic} {v.rot}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 11, fontVariantNumeric: 'tabular-nums' as const }}>
-        <Num rot="Demanda" val={dem ? `${dem.vendasMes}/mês` : '—'} sub={dem ? `BSR ${dem.bsr.toLocaleString('pt-BR')}` : ''} cor="var(--blue)" />
+        <Num rot="Demanda"
+          val={dem ? (ml ? `${Number(dem.vendasMes).toLocaleString('pt-BR')} vend.` : `${dem.vendasMes}/mês`) : '—'}
+          sub={dem ? (ml ? (dem.bsr ? `#${dem.bsr} no ranking` : 'no ranking') : `BSR ${dem.bsr.toLocaleString('pt-BR')}`) : ''}
+          cor="var(--blue)" />
         <Num rot="Preço venda" val={r.precoVenda != null ? brl(r.precoVenda) : '—'} sub={`custo ${brl(r.custoUn)}`} cor="var(--t1)" />
         <Num rot="Margem" val={r.margemPct != null ? `${r.margemPct}%` : '—'} sub={r.lucroUn != null ? `lucro ${brl(r.lucroUn)}/un` : ''} cor={corMargem} />
-        <Num rot="Avaliação" val="—" sub="via Amazon (em breve)" cor="var(--t3)" />
+        <Num rot="Avaliação" val="—" sub={`via ${praca} (em breve)`} cor="var(--t3)" />
       </div>
       {r.nota && <div style={{ fontSize: 10, color: 'var(--t3)', marginTop: 9, lineHeight: 1.4 }}>{String(r.nota).slice(0, 160)}</div>}
     </>

@@ -16,9 +16,11 @@ export async function POST(req: NextRequest) {
   // na minha conta sem ninguém ver"). Liberar = tirar esta linha.
   if (user.role !== 'admin') return NextResponse.json({ error: 'minerador de fornecedor em teste (admin only)' }, { status: 403 })
   // ?op=varrer → dispara a varredura completa do catálogo (sem body).
+  // ?marketplace=ml cruza o MESMO catálogo no Mercado Livre (default amazon).
   if (req.nextUrl.searchParams.get('op') === 'varrer') {
+    const mkt = req.nextUrl.searchParams.get('marketplace') === 'ml' ? 'ml' : 'amazon'
     try {
-      const res = await fetch(`${BACKEND}/api/fornecedor/varrer?email=${encodeURIComponent(user.email)}`, {
+      const res = await fetch(`${BACKEND}/api/fornecedor/varrer?email=${encodeURIComponent(user.email)}&marketplace=${mkt}`, {
         method: 'POST', headers: { 'x-internal-key': KEY }, signal: AbortSignal.timeout(20_000),
       })
       return NextResponse.json(await res.json().catch(() => ({ error: 'resposta inválida' })), { status: res.status })
@@ -46,8 +48,9 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   if (user.role !== 'admin') return NextResponse.json({ status: 'nenhum' })
   const endpoint = req.nextUrl.searchParams.get('resultados') === '1' ? 'resultados' : 'status'
+  const mkt = req.nextUrl.searchParams.get('marketplace') === 'ml' ? 'ml' : 'amazon'
   try {
-    const res = await fetch(`${BACKEND}/api/fornecedor/${endpoint}?email=${encodeURIComponent(user.email)}`, {
+    const res = await fetch(`${BACKEND}/api/fornecedor/${endpoint}?email=${encodeURIComponent(user.email)}&marketplace=${mkt}`, {
       cache: 'no-store', headers: { 'x-internal-key': KEY }, signal: AbortSignal.timeout(30_000),
     })
     return NextResponse.json(await res.json().catch(() => ({ error: 'resposta inválida' })), { status: res.status })
