@@ -30,17 +30,24 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
   const [filtro, setFiltro] = useState<'todos' | 'oportunidade'>('oportunidade')
   const fileRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastPartialRef = useRef(0)
 
   const carregarStatus = useCallback(async () => {
     try {
       const r = await fetch(`/api/agent/fornecedor?marketplace=${marketplace}`, { cache: 'no-store' })
       const d = await r.json().catch(() => null)
       if (d && d.status !== 'nenhum') setCat(d); else setCat(null)
-      // Varredura pronta → puxa os resultados completos pros cards.
-      if (d?.varredura?.status === 'pronta') {
-        const rr = await fetch(`/api/agent/fornecedor?resultados=1&marketplace=${marketplace}`, { cache: 'no-store' })
-        const dd = await rr.json().catch(() => null)
-        if (Array.isArray(dd?.resultados)) setResultados(dd.resultados)
+      const vs = d?.varredura?.status
+      // PRONTA → resultado final. RODANDO → streaming: puxa os parciais já achados,
+      // mas throttled (~12s) pra não trazer milhares de itens a cada 3s de poll.
+      if (vs === 'pronta' || vs === 'rodando') {
+        const agora = Date.now()
+        if (vs === 'pronta' || agora - lastPartialRef.current > 12000) {
+          lastPartialRef.current = agora
+          const q = `/api/agent/fornecedor?resultados=1&marketplace=${marketplace}${vs === 'rodando' ? '&parcial=1' : ''}`
+          const dd = await fetch(q, { cache: 'no-store' }).then(x => x.json()).catch(() => null)
+          if (Array.isArray(dd?.resultados)) setResultados(dd.resultados)
+        }
       }
     } catch {}
   }, [marketplace])
@@ -139,8 +146,24 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
         )}
       </div>
 
-      {/* Resultados como cards de Mineração */}
-      {vr?.status === 'pronta' && resultados.length > 0 && (
+      {/* Aviso do NEO durante a varredura — o seller entende que leva tempo e que
+          as oportunidades vão CAINDO aqui conforme cruza (não precisa esperar tudo). */}
+      {vr?.status === 'rodando' && (
+        <div style={{ ...card, borderColor: tint('var(--gold)', 26), background: tint('var(--gold)', 6), padding: '12px 14px', marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <span className="ora-spin" style={{ display: 'inline-block', width: 14, height: 14, marginTop: 2, flexShrink: 0, border: '2px solid ' + tint('var(--gold)', 35), borderTopColor: 'var(--gold)', borderRadius: '50%' }} />
+          <div style={{ fontSize: 12, color: 'var(--t2)', lineHeight: 1.5 }}>
+            <b style={{ color: 'var(--t1)' }}>O NEO está garimpando cada produto na {marketplace === 'ml' ? 'Mercado Livre' : 'Amazon'}</b> — isso leva um tempo (catálogo grande passa de uma hora).
+            {oportunidades.length > 0
+              ? <> Já achei <b style={{ color: 'var(--g)' }}>{oportunidades.length} oportunidade{oportunidades.length > 1 ? 's' : ''}</b> em {Number(vr.progresso) || 0}/{Number(vr.total) || 0} cruzados — e vão aparecendo aqui embaixo conforme saem.</>
+              : <> Já cruzei {Number(vr.progresso) || 0}/{Number(vr.total) || 0}; as oportunidades aparecem aqui assim que a primeira sair.</>}
+            {' '}Pode fechar a aba, continua sozinho. 👇
+          </div>
+        </div>
+      )}
+
+      {/* Resultados como cards de Mineração — durante a varredura são PARCIAIS
+          (streaming); quando 'pronta', o conjunto final ordenado. */}
+      {(vr?.status === 'pronta' || vr?.status === 'rodando') && resultados.length > 0 && (
         <>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' as const }}>
             {[{ id: 'oportunidade', lbl: `Oportunidades (${oportunidades.length})` }, { id: 'todos', lbl: `Todos (${resultados.length})` }].map(f => (
@@ -150,6 +173,7 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
                 {f.lbl}
               </button>
             ))}
+            {vr?.status === 'rodando' && <span style={{ fontSize: 10.5, color: 'var(--t4)' }}>parcial · atualiza sozinho</span>}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 13 }}>
             {mostrados.map((r, i) => <CardResultado key={(r.match?.asin || r.cod || i) + ':' + i} r={r} card={card} marketplace={marketplace} />)}

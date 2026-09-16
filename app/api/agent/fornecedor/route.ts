@@ -49,8 +49,10 @@ export async function GET(req: NextRequest) {
   if (user.role !== 'admin') return NextResponse.json({ status: 'nenhum' })
   const endpoint = req.nextUrl.searchParams.get('resultados') === '1' ? 'resultados' : 'status'
   const mkt = req.nextUrl.searchParams.get('marketplace') === 'ml' ? 'ml' : 'amazon'
+  // streaming: repassa ?parcial=1 (resultados da varredura ainda rodando)
+  const parcial = req.nextUrl.searchParams.get('parcial') === '1' ? '&parcial=1' : ''
   try {
-    const res = await fetch(`${BACKEND}/api/fornecedor/${endpoint}?email=${encodeURIComponent(user.email)}&marketplace=${mkt}`, {
+    const res = await fetch(`${BACKEND}/api/fornecedor/${endpoint}?email=${encodeURIComponent(user.email)}&marketplace=${mkt}${parcial}`, {
       cache: 'no-store', headers: { 'x-internal-key': KEY }, signal: AbortSignal.timeout(30_000),
     })
     return NextResponse.json(await res.json().catch(() => ({ error: 'resposta inválida' })), { status: res.status })
