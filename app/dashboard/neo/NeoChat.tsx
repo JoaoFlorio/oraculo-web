@@ -32,7 +32,9 @@ type Ficha = {
   custoBrl?: number
 }
 type ImgGerada = { rotulo: string; mediaType: string; data: string }
-type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[]; ficha?: Ficha; geradas?: ImgGerada[]; id?: string }
+// Vídeo do Veo (assíncrono): chega DEPOIS da resposta, via polling em /api/agent/videos.
+type VidGerado = { id: number; rotulo: string; mediaType: string; data: string }
+type Msg = { role: 'user' | 'assistant'; text: string; envio?: string; images?: Img[]; ficha?: Ficha; geradas?: ImgGerada[]; videos?: VidGerado[]; videoJobs?: number[]; id?: string }
 
 // Id estável só pras mensagens com imagem gerada — é a chave que liga a mensagem
 // (texto no localStorage) às imagens guardadas no IndexedDB ao reabrir a aba.
@@ -262,6 +264,45 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
   const [insOculto, setInsOculto] = useState(false)
 
   const [msgs, setMsgs] = useState<Msg[]>([])
+
+  // ⭐ VÍDEO (Veo) é ASSÍNCRONO: o NEO responde "em produção" e o mp4 chega
+  // depois (1-3 min). Enquanto alguma mensagem tiver job pendente, consulta
+  // /api/agent/videos a cada 15s e encaixa o player na mensagem certa. Job que
+  // falhou vira aviso no texto (o crédito já foi devolvido no servidor).
+  const ultimoVideoIdRef = useRef(0)
+  const chaveVideos = msgs.map((m) => `${m.videoJobs?.length || 0}/${m.videos?.length || 0}`).join('|')
+  useEffect(() => {
+    const pendentes = msgs.some((m) => (m.videoJobs?.length || 0) > (m.videos?.length || 0))
+    if (!pendentes) return
+    let vivo = true
+    const tick = async () => {
+      try {
+        const r = await fetch(`/api/agent/videos?desde=${ultimoVideoIdRef.current}`, { cache: 'no-store' })
+        const d = await r.json().catch(() => null)
+        if (!vivo || !d) return
+        const prontos: VidGerado[] = Array.isArray(d.prontos) ? d.prontos : []
+        const erros: Array<{ id: number; rotulo: string; erro: string }> = Array.isArray(d.erros) ? d.erros : []
+        if (!prontos.length && !erros.length) return
+        for (const v of prontos) ultimoVideoIdRef.current = Math.max(ultimoVideoIdRef.current, v.id)
+        setMsgs((atual) => atual.map((m) => {
+          if (!m.videoJobs?.length) return m
+          const meus = prontos.filter((v) => m.videoJobs!.includes(v.id) && !(m.videos || []).some((x) => x.id === v.id))
+          const errosMeus = erros.filter((e) => m.videoJobs!.includes(e.id))
+          if (!meus.length && !errosMeus.length) return m
+          const videos = [...(m.videos || []), ...meus]
+          const videoJobs = m.videoJobs.filter((id) => !errosMeus.some((e) => e.id === id))
+          const text = errosMeus.length
+            ? `${m.text}\n\n⚠️ ${errosMeus.map((e) => `${e.rotulo}: ${e.erro} — crédito devolvido`).join(' · ')}`
+            : m.text
+          return { ...m, videos, videoJobs, text }
+        }))
+      } catch { /* tenta no próximo tick */ }
+    }
+    void tick()
+    const t = setInterval(tick, 15_000)
+    return () => { vivo = false; clearInterval(t) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveVideos])
   const [input, setInput] = useState('')
 
   // ── Multi-chat (barra de conversas por tópico) ────────────────────────────
@@ -652,6 +693,10 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         // mostra enquanto o admin não força nenhum.
         if (data.provider === 'claude' || data.provider === 'gemini') setMotorAtivo(data.provider)
         const geradas = Array.isArray(data.imagens) && data.imagens.length ? (data.imagens as ImgGerada[]) : undefined
+        // Jobs de vídeo que o NEO disparou nesta resposta — o mp4 chega depois (polling).
+        const videoJobs = Array.isArray(data.videoJobs) && data.videoJobs.length
+          ? (data.videoJobs as Array<{ id: number }>).map((v) => Number(v.id)).filter((n) => n > 0)
+          : undefined
         const msg: Msg = {
           role: 'assistant', text: data.reply || '(sem resposta)',
           ficha: {
@@ -661,8 +706,8 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
             tokensSaida: data.usage?.output_tokens,
             custoBrl: data.custo?.brl,
           },
-          geradas,
-          id: geradas ? novoId() : undefined,
+          geradas, videoJobs,
+          id: (geradas || videoJobs) ? novoId() : undefined,
         }
         setMsgs([...historico, msg])
         void carregarConversas()   // título/horário da conversa mudaram no servidor
@@ -1203,6 +1248,24 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
                             <span>{g.rotulo} ⬇</span>
                           </a>
                         ))}
+                      </div>
+                    ) : null}
+                    {/* Vídeos do Veo (assíncronos): player + baixar. Enquanto o
+                        job roda, aviso de "em produção" (some sozinho ao chegar). */}
+                    {m.videos?.length ? (
+                      <div className="neoGerGrid">
+                        {m.videos.map((v) => (
+                          <div key={v.id} className="neoGerCard" title={v.rotulo} style={{ display: 'block' }}>
+                            <video controls playsInline preload="metadata" src={`data:${v.mediaType};base64,${v.data}`} style={{ width: '100%', borderRadius: 10, background: '#000', display: 'block' }} />
+                            <a href={`data:${v.mediaType};base64,${v.data}`} download={`video-${v.id}.mp4`} style={{ display: 'block', marginTop: 6 }}>🎬 {v.rotulo} ⬇ baixar mp4</a>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                    {(m.videoJobs?.length || 0) > (m.videos?.length || 0) ? (
+                      <div style={{ fontSize: 12, color: '#f0b429', margin: '6px 0 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span className="ora-spin" style={{ display: 'inline-block', width: 12, height: 12, border: '2px solid rgba(240,180,41,.35)', borderTopColor: '#f0b429', borderRadius: '50%' }} />
+                        🎬 Vídeo em produção — chega aqui sozinho em ~1-3 min…
                       </div>
                     ) : null}
                     <div className="neoMsgTxt">{rico(m.text)}</div>
