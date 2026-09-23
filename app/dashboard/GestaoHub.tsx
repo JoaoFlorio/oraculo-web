@@ -5873,7 +5873,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
       fetch(`/api/amazon/finance?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`)
         .then(x=>x.json()).then(f=>{ if(alive&&f&&f.linhas) setRealDre(f) }).catch(()=>{})
     }
-    const timer=setInterval(silentLoad,30000)   // 30s (era 60): casa com o stale de 30s do backend — venda nova entra na tela em ~30s
+    const timer=setInterval(silentLoad,90000)   // 90s (23/09, era 30s): cada revalidação pagina a Finances na Amazon; a venda nova já chega pelo espelho (3 min)
     // Voltar pro app recarrega na hora — é o caminho de quem tocou no push da venda.
     const onVis=()=>{ if(document.visibilityState==='visible') silentLoad() }
     document.addEventListener('visibilitychange',onVis)
