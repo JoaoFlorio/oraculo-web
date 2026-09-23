@@ -956,6 +956,7 @@ function CustoTab() {
   const porAgente: any[] = Array.isArray(d?.porAgente) ? d.porAgente : []
   const porUsuario: any[] = Array.isArray(d?.porUsuario) ? d.porUsuario : []
   const diasComUso = porDia.length || 1
+  const diasJanela = dias   // média sobre a JANELA (hoje = 1 dia; 7 dias = 7), não sobre dias com uso
   const maisCaro = porDia.reduce((m: any, x: any) => (!m || x.usd > m.usd ? x : m), null as any)
   return (
     <>
@@ -968,9 +969,10 @@ function CustoTab() {
       {d && (
         <>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-            {kpi('Total no período', brl(totalUsd * USD_BRL), `US$ ${totalUsd.toFixed(2)} · ${Number(d.total?.mensagens || 0).toLocaleString('pt-BR')} chamadas`)}
-            {kpi('Média por dia', brl(totalUsd * USD_BRL / diasComUso), `${diasComUso} dia(s) com uso`)}
-            {kpi('Dia mais caro', maisCaro ? brl(maisCaro.usd * USD_BRL) : '—', maisCaro ? `${isoDM(maisCaro.dia)} · ${maisCaro.mensagens} chamadas` : undefined)}
+            {kpi(dias === 1 ? 'Hoje até agora' : `Total nos últimos ${dias} dias`, brl(totalUsd * USD_BRL), `US$ ${totalUsd.toFixed(2)} · ${Number(d.total?.mensagens || 0).toLocaleString('pt-BR')} chamadas · dias de calendário, Brasília`)}
+            {dias > 1 && kpi('Média por dia', brl(totalUsd * USD_BRL / diasJanela), `${diasJanela} dias (${diasComUso} com uso)`)}
+            {dias > 1 && kpi('Dia mais caro', maisCaro ? brl(maisCaro.usd * USD_BRL) : '—', maisCaro ? `${isoDM(maisCaro.dia)} · ${maisCaro.mensagens} chamadas` : undefined)}
+            {dias === 1 && kpi('Chamadas hoje', Number(d.total?.mensagens || 0).toLocaleString('pt-BR'), `${brl(totalUsd * USD_BRL / Math.max(1, Number(d.total?.mensagens || 0)))} por chamada`)}
             {kpi('Tokens de entrada em cache', `${Math.round(100 * Number(d.total?.cache || 0) / Math.max(1, Number(d.total?.input || 0)))}%`, 'quanto da entrada saiu pelo cache (barato)')}
           </div>
 
