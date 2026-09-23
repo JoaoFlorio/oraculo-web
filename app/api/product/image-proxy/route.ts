@@ -28,27 +28,34 @@ export async function GET(req: NextRequest) {
     // Imagens do ML (o modal de análise da Mineração ML baixa por aqui também)
     'mlstatic.com',
   ]
+  const hostOk = (h: string) => allowed.some(a => h === a || h.endsWith('.' + a))
+  let u: URL
   try {
-    const host = new URL(url).hostname
+    u = new URL(url)
     // 23/09: `endsWith('mlstatic.com')` deixava passar `evilmlstatic.com` (SSRF) — agora igual ou subdomínio.
-    if (!allowed.some(a => host === a || host.endsWith('.' + a))) {
+    if (!/^https?:$/.test(u.protocol) || !hostOk(u.hostname)) {
       return NextResponse.json({ error: 'URL não permitida' }, { status: 403 })
     }
   } catch {
     return NextResponse.json({ error: 'URL inválida' }, { status: 400 })
   }
 
-  // Troca resolução para máxima disponível
-  const ehML = /mlstatic\.com$/.test(new URL(url).hostname)
-  const hiResUrl = ehML
+  // Troca resolução para máxima disponível — SÓ no pathname. A versão antiga reescrevia a
+  // string inteira e `\._.*?_\.` podia engolir o host (`https://a._.m.media-amazon.com/_.evil.com/x`
+  // passava na allowlist e virava `https://a.evil.com/x` = SSRF). Mexer no pathname não muda o host.
+  const ehML = /mlstatic\.com$/.test(u.hostname)
+  const hi = new URL(u.toString())
+  hi.pathname = ehML
     // ML: sufixo -I/-S = thumbnail, -O = original em tamanho cheio
-    ? url.replace(/-[IS]\.(jpg|webp|png)$/i, '-O.$1')
-    : url
+    ? hi.pathname.replace(/-[IS]\.(jpg|webp|png)$/i, '-O.$1')
+    : hi.pathname
         .replace(/_AC_SR\d+,\d+_/,  '_AC_SL2000_')
         .replace(/_AC_UL\d+_/,      '_AC_SL2000_')
         .replace(/_AC_SL\d+_/,      '_AC_SL2000_')
         .replace(/_SL\d+_/,         '_SL2000_')
         .replace(/\._.*?_\./,       '.')   // fallback: remove todos os modificadores
+  if (!hostOk(hi.hostname)) return NextResponse.json({ error: 'URL não permitida' }, { status: 403 })
+  const hiResUrl = hi.toString()
 
   try {
     const res = await fetch(hiResUrl, {

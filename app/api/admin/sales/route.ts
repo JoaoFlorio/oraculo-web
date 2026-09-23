@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { segredoIgual } from '@/lib/password'
 export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db'
 import { getAdminSession } from '@/lib/auth'
@@ -10,7 +11,7 @@ const ADMIN_KEY = process.env.INTERNAL_KEY || ''
 const STATUS = ['paid', 'refunded', 'canceled', 'test']
 
 async function checkAdmin(req: NextRequest) {
-  if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return true
+  if (ADMIN_KEY && segredoIgual(req.headers.get('x-admin-key'), ADMIN_KEY)) return true
   return !!(await getAdminSession())
 }
 
