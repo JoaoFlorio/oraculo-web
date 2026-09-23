@@ -33,6 +33,6 @@ export async function GET(req: Request) {
       { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
     return NextResponse.json(await res.json(), { status: res.status })
   } catch (e: any) {
-    return NextResponse.json({ error: 'Erro ao consultar a conciliação', detalhe: String(e?.message || e).slice(0, 200) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro ao consultar a conciliação' }, { status: 500 })
   }
 }

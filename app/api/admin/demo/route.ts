@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { gerarSenha, segredoIgual } from '@/lib/password'
 export const dynamic = 'force-dynamic'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
@@ -9,12 +10,7 @@ import { mergeDemoConfig, demoCosts, DEFAULT_DEMO_CONFIG } from '@/lib/demoGesta
 // metadata guarda a config (números fake) + os custos por SKU (gestao_cmv).
 const DEMO_EMAIL_DEFAULT = 'demo@oraculojf.com.br'
 
-function genPassword(): string {
-  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'
-  let p = 'Demo#'
-  for (let i = 0; i < 6; i++) p += chars[Math.floor(Math.random() * chars.length)]
-  return p
-}
+function genPassword() { return gerarSenha('Demo#') }   // 23/09: CSPRNG, 12 caracteres (lib/password.ts)
 
 // GET → conta demo atual (se houver) + config vigente
 export async function GET() {

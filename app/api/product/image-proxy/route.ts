@@ -30,7 +30,8 @@ export async function GET(req: NextRequest) {
   ]
   try {
     const host = new URL(url).hostname
-    if (!allowed.some(a => host.endsWith(a))) {
+    // 23/09: `endsWith('mlstatic.com')` deixava passar `evilmlstatic.com` (SSRF) — agora igual ou subdomínio.
+    if (!allowed.some(a => host === a || host.endsWith('.' + a))) {
       return NextResponse.json({ error: 'URL não permitida' }, { status: 403 })
     }
   } catch {
@@ -52,11 +53,13 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(hiResUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OraculoBot/1.0)' },
+      redirect: 'manual', signal: AbortSignal.timeout(10_000),
     })
 
     if (!res.ok) throw new Error(`Status ${res.status}`)
 
     const contentType = res.headers.get('content-type') || 'image/jpeg'
+    if (!contentType.startsWith('image/')) throw new Error('não é imagem')
     const buffer      = await res.arrayBuffer()
 
     return new NextResponse(buffer, {
@@ -72,8 +75,11 @@ export async function GET(req: NextRequest) {
     try {
       const res2 = await fetch(url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OraculoBot/1.0)' },
+        redirect: 'manual', signal: AbortSignal.timeout(10_000),
       })
+      if (!res2.ok) throw new Error(`Status ${res2.status}`)
       const ct  = res2.headers.get('content-type') || 'image/jpeg'
+      if (!ct.startsWith('image/')) throw new Error('não é imagem')
       const buf = await res2.arrayBuffer()
       return new NextResponse(buf, {
         status: 200,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
-import { createToken, COOKIE, accessDenied } from '@/lib/auth'
+import { createToken, COOKIE, accessDenied, ttlMsDe } from '@/lib/auth'
 
 // ⚠️ SEGURANÇA (pentest 06/08/2026): hash "isca" de custo 12 pra igualar o TEMPO
 // de resposta quando o e-mail NÃO existe. Sem isso, e-mail inexistente respondia
@@ -24,9 +24,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 })
     }
 
-    const valid = await bcrypt.compare(password, user.password)
-    if (!valid)
+    // 🔒 23/09: TRAVA POR CONTA (o rate limit do proxy era só por IP): 5 erros seguidos
+    // bloqueiam 15 min (dobrando a cada 5), com a MESMA resposta genérica — não revela
+    // nem que a conta existe nem que está travada. Guardado em User.metadata.loginLock.
+    const metaLogin = ((user as any).metadata ?? {}) as Record<string, any>
+    const lock = (metaLogin.loginLock || {}) as { n?: number; until?: number }
+    if (lock.until && lock.until > Date.now()) {
+      await bcrypt.compare(String(password), HASH_ISCA)
       return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 })
+    }
+    const valid = await bcrypt.compare(password, user.password)
+    if (!valid) {
+      const n = (Number(lock.n) || 0) + 1
+      const until = n >= 5 ? Date.now() + Math.min(24 * 3600_000, 15 * 60_000 * Math.pow(2, n - 5)) : 0
+      await prisma.user.update({ where: { id: user.id }, data: { metadata: { ...metaLogin, loginLock: { n, until } } as object } }).catch(() => {})
+      return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 })
+    }
+    if (lock.n) {
+      const { loginLock: _l, ...resto } = metaLogin
+      await prisma.user.update({ where: { id: user.id }, data: { metadata: resto as object } }).catch(() => {})
+    }
 
     const denied = accessDenied(user)
     if (denied === 'inactive')
@@ -36,9 +53,23 @@ export async function POST(req: NextRequest) {
     if (denied)  // 'free' / 'notfound' → sem plano pago ativo
       return NextResponse.json({ error: 'Você não tem um plano ativo. Adquira o Oráculo para acessar.' }, { status: 403 })
 
-    const token = await createToken(user.id)
+    const token = await createToken(user.id, user.role)
+    // 🔔 23/09: acesso a conta PRIVILEGIADA avisa o dono por e-mail (IP/hora/navegador).
+    if (['admin', 'support', 'staff'].includes(String(user.role || ''))) {
+      try {
+        const { Resend } = await import('resend')
+        const hops = (req.headers.get('x-forwarded-for') || '').split(',').map(s => s.trim()).filter(Boolean)
+        const ip = hops[hops.length - 1] || req.headers.get('x-real-ip') || 'desconhecido'
+        const ua = (req.headers.get('user-agent') || '').slice(0, 160)
+        if (process.env.RESEND_API_KEY) await new Resend(process.env.RESEND_API_KEY).emails.send({
+          from: 'ORÁCULO <noreply@oraculojf.com.br>', to: user.email,
+          subject: 'Novo acesso à sua conta (' + user.role + ')',
+          text: `Um login foi feito na sua conta ${user.role} do Oráculo.\n\nQuando: ${new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}\nIP: ${ip}\nNavegador: ${ua}\n\nSe não foi você, troque a senha agora pelo perfil e avise o suporte.`,
+        })
+      } catch { /* alerta é best-effort */ }
+    }
     const res = NextResponse.json({ ok: true, user: { id: user.id, name: user.name, email: user.email, plan: user.plan, role: user.role } })
-    res.cookies.set(COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: 60 * 60 * 24 * 30, path: '/' })
+    res.cookies.set(COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax', maxAge: Math.floor(ttlMsDe(user.role) / 1000), path: '/' })
     return res
   } catch (e: any) {
     console.error('[login]', e)

@@ -27,6 +27,6 @@ export async function POST(req: Request) {
       { method: 'POST', cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
     return NextResponse.json(await res.json(), { status: res.status })
   } catch (e: any) {
-    return NextResponse.json({ error: 'Erro ao reparar o espelho', detalhe: String(e?.message || e).slice(0, 200) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro ao reparar o espelho' }, { status: 500 })
   }
 }

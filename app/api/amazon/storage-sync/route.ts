@@ -37,6 +37,6 @@ export async function POST(req: Request) {
     )
     return NextResponse.json(await res.json(), { status: res.status })
   } catch (e: any) {
-    return NextResponse.json({ error: 'Erro ao sincronizar armazenagem', detalhe: String(e?.message || e).slice(0, 200) }, { status: 500 })
+    return NextResponse.json({ error: 'Erro ao sincronizar armazenagem' }, { status: 500 })
   }
 }

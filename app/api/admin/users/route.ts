@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { gerarSenha, segredoIgual } from '@/lib/password'
 export const dynamic = 'force-dynamic'
 import bcrypt from 'bcryptjs'
 import { Resend } from 'resend'
@@ -15,12 +16,12 @@ const resend       = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_
 // O suporte (Marli) cria clientes igual o admin — sempre role='client' (o POST não
 // aceita `role`), então não há risco de escalonamento por aqui.
 async function checkAuth(req: NextRequest) {
-  if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return true  // backend interno
+  if (segredoIgual(req.headers.get('x-admin-key'), ADMIN_KEY)) return true  // backend interno (timing-safe)
   return !!(await getStaffSession()) || !!(await getClientsSession())          // admin/staff/support logado
 }
 // PATCH (mudar plano / desativar): só admin OU backend interno.
 async function checkAdmin(req: NextRequest) {
-  if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return true
+  if (segredoIgual(req.headers.get('x-admin-key'), ADMIN_KEY)) return true
   return !!(await getAdminSession())
 }
 // GET (listar) e PUT (reenviar senha): admin OU support OU backend interno.
@@ -28,7 +29,7 @@ async function checkAdmin(req: NextRequest) {
 // isso — não cria (POST=staff), não muda plano/desativa (PATCH=admin), e só
 // enxerga/reseta CLIENTE, nunca admin/staff/outro support).
 async function clientsLevel(req: NextRequest): Promise<'internal' | 'admin' | 'support' | null> {
-  if (ADMIN_KEY && req.headers.get('x-admin-key') === ADMIN_KEY) return 'internal'
+  if (segredoIgual(req.headers.get('x-admin-key'), ADMIN_KEY)) return 'internal'
   const s = await getClientsSession()
   if (!s) return null
   return s.role === 'admin' ? 'admin' : 'support'
@@ -100,12 +101,7 @@ async function sendAccessEmail(opts: {
 }
 
 /** Gera senha aleatória legível: ex. Orc#8f2kL */
-function genPassword(): string {
-  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'
-  let p = 'Orc#'
-  for (let i = 0; i < 6; i++) p += chars[Math.floor(Math.random() * chars.length)]
-  return p
-}
+function genPassword() { return gerarSenha('Orc#') }   // 23/09: CSPRNG, 12 caracteres (lib/password.ts)
 
 /** Cria licença no backend. Retorna a chave gerada ou null em caso de falha. */
 async function createBackendLicense(email: string, plan: string): Promise<string | null> {
@@ -278,6 +274,12 @@ export async function PUT(req: NextRequest) {
   if (level === 'support' && user.role !== 'client') {
     return NextResponse.json({ error: 'Sem permissão para este usuário' }, { status: 403 })
   }
+  // 🔒 23/09: conta ADMIN nunca é resetada por aqui (nem pelo caminho interno, nem por
+  // outro admin) — o admin troca a própria senha logado (/api/user/change-password).
+  // Era o atalho: INTERNAL_KEY vazada = senha do João em claro na resposta.
+  if (user.role === 'admin') {
+    return NextResponse.json({ error: 'Conta admin: troque a senha pelo perfil, logado.' }, { status: 403 })
+  }
 
   // Gera nova senha e atualiza no banco
   const password = genPassword()
@@ -308,5 +310,6 @@ export async function PUT(req: NextRequest) {
   // Envia email com novos dados
   await sendAccessEmail({ to: user.email, name: user.name || user.email, password, key: licKey, plan: user.plan })
 
-  return NextResponse.json({ ok: true, password, licenseKey: licKey })
+  // 23/09: a senha nova vai pelo e-mail; a resposta só a devolve pra um humano logado (support/admin), nunca pro caminho interno.
+  return NextResponse.json({ ok: true, password: level === 'internal' ? undefined : password, licenseKey: licKey })
 }

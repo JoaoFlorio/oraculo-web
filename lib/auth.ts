@@ -15,12 +15,19 @@ export const COOKIE = 'oraculo_session'
 // continua: o 4º aparelho derruba o mais antigo. Ajustável por env.
 const MAX_SESSIONS = parseInt(process.env.MAX_SESSIONS || '3')
 
-export async function createToken(userId: string): Promise<string> {
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+// 23/09: sessão de conta PRIVILEGIADA (admin/support/staff) dura 8h e não desliza;
+// cliente continua 30d. Senha do João vazada não vira 30 dias de controle total.
+export const PRIVILEGIADO = new Set(['admin', 'support', 'staff'])
+export function ttlMsDe(role?: string | null): number {
+  return PRIVILEGIADO.has(String(role || '')) ? 8 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000
+}
+export async function createToken(userId: string, role?: string | null): Promise<string> {
+  const ttl = ttlMsDe(role)
+  const expiresAt = new Date(Date.now() + ttl)
 
   const token = await new SignJWT({ userId })
     .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime('30d')
+    .setExpirationTime(PRIVILEGIADO.has(String(role || '')) ? '8h' : '30d')
     .sign(SECRET)
 
   await prisma.$transaction(async (tx) => {

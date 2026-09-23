@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { gerarSenha, segredoIgual } from '@/lib/password'
 export const dynamic = 'force-dynamic'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/db'
@@ -7,12 +8,7 @@ import { getAdminSession } from '@/lib/auth'
 // Gestão da equipe (staff) — somente admin.
 
 /** Gera senha aleatória legível: ex. Orc#8f2kL */
-function genPassword(): string {
-  const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'
-  let p = 'Orc#'
-  for (let i = 0; i < 6; i++) p += chars[Math.floor(Math.random() * chars.length)]
-  return p
-}
+function genPassword() { return gerarSenha('Orc#') }   // 23/09: CSPRNG, 12 caracteres (lib/password.ts)
 
 // Papéis de equipe que o admin gerencia por aqui (nunca 'admin' nem 'client').
 //  · staff   = só cadastra cliente

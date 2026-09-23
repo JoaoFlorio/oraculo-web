@@ -11,7 +11,9 @@ export async function POST(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'desconhecido'
+  // 23/09: o hop confiável é o ÚLTIMO (o Envoy do Railway anexa à direita; o [0] é do cliente).
+  const hops = (req.headers.get('x-forwarded-for') || '').split(',').map(s => s.trim()).filter(Boolean)
+  const ip = hops[hops.length - 1] || req.headers.get('x-real-ip') || 'desconhecido'
   const u = await prisma.user.findUnique({ where: { id: user.id }, select: { metadata: true } })
   const meta = (u?.metadata ?? {}) as Record<string, unknown>
   meta.terms = { version: TERMS_VERSION, acceptedAt: new Date().toISOString(), ip }

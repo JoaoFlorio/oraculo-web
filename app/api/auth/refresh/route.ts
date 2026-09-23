@@ -37,6 +37,10 @@ export async function POST() {
   if (Date.now() - session.createdAt.getTime() < RENEW_AFTER_MS) {
     return NextResponse.json({ ok: true, renewed: false })
   }
+  // 23/09: conta privilegiada não desliza — 8h e acabou (loga de novo).
+  if (['admin', 'support', 'staff'].includes(String(user.role || ''))) {
+    return NextResponse.json({ ok: true, renewed: false })
+  }
 
   const fresh = await new SignJWT({ userId: payload.userId })
     .setProtectedHeader({ alg: 'HS256' })
