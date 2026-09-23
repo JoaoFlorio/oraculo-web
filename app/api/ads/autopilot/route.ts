@@ -20,8 +20,12 @@ export async function POST(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const b = await req.json().catch(() => ({}))
-  // Ligar o automático só admin (executa mudança real sozinho).
-  if (b?.automatico === true && user.role !== 'admin') return NextResponse.json({ error: 'o piloto automático está em teste (admin only)' }, { status: 403 })
+  // ⭐ 23/09 (decisão do João: "um botãozinho de ligar/desligar o NEO pro cliente"):
+  // LIGAR o automático passou a ser de TODOS os clientes — o bot roda com os tetos de
+  // segurança (lance ≤ R$10, 50 ajustes, 20 negativações, 2 campanhas/dia, respeita
+  // "eu cuido"). Kill-switch: NEO_ADS_BOT_PARA_TODOS=false volta a ser admin-only.
+  const paraTodos = process.env.NEO_ADS_BOT_PARA_TODOS !== 'false'
+  if (b?.automatico === true && user.role !== 'admin' && !paraTodos) return NextResponse.json({ error: 'o piloto automático está em teste (admin only)' }, { status: 403 })
   try {
     const r = await fetch(`${BACKEND}/api/ads/autopilot`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-key': KEY },

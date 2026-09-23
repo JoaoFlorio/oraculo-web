@@ -41,6 +41,10 @@ export async function POST(req: NextRequest) {
     } else if (tipo === 'pausar-keyword') {
       if (!a.keywordId) return NextResponse.json({ error: 'dados incompletos' }, { status: 400 })
       r = await chamar('/api/ads/keyword-update', { keywordId: a.keywordId, state: 'PAUSED' })
+    } else if (tipo === 'desligar-sem-estoque') {
+      // Bug 23/09: o botão "Desligar" do card sem estoque caía aqui como "tipo desconhecido".
+      if (!a.sku) return NextResponse.json({ error: 'dados incompletos' }, { status: 400 })
+      r = await chamar('/api/ads/pausar-produto', { sku: a.sku, state: 'PAUSED' })
     } else {
       return NextResponse.json({ error: `tipo desconhecido: ${tipo}` }, { status: 400 })
     }

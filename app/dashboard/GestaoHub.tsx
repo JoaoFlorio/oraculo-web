@@ -3178,30 +3178,40 @@ function ProdutosDaCampanha({produtos}:{produtos:{sku:string;name:string;image:s
    vazamento, capturar termo que vende, acertar lance) e a pessoa — mesmo leiga —
    só dá o OK. As tabelas técnicas descem pra um "ver detalhes" recolhido. */
 function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;margem?:number|null;fotos?:Record<string,{image?:string;name?:string}>}){
+  /* ⭐ PILOTO NEO v3 (23/09/2026) — feedback do João: "tá escrito um tanto de coisa,
+     eu não sei se ele está fazendo ou não; quero um botão de ligar/desligar, ele
+     pausar o que não tem estoque e me avisar o que economizou". A tela virou:
+       1) UM painel "NEO no comando": ligar/desligar (todos os clientes), objetivo,
+          e O QUE O NEO FEZ (rodadas, ações, R$ estancados, pausas por estoque) —
+          lido do livro de rodadas (/api/ads/neo-relatorio), não de estimativa.
+       2) Cards com 3 estados: 🟢 NEO cuidando · ⏸ pausado sem estoque · 👤 você cuida.
+          Produto sem estoque gerenciado NÃO é "crítico": está pausado (ou pausa no
+          próximo ciclo) e religa sozinho quando o estoque volta.
+     A prévia ("se rodasse agora") virou uma linha discreta. */
   const t=useT()
   const [d,setD]=useState<any>(null)
+  const [rel,setRel]=useState<any>(null)      // o que o NEO fez (livro de rodadas)
   const [carregando,setCarregando]=useState(true)
   const [feitos,setFeitos]=useState<Record<string,'ok'|'erro'|'indo'>>({})
   const [objetivo,setObjetivo]=useState<string>('equilibrar')
-  const [gerencia,setGerencia]=useState<Record<string,boolean>>({})   // toggle por produto (otimista)
-  const [bot,setBot]=useState<any>(null)   // estado do bot diário: automatico, lastRunAt, lastResult
-  const [criando,setCriando]=useState<Record<string,'indo'|'ok'|'erro'>>({})   // criação de campanha por sku
-  const [filtro,setFiltro]=useState<'acao'|'saudavel'|'estoque'|'todos'>('acao')   // filtro da lista de produtos
-  const [cfgAberta,setCfgAberta]=useState(false)   // objetivo/bot recolhidos por padrão (menos poluição)
-  const [abertos,setAbertos]=useState<Record<string,boolean>>({})   // ações por produto recolhidas por padrão
-  const [simReal,setSimReal]=useState<any>(null)   // simulação REAL do motor (autopilot dry) — o preview exato
+  const [gerencia,setGerencia]=useState<Record<string,boolean>>({})
+  const [bot,setBot]=useState<any>(null)
+  const [criando,setCriando]=useState<Record<string,'indo'|'ok'|'erro'>>({})
+  const [filtro,setFiltro]=useState<'acao'|'saudavel'|'estoque'|'todos'>('acao')
+  const [abertos,setAbertos]=useState<Record<string,boolean>>({})
+  const [simReal,setSimReal]=useState<any>(null)
+  const [verFeitos,setVerFeitos]=useState(false)
+  const [pausando,setPausando]=useState<Record<string,'indo'|'ok'|'erro'>>({})
   const chave=(r:any)=>`${r.tipo}:${r.campaignId}:${r.keywordId||r.termo}`
-  // Cria a campanha automática do produto (admin-only no proxy). Gasta na conta.
   async function criarCampanha(p:any){
     if(criando[p.sku]==='indo'||criando[p.sku]==='ok') return
     setCriando(c=>({...c,[p.sku]:'indo'}))
     try{
       const r=await fetch('/api/ads/criar-campanha',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sku:p.sku,asin:p.asin,nome:p.nome})})
-      const j=await r.json()
-      setCriando(c=>({...c,[p.sku]:j?.ok?'ok':'erro'}))
+      const j=await r.json(); setCriando(c=>({...c,[p.sku]:j?.ok?'ok':'erro'}))
     }catch{ setCriando(c=>({...c,[p.sku]:'erro'})) }
   }
-  // Liga/desliga o bot diário (ligar é admin-only no proxy — em teste).
+  // Liga/desliga o NEO (todos os clientes — kill-switch no proxy).
   function alternarBot(){
     const novo=!(bot?.automatico)
     setBot((b:any)=>({...b,automatico:novo}))
@@ -3209,19 +3219,25 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
       .then(r=>r.json()).then(x=>{ if(x&&typeof x.automatico==='boolean') setBot((b:any)=>({...b,automatico:x.automatico})); else setBot((b:any)=>({...b,automatico:!novo})) })
       .catch(()=>setBot((b:any)=>({...b,automatico:!novo})))
   }
-  // "NEO gerencia esse produto" ↔ "eu cuido dele" — persiste no backend, otimista na UI.
   function alternarProduto(sku:string,valorAtual:boolean){
     const novo=!valorAtual
     setGerencia(g=>({...g,[sku]:novo}))
     fetch('/api/ads/produto-config',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sku,gerenciar:novo})}).catch(()=>{ setGerencia(g=>({...g,[sku]:valorAtual})) })
+  }
+  // Pausar/religar os anúncios de um produto na mão (modo "eu cuido" / sem estoque).
+  async function pausarProduto(sku:string,state:'PAUSED'|'ENABLED'){
+    if(pausando[sku]==='indo') return
+    setPausando(p=>({...p,[sku]:'indo'}))
+    try{ const r=await fetch('/api/ads/pausar-produto',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({sku,state})}); const j=await r.json(); setPausando(p=>({...p,[sku]:j?.ok?'ok':'erro'})) }
+    catch{ setPausando(p=>({...p,[sku]:'erro'})) }
   }
   useEffect(()=>{
     let vivo=true
     const url='/api/ads/copiloto'+(margem!=null&&isFinite(margem)?`?margem=${margem}`:'')
     fetch(url,{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo) setD(x) }).catch(()=>{}).finally(()=>{ if(vivo)setCarregando(false) })
     fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo){ setObjetivo(x.objetivo); setBot({automatico:!!x.automatico,lastRunAt:x.lastRunAt||null,lastResult:x.lastResult||null}) } }).catch(()=>{})
-    // ⭐ Simulação REAL do motor (dry, não gasta): o preview passa a mostrar EXATAMENTE
-    // o que o bot faria — não a estimativa do copiloto. Chamada pesada; roda no fundo.
+    fetch('/api/ads/neo-relatorio?dias=7',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x&&typeof x.acoes==='number') setRel(x) }).catch(()=>{})
+    // Prévia REAL do motor (dry, não gasta) — vira uma linha discreta.
     fetch('/api/ads/autopilot/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({dry:true,margem})}).then(r=>r.json()).then(x=>{ if(vivo&&x&&typeof x.mudancas==='number') setSimReal(x) }).catch(()=>{})
     return ()=>{vivo=false}
   },[margem])
@@ -3236,43 +3252,27 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
     setFeitos(f=>({...f,[k]:'indo'}))
     try{
       const res=await fetch('/api/ads/aplicar',{method:'POST',headers:{'content-type':'application/json'},
-        body:JSON.stringify({tipo:r.tipo,campaignId:r.campaignId,adGroupId:r.adGroupId,keywordId:r.keywordId,termo:r.termo,lance:r.lanceSugerido})})
-      const j=await res.json()
-      setFeitos(f=>({...f,[k]:j?.ok?'ok':'erro'}))
+        body:JSON.stringify({tipo:r.tipo,campaignId:r.campaignId,adGroupId:r.adGroupId,keywordId:r.keywordId,termo:r.termo,lance:r.lanceSugerido,sku:r.sku})})
+      const j=await res.json(); setFeitos(f=>({...f,[k]:j?.ok?'ok':'erro'}))
     }catch{ setFeitos(f=>({...f,[k]:'erro'})) }
   }
   const card:React.CSSProperties={background:t.card,border:`1px solid ${t.line}`,borderRadius:16,padding:'18px 20px',marginBottom:16}
   if(carregando) return <div style={{...card,display:'flex',alignItems:'center',gap:11,color:t.t3,fontSize:12.5}}><IrisNeo tam={30} sev="ok" carga={0}/>O NEO está lendo suas campanhas…</div>
   if(!d) return null
-  if(d.connected===false) return null   // o aviso de conectar já aparece fora
+  if(d.connected===false) return null
   if(!d.pronto) return <div style={{...card,display:'flex',alignItems:'center',gap:11,color:t.t2,fontSize:12.5}}><IrisNeo tam={30} sev="ok" carga={0.3}/>{d.msg||'Preparando sua análise de anúncios…'}</div>
 
   const neg:any[]=d.negativar||[], prom:any[]=d.promover||[], lan:any[]=d.lances||[]
   const totalAcoes=neg.length+prom.length+lan.length
-  const gastoVaza=Number(d.totais?.gastoSemVenda)||0
-  const vendasCapturar=Number(d.totais?.vendasDeTermosPromoviveis)||0
-  // ⭐ SIMULAÇÃO (dry-run): tudo que o NEO faria SOZINHO no modo automático,
-  // consolidado por tipo. É o copiloto (que já é a simulação) apresentado como plano.
-  const nCriar=Array.isArray(d.semCampanha)?d.semCampanha.length:0
-  const plano=(()=>{
-    // Preferir a simulação REAL do motor (o que o bot de fato faria) quando ela chegou.
-    if(simReal){
-      const c:any={criar:simReal.criou||0,promover:simReal.promoveu||0,negativar:simReal.negativou||0,lance:(simReal.baixar||0)+(simReal.subir||0),pausar:(simReal.pausar||0)+(simReal.campanhasPausadas||0),desligarCamp:simReal.campanhasPausadas||0}
-      c.total=c.criar+c.promover+c.negativar+c.lance+c.pausar
-      c.real=true
-      return c
-    }
-    const c:any={criar:nCriar,promover:0,negativar:0,lance:0,pausar:0}
-    const src=(d.produtos&&d.produtos.length)?d.produtos.flatMap((g:any)=>g.acoes||[]):[...neg,...prom,...lan]
-    for(const a of src){
-      if(a.tipo==='promover')c.promover++
-      else if(a.tipo==='negativar')c.negativar++
-      else if(a.tipo==='ajustar-lance')c.lance++
-      else if(a.tipo==='pausar-keyword'||a.tipo==='desligar-sem-estoque')c.pausar++
-    }
-    c.total=c.criar+c.promover+c.negativar+c.lance+c.pausar
-    return c
-  })()
+  const ligado=!!bot?.automatico
+  const tint=(hex:string,a:number)=>{const h=hex.replace('#','');const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a/100})`}
+  const previaTotal=simReal?((simReal.baixar||0)+(simReal.subir||0)+(simReal.pausar||0)+(simReal.negativou||0)+(simReal.promoveu||0)+(simReal.criou||0)+(simReal.campanhasPausadas||0)+(simReal.produtosPausados||0)+(simReal.produtosReativados||0)):0
+  const fmtDH=(iso?:string|null)=>iso?new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'
+  const emHoras=(iso?:string|null)=>{ if(!iso) return null; const h=(Date.parse(iso)-Date.now())/3600000; return h<=0?'em instantes':h<1?`em ${Math.max(1,Math.round(h*60))} min`:`em ${Math.round(h)} h` }
+  const pausadosPeloNeo=new Set<string>((rel?.pausasAtivas||[]).map((p:any)=>p.sku).filter(Boolean))
+  const feitosPorSku:Record<string,any[]>={}; for(const a of (rel?.ultimasAcoes||[])) if(a?.sku) (feitosPorSku[a.sku]||(feitosPorSku[a.sku]=[])).push(a)
+  const TIPO_ROT:Record<string,string>={'pausar-produto':'pausou anúncio sem estoque','reativar-produto':'religou anúncio (estoque voltou)','pausar-campanha':'pausou campanha sem estoque','reativar-campanha':'religou campanha','pausar-palavra':'pausou palavra sem venda','lance':'ajustou lance','negativar':'cortou termo que só gastava','promover':'promoveu termo que vende','criar-campanha':'criou campanha'}
+  const TIPO_ICON:Record<string,string>={'pausar-produto':'ti-player-pause','reativar-produto':'ti-player-play','pausar-campanha':'ti-player-pause','reativar-campanha':'ti-player-play','pausar-palavra':'ti-player-pause','lance':'ti-adjustments','negativar':'ti-ban','promover':'ti-star','criar-campanha':'ti-rocket'}
 
   const Acao=({r,cor,rotulo,acaoTxt}:{r:any;cor:string;rotulo:string;acaoTxt:string})=>{
     const st=feitos[chave(r)]
@@ -3293,9 +3293,6 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
     )
   }
   async function aplicarTudo(lista:any[]){ for(const r of lista){ if(feitos[chave(r)]!=='ok') await aplicar(r) } }
-  // hex → rgba translúcido (fundos/bordas suaves por produto).
-  const tint=(hex:string,a:number)=>{const h=hex.replace('#','');const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a/100})`}
-  // Rótulo/cor por tipo de ação (linguagem simples pra leigo).
   const REC:Record<string,{cor:string;rot:string;btn:string}>={
     negativar:{cor:t.red,rot:'Cortar palavra que só gasta',btn:'Cortar'},
     promover:{cor:t.grn,rot:'Transformar em palavra certeira',btn:'Criar'},
@@ -3304,12 +3301,11 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
     'desligar-sem-estoque':{cor:t.red,rot:'Desligar (sem estoque)',btn:'Desligar'},
   }
   const produtos:any[] = d.temMapaProduto ? (d.produtos||[]) : []
-  // Classifica pra o FILTRO. Sem-estoque tem grupo PRÓPRIO (não é pra otimizar, é
-  // pra desligar) — por isso sai do "precisam de ação". Evita a "bíblia".
+  const gerenDe=(g:any)=> g.sku in gerencia ? gerencia[g.sku] : (g.gerenciar!==false)
+  // "Precisam de ação" = só o que depende do SELLER (vitrine/página) ou produto em "eu cuido" com ações.
   const precisaAcao=(g:any)=> !g.semEstoque && (
-       ['alerta','sangrando','prejuizo'].includes(g.diagnostico?.severidade)
-    || ['vitrine','pagina','lance-alto','nao-gasta'].includes(g.diagnostico?.causa)
-    || (g.acoes?.length>0))
+       (!gerenDe(g) && (g.acoes?.length>0 || ['alerta','sangrando','prejuizo'].includes(g.diagnostico?.severidade)))
+    || ['vitrine','pagina'].includes(g.diagnostico?.causa))
   const nAcao=produtos.filter(precisaAcao).length
   const nSaudavel=produtos.filter((g:any)=>!g.semEstoque && g.diagnostico?.causa==='saudavel').length
   const nSemEstoque=produtos.filter((g:any)=>g.semEstoque).length
@@ -3317,20 +3313,14 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
     : filtro==='saudavel' ? produtos.filter((g:any)=>!g.semEstoque && g.diagnostico?.causa==='saudavel')
     : filtro==='estoque' ? produtos.filter((g:any)=>g.semEstoque)
     : produtos
-  // Ícone por CAUSA raiz (a alma do método: fala a causa: vitrine/página/lance).
   const CAUSA:Record<string,{icon:string}>={
     'sem-estoque':{icon:'ti-box-off'}, 'nao-gasta':{icon:'ti-eye-off'},
     'vitrine':{icon:'ti-photo'}, 'pagina':{icon:'ti-file-description'},
     'lance-alto':{icon:'ti-trending-down'}, 'saudavel':{icon:'ti-circle-check'},
     'sem-dado':{icon:'ti-hourglass'},
   }
-  // Cor pela SEVERIDADE (a régua absoluta de ACoS do João): saudável<10 verde,
-  // alerta 10-20 amarelo, sangrando 20-30 vermelho, prejuízo 30+ vermelho-escuro.
-  const corSev=(sev?:string|null)=> sev==='saudavel'?t.grn : sev==='alerta'?t.gold
-    : sev==='sangrando'?t.red : sev==='prejuizo'?(t.dark?'#ff5470':'#c81e3a') : t.t3
-  // Cor de um valor de ACoS pela mesma régua (pro número na faixa de métricas).
+  const corSev=(sev?:string|null)=> sev==='saudavel'?t.grn : sev==='alerta'?t.gold : sev==='sangrando'?t.red : sev==='prejuizo'?(t.dark?'#ff5470':'#c81e3a') : t.t3
   const corAcos=(a:number|null)=> a==null?t.t3 : a<10?t.grn : a<20?t.gold : a<30?t.red : (t.dark?'#ff5470':'#c81e3a')
-  // Uma métrica do m19: valor + rótulo. Honesto — mostra "—" quando é null.
   const Metrica=({rot,val,cor}:{rot:string;val:string;cor?:string})=>(
     <div style={{textAlign:'center' as const,minWidth:52}}>
       <div style={{fontSize:14,fontWeight:800,color:cor||t.t1,fontFamily:FG,lineHeight:1.1}}>{val}</div>
@@ -3338,155 +3328,168 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
     </div>
   )
   const num=(v:any,suf='')=>v==null?'—':(typeof v==='number'?(Math.round(v*100)/100):v)+suf
+  const kpi=(rot:string,val:string,cor:string,sub?:string)=>(
+    <div style={{flex:'1 1 130px',minWidth:120,padding:'10px 12px',borderRadius:12,background:t.dark?'rgba(255,255,255,0.03)':'#FCFCFD',border:`1px solid ${t.line}`}}>
+      <div style={{fontSize:9.5,color:t.t3,textTransform:'uppercase' as const,letterSpacing:'0.06em',fontWeight:700}}>{rot}</div>
+      <div style={{fontSize:20,fontWeight:800,color:cor,fontFamily:FG,lineHeight:1.15,marginTop:3}}>{val}</div>
+      {sub&&<div style={{fontSize:10.5,color:t.t3,marginTop:2,lineHeight:1.3}}>{sub}</div>}
+    </div>
+  )
+  const nPausasEstoque=(rel?.pausasAtivas||[]).length
+  const acoesOk=(rel?.ultimasAcoes||[]).filter((a:any)=>a.sucesso)
 
   return(
     <div style={{...card,padding:'20px 22px'}}>
-      {/* Cabeçalho */}
-      <div style={{display:'flex',alignItems:'center',gap:13,marginBottom:12}}>
-        <IrisNeo tam={38} sev={totalAcoes?'atencao':'ok'} carga={Math.min(1,totalAcoes/10)}/>
-        <div style={{flex:1}}>
-          <div style={{fontFamily:FH,fontSize:18,fontWeight:800,color:t.t1,letterSpacing:'-0.02em'}}>Piloto NEO</div>
-          <div style={{fontSize:12,color:t.t3,marginTop:1}}>ACoS bom é <b style={{color:t.grn}}>abaixo de 10%</b> — quanto menor, melhor. <span style={{color:t.gold}}>10-20 alerta</span>, <span style={{color:t.red}}>20-30 sangrando</span>, <span style={{color:t.dark?'#ff5470':'#c81e3a'}}>30+ prejuízo</span>.</div>
-        </div>
-      </div>
-      {/* Resumo compacto + toggle dos ajustes (menos poluição: abre nos produtos) */}
-      <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,marginBottom:cfgAberta?12:14,padding:'9px 12px',borderRadius:11,background:t.dark?'rgba(255,255,255,0.02)':'#FCFCFD',border:`1px solid ${t.line}`}}>
-        <i className="ti ti-adjustments-horizontal" style={{fontSize:16,color:t.t3}} aria-hidden="true"/>
-        <div style={{flex:1,minWidth:0,fontSize:12,color:t.t2}}>
-          Objetivo: <b style={{color:t.gold}}>{OBJS.find(o=>o.id===objetivo)?.rot||objetivo}</b>
-          {(isAdmin||bot?.automatico)&&<> · Bot diário: <b style={{color:bot?.automatico?t.grn:t.t3}}>{bot?.automatico?'ligado':'desligado'}</b></>}
-        </div>
-        <button onClick={()=>setCfgAberta(v=>!v)} style={{fontSize:11.5,fontWeight:700,color:t.t2,background:'none',border:`1px solid ${t.line}`,borderRadius:9,padding:'6px 11px',cursor:'pointer',fontFamily:'inherit'}}>{cfgAberta?'ocultar ajustes':'ajustar'}</button>
-      </div>
-      {cfgAberta && <>
-      {/* ⭐ OBJETIVO — o cliente diz o que quer, o NEO otimiza por isso (autonomia m19) */}
-      <div style={{marginBottom:14}}>
-        <div style={{fontSize:11.5,color:t.t3,marginBottom:7}}>Qual é o seu objetivo? O NEO otimiza tudo por ele.</div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8}}>
-          {OBJS.map(o=>{const on=objetivo===o.id;return(
-            <button key={o.id} onClick={()=>escolherObjetivo(o.id)}
-              style={{textAlign:'left' as const,background:on?tint(t.gold,12):(t.dark?'rgba(255,255,255,0.02)':'#FCFCFD'),border:`1.5px solid ${on?t.gold:t.line}`,borderRadius:11,padding:'10px 11px',cursor:'pointer',fontFamily:'inherit',transition:'all .15s'}}>
-              <div style={{fontSize:13,fontWeight:700,color:on?t.gold:t.t1}}>{o.emoji} {o.rot}</div>
-              <div style={{fontSize:10.5,color:t.t3,marginTop:2,lineHeight:1.3}}>{o.sub}</div>
-            </button>
-          )})}
-        </div>
-      </div>
-      {/* 🤖 BOT DIÁRIO — o "olha todo dia sozinho" do m19. Ligar é admin-only (teste). */}
-      {(isAdmin || bot?.automatico) && <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14,padding:'12px 14px',borderRadius:12,background:bot?.automatico?tint(t.grn,7):(t.dark?'rgba(255,255,255,0.02)':'#FCFCFD'),border:`1.5px solid ${bot?.automatico?tint(t.grn,30):t.line}`}}>
-        <i className={`ti ti-robot`} style={{fontSize:20,color:bot?.automatico?t.grn:t.t3}} aria-hidden="true"/>
-        <div style={{flex:1,minWidth:0}}>
-          <div style={{fontSize:13,fontWeight:700,color:t.t1}}>Bot diário {bot?.automatico?<span style={{color:t.grn}}>· ligado</span>:<span style={{color:t.t3}}>· desligado</span>}</div>
-          <div style={{fontSize:11,color:t.t3,marginTop:1,lineHeight:1.35}}>
-            {bot?.automatico
-              ? <>O NEO revisa e ajusta seus lances sozinho, 1×/dia, pela sua régua.{bot?.lastRunAt?<> Última passada: <b style={{color:t.t2}}>{new Date(bot.lastRunAt).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</b>{bot?.lastResult?` — ${bot.lastResult}`:''}.</>:<> Ainda não rodou a 1ª passada.</>}</>
-              : 'O NEO só recomenda; ligue pra ele executar sozinho todo dia (respeita "eu cuido" por produto, estoque e teto de lance).'}
+      {/* ═══ NEO NO COMANDO — um painel, um botão ═══ */}
+      <div style={{padding:'16px 18px',borderRadius:16,marginBottom:16,background:ligado?tint(t.grn,6):(t.dark?'rgba(255,255,255,0.02)':'#FCFCFD'),border:`1.5px solid ${ligado?tint(t.grn,35):t.line}`}}>
+        <div style={{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap' as const}}>
+          <IrisNeo tam={44} sev={ligado?'ok':'atencao'} carga={ligado?0.6:0.1}/>
+          <div style={{flex:1,minWidth:200}}>
+            <div style={{fontFamily:FH,fontSize:18,fontWeight:800,color:t.t1,letterSpacing:'-0.02em'}}>NEO no comando dos seus anúncios {ligado?<span style={{color:t.grn}}>· ligado</span>:<span style={{color:t.t3}}>· desligado</span>}</div>
+            <div style={{fontSize:12,color:t.t2,marginTop:3,lineHeight:1.45}}>
+              {ligado
+                ? <>Todo dia eu reviso suas campanhas e <b style={{color:t.t1}}>mexo sozinho na sua Amazon</b>: pauso produto sem estoque (e religo quando volta), corto termo que só gasta, acerto lance, promovo o que vende e crio campanha pra quem tem estoque e não anuncia. Você não precisa fazer nada.</>
+                : <>Desligado, eu só observo e recomendo. Ligue e eu passo a executar sozinho, todo dia, dentro dos tetos de segurança (lance até R$10, no máximo 50 ajustes, 20 cortes e 2 campanhas novas por dia). Produto que você marcar "eu cuido" eu não toco.</>}
+            </div>
           </div>
+          <button onClick={alternarBot} style={{flexShrink:0,display:'flex',alignItems:'center',gap:9,padding:'10px 16px',borderRadius:12,cursor:'pointer',fontFamily:'inherit',fontSize:13,fontWeight:800,
+            color:ligado?t.red:(t.dark?'#1c1606':'#3a2a05'),background:ligado?'transparent':t.grn,border:ligado?`1.5px solid ${tint(t.red,55)}`:'none'}}>
+            <i className={`ti ${ligado?'ti-power':'ti-player-play'}`} style={{fontSize:16}} aria-hidden="true"/>{ligado?'Desligar o NEO':'Ligar o NEO'}
+          </button>
         </div>
-        {isAdmin && <button onClick={alternarBot} style={{fontSize:11.5,fontWeight:700,color:bot?.automatico?t.red:(t.dark?'#1c1606':'#3a2a05'),background:bot?.automatico?'none':t.grn,border:bot?.automatico?`1px solid ${t.red}`:'none',borderRadius:9,padding:'7px 13px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{bot?.automatico?'Desligar':'Ligar bot diário'}</button>}
-      </div>}
-      </>}
-      {plano.total===0
-        ? <div style={{fontSize:13.5,color:t.grn,padding:'6px 0'}}>✓ Tudo na régua pro seu objetivo — nenhuma ação urgente agora. O NEO segue de olho.</div>
-        : <div style={{marginBottom:14,padding:'15px 16px',borderRadius:14,background:t.dark?'rgba(240,180,41,0.05)':'#FFFCF3',border:`1.5px solid ${tint(t.gold,28)}`}}>
-            {/* 🔮 SIMULAÇÃO (dry-run): o plano completo que o NEO executaria sozinho */}
-            <div style={{display:'flex',alignItems:'center',gap:9,marginBottom:10,flexWrap:'wrap' as const}}>
-              <i className="ti ti-wand" style={{fontSize:18,color:t.gold}} aria-hidden="true"/>
-              <div style={{fontSize:14.5,fontWeight:800,color:t.t1,fontFamily:FH,letterSpacing:'-0.01em'}}>Se rodasse agora, o NEO faria <span style={{color:t.gold}}>{plano.total} {plano.total===1?'ação':'ações'}</span> sozinho</div>
-              <span style={{fontSize:9.5,fontWeight:700,color:plano.real?t.grn:t.t3,background:plano.real?tint(t.grn,10):(t.dark?'rgba(255,255,255,0.05)':'#f1f1f4'),padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.04em'}}>{plano.real?'prévia do bot · nada foi aplicado':(simReal===null?'calculando a prévia…':'prévia · nada foi aplicado')}</span>
-            </div>
-            {/* Quebra por tipo de ação */}
-            <div style={{display:'flex',gap:8,flexWrap:'wrap' as const,marginBottom:11}}>
-              {[
-                {n:plano.criar,ic:'ti-rocket',rot:'criar campanha',cor:t.gold},
-                {n:plano.promover,ic:'ti-star',rot:'promover palavra',cor:t.grn},
-                {n:plano.negativar,ic:'ti-ban',rot:'cortar o que só gasta',cor:t.red},
-                {n:plano.lance,ic:'ti-adjustments',rot:'ajustar lance',cor:t.gold},
-                {n:plano.pausar,ic:'ti-player-pause',rot:'pausar/desligar',cor:t.red},
-              ].filter(x=>x.n>0).map((x,i)=>(
-                <div key={i} style={{display:'flex',alignItems:'center',gap:7,padding:'7px 12px',borderRadius:10,background:tint(x.cor,8),border:`1px solid ${tint(x.cor,22)}`}}>
-                  <i className={`ti ${x.ic}`} style={{fontSize:15,color:x.cor}} aria-hidden="true"/>
-                  <span style={{fontSize:15,fontWeight:800,color:x.cor,fontFamily:FG}}>{x.n}</span>
-                  <span style={{fontSize:11.5,color:t.t2}}>{x.rot}</span>
-                </div>
-              ))}
-            </div>
-            {/* Impacto estimado */}
-            <div style={{fontSize:12.5,color:t.t2,lineHeight:1.5}}>
-              {gastoVaza>0.005 && <>Estanca <b style={{color:t.red}}>{brl2(gastoVaza)}</b> que estão escorrendo em cliques que não vendem. </>}
-              {vendasCapturar>0.005 && <>Captura melhor <b style={{color:t.grn}}>{brl2(vendasCapturar)}</b> de vendas que já vêm de termos certos. </>}
-              {gastoVaza<=0.005&&vendasCapturar<=0.005 && <>São ajustes finos de lance e estrutura pra manter o ACoS na régua. </>}
-            </div>
-            <div style={{fontSize:11,color:t.t3,marginTop:9,paddingTop:9,borderTop:`1px solid ${t.line}`,lineHeight:1.5}}>
-              <div style={{marginBottom:6,color:t.t2}}><i className="ti ti-info-circle" style={{fontSize:13,color:t.gold,marginRight:5}} aria-hidden="true"/><b>Você não precisa criar nada nem preencher Estratégias.</b> O NEO monta essa lista sozinho a partir das suas campanhas e do <b>objetivo</b> acima — é só escolher o objetivo e ligar o bot.</div>
-              {bot?.automatico
-                ? <>Com o bot diário <b style={{color:t.grn}}>ligado</b>, o NEO aplica tudo isto <b style={{color:t.t2}}>sozinho</b> — ajustar lance, pausar, cortar (negativar), promover e criar campanha — dentro dos tetos de segurança, ~1×/dia. Este card é a <b style={{color:t.gold}}>prévia do próximo ciclo</b>; nada aqui espera aprovação sua.</>
-                : <><b style={{color:t.gold}}>Isto é só uma prévia</b> — nada foi aplicado. Ligue o bot diário no <b>“ajustar”</b> acima e ele passa a executar tudo isto sozinho (lance, pausa, negativar, promover e criar campanha), dentro dos tetos de segurança, ~1×/dia.</>}
-            </div>
-          </div>}
+        {/* Objetivo — inline, 3 chips */}
+        <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' as const,marginTop:12}}>
+          <span style={{fontSize:11.5,color:t.t3}}>Estratégia:</span>
+          {OBJS.map(o=>{const on=objetivo===o.id;return(
+            <button key={o.id} onClick={()=>escolherObjetivo(o.id)} title={o.sub}
+              style={{fontSize:11.5,fontWeight:700,padding:'5px 11px',borderRadius:99,cursor:'pointer',fontFamily:'inherit',background:on?tint(t.gold,14):'transparent',border:`1px solid ${on?t.gold:t.line}`,color:on?t.gold:t.t3}}>
+              {o.emoji} {o.rot}
+            </button>)})}
+          <span style={{fontSize:11,color:t.t3,marginLeft:'auto'}}>{OBJS.find(o=>o.id===objetivo)?.sub}</span>
+        </div>
 
-      {/* 🆕 PRODUTOS SEM CAMPANHA — "não vai vender porque não anuncia" (m19 style) */}
+        {/* ═══ O QUE O NEO FEZ (7 dias) — números reais do livro de rodadas ═══ */}
+        {ligado && <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${t.line}`}}>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap' as const}}>
+            <div style={{fontSize:13,fontWeight:800,color:t.t1,fontFamily:FH}}>O que eu fiz nos últimos 7 dias</div>
+            <span style={{fontSize:11,color:t.t3}}>· última passada {fmtDH(rel?.bot?.ultimaPassada||bot?.lastRunAt)}{rel?.bot?.proximaPassada?<> · próxima {emHoras(rel.bot.proximaPassada)}</>:null}</span>
+          </div>
+          {!rel ? <div style={{fontSize:12,color:t.t3}}>Lendo o histórico…</div>
+          : rel.acoes===0 ? <div style={{fontSize:12.5,color:t.t2,lineHeight:1.5}}>Ainda não executei nada nesta semana{rel.rodadas>0?` (${rel.rodadas} passada${rel.rodadas>1?'s':''} sem ajuste necessário — está na régua)`:' — a primeira passada acontece em até 24 h depois de ligar'}.{previaTotal>0&&<> Na próxima passada devo fazer <b style={{color:t.gold}}>{previaTotal} ações</b>.</>}</div>
+          : <>
+            <div style={{display:'flex',gap:10,flexWrap:'wrap' as const,marginBottom:10}}>
+              {kpi('Ações executadas',String(rel.acoes),t.t1,`${rel.rodadas} passada${rel.rodadas===1?'':'s'}`)}
+              {kpi('Estancado por mês',rel.economiaMensal>0?brl2(rel.economiaMensal):'—',t.grn,'gasto sem retorno que cortei (estimativa)')}
+              {kpi('Sem estoque pausados',String(nPausasEstoque),nPausasEstoque?t.gold:t.t1,'religo sozinho quando o estoque voltar')}
+              {previaTotal>0&&kpi('Próxima passada',`${previaTotal} ações`,t.t2,'prévia do que devo fazer')}
+            </div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginBottom:8}}>
+              {(rel.porTipo||[]).map((x:any)=>(
+                <span key={x.tipo} style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:11,color:t.t2,padding:'4px 9px',borderRadius:99,background:t.dark?'rgba(255,255,255,0.04)':'#f1f1f4'}}>
+                  <i className={`ti ${TIPO_ICON[x.tipo]||'ti-check'}`} style={{fontSize:13,color:t.gold}} aria-hidden="true"/><b style={{color:t.t1}}>{x.n}</b> {TIPO_ROT[x.tipo]||x.tipo}{x.economiaMensal>0&&<span style={{color:t.grn}}> · {brl2(x.economiaMensal)}/mês</span>}
+                </span>))}
+            </div>
+            <button onClick={()=>setVerFeitos(v=>!v)} style={{fontSize:11.5,fontWeight:600,color:t.t2,background:'none',border:`1px solid ${t.line}`,borderRadius:9,padding:'5px 11px',cursor:'pointer',fontFamily:'inherit'}}>{verFeitos?'esconder o histórico':'ver cada mudança'}</button>
+            {verFeitos && <div style={{marginTop:8}}>
+              {acoesOk.slice(0,25).map((a:any,i:number)=>(
+                <div key={i} style={{display:'flex',gap:10,alignItems:'flex-start',padding:'8px 0',borderTop:`1px solid ${t.line}`,fontSize:12}}>
+                  <i className={`ti ${TIPO_ICON[a.tipo]||'ti-check'}`} style={{fontSize:14,color:t.gold,marginTop:2}} aria-hidden="true"/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:t.t1,lineHeight:1.4}}>{a.descricao}</div>
+                    <div style={{color:t.t3,fontSize:10.5,marginTop:1}}>{fmtDH(a.em)}{a.antes||a.depois?<> · {a.antes||'—'} → {a.depois||'—'}</>:null}{a.economiaMensal>0&&<span style={{color:t.grn}}> · ≈ {brl2(a.economiaMensal)}/mês</span>}</div>
+                  </div>
+                </div>))}
+              {(rel.ultimasAcoes||[]).some((a:any)=>!a.sucesso)&&<div style={{fontSize:11,color:t.t3,marginTop:6}}>{(rel.ultimasAcoes||[]).filter((a:any)=>!a.sucesso).length} tentativa(s) que a Amazon recusou — eu tento de novo na próxima passada.</div>}
+            </div>}
+          </>}
+        </div>}
+        {!ligado && previaTotal>0 && <div style={{fontSize:12,color:t.t2,marginTop:12,paddingTop:12,borderTop:`1px solid ${t.line}`}}><i className="ti ti-wand" style={{color:t.gold,marginRight:5}} aria-hidden="true"/>Se você ligar agora, na primeira passada eu faria <b style={{color:t.gold}}>{previaTotal} ações</b>{simReal?.produtosPausados?<> — inclusive pausar <b>{simReal.produtosPausados}</b> anúncio{simReal.produtosPausados>1?'s':''} de produto sem estoque</>:null}.</div>}
+      </div>
+
+      {/* 🆕 PRODUTOS COM ESTOQUE E SEM CAMPANHA */}
       {Array.isArray(d.semCampanha)&&d.semCampanha.length>0&&<div style={{marginBottom:14,padding:'13px 15px',borderRadius:13,background:tint(t.gold,7),border:`1.5px solid ${tint(t.gold,30)}`}}>
         <div style={{display:'flex',gap:9,alignItems:'flex-start'}}>
           <i className="ti ti-rocket" style={{fontSize:18,color:t.gold,marginTop:1}} aria-hidden="true"/>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:13.5,fontWeight:700,color:t.t1}}>{d.semCampanha.length} produto{d.semCampanha.length>1?'s':''} com estoque SEM campanha</div>
-            <div style={{fontSize:12,color:t.t2,marginTop:2,lineHeight:1.4}}>Sem anúncio, esses produtos quase não vendem. O NEO cria uma campanha automática pra cada um (lance inicial ~R$0,55, deixa coletar dado e otimiza sozinho).</div>
+            <div style={{fontSize:12,color:t.t2,marginTop:2,lineHeight:1.4}}>{ligado?'Eu crio a campanha automática deles sozinho (até 2 por dia, lance R$0,55, R$25/dia) e otimizo depois.':'Sem anúncio esses produtos quase não vendem. Ligue o NEO e eu crio a campanha deles sozinho.'}</div>
             <div style={{marginTop:8,display:'flex',flexDirection:'column' as const,gap:6}}>
               {d.semCampanha.slice(0,6).map((p:any,i:number)=>(
                 <div key={i} style={{display:'flex',alignItems:'center',gap:9,fontSize:12.5}}>
                   <span style={{flex:1,minWidth:0,color:t.t1,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{p.nome}</span>
                   <span style={{fontSize:10.5,color:t.grn,background:tint(t.grn,10),padding:'2px 8px',borderRadius:99,whiteSpace:'nowrap'}}>{p.fulfillable} un</span>
                   {isAdmin
-                    ? (criando[p.sku]==='ok'
-                        ? <span style={{fontSize:11,color:t.grn,fontWeight:700,whiteSpace:'nowrap'}}>✓ criada</span>
-                        : criando[p.sku]==='erro'
-                        ? <button onClick={()=>criarCampanha(p)} style={{fontSize:11,color:t.red,background:'none',border:`1px solid ${t.red}`,borderRadius:8,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>tentar de novo</button>
-                        : <button onClick={()=>criarCampanha(p)} disabled={criando[p.sku]==='indo'} title="Criar campanha automática pra esse produto (~R$0,55, R$25/dia)" style={{fontSize:11,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:8,padding:'5px 11px',cursor:criando[p.sku]==='indo'?'default':'pointer',opacity:criando[p.sku]==='indo'?0.6:1,fontFamily:'inherit',whiteSpace:'nowrap'}}>{criando[p.sku]==='indo'?'criando…':'Criar campanha'}</button>)
-                    : <span style={{fontSize:10,color:t.t3,whiteSpace:'nowrap'}}>o NEO pode criar</span>}
-                </div>
-              ))}
+                    ? (criando[p.sku]==='ok' ? <span style={{fontSize:11,color:t.grn,fontWeight:700,whiteSpace:'nowrap'}}>✓ criada</span>
+                      : <button onClick={()=>criarCampanha(p)} disabled={criando[p.sku]==='indo'} style={{fontSize:11,fontWeight:700,color:criando[p.sku]==='erro'?t.red:(t.dark?'#1c1606':'#3a2a05'),background:criando[p.sku]==='erro'?'none':t.gold,border:criando[p.sku]==='erro'?`1px solid ${t.red}`:'none',borderRadius:8,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{criando[p.sku]==='indo'?'criando…':criando[p.sku]==='erro'?'tentar de novo':'Criar agora'}</button>)
+                    : <span style={{fontSize:10,color:t.t3,whiteSpace:'nowrap'}}>{ligado?'o NEO cria':'ligue o NEO'}</span>}
+                </div>))}
               {d.semCampanha.length>6&&<div style={{fontSize:11,color:t.t3}}>+{d.semCampanha.length-6} outros</div>}
             </div>
-            {isAdmin&&<div style={{fontSize:10.5,color:t.t3,marginTop:8}}>Cria campanha automática (lance R$0,55, R$25/dia, lance dinâmico só pra baixo). O Piloto otimiza depois.</div>}
           </div>
         </div>
       </div>}
 
-      {/* ── SEUS PRODUTOS — cabeçalho de seção + filtro (tira a "bíblia") ──── */}
+      {/* ── SEUS PRODUTOS + filtro ── */}
       {produtos.length>0 && <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,margin:'6px 0 12px',paddingTop:14,borderTop:`1px solid ${t.line}`}}>
         <div style={{fontFamily:FH,fontSize:15,fontWeight:800,color:t.t1,letterSpacing:'-0.01em',flex:1,minWidth:120}}>Seus produtos</div>
         <div style={{display:'flex',gap:6,flexWrap:'wrap' as const}}>
           {[
-            {id:'acao' as const,rot:'Precisam de ação',n:nAcao,cor:t.gold},
+            {id:'acao' as const,rot:'Dependem de você',n:nAcao,cor:t.gold},
             {id:'saudavel' as const,rot:'Saudáveis',n:nSaudavel,cor:t.grn},
-            ...(nSemEstoque>0?[{id:'estoque' as const,rot:'Sem estoque',n:nSemEstoque,cor:t.red}]:[]),
+            ...(nSemEstoque>0?[{id:'estoque' as const,rot:'Sem estoque',n:nSemEstoque,cor:t.t2}]:[]),
             {id:'todos' as const,rot:'Todos',n:produtos.length,cor:t.t2},
           ].map(f=>{const on=filtro===f.id;return(
             <button key={f.id} onClick={()=>setFiltro(f.id)}
               style={{display:'flex',alignItems:'center',gap:6,fontSize:12,fontWeight:700,padding:'6px 11px',borderRadius:99,cursor:'pointer',fontFamily:'inherit',
                 background:on?tint(f.cor,14):'transparent',border:`1px solid ${on?f.cor:t.line}`,color:on?f.cor:t.t3}}>
               {f.rot}<span style={{fontSize:10.5,opacity:0.85}}>{f.n}</span>
-            </button>
-          )})}
+            </button>)})}
         </div>
       </div>}
 
-      {/* ── VISÃO POR PRODUTO (m19): métricas + diagnóstico + toggle ──────── */}
-      {produtos.length>0 && listaProdutos.length===0 && <div style={{fontSize:12.5,color:t.grn,padding:'10px 2px'}}>✓ Nenhum produto {filtro==='acao'?'precisa de ação agora':filtro==='saudavel'?'saudável neste momento':'aqui'} — {filtro==='acao'?'tudo no ponto.':'troque o filtro pra ver os outros.'}</div>}
+      {produtos.length>0 && listaProdutos.length===0 && <div style={{fontSize:12.5,color:t.grn,padding:'10px 2px'}}>✓ {filtro==='acao'?'Nada depende de você agora — o resto eu cuido.':filtro==='saudavel'?'Nenhum produto saudável neste momento.':filtro==='estoque'?'Nenhum produto sem estoque.':'Nenhum produto aqui.'}</div>}
       {produtos.length>0 ? listaProdutos.map((g:any,gi:number)=>{
         const acoes:any[]=g.acoes||[]
         const dg=g.diagnostico||{}; const czIcon=(CAUSA[dg.causa]||CAUSA['sem-dado']).icon
-        const cz={cor:dg.severidade?corSev(dg.severidade):(dg.causa==='saudavel'?t.grn:dg.causa==='sem-dado'||dg.causa==='nao-gasta'?t.t3:t.gold),icon:czIcon}
+        const geren=gerenDe(g)
         const me=g.metricas||{}
-        const geren = g.sku in gerencia ? gerencia[g.sku] : (g.gerenciar!==false)
         const foto=fotos?.[g.sku]?.image
-        const barra=cz.cor   // cor da faixa lateral = severidade/causa (leitura de 1 relance)
+        const feitosAqui=(feitosPorSku[g.sku]||[]).filter((a:any)=>a.sucesso)
+        /* ── ESTADO 1: ⏸ SEM ESTOQUE + NEO cuidando → card curto, sem "crítico" ── */
+        if(g.semEstoque && geren){
+          const jaPausado=pausadosPeloNeo.has(g.sku)
+          const inbound=Number(g.estoque?.inbound)||0
+          return(
+            <div key={gi} style={{position:'relative' as const,overflow:'hidden',border:`1px solid ${t.line}`,borderRadius:16,padding:'13px 16px 13px 18px',marginBottom:10,background:t.dark?'rgba(255,255,255,0.015)':'#FCFCFD',opacity:0.92}}>
+              <div style={{position:'absolute' as const,left:0,top:0,bottom:0,width:4,background:t.t3}}/>
+              <div style={{display:'flex',alignItems:'center',gap:12}}>
+                <div style={{width:44,height:44,borderRadius:10,overflow:'hidden',flexShrink:0,background:t.dark?'rgba(255,255,255,0.05)':'#f3f3f7',border:`1px solid ${t.line}`,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  {foto?<img src={foto} alt="" style={{width:'100%',height:'100%',objectFit:'cover' as const,filter:hide?'blur(7px)':'none',opacity:0.7}}/>:<i className="ti ti-package" style={{fontSize:20,color:t.t3}} aria-hidden="true"/>}
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13.5,fontWeight:700,color:t.t2,lineHeight:1.3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const}}>{g.nome}</div>
+                  <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginTop:5,alignItems:'center'}}>
+                    <span style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:10.5,fontWeight:800,color:t.t2,background:t.dark?'rgba(255,255,255,0.06)':'#eeeef2',padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const}}><i className="ti ti-player-pause" style={{fontSize:12}} aria-hidden="true"/>{jaPausado?'pausado pelo NEO · sem estoque':ligado?'sem estoque · pauso na próxima passada':'sem estoque'}</span>
+                    {inbound>0&&<span style={{fontSize:10,color:t.t3}}>{inbound} un a caminho</span>}
+                    {g.gastoMes>0&&<span style={{fontSize:10,color:t.t3}}>gastou {brl2(g.gastoMes)} no mês</span>}
+                  </div>
+                  <div style={{fontSize:11.5,color:t.t3,marginTop:5,lineHeight:1.4}}>{jaPausado?'Repõe o estoque e eu religo o anúncio sozinho.':ligado?'Vou pausar o anúncio pra não gastar com produto que não tem — e religo quando o estoque voltar.':'Ligue o NEO pra eu pausar sozinho (ou pause abaixo).'}</div>
+                </div>
+                <div style={{display:'flex',flexDirection:'column' as const,gap:6,alignItems:'flex-end',flexShrink:0}}>
+                  <button onClick={()=>alternarProduto(g.sku,geren)} title="Clique para você mesmo cuidar" style={{display:'flex',alignItems:'center',gap:6,background:tint(t.gold,10),border:`1.5px solid ${tint(t.gold,50)}`,borderRadius:99,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit'}}><span style={{width:7,height:7,borderRadius:99,background:t.gold}}/><span style={{fontSize:11,fontWeight:700,color:t.gold}}>NEO gerencia</span></button>
+                  {!jaPausado && (pausando[g.sku]==='ok'?<span style={{fontSize:11,color:t.grn,fontWeight:700}}>✓ pausado</span>
+                    :<button onClick={()=>pausarProduto(g.sku,'PAUSED')} disabled={pausando[g.sku]==='indo'} style={{fontSize:11,fontWeight:700,color:t.t2,background:'none',border:`1px solid ${t.line}`,borderRadius:8,padding:'4px 10px',cursor:'pointer',fontFamily:'inherit'}}>{pausando[g.sku]==='indo'?'pausando…':pausando[g.sku]==='erro'?'tentar de novo':'pausar agora'}</button>)}
+                </div>
+              </div>
+            </div>
+          )
+        }
+        const cz={cor:dg.severidade?corSev(dg.severidade):(dg.causa==='saudavel'?t.grn:dg.causa==='sem-dado'||dg.causa==='nao-gasta'?t.t3:t.gold),icon:czIcon}
+        const planoVoce=Array.isArray(g.plano)?g.plano.filter((p:any)=>p.quem!=='neo'):[]
+        const planoNeo=Array.isArray(g.plano)?g.plano.filter((p:any)=>p.quem==='neo'):[]
         return(
-          <div key={gi} style={{position:'relative' as const,overflow:'hidden',border:`1px solid ${g.semEstoque?tint(t.red,28):t.line}`,borderRadius:16,padding:'15px 16px 15px 18px',marginBottom:12,background:t.dark?'rgba(255,255,255,0.02)':'#fff',opacity:geren?1:0.66,boxShadow:t.dark?'none':'0 1px 2px rgba(20,20,40,0.04)'}}>
-            {/* Faixa lateral colorida pela causa — dá o "estado" num relance, sem ler */}
-            <div style={{position:'absolute' as const,left:0,top:0,bottom:0,width:4,background:barra}}/>
-            {/* Header: FOTO + nome (título) + chips coloridos + toggle */}
+          <div key={gi} style={{position:'relative' as const,overflow:'hidden',border:`1px solid ${g.semEstoque?tint(t.red,28):t.line}`,borderRadius:16,padding:'15px 16px 15px 18px',marginBottom:12,background:t.dark?'rgba(255,255,255,0.02)':'#fff'}}>
+            <div style={{position:'absolute' as const,left:0,top:0,bottom:0,width:4,background:cz.cor}}/>
             <div style={{display:'flex',alignItems:'flex-start',gap:13,marginBottom:13}}>
               <div style={{width:56,height:56,borderRadius:12,overflow:'hidden',flexShrink:0,background:t.dark?'rgba(255,255,255,0.05)':'#f3f3f7',border:`1px solid ${t.line}`,display:'flex',alignItems:'center',justifyContent:'center'}}>
                 {foto?<img src={foto} alt="" style={{width:'100%',height:'100%',objectFit:'cover' as const,filter:hide?'blur(7px)':'none'}}/>:<i className="ti ti-package" style={{fontSize:24,color:t.t3}} aria-hidden="true"/>}
@@ -3494,23 +3497,19 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:14.5,fontWeight:700,color:t.t1,lineHeight:1.32,letterSpacing:'-0.01em',display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as const,overflow:'hidden'}}>{g.nome}</div>
                 <div style={{display:'flex',gap:6,flexWrap:'wrap' as const,marginTop:7,alignItems:'center'}}>
-                  {/* Chip de ESTADO (a causa, colorida) — o m19 não tem isso */}
-                  {dg.titulo && <span style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:10.5,fontWeight:800,color:cz.cor,background:tint(cz.cor,13),padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.03em',whiteSpace:'nowrap' as const}}><i className={`ti ${cz.icon}`} style={{fontSize:12}} aria-hidden="true"/>{dg.titulo}</span>}
-                  {/* Chip de ESTOQUE */}
+                  {dg.titulo && <span style={{display:'inline-flex',alignItems:'center',gap:5,fontSize:10.5,fontWeight:800,color:cz.cor,background:tint(cz.cor,13),padding:'3px 9px',borderRadius:99,textTransform:'uppercase' as const}}><i className={`ti ${cz.icon}`} style={{fontSize:12}} aria-hidden="true"/>{dg.titulo}</span>}
                   {g.estoque && (g.semEstoque
                     ? <span style={{fontSize:10,fontWeight:700,color:t.red,background:tint(t.red,10),padding:'3px 8px',borderRadius:99,whiteSpace:'nowrap' as const}}>sem estoque</span>
                     : <span style={{fontSize:10,fontWeight:600,color:t.t3,background:t.dark?'rgba(255,255,255,0.04)':'#f1f1f4',padding:'3px 8px',borderRadius:99,whiteSpace:'nowrap' as const}}>{g.estoque.fulfillable} em estoque</span>)}
-                  {/* Chip de CAMPANHA */}
-                  <span style={{fontSize:10,fontWeight:600,color:t.grn,background:tint(t.grn,9),padding:'3px 8px',borderRadius:99,whiteSpace:'nowrap' as const}}>anunciando</span>
+                  {geren&&ligado&&feitosAqui.length>0&&<span style={{fontSize:10,fontWeight:700,color:t.grn,background:tint(t.grn,9),padding:'3px 8px',borderRadius:99,whiteSpace:'nowrap' as const}}>NEO mexeu aqui: {feitosAqui.length}×</span>}
                 </div>
               </div>
               <button onClick={()=>alternarProduto(g.sku,geren)} title={geren?'O NEO está no comando — clique para você mesmo cuidar':'Você cuida deste — clique para devolver ao NEO'}
-                style={{display:'flex',alignItems:'center',gap:6,flexShrink:0,background:geren?tint(t.gold,12):'transparent',border:`1.5px solid ${geren?t.gold:t.line}`,borderRadius:99,padding:'5px 11px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap' as const}}>
+                style={{display:'flex',alignItems:'center',gap:6,flexShrink:0,background:geren?tint(t.gold,12):'transparent',border:`1.5px solid ${geren?t.gold:t.line}`,borderRadius:99,padding:'5px 11px',cursor:'pointer',fontFamily:'inherit'}}>
                 <span style={{width:7,height:7,borderRadius:99,background:geren?t.gold:t.t3}}/>
                 <span style={{fontSize:11,fontWeight:700,color:geren?t.gold:t.t3}}>{geren?'NEO gerencia':'Eu cuido'}</span>
               </button>
             </div>
-            {/* Métricas: ACoS é o HERÓI (grande, colorido); o resto é apoio (menor). */}
             <div style={{display:'flex',alignItems:'stretch',gap:12,marginBottom:12,flexWrap:'wrap' as const}}>
               <div style={{display:'flex',flexDirection:'column' as const,justifyContent:'center',padding:'8px 16px 8px 0',borderRight:`1px solid ${t.line}`,minWidth:96}}>
                 <div style={{fontSize:26,fontWeight:800,color:corAcos(me.acos),fontFamily:FG,lineHeight:1,letterSpacing:'-0.02em'}}>{num(me.acos,'%')}</div>
@@ -3525,68 +3524,60 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
                 <Metrica rot="TACoS" val={num(me.tacos,'%')} cor={me.tacos==null?t.t3:t.t2}/>
               </div>
             </div>
-            {/* ⭐ O DIAGNÓSTICO (a CAUSA) + o PLANO pra baixar o ACoS (ordenado, 🤖 NEO / 👤 você) */}
-            {(dg.texto || (Array.isArray(g.plano)&&g.plano.length>0)) && <div style={{padding:'11px 13px',marginBottom:acoes.length?11:2,background:tint(cz.cor,6),borderRadius:12,borderLeft:`3px solid ${cz.cor}`}}>
-              {dg.texto && <div style={{fontSize:12.5,color:t.t2,lineHeight:1.5,marginBottom:(Array.isArray(g.plano)&&g.plano.length>0)?10:0}}>{dg.texto}</div>}
-              {Array.isArray(g.plano) && g.plano.length>0 ? <>
-                <div style={{fontSize:10,fontWeight:700,color:t.t3,textTransform:'uppercase' as const,letterSpacing:'0.04em',marginBottom:7}}>Plano pra baixar o ACoS</div>
-                <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
-                  {g.plano.map((p:any,i:number)=>{const neo=p.quem==='neo'; return(
-                    <div key={i} style={{display:'flex',gap:9,alignItems:'flex-start'}}>
-                      <span style={{flexShrink:0,width:19,height:19,borderRadius:6,background:tint(cz.cor,15),color:cz.cor,fontSize:11,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',marginTop:1,fontFamily:FG}}>{i+1}</span>
-                      <div style={{minWidth:0,flex:1}}>
-                        <div style={{fontSize:12.5,color:t.t1,fontWeight:700,lineHeight:1.4,display:'flex',gap:7,flexWrap:'wrap' as const,alignItems:'center'}}>
-                          <span>{p.titulo}</span>
-                          <span style={{fontSize:8.5,fontWeight:700,padding:'1px 7px',borderRadius:99,textTransform:'uppercase' as const,letterSpacing:'0.03em',color:neo?t.grn:t.gold,background:neo?tint(t.grn,13):tint(t.gold,13),whiteSpace:'nowrap' as const}}>{neo?'🤖 NEO faz':'👤 você'}</span>
-                        </div>
-                        <div style={{fontSize:11,color:t.t3,lineHeight:1.45,marginTop:1}}>{p.detalhe}</div>
-                      </div>
-                    </div>
-                  )})}
-                </div>
-              </> : dg.acao && <div style={{fontSize:13,color:t.t1,fontWeight:700,marginTop:6,lineHeight:1.45,display:'flex',gap:6}}><span style={{color:cz.cor}}>→</span><span>{dg.acao}</span></div>}
-            </div>}
-            {g.aviso && <div style={{fontSize:12,color:t.gold,marginBottom:9,lineHeight:1.4}}>{g.aviso}</div>}
-            {/* Ações RECOLHIDAS por produto (tira o paredão): resumo + aplicar todas + ver detalhes */}
-            {geren && acoes.length>0 && (()=>{
-              const aberto=!!abertos[g.sku]
-              const cont:Record<string,number>={}; for(const r of acoes) cont[r.tipo]=(cont[r.tipo]||0)+1
-              const resumo=Object.entries(cont).map(([tp,n])=>`${n} ${(REC[tp]?.rot||tp).toLowerCase()}`).join(' · ')
-              return(<>
-                <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,paddingTop:9,borderTop:`1px solid ${t.line}`}}>
-                  <div style={{flex:1,minWidth:0,fontSize:12,color:t.t2}}><b style={{color:t.t1}}>{acoes.length} {acoes.length===1?'ação':'ações'}</b> — {resumo}</div>
-                  {isAdmin && <button onClick={()=>aplicarTudo(acoes)} style={{fontSize:11.5,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:9,padding:'6px 12px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>Aplicar todas</button>}
-                  <button onClick={()=>setAbertos(a=>({...a,[g.sku]:!aberto}))} style={{fontSize:11.5,fontWeight:600,color:t.t2,background:'none',border:`1px solid ${t.line}`,borderRadius:9,padding:'6px 11px',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>{aberto?'ocultar':'ver ações'}</button>
-                </div>
-                {aberto && <div style={{marginTop:2}}>{acoes.map((r:any,i:number)=>{
-                  const cfg=REC[r.tipo]||REC['ajustar-lance']
-                  return <Acao key={i} r={r} cor={cfg.cor} rotulo={cfg.rot} acaoTxt={cfg.btn}/>
-                })}</div>}
-              </>)
-            })()}
-            {!geren && <div style={{fontSize:11,color:t.t3,paddingTop:6,borderTop:`1px solid ${t.line}`}}>Você está cuidando deste produto — o NEO só observa e mostra o diagnóstico, sem mexer nas campanhas.</div>}
+            {/* ── ESTADO 2: 🟢 NEO CUIDANDO → diagnóstico + o que EU fiz aqui + o que depende de VOCÊ ── */}
+            {geren ? <>
+              {dg.texto && <div style={{fontSize:12.5,color:t.t2,lineHeight:1.5,marginBottom:9}}>{dg.texto}</div>}
+              {ligado && <div style={{padding:'10px 13px',marginBottom:9,background:tint(t.grn,6),borderRadius:12,borderLeft:`3px solid ${t.grn}`}}>
+                <div style={{fontSize:10,fontWeight:700,color:t.grn,textTransform:'uppercase' as const,letterSpacing:'0.04em',marginBottom:5}}>Comigo (o NEO)</div>
+                {feitosAqui.length>0
+                  ? <div style={{display:'flex',flexDirection:'column' as const,gap:4}}>{feitosAqui.slice(0,3).map((a:any,i:number)=><div key={i} style={{fontSize:12,color:t.t1,lineHeight:1.4}}>✓ {a.descricao}{a.economiaMensal>0&&<span style={{color:t.grn}}> · ≈ {brl2(a.economiaMensal)}/mês</span>}</div>)}{feitosAqui.length>3&&<div style={{fontSize:11,color:t.t3}}>+{feitosAqui.length-3} mudanças (ver histórico acima)</div>}</div>
+                  : <div style={{fontSize:12,color:t.t2,lineHeight:1.4}}>{planoNeo.length>0?<>Na próxima passada: {planoNeo.map((p:any)=>p.titulo.toLowerCase()).join(' · ')}.</>:'Nada a ajustar aqui agora — está na régua. Sigo de olho todo dia.'}</div>}
+              </div>}
+              {!ligado && planoNeo.length>0 && <div style={{fontSize:12,color:t.t3,marginBottom:9,lineHeight:1.45}}>Se ligar o NEO, eu faço aqui: {planoNeo.map((p:any)=>p.titulo.toLowerCase()).join(' · ')}.</div>}
+              {planoVoce.length>0 && <div style={{padding:'10px 13px',background:tint(t.gold,6),borderRadius:12,borderLeft:`3px solid ${t.gold}`}}>
+                <div style={{fontSize:10,fontWeight:700,color:t.gold,textTransform:'uppercase' as const,letterSpacing:'0.04em',marginBottom:6}}>Depende de você</div>
+                {planoVoce.map((p:any,i:number)=><div key={i} style={{marginBottom:i<planoVoce.length-1?6:0}}><div style={{fontSize:12.5,color:t.t1,fontWeight:700,lineHeight:1.4}}>{p.titulo}</div><div style={{fontSize:11,color:t.t3,lineHeight:1.45}}>{p.detalhe}</div></div>)}
+              </div>}
+            </> : <>
+              {/* ── ESTADO 3: 👤 VOCÊ CUIDA → diagnóstico + plano completo + ações (aplicar) ── */}
+              {(dg.texto || (Array.isArray(g.plano)&&g.plano.length>0)) && <div style={{padding:'11px 13px',marginBottom:acoes.length?11:2,background:tint(cz.cor,6),borderRadius:12,borderLeft:`3px solid ${cz.cor}`}}>
+                {dg.texto && <div style={{fontSize:12.5,color:t.t2,lineHeight:1.5,marginBottom:(Array.isArray(g.plano)&&g.plano.length>0)?10:0}}>{dg.texto}</div>}
+                {Array.isArray(g.plano) && g.plano.length>0 && <>
+                  <div style={{fontSize:10,fontWeight:700,color:t.t3,textTransform:'uppercase' as const,letterSpacing:'0.04em',marginBottom:7}}>Plano pra baixar o ACoS</div>
+                  <div style={{display:'flex',flexDirection:'column' as const,gap:8}}>
+                    {g.plano.map((p:any,i:number)=>(
+                      <div key={i} style={{display:'flex',gap:9,alignItems:'flex-start'}}>
+                        <span style={{flexShrink:0,width:19,height:19,borderRadius:6,background:tint(cz.cor,15),color:cz.cor,fontSize:11,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',marginTop:1,fontFamily:FG}}>{i+1}</span>
+                        <div style={{minWidth:0,flex:1}}><div style={{fontSize:12.5,color:t.t1,fontWeight:700,lineHeight:1.4}}>{p.titulo}</div><div style={{fontSize:11,color:t.t3,lineHeight:1.45,marginTop:1}}>{p.detalhe}</div></div>
+                      </div>))}
+                  </div>
+                </>}
+              </div>}
+              {acoes.length>0 && (()=>{
+                const aberto=!!abertos[g.sku]
+                const cont:Record<string,number>={}; for(const r of acoes) cont[r.tipo]=(cont[r.tipo]||0)+1
+                const resumo=Object.entries(cont).map(([tp,n])=>`${n} ${(REC[tp]?.rot||tp).toLowerCase()}`).join(' · ')
+                return(<>
+                  <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const,paddingTop:9,borderTop:`1px solid ${t.line}`}}>
+                    <div style={{flex:1,minWidth:0,fontSize:12,color:t.t2}}><b style={{color:t.t1}}>{acoes.length} {acoes.length===1?'ação':'ações'}</b> — {resumo}</div>
+                    {isAdmin && <button onClick={()=>aplicarTudo(acoes)} style={{fontSize:11.5,fontWeight:700,color:t.dark?'#1c1606':'#3a2a05',background:t.gold,border:'none',borderRadius:9,padding:'6px 12px',cursor:'pointer',fontFamily:'inherit'}}>Aplicar todas</button>}
+                    <button onClick={()=>setAbertos(a=>({...a,[g.sku]:!aberto}))} style={{fontSize:11.5,fontWeight:600,color:t.t2,background:'none',border:`1px solid ${t.line}`,borderRadius:9,padding:'6px 11px',cursor:'pointer',fontFamily:'inherit'}}>{aberto?'esconder':'ver ações'}</button>
+                  </div>
+                  {aberto && <div style={{marginTop:2}}>{acoes.map((r:any,i:number)=>{ const cfg=REC[r.tipo]||REC['ajustar-lance']; return <Acao key={i} r={{...r,sku:g.sku}} cor={cfg.cor} rotulo={cfg.rot} acaoTxt={cfg.btn}/> })}</div>}
+                </>)
+              })()}
+              <div style={{fontSize:11,color:t.t3,paddingTop:6,borderTop:`1px solid ${t.line}`,marginTop:acoes.length?0:4}}>Você está cuidando deste produto — eu só mostro o diagnóstico, sem mexer nas campanhas.</div>
+            </>}
           </div>
         )
       }) : (
-        /* ── FALLBACK: mapa de produto ainda sincronizando → grupos simples ── */
         <>
           {(!d.temMapaProduto && totalAcoes>0) && <div style={{fontSize:11,color:t.t3,marginBottom:8}}>Organizando por produto… (na 1ª vez leva alguns minutos; recarregue em instantes)</div>}
-          {neg.length>0&&<div style={{marginTop:6}}>
-            <div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:2}}>🛑 Cortar o que só gasta <span style={{color:t.t3,fontWeight:400}}>({neg.length})</span></div>
-            {neg.slice(0,8).map((r:any,i:number)=><Acao key={i} r={r} cor={t.red} rotulo="Cortar" acaoTxt="Cortar"/>)}
-          </div>}
-          {prom.length>0&&<div style={{marginTop:14}}>
-            <div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:2}}>⭐ Capturar quem já vende <span style={{color:t.t3,fontWeight:400}}>({prom.length})</span></div>
-            {prom.slice(0,8).map((r:any,i:number)=><Acao key={i} r={r} cor={t.grn} rotulo="Criar exata" acaoTxt="Criar"/>)}
-          </div>}
-          {lan.length>0&&<div style={{marginTop:14}}>
-            <div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:2}}>📉 Acertar os lances <span style={{color:t.t3,fontWeight:400}}>({lan.length})</span></div>
-            {lan.slice(0,8).map((r:any,i:number)=><Acao key={i} r={r} cor={t.gold} rotulo={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'} acaoTxt={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'}/>)}
-          </div>}
+          {neg.length>0&&<div style={{marginTop:6}}><div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:2}}>🛑 Cortar o que só gasta <span style={{color:t.t3,fontWeight:400}}>({neg.length})</span></div>{neg.slice(0,8).map((r:any,i:number)=><Acao key={i} r={r} cor={t.red} rotulo="Cortar" acaoTxt="Cortar"/>)}</div>}
+          {prom.length>0&&<div style={{marginTop:14}}><div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:2}}>⭐ Capturar quem já vende <span style={{color:t.t3,fontWeight:400}}>({prom.length})</span></div>{prom.slice(0,8).map((r:any,i:number)=><Acao key={i} r={r} cor={t.grn} rotulo="Criar exata" acaoTxt="Criar"/>)}</div>}
+          {lan.length>0&&<div style={{marginTop:14}}><div style={{fontSize:12.5,fontWeight:700,color:t.t1,marginBottom:2}}>📉 Acertar os lances <span style={{color:t.t3,fontWeight:400}}>({lan.length})</span></div>{lan.slice(0,8).map((r:any,i:number)=><Acao key={i} r={r} cor={t.gold} rotulo={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'} acaoTxt={r.tipo==='pausar-keyword'?'Pausar':'Ajustar'}/>)}</div>}
         </>
       )}
-
-      {!isAdmin&&totalAcoes>0&&<div style={{fontSize:11,color:t.t3,marginTop:12,paddingTop:11,borderTop:`1px solid ${t.line}`}}>O aplicar com 1 toque está em teste final. Por ora, faça esses ajustes no seu painel de anúncios da Amazon — ou peça no chat do NEO.</div>}
     </div>
   )
 }
