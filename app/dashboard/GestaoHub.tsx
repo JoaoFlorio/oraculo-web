@@ -583,7 +583,7 @@ function RealDRECard({data,hide,adsReal}:{data:any;hide:boolean;adsReal?:any}){
       <Row label="Devoluções" val={L.devolucoes} sign="-" color={t.red}/>
       <Row label="Receita líquida" val={L.receitaLiquida} sign="=" strong/>
       <Row label="Comissão Amazon" val={L.comissao} sign="-" color={t.red}/>
-      <Row label="Taxa Amazon pra Todos" val={L.taxaPrograma} sign="-" color={t.red}/>
+      <Row label="Parcelamento sem juros (Amazon pra Todos)" val={L.taxaPrograma} sign="-" color={t.red}/>
       <Row label="Tarifa FBA" val={L.fba} sign="-" color={t.red}/>
       {L.armazenagem>0 && <Row label="Armazenagem" val={L.armazenagem} sign="-" color={t.red}/>}
       <Row label="Assinatura" val={L.assinatura} sign="-" color={t.red}/>
@@ -701,7 +701,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
             ? `Valor da VENDA: o preço do anúncio × unidades — o número que você reconhece.\nFrete pago pelo comprador, embrulho e cupom/desconto NÃO entram aqui: aparecem como linhas na lupinha de cada produto e pedido (valor da venda − desconto + frete + embrulho = recebido).${devolucoesVal>0.005?`\nDevoluções do período: −${brl2(devolucoesVal)} (linha própria, já descontam do Lucro).`:''}`
             : `Tudo que você vendeu no período, já líquido de todo desconto que o Oráculo enxergou (cupom, oferta, frete grátis).\n⚠️ Cupom em venda ANTIGA pode não estar aqui: a Amazon só informa o desconto pela API de pedidos, e o histórico só ganha esse dado quando é reprocessado.${devolucoesVal>0.005?`\nDevoluções: −${brl2(devolucoesVal)} → líquido de devolução: ${brl2(Math.max(0,fat-devolucoesVal))}.`:''}\nA devolução aparece como linha própria e já desconta do Lucro — aqui fica o bruto pra você ver o volume real de venda.`},
         {label:'Líq. do Marketplace',value:brl2(liq),icon:'ti-building-bank',color:t.blue,
-          tip:'O que sobra DA VENDA depois da parte da Amazon sobre o pedido: comissão, tarifa FBA, Taxa Amazon pra Todos e devoluções.\nArmazenagem e assinatura NÃO entram aqui — são custos MENSAIS da conta (estocagem por volume, mensalidade), aparecem no Repasse. Ainda não desconta seu custo de produto, imposto nem ads.'},
+          tip:'O que sobra DA VENDA depois da parte da Amazon sobre o pedido: comissão, tarifa FBA, parcelamento sem juros (Amazon pra Todos) e devoluções.\nArmazenagem e assinatura NÃO entram aqui — são custos MENSAIS da conta (estocagem por volume, mensalidade), aparecem no Repasse. Ainda não desconta seu custo de produto, imposto nem ads.'},
         {label:'Lucro Bruto',value:cm?brl2(lucroBruto):dash,icon:'ti-trending-up',color:t.grn,
           tip:'Líq. do Marketplace − custo dos produtos (CMV das unidades líquidas) − imposto − armazenagem MEDIDA por SKU + lançamentos avulsos. É o lucro da VENDA, antes do anúncio.\nA cobrança MENSAL de estocagem e a assinatura são custo da conta e aparecem no Repasse (o caixa), não aqui — assim uma cobrança do mês não vira "prejuízo" num dia de venda boa.'},
         {label:'Margem',value:cm?pc(margem):dash,icon:'ti-percentage',color:t.grn,
@@ -1425,7 +1425,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
           <div style={hide?{filter:'blur(5px)',userSelect:'none' as const,pointerEvents:'none' as const}:undefined}><Thumb p={{id:produto.sku,name:produto.name,image:produto.image}}/></div>
           <div style={{minWidth:0,flex:1}}>
             <div style={{fontSize:14.5,fontWeight:600,color:t.t1,lineHeight:1.3,filter:hide?'blur(5px)':'none',userSelect:hide?'none' as const:undefined}}>{produto.name}</div>
-            <div style={{fontSize:10.5,color:t.t3,marginTop:2,filter:hide?'blur(4px)':'none',userSelect:hide?'none' as const:undefined}}>SKU {produto.sku}{produto.asin?` · ASIN ${produto.asin}`:''}{from&&to?` · ${from.slice(0,10).split('-').reverse().join('/')} a ${to.slice(0,10).split('-').reverse().join('/')}`:''}</div>
+            <div style={{fontSize:12,color:t.t2,marginTop:3,fontWeight:600,filter:hide?'blur(4px)':'none',userSelect:hide?'none' as const:undefined}}>SKU {produto.sku}{produto.asin?` · ASIN ${produto.asin}`:''}{from&&to?` · ${from.slice(0,10).split('-').reverse().join('/')} a ${to.slice(0,10).split('-').reverse().join('/')}`:''}</div>
           </div>
           <button onClick={onClose} style={{background:'none',border:'none',color:t.t3,fontSize:22,cursor:'pointer',lineHeight:1,padding:0}} title="Fechar">×</button>
         </div>
@@ -1447,7 +1447,12 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
               (sem `principal`) cai no formato anterior — nada some. */}
           {M.principal!==null && (
             <Row label={`Valor da venda (${units} un.)`} val={M.principal} strong hide={hide}
-                 nota="preço do anúncio × unidades — sem frete, embrulho ou desconto"/>
+                 nota={`preço do anúncio × unidades — sem frete, embrulho ou desconto${units>0&&M.principal>0?` · ${brl2(M.principal/units)} por unidade`:''}`}/>
+          )}
+          {/* 23/09: unidade de pedido PENDENTE é estimada (a Amazon ainda não precificou) — dizer isso
+              na cara evita o "o sistema traz outro valor" (caso aandre_guerreiro). */}
+          {((produto as any)?.unitsEstimadas||0)>0 && (
+            <div style={{fontSize:10.5,color:t.gold,margin:'-4px 0 8px',lineHeight:1.4}}>≈ inclui {(produto as any).unitsEstimadas} un. de pedido pendente, estimada{(produto as any).unitsEstimadas>1?'s':''} em {brl2(Number((produto as any)?.estimativa?.unit)||0)}{(produto as any)?.estimativa?.fonte==='ultima-venda'?' (última venda real do SKU)':(produto as any)?.estimativa?.fonte==='anuncio'?' (preço do anúncio)':''} — o valor real substitui quando a Amazon faturar.</div>
           )}
           {M.principal===null && (p?.precoTabela||0) > (M.receitaBruta||0) + 0.005 && (
             /* ⚠️ A NOTA DIZIA "o que o anúncio pedia" e ISSO ERA FALSO: o valor
@@ -1555,7 +1560,7 @@ function ProdutoDetalhe({produto,realDre,adsReal,costs,imposto,hide,onClose,ajus
           ) : (
             <Row label="Taxa FBA" val={M.fba} sign="-" color={t.red} hide={hide}/>
           )}
-          {M.taxaPrograma>0.005 && <Row label="Taxa Amazon pra Todos" val={M.taxaPrograma} sign="-" color={t.red} hide={hide}
+          {M.taxaPrograma>0.005 && <Row label="Parcelamento sem juros (Amazon pra Todos)" val={M.taxaPrograma} sign="-" color={t.red} hide={hide}
                nota={M.taxasMedidas?'cobrada por item no seu repasse':'rateada por faturamento'}/>}
           {M.outrasTaxas>0.005 && <Row label="Outras taxas" val={M.outrasTaxas} sign="-" color={t.red} hide={hide}
                nota={M.taxasMedidas?'chargeback de frete/embrulho e taxas novas, do seu repasse':'rateadas por faturamento'}/>}
