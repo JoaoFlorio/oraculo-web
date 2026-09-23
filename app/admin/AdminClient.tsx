@@ -989,6 +989,19 @@ function CustoTab() {
               </table>
             </div>
             <div style={{ ...card, padding: '14px 6px' }}>
+              <div style={{ ...upLabel, padding: '0 10px 8px' }}>Por modelo <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>· o roteador manda o trivial pro Lite e o que pede raciocínio pro 3.8</span></div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr><th style={th}>Modelo</th><th style={{ ...th, textAlign: 'right' }}>Chamadas</th><th style={{ ...th, textAlign: 'right' }}>Custo</th><th style={{ ...th, textAlign: 'right' }}>R$/chamada</th></tr></thead>
+                <tbody>{(Array.isArray(d.porModelo) ? d.porModelo : []).map((m: any) => (
+                  <tr key={m.model}>
+                    <td style={td}>{m.model}</td>
+                    <td style={tdN}>{Number(m.mensagens).toLocaleString('pt-BR')}</td>
+                    <td style={tdN}>{brl(Number(m.usd) * USD_BRL)}</td>
+                    <td style={tdN}>{brl(Number(m.usd) * USD_BRL / Math.max(1, Number(m.mensagens)))}</td>
+                  </tr>))}</tbody>
+              </table>
+            </div>
+            <div style={{ ...card, padding: '14px 6px' }}>
               <div style={{ ...upLabel, padding: '0 10px 8px' }}>Por dia</div>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead><tr><th style={th}>Dia</th><th style={{ ...th, textAlign: 'right' }}>Chamadas</th><th style={{ ...th, textAlign: 'right' }}>Custo</th></tr></thead>
