@@ -190,7 +190,7 @@ function RevChart({ series, days }: { series: { date: string; amount: number }[]
 export default function AdminClient({ role, name, previewData }: { role: string; name: string; previewData?: any }) {
   // Funcionário (staff) só cadastra cliente; admin vê o centro de decisão completo.
   const isAdmin = role === 'admin'
-  const [tab, setTab] = useState<'overview' | 'clients' | 'new' | 'team' | 'demo'>(isAdmin ? 'overview' : 'new')
+  const [tab, setTab] = useState<'overview' | 'clients' | 'new' | 'team' | 'demo' | 'custo'>(isAdmin ? 'overview' : 'new')
   const [data, setData] = useState<any>(previewData || null)
   const [days, setDays] = useState(90)
   const [licenses, setLicenses] = useState<any[]>([])
@@ -526,7 +526,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {([['overview', 'Visão geral'], ['clients', 'Clientes'], ['new', 'Novo cliente'], ['team', 'Equipe'], ['demo', 'Conta Demo']] as const).map(([id, label]) => (
+          {([['overview', 'Visão geral'], ['clients', 'Clientes'], ['new', 'Novo cliente'], ['team', 'Equipe'], ['demo', 'Conta Demo'], ['custo', 'Custo IA']] as const).map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={chip(tab === id)}>{label}</button>
           ))}
         </div>
@@ -912,7 +912,108 @@ export default function AdminClient({ role, name, previewData }: { role: string;
             </div>
           </div>
         )}
+
+        {/* ═══ CUSTO IA (22/09) — o que a Google cobra, por dia / tipo / seller ═══ */}
+        {tab === 'custo' && <CustoTab />}
       </div>
     </div>
+  )
+}
+
+/* ═══ CUSTO IA (22/09/2026) ═══
+   Pedido do João: "todo dia R$100 a mais, deixa eu entender". A telemetria do
+   backend (neo_usage_events) registra cada chamada à Google — conversa E gerações
+   (imagem, A+, vídeo, briefing, catálogo, verificação visual) — com o custo em
+   dólar congelado no dia. Aqui é a fatura explicada: por dia, por tipo, por seller.
+   Fonte: GET /api/agent/uso (só admin). Câmbio só pra exibir. */
+const USD_BRL = 5.5
+const TIPO_LABEL: Record<string, string> = {
+  neo: 'Conversa com o NEO', suporte: 'Conversa (Suporte)', imagem: 'Imagens de anúncio', aplus: 'Conteúdo A+',
+  video: 'Vídeo (Omni/Veo)', briefing: 'Briefing de vídeo', catalogo: 'Catálogo de fornecedor (PDF)', visual: 'Verificação visual (catálogo)',
+}
+function CustoTab() {
+  const [dias, setDias] = useState(7)
+  const [d, setD] = useState<any>(null)
+  const [erro, setErro] = useState('')
+  useEffect(() => {
+    setD(null); setErro('')
+    fetch(`/api/agent/uso?dias=${dias}&limite=15`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(setD)
+      .catch(e => setErro(`não consegui ler o uso (${e})`))
+  }, [dias])
+  const chipC = (on: boolean): any => ({ padding: '7px 14px', borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', border: `1px solid ${on ? C.lineG : C.line}`, background: on ? 'rgba(240,180,41,0.10)' : 'transparent', color: on ? C.gold : C.t2, fontFamily: 'inherit' })
+  const th: any = { ...upLabel, textAlign: 'left', padding: '8px 10px', borderBottom: `1px solid ${C.line}` }
+  const td: any = { padding: '8px 10px', fontSize: 13, borderBottom: `1px solid ${C.line}22`, verticalAlign: 'top' }
+  const tdN: any = { ...td, ...num, textAlign: 'right', whiteSpace: 'nowrap' }
+  const kpi = (label: string, valor: string, sub?: string) => (
+    <div style={{ ...card, padding: '16px 18px', minWidth: 170, flex: '1 1 170px' }}>
+      <div style={upLabel}>{label}</div>
+      <div style={{ ...num, fontSize: 24, fontWeight: 800, marginTop: 6 }}>{valor}</div>
+      {sub && <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+  const totalUsd = Number(d?.total?.usd || 0)
+  const porDia: any[] = Array.isArray(d?.porDia) ? d.porDia : []
+  const porAgente: any[] = Array.isArray(d?.porAgente) ? d.porAgente : []
+  const porUsuario: any[] = Array.isArray(d?.porUsuario) ? d.porUsuario : []
+  const diasComUso = porDia.length || 1
+  const maisCaro = porDia.reduce((m: any, x: any) => (!m || x.usd > m.usd ? x : m), null as any)
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 12.5, color: C.t2 }}>O que a Google cobra pela IA do Oráculo — conversa e gerações (imagem, A+, vídeo, briefing, catálogo). Dólar congelado no dia; câmbio de exibição R$ {USD_BRL.toFixed(2)}.</div>
+        <div style={{ display: 'flex', gap: 6 }}>{[1, 7, 30].map(n => <button key={n} onClick={() => setDias(n)} style={chipC(dias === n)}>{n === 1 ? 'Hoje' : `${n} dias`}</button>)}</div>
+      </div>
+      {erro && <div style={{ ...card, padding: 14, color: C.red || '#F87171', marginBottom: 12 }}>{erro}</div>}
+      {!d && !erro && <div style={{ color: C.t3, fontSize: 13 }}>Lendo a telemetria…</div>}
+      {d && (
+        <>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+            {kpi('Total no período', brl(totalUsd * USD_BRL), `US$ ${totalUsd.toFixed(2)} · ${Number(d.total?.mensagens || 0).toLocaleString('pt-BR')} chamadas`)}
+            {kpi('Média por dia', brl(totalUsd * USD_BRL / diasComUso), `${diasComUso} dia(s) com uso`)}
+            {kpi('Dia mais caro', maisCaro ? brl(maisCaro.usd * USD_BRL) : '—', maisCaro ? `${isoDM(maisCaro.dia)} · ${maisCaro.mensagens} chamadas` : undefined)}
+            {kpi('Tokens de entrada em cache', `${Math.round(100 * Number(d.total?.cache || 0) / Math.max(1, Number(d.total?.input || 0)))}%`, 'quanto da entrada saiu pelo cache (barato)')}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 12 }}>
+            <div style={{ ...card, padding: '14px 6px' }}>
+              <div style={{ ...upLabel, padding: '0 10px 8px' }}>Por tipo</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr><th style={th}>Tipo</th><th style={{ ...th, textAlign: 'right' }}>Chamadas</th><th style={{ ...th, textAlign: 'right' }}>Custo</th><th style={{ ...th, textAlign: 'right' }}>%</th></tr></thead>
+                <tbody>{porAgente.map((a: any) => (
+                  <tr key={a.agente + a.provider}>
+                    <td style={td}>{TIPO_LABEL[a.agente] || a.agente}<span style={{ color: C.t3, fontSize: 11 }}> · {a.provider}</span></td>
+                    <td style={tdN}>{Number(a.mensagens).toLocaleString('pt-BR')}</td>
+                    <td style={tdN}>{brl(Number(a.usd) * USD_BRL)}</td>
+                    <td style={tdN}>{totalUsd ? Math.round(100 * Number(a.usd) / totalUsd) : 0}%</td>
+                  </tr>))}</tbody>
+              </table>
+            </div>
+            <div style={{ ...card, padding: '14px 6px' }}>
+              <div style={{ ...upLabel, padding: '0 10px 8px' }}>Por dia</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr><th style={th}>Dia</th><th style={{ ...th, textAlign: 'right' }}>Chamadas</th><th style={{ ...th, textAlign: 'right' }}>Custo</th></tr></thead>
+                <tbody>{porDia.map((x: any) => (
+                  <tr key={x.dia}><td style={td}>{isoDM(x.dia)}</td><td style={tdN}>{Number(x.mensagens).toLocaleString('pt-BR')}</td><td style={tdN}>{brl(Number(x.usd) * USD_BRL)}</td></tr>))}</tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={{ ...card, padding: '14px 6px' }}>
+            <div style={{ ...upLabel, padding: '0 10px 8px' }}>Quem mais consome (top 15)</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead><tr><th style={th}>Seller</th><th style={{ ...th, textAlign: 'right' }}>Chamadas</th><th style={{ ...th, textAlign: 'right' }}>Entrada</th><th style={{ ...th, textAlign: 'right' }}>Saída</th><th style={{ ...th, textAlign: 'right' }}>Custo</th></tr></thead>
+              <tbody>{porUsuario.map((u: any) => (
+                <tr key={u.user_email}>
+                  <td style={td}>{u.user_email}</td>
+                  <td style={tdN}>{Number(u.mensagens).toLocaleString('pt-BR')}</td>
+                  <td style={tdN}>{(Number(u.input) / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}k</td>
+                  <td style={tdN}>{(Number(u.output) / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}k</td>
+                  <td style={tdN}>{brl(Number(u.usd) * USD_BRL)}</td>
+                </tr>))}</tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
   )
 }
