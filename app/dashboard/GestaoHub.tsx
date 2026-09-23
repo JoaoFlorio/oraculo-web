@@ -3266,13 +3266,13 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
   const totalAcoes=neg.length+prom.length+lan.length
   const ligado=!!bot?.automatico
   const tint=(hex:string,a:number)=>{const h=hex.replace('#','');const n=parseInt(h.length===3?h.split('').map(c=>c+c).join(''):h,16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a/100})`}
-  const previaTotal=simReal?((simReal.baixar||0)+(simReal.subir||0)+(simReal.pausar||0)+(simReal.negativou||0)+(simReal.promoveu||0)+(simReal.criou||0)+(simReal.campanhasPausadas||0)+(simReal.produtosPausados||0)+(simReal.produtosReativados||0)):0
+  const previaTotal=simReal?((simReal.baixar||0)+(simReal.subir||0)+(simReal.pausar||0)+(simReal.negativou||0)+(simReal.promoveu||0)+(simReal.criou||0)+(simReal.campanhasPausadas||0)+(simReal.produtosPausados||0)+(simReal.produtosReativados||0)+(simReal.alvosAjustados||0)+(simReal.alvosPausados||0)+(simReal.orcamentosAjustados||0)+(simReal.topoAjustados||0)):0
   const fmtDH=(iso?:string|null)=>iso?new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'
   const emHoras=(iso?:string|null)=>{ if(!iso) return null; const h=(Date.parse(iso)-Date.now())/3600000; return h<=0?'em instantes':h<1?`em ${Math.max(1,Math.round(h*60))} min`:`em ${Math.round(h)} h` }
   const pausadosPeloNeo=new Set<string>((rel?.pausasAtivas||[]).map((p:any)=>p.sku).filter(Boolean))
   const feitosPorSku:Record<string,any[]>={}; for(const a of (rel?.ultimasAcoes||[])) if(a?.sku) (feitosPorSku[a.sku]||(feitosPorSku[a.sku]=[])).push(a)
-  const TIPO_ROT:Record<string,string>={'pausar-produto':'pausou anúncio sem estoque','reativar-produto':'religou anúncio (estoque voltou)','pausar-campanha':'pausou campanha sem estoque','reativar-campanha':'religou campanha','pausar-palavra':'pausou palavra sem venda','lance':'ajustou lance','negativar':'cortou termo que só gastava','promover':'promoveu termo que vende','criar-campanha':'criou campanha'}
-  const TIPO_ICON:Record<string,string>={'pausar-produto':'ti-player-pause','reativar-produto':'ti-player-play','pausar-campanha':'ti-player-pause','reativar-campanha':'ti-player-play','pausar-palavra':'ti-player-pause','lance':'ti-adjustments','negativar':'ti-ban','promover':'ti-star','criar-campanha':'ti-rocket'}
+  const TIPO_ROT:Record<string,string>={'pausar-produto':'pausou anúncio sem estoque','reativar-produto':'religou anúncio (estoque voltou)','pausar-campanha':'pausou campanha sem estoque','reativar-campanha':'religou campanha','pausar-palavra':'pausou palavra sem venda','pausar-alvo':'pausou segmentação sem venda','lance':'ajustou lance','orcamento':'ajustou orçamento diário','topo-busca':'ajustou o topo de busca','negativar':'cortou termo que só gastava','promover':'promoveu termo que vende','criar-campanha':'criou campanha'}
+  const TIPO_ICON:Record<string,string>={'pausar-produto':'ti-player-pause','reativar-produto':'ti-player-play','pausar-campanha':'ti-player-pause','reativar-campanha':'ti-player-play','pausar-palavra':'ti-player-pause','pausar-alvo':'ti-player-pause','lance':'ti-adjustments','orcamento':'ti-wallet','topo-busca':'ti-arrow-bar-to-up','negativar':'ti-ban','promover':'ti-star','criar-campanha':'ti-rocket'}
 
   const Acao=({r,cor,rotulo,acaoTxt}:{r:any;cor:string;rotulo:string;acaoTxt:string})=>{
     const st=feitos[chave(r)]
@@ -3348,7 +3348,7 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
             <div style={{fontFamily:FH,fontSize:18,fontWeight:800,color:t.t1,letterSpacing:'-0.02em'}}>NEO no comando dos seus anúncios {ligado?<span style={{color:t.grn}}>· ligado</span>:<span style={{color:t.t3}}>· desligado</span>}</div>
             <div style={{fontSize:12,color:t.t2,marginTop:3,lineHeight:1.45}}>
               {ligado
-                ? <>Todo dia eu reviso suas campanhas e <b style={{color:t.t1}}>mexo sozinho na sua Amazon</b>: pauso produto sem estoque (e religo quando volta), corto termo que só gasta, acerto lance, promovo o que vende e crio campanha pra quem tem estoque e não anuncia. Você não precisa fazer nada.</>
+                ? <>Todo dia eu reviso suas campanhas e <b style={{color:t.t1}}>mexo sozinho na sua Amazon</b>: pauso produto sem estoque (e religo quando volta), corto termo que só gasta, acerto o lance de palavra, segmentação automática, categoria e produto, ajusto orçamento e topo de busca, promovo o que vende e crio campanha pra quem tem estoque e não anuncia. Você não precisa fazer nada.</>
                 : <>Desligado, eu só observo e recomendo. Ligue e eu passo a executar sozinho, todo dia, dentro dos tetos de segurança (lance até R$10, no máximo 50 ajustes, 20 cortes e 2 campanhas novas por dia). Produto que você marcar "eu cuido" eu não toco.</>}
             </div>
           </div>
