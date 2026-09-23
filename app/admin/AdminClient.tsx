@@ -191,6 +191,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   // Funcionário (staff) só cadastra cliente; admin vê o centro de decisão completo.
   const isAdmin = role === 'admin'
   const [tab, setTab] = useState<'overview' | 'clients' | 'new' | 'team' | 'demo' | 'custo'>(isAdmin ? 'overview' : 'new')
+  const [totpOpen, setTotpOpen] = useState(false)   // 23/09: 2FA da própria conta
   const [data, setData] = useState<any>(previewData || null)
   const [days, setDays] = useState(90)
   const [licenses, setLicenses] = useState<any[]>([])
@@ -519,6 +520,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => setTotpOpen(v => !v)} className="orc-ghost" title="Verificação em duas etapas da sua conta" style={{ background: totpOpen ? 'rgba(240,180,41,0.12)' : 'transparent', border: `1px solid ${C.gold}55`, color: C.gold, fontSize: 12, padding: '8px 14px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit' }}>🔐 2FA</button>
             <a href="/dashboard" className="orc-ghost" style={{ background: 'transparent', border: `1px solid ${C.gold}55`, color: C.gold, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'none', transition: 'color .15s,border-color .15s' }}>Painel do cliente ↗</a>
             <button onClick={logout} className="orc-ghost" style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.t2, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', transition: 'color .15s,border-color .15s' }}>Sair</button>
           </div>
@@ -534,6 +536,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
         {diagBox}
         {msgBox}
         {credentialsCard}
+        {totpOpen && <TotpCard onClose={() => setTotpOpen(false)} />}
 
         {/* ═══ VISÃO GERAL ═══ */}
         {tab === 'overview' && (
@@ -1030,5 +1033,66 @@ function CustoTab() {
         </>
       )}
     </>
+  )
+}
+
+/* ═══ 2FA (TOTP) da própria conta — 23/09/2026, "blindar o admin" ═══
+   Fluxo: Gerar QR → escanear no Google Authenticator/Authy/1Password → digitar o
+   1º código → ativo. A partir daí o login pede o código. Desativar exige código. */
+function TotpCard({ onClose }: { onClose: () => void }) {
+  const [st, setSt] = useState<{ enabled: boolean; enabledAt?: string | null } | null>(null)
+  const [setup, setSetup] = useState<{ secret: string; uri: string; qr: string } | null>(null)
+  const [code, setCode] = useState('')
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const load = () => fetch('/api/auth/totp', { cache: 'no-store' }).then(r => r.json()).then(setSt).catch(() => setSt({ enabled: false }))
+  useEffect(() => { load() }, [])
+  async function acao(a: 'setup' | 'enable' | 'disable') {
+    setBusy(true); setMsg(null)
+    try {
+      const r = await fetch('/api/auth/totp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ acao: a, code }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { setMsg({ ok: false, text: d.error || 'Falhou' }); return }
+      if (a === 'setup') { setSetup(d); setCode('') }
+      if (a === 'enable') { setSetup(null); setCode(''); setMsg({ ok: true, text: 'Verificação em duas etapas ATIVADA. O próximo login vai pedir o código.' }); load() }
+      if (a === 'disable') { setCode(''); setMsg({ ok: true, text: 'Verificação em duas etapas desativada.' }); load() }
+    } catch { setMsg({ ok: false, text: 'Erro de conexão' }) } finally { setBusy(false) }
+  }
+  const inp: any = { ...num, width: 140, padding: '9px 12px', borderRadius: 9, border: `1px solid ${C.line}`, background: 'transparent', color: C.t1, fontSize: 18, letterSpacing: '0.2em', textAlign: 'center' }
+  const btn = (col: string): any => ({ padding: '8px 14px', borderRadius: 9, fontSize: 12.5, fontWeight: 700, cursor: busy ? 'default' : 'pointer', border: `1px solid ${col}66`, background: 'transparent', color: col, fontFamily: 'inherit', opacity: busy ? 0.6 : 1 })
+  return (
+    <div style={{ ...card, padding: '18px 20px', marginBottom: 16, maxWidth: 640 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <div style={{ fontSize: 14, fontWeight: 800 }}>🔐 Verificação em duas etapas (2FA)</div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.t3, fontSize: 20, cursor: 'pointer' }} title="Fechar">×</button>
+      </div>
+      <div style={{ fontSize: 12.5, color: C.t2, lineHeight: 1.5, marginBottom: 12 }}>
+        Com o 2FA ligado, entrar na sua conta exige a senha <b>e</b> um código de 6 dígitos do app autenticador (Google Authenticator, Authy, 1Password…). Senha vazada não basta.
+      </div>
+      {!st ? <div style={{ fontSize: 12, color: C.t3 }}>Carregando…</div> : st.enabled ? (
+        <div>
+          <div style={{ fontSize: 13, color: C.green, fontWeight: 700, marginBottom: 10 }}>✓ Ativo{st.enabledAt ? ` desde ${new Date(st.enabledAt).toLocaleDateString('pt-BR')}` : ''}</div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input style={inp} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" inputMode="numeric" />
+            <button onClick={() => acao('disable')} disabled={busy || code.length !== 6} style={btn(C.red)}>Desativar</button>
+          </div>
+        </div>
+      ) : !setup ? (
+        <button onClick={() => acao('setup')} disabled={busy} style={btn(C.gold)}>Gerar QR e ativar</button>
+      ) : (
+        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <img src={setup.qr} alt="QR do autenticador" width={200} height={200} style={{ borderRadius: 10, background: '#fff', padding: 6 }} />
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 12.5, color: C.t2, lineHeight: 1.5 }}>1. Abra o app autenticador e escaneie o QR (ou digite a chave abaixo).<br />2. Digite o código de 6 dígitos que ele mostrar.</div>
+            <div style={{ ...num, fontSize: 11, color: C.t3, margin: '8px 0', wordBreak: 'break-all' }}>{setup.secret}</div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input style={inp} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="000000" inputMode="numeric" autoFocus />
+              <button onClick={() => acao('enable')} disabled={busy || code.length !== 6} style={btn(C.green)}>Confirmar e ativar</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {msg && <div style={{ marginTop: 10, fontSize: 12.5, color: msg.ok ? C.green : C.red }}>{msg.text}</div>}
+    </div>
   )
 }

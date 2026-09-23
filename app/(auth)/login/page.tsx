@@ -149,6 +149,8 @@ export default function LoginPage() {
   const [showPass, setShowPass] = useState(false)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
+  const [code, setCode]         = useState('')          // 2FA (TOTP) — só aparece quando a conta tem
+  const [needCode, setNeedCode] = useState(false)
   const year = new Date().getFullYear()
 
   async function handleSubmit(e: React.FormEvent) {
@@ -159,11 +161,12 @@ export default function LoginPage() {
       const res  = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, code: code || undefined }),
       })
       const data = await res.json()
       if (!res.ok) {
-        setError(data?.error || 'Não foi possível entrar. Tente novamente.')
+        if (data?.totpRequired) { setNeedCode(true); setError(code ? (data?.error || 'Código inválido') : 'Sua conta tem verificação em duas etapas: digite o código do app autenticador.') }
+        else setError(data?.error || 'Não foi possível entrar. Tente novamente.')
         setLoading(false)
         return
       }
@@ -334,6 +337,16 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+
+              {needCode && (
+                <div>
+                  <label htmlFor="og-code" style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8, opacity: 0.8 }}>
+                    Código do autenticador
+                  </label>
+                  <input id="og-code" className="og-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6}
+                    placeholder="000000" autoFocus value={code} onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+                </div>
+              )}
 
               {error && (
                 <div role="alert" style={{
