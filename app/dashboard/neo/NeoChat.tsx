@@ -593,7 +593,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
       const r = await fetch(`/api/agent/fornecedor?nome=${encodeURIComponent(f.name)}`, { method: 'POST', body: f })
       const j = await r.json()
       if (!r.ok) { setCatalogo(null); setErro(j?.error || 'não consegui enviar o catálogo'); return }
-      setCatalogo({ status: 'extraindo', nome_arquivo: f.name })
+      setCatalogo({ status: 'extraindo', nome_arquivo: f.name, creditos: Number(j?.creditos) || 0 })
       vigiarCatalogo()
     } catch { setCatalogo(null); setErro('falha ao enviar o catálogo — tenta de novo') }
   }
@@ -1326,7 +1326,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
             {catalogo && (
               <div style={{ margin: '0 0 8px', padding: '10px 12px', borderRadius: 12, border: '1px solid rgba(255,183,3,.25)', background: 'rgba(255,183,3,.06)', fontSize: 12, color: '#CFCFE8', position: 'relative' as const }}>
                 <button onClick={() => setCatalogo(null)} aria-label="fechar" style={{ position: 'absolute', top: 6, right: 8, background: 'transparent', border: 'none', color: '#8B8BAC', cursor: 'pointer', fontSize: 13 }}>×</button>
-                {catalogo.status === 'enviando' && <>📦 Enviando <b>{catalogo.nome_arquivo}</b>… (catálogo grande leva um minuto)</>}
+                {catalogo.status === 'enviando' && <>📦 Enviando <b>{catalogo.nome_arquivo}</b>… (catálogo grande leva um minuto) <span style={{ color: '#FFB703' }}>· a leitura custa 10 créditos</span></>}
                 {catalogo.status === 'extraindo' && (() => {
                   const pt = Number(catalogo.paginas_total) || 0, pl = Number(catalogo.paginas_lidas) || 0
                   const pct = pt > 0 ? Math.min(100, Math.round((pl / pt) * 100)) : null
@@ -1337,7 +1337,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
                     <>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <span className="ora-spin" style={{ display: 'inline-block', width: 11, height: 11, border: '2px solid rgba(255,183,3,.35)', borderTopColor: '#FFB703', borderRadius: '50%' }} />
-                        📦 <b>{catalogo.nome_arquivo}</b>: {txt} <span style={{ color: '#8B8BAC' }}>(pode continuar usando o chat)</span>
+                        📦 <b>{catalogo.nome_arquivo}</b>: {txt} <span style={{ color: '#8B8BAC' }}>(pode continuar usando o chat)</span>{catalogo.creditos ? <span style={{ color: '#FFB703' }}> · 💳 {catalogo.creditos} créditos cobrados</span> : null}
                       </span>
                       {pct != null && (
                         <div style={{ marginTop: 6, height: 4, borderRadius: 99, background: 'rgba(255,183,3,.15)', overflow: 'hidden' }}>

@@ -27,6 +27,7 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
   const [resultados, setResultados] = useState<Resultado[]>([])
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [cobrado, setCobrado] = useState<number | null>(null)   // créditos cobrados no último upload
   const [filtro, setFiltro] = useState<'todos' | 'oportunidade'>('oportunidade')
   const fileRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -71,7 +72,7 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
       const r = await fetch(`/api/agent/fornecedor?nome=${encodeURIComponent(f.name)}`, { method: 'POST', body: f })
       const d = await r.json().catch(() => null)
       if (!r.ok || d?.error) setErro(d?.error || 'falha ao enviar o catálogo')
-      else await carregarStatus()
+      else { setCobrado(Number(d?.creditos) || null); await carregarStatus() }
     } catch { setErro('falha de rede ao enviar') }
     finally { setEnviando(false); if (fileRef.current) fileRef.current.value = '' }
   }
@@ -104,6 +105,9 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
             <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--t1)', letterSpacing: '-0.01em' }}>Analisar meu catálogo</div>
             <div style={{ fontSize: 11.5, color: 'var(--t3)', marginTop: 2 }}>
               Suba o PDF do fornecedor — o NEO lê, cruza cada produto na {marketplace === 'ml' ? 'Mercado Livre' : 'Amazon'} e te devolve os que valem a pena: <b style={{ color: 'var(--t2)' }}>demanda, preço e margem</b> já prontos.
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--gold)', marginTop: 6, fontWeight: 700 }}>
+              💳 A leitura do catálogo custa <b>10 créditos</b> da sua franquia (a varredura na Amazon não cobra).{cobrado ? <span style={{ color: 'var(--t2)', fontWeight: 600 }}> ✅ {cobrado} créditos cobrados neste envio.</span> : null}
             </div>
           </div>
           <input ref={fileRef} type="file" accept="application/pdf,.pdf" hidden onChange={e => e.target.files?.[0] && subir(e.target.files[0])} />
