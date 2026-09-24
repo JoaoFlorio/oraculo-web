@@ -76,6 +76,8 @@ export async function POST(req: NextRequest) {
         // Plano do aluno — define a COTA mensal inclusa de anúncios. Vem da
         // sessão (o cliente não escolhe o próprio plano), igual ao isAdmin.
         planoSeller: user.plan,
+        // 24/09: data de renovação — o NEO sugere o degrau de cima quando está perto de vencer.
+        planoVenceEm: (user as any).expiresAt ? new Date((user as any).expiresAt).toISOString() : null,
         // ⭐ Nome do seller pra o NEO tratar pela pessoa (parceiro, não robô).
         // Vem da sessão (autoritativo), o backend usa só o primeiro nome.
         ...(agent === 'neo' && user.name ? { nome: user.name } : {}),
