@@ -47,13 +47,13 @@ export const checkout = (id: Exclude<PlanoId, 'free'>, email: string) => `${GREE
 
 /** O DEGRAU RECOMENDADO — a regra do upsell (pedido do João, 24/09):
  *  mensal → anual (e antes de vencer, com urgência) · semestral → anual/vitalício · anual → vitalício · vitalício → topo. */
-export function recomendacao(plan: string, daysLeft: number | null): { alvo: Plano | null; titulo: string; texto: string; urgente: boolean } {
+export function recomendacao(plan: string, daysLeft: number | null): { alvo: Plano | null; alternativa?: Plano | null; titulo: string; texto: string; urgente: boolean } {
   const anual = planoDe('annual')!, vit = planoDe('lifetime')!
   const vence = daysLeft != null && daysLeft <= 7
   if (plan === 'lifetime') return { alvo: null, titulo: 'Você está no topo: Fundador Vitalício', texto: 'Acesso a tudo, para sempre, com todas as atualizações incluídas. Não existe degrau acima deste.', urgente: false }
   if (plan === 'annual') return { alvo: vit, titulo: 'Próximo degrau: Fundador Vitalício', texto: `Você paga ${fmt(anual.preco)} por ano. O vitalício custa ${fmt(vit.preco)} uma vez só — em menos de 2 anos ele já se pagou, e as atualizações futuras vão junto.`, urgente: vence }
   const mensal = planoDe('monthly')!, semestral = planoDe('biannual')!
   if (plan === 'biannual') return { alvo: anual, titulo: vence ? `Seu semestral vence em ${daysLeft} dia${daysLeft === 1 ? '' : 's'}` : 'Próximo degrau: Anual', texto: `Dois semestres custam ${fmt(semestral.preco * 2)}; o anual custa ${fmt(anual.preco)} — ${fmt(semestral.preco * 2 - anual.preco)} a menos pelo mesmo ano. Ou vá direto ao vitalício e pare de pagar.`, urgente: vence }
-  if (plan === 'monthly') return { alvo: anual, titulo: vence ? `Seu mensal renova em ${daysLeft} dia${daysLeft === 1 ? '' : 's'}` : 'Próximo degrau: Anual', texto: `12 meses no mensal = ${fmt(mensal.preco * 12)}. O anual custa ${fmt(anual.preco)}: você economiza ${fmt(mensal.preco * 12 - anual.preco)} no ano e paga o equivalente a ${fmt(Math.round(anual.porMes || 0))}/mês.${vence ? ' Troque antes da renovação e a próxima mensalidade não é cobrada.' : ''}`, urgente: vence }
+  if (plan === 'monthly') return { alvo: anual, alternativa: semestral, titulo: vence ? `Seu mensal renova em ${daysLeft} dia${daysLeft === 1 ? '' : 's'} — em vez de pagar por mês, que tal por ano?` : 'Em vez de pagar por mês, que tal por ano?', texto: `Renovar o mensal custa ${fmt(mensal.preco)}. No anual você paga ${fmt(anual.preco)} por 12 meses (${fmt(Math.round((anual.porMes || 0) * 100) / 100)}/mês) e economiza ${fmt(mensal.preco * 12 - anual.preco)} no ano. Se preferir um passo menor, o semestral sai por ${fmt(semestral.preco)} (${fmt(Math.round((semestral.porMes || 0) * 100) / 100)}/mês).${vence ? ' Troque antes da renovação: os dias que faltam são somados e a próxima mensalidade não é cobrada.' : ''}`, urgente: vence }
   return { alvo: planoDe('monthly'), titulo: 'Comece pelo Mensal', texto: 'Acesso completo por 30 dias. Cancele quando quiser.', urgente: false }
 }

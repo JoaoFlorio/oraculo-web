@@ -1401,6 +1401,10 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // real multi-unidade no Seller Central (mlGestao.ts:102).
   const mlEnabled = true
   const [nav,      setNav]      = useState(podeGestao ? 'financeiro' : 'bestsellers')
+  // Deep link ?nav=planos (push/e-mail de renovação): abre direto na aba pedida, se ela existir.
+  useEffect(()=>{
+    try{ const q=new URLSearchParams(window.location.search).get('nav'); if(q&&NAV.some(n=>n.id===q)) setNav(q) }catch{}
+  },[])
   // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
   const navGroups = NAV_GROUPS
     .map(g=>({...g, ids: g.ids.filter(id=>
@@ -2245,6 +2249,16 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
                 <div style={{fontSize:10,color:T.t3,marginTop:1}}>O que vamos garimpar hoje?</div>
               </div>
             )}
+            {/* 🔴 TAG DE RENOVAÇÃO (pedido do João, 24/09): ≤7 dias pro vencimento, em qualquer aba; clicar leva
+                pra aba Planos, que já induz o degrau de cima ("em vez de pagar por mês, que tal por ano?"). */}
+            {nav!=='agente'&&!isLifetime&&daysLeft!=null&&daysLeft>=0&&daysLeft<=7&&(
+              <button onClick={()=>goNav('planos')} title="Ver planos" aria-label={`Faltam ${daysLeft} dias para sua renovação — ver planos`}
+                style={{display:'inline-flex',alignItems:'center',gap:7,padding:'6px 11px',borderRadius:999,border:'1px solid rgba(248,113,113,.55)',background:'rgba(248,113,113,.12)',color:'#F87171',fontWeight:800,fontSize:11.5,cursor:'pointer',whiteSpace:'nowrap' as const,flexShrink:0,animation:'ora-tagpulse 2.6s ease-out infinite'}}>
+                <span style={{width:7,height:7,borderRadius:'50%',background:'#F87171',boxShadow:'0 0 0 3px rgba(248,113,113,.25)'}}/>
+                {daysLeft===0?'Sua renovação é hoje':daysLeft===1?'Falta 1 dia para sua renovação':`Faltam apenas ${daysLeft} dias para sua renovação`}
+                <span style={{opacity:.8}}>→</span>
+              </button>
+            )}
             <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:14}}>
               {/* Atualizar — discreto, sempre visível ao lado do tema (elegante, PWA-friendly) */}
               <button onClick={atualizarTudo} title="Atualizar" aria-label="Atualizar dados"
@@ -2411,13 +2425,6 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {nav==='planos'&&(
               <div style={{padding:'0 4px'}}>
                 <Planos user={{ email:user.email, name:user.name, plan:user.plan, expiresAt:user.expiresAt }}/>
-              </div>
-            )}
-            {/* ⏳ Upsell antes de vencer (pedido do João): mensal/semestral com ≤7 dias vê o degrau de cima em qualquer aba */}
-            {nav!=='planos'&&!isLifetime&&(user.plan==='monthly'||user.plan==='biannual')&&daysLeft!=null&&daysLeft>=0&&daysLeft<=7&&(
-              <div style={{margin:'0 4px 14px',padding:'10px 14px',borderRadius:12,border:'1px solid rgba(240,180,41,.45)',background:'rgba(240,180,41,.08)',display:'flex',flexWrap:'wrap',alignItems:'center',gap:10,justifyContent:'space-between',fontSize:12.5,color:T.t2}}>
-                <span>⏳ Seu plano <b style={{color:T.t1}}>{cfg.label}</b> {user.plan==='monthly'?'renova':'vence'} em <b style={{color:T.gold}}>{daysLeft} dia{daysLeft===1?'':'s'}</b>. Troque para o <b style={{color:T.t1}}>Anual</b> antes e pague o equivalente a <b style={{color:T.gold}}>R$ 75/mês</b>.</span>
-                <button onClick={()=>goNav('planos')} style={{padding:'7px 12px',borderRadius:9,border:'none',background:T.gold,color:'#111',fontWeight:800,fontSize:12,cursor:'pointer'}}>Ver planos →</button>
               </div>
             )}
             {nav==='perfil'&&(()=>{

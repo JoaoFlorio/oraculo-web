@@ -204,9 +204,16 @@ export default function Planos({ user }: { user: { email: string; name?: string;
           )}
         </div>
         {rec.alvo && (
-          <a className="pl-cta" style={{ marginTop: 0, minWidth: 220 }} href={checkout(rec.alvo.id as Exclude<PlanoId, 'free'>, user.email)} target="_blank" rel="noreferrer">
-            {rec.alvo.id === 'lifetime' ? 'Virar Fundador' : `Subir para o ${rec.alvo.nome}`} · {fmt(rec.alvo.preco)}
-          </a>
+          <div style={{ display: 'grid', gap: 8, minWidth: 230 }}>
+            <a className="pl-cta" style={{ marginTop: 0 }} href={checkout(rec.alvo.id as Exclude<PlanoId, 'free'>, user.email)} target="_blank" rel="noreferrer">
+              {rec.alvo.id === 'lifetime' ? 'Virar Fundador' : `Pagar por ano · ${fmt(rec.alvo.preco)}`}
+            </a>
+            {rec.alternativa && (
+              <a className="pl-cta ghost" style={{ marginTop: 0 }} href={checkout(rec.alternativa.id as Exclude<PlanoId, 'free'>, user.email)} target="_blank" rel="noreferrer">
+                Ou por semestre · {fmt(rec.alternativa.preco)}
+              </a>
+            )}
+          </div>
         )}
       </section>
 
