@@ -1405,7 +1405,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     .map(g=>({...g, ids: g.ids.filter(id=>
       ((id!=='financeiro' && id!=='ads') || gestaoEnabled)      // Ads Amazon usa a conta de seller
       && ((!id.startsWith('ml-') && id!=='ads-ml') || mlEnabled) // Ads Mercado Livre só com ML ligado
-      && (id!=='catalogo' || user.role==='admin')                // Analisar Catálogo: admin-only (em teste)
+      // Analisar Catálogo (Amazon): liberado pra todos em 24/09
       && (id!=='catalogo-ml' || user.role==='admin')             // Analisar Catálogo ML: admin-only (em teste)
     )}))
     .filter(g=>g.ids.length>0)
@@ -1782,7 +1782,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     setNav(id); setPage(1)
     setQuery(''); setSearchInput(''); queryRef.current=''  // trocar de aba sai da busca
     setSortBy('default')  // cada aba tem semântica própria — não herda ordenação
-    if(id==='competitor'||id==='saved'||id==='perfil'||id==='ml-calc'||id==='ml-minera'||id==='catalogo-ml'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
+    if(id==='competitor'||id==='saved'||id==='perfil'||id==='ml-calc'||id==='ml-minera'||id==='catalogo'||id==='catalogo-ml'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
     if(id==='extension'){
       loadIdRef.current++;setLoading(false)
       setProds([]);setDone(false)
@@ -2626,8 +2626,8 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
               </div>
             )}
 
-            {/* Analisar Catálogo — o NEO lê o PDF do fornecedor e devolve os produtos que valem (admin) */}
-            {nav==='catalogo'&&user.role==='admin'&&(
+            {/* Analisar Catálogo — o NEO lê o PDF do fornecedor e devolve os produtos que valem (todos, desde 24/09) */}
+            {nav==='catalogo'&&(
               <div style={{padding:'0 4px'}}>
                 <CatalogoFornecedor marketplace="amazon"/>
               </div>

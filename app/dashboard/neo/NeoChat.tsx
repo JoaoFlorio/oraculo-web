@@ -563,7 +563,6 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
      05/09: o estado só nascia no upload). No mount, uma consulta recupera o que
      estiver rodando — ou o resultado recente — e religa o polling se preciso. */
   useEffect(() => {
-    if (!isAdmin) return
     ;(async () => {
       try {
         const r = await fetch('/api/agent/fornecedor', { cache: 'no-store' })
@@ -576,7 +575,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
       } catch { /* sem card */ }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin])
+  }, [])
   async function dispararVarredura() {
     try {
       const r = await fetch('/api/agent/fornecedor?op=varrer', { method: 'POST' })
@@ -604,12 +603,8 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
     setErro(null)
     const novas: Img[] = []
     for (const f of Array.from(files)) {
-      // PDF = catálogo de fornecedor (admin): rota própria, não vira mensagem.
-      if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) {
-        if (isAdmin) { subirCatalogo(f); continue }
-        setErro('PDF ainda não é aceito aqui. Anexe uma foto (JPG, PNG ou do iPhone).')
-        continue
-      }
+      // PDF = catálogo de fornecedor: rota própria, não vira mensagem (liberado pra todos em 24/09).
+      if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) { subirCatalogo(f); continue }
       if (pend.length + novas.length >= MAX_IMGS) break
       // ⚠️ Só aceita ARQUIVO DE IMAGEM. `accept="image/*"` no input não impede
       // arrastar um PDF pra cá — e aí a "conversão" viraria lixo.
@@ -1401,8 +1396,8 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7m0 5h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 </button>
               )}
-              <input ref={fileRef} type="file" accept={isAdmin ? 'image/*,application/pdf' : 'image/*'} multiple hidden onChange={(e) => anexar(e.target.files)} />
-              <button className="neoIconBtn" onClick={() => fileRef.current?.click()} disabled={loading || pend.length >= MAX_IMGS} title={isAdmin ? 'Anexar imagem ou catálogo (PDF)' : 'Anexar imagem'} aria-label="Anexar imagem">
+              <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => anexar(e.target.files)} />
+              <button className="neoIconBtn" onClick={() => fileRef.current?.click()} disabled={loading || pend.length >= MAX_IMGS} title="Anexar imagem ou catálogo do fornecedor (PDF)" aria-label="Anexar imagem">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 11.5 12.6 19a5.1 5.1 0 0 1-7.2-7.2l8-8a3.4 3.4 0 0 1 4.8 4.8l-7.8 7.8a1.7 1.7 0 0 1-2.4-2.4l7-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
               </button>
               {suportaMic && (

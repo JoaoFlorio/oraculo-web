@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
 
-// Proxy do CATÁLOGO DE FORNECEDOR do NEO (minerador Fase 2, admin-only por ora).
+// Proxy do CATÁLOGO DE FORNECEDOR do NEO (minerador). 24/09: LIBERADO pra todos os
+// clientes na Amazon (pedido do João). O cruzamento no Mercado Livre segue admin-only
+// enquanto o ML inteiro está em teste.
 // Mesmo encanamento dos demais proxies: sessão → user.email (nunca da URL),
 // BACKEND_URL + INTERNAL_KEY. O corpo do POST é o PDF cru (stream até o backend).
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
@@ -12,13 +14,13 @@ const KEY = process.env.INTERNAL_KEY || ''
 export async function POST(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  // ⚠️ ADMIN-ONLY enquanto o minerador está em teste (decisão do João: "começo só
-  // na minha conta sem ninguém ver"). Liberar = tirar esta linha.
-  if (user.role !== 'admin') return NextResponse.json({ error: 'minerador de fornecedor em teste (admin only)' }, { status: 403 })
+  // Conta demo (credencial pública do lançamento) não gasta Gemini nem o token compartilhado.
+  if (user.role === 'demo') return NextResponse.json({ error: 'a conta demo não sobe catálogo — na sua conta o NEO lê e varre o PDF do seu fornecedor' }, { status: 403 })
   // ?op=varrer → dispara a varredura completa do catálogo (sem body).
-  // ?marketplace=ml cruza o MESMO catálogo no Mercado Livre (default amazon).
+  // ?marketplace=ml cruza o MESMO catálogo no Mercado Livre (default amazon) — admin-only.
   if (req.nextUrl.searchParams.get('op') === 'varrer') {
     const mkt = req.nextUrl.searchParams.get('marketplace') === 'ml' ? 'ml' : 'amazon'
+    if (mkt === 'ml' && user.role !== 'admin') return NextResponse.json({ error: 'Mercado Livre em teste (admin only)' }, { status: 403 })
     try {
       const res = await fetch(`${BACKEND}/api/fornecedor/varrer?email=${encodeURIComponent(user.email)}&marketplace=${mkt}`, {
         method: 'POST', headers: { 'x-internal-key': KEY }, signal: AbortSignal.timeout(20_000),
@@ -46,9 +48,9 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  if (user.role !== 'admin') return NextResponse.json({ status: 'nenhum' })
   const endpoint = req.nextUrl.searchParams.get('resultados') === '1' ? 'resultados' : 'status'
   const mkt = req.nextUrl.searchParams.get('marketplace') === 'ml' ? 'ml' : 'amazon'
+  if (user.role === 'demo' || (mkt === 'ml' && user.role !== 'admin')) return NextResponse.json({ status: 'nenhum' })
   // streaming: repassa ?parcial=1 (resultados da varredura ainda rodando)
   const parcial = req.nextUrl.searchParams.get('parcial') === '1' ? '&parcial=1' : ''
   try {

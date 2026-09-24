@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 /* ═══════════════════════════════════════════════════════════════════════════
    ANÁLISE DE CATÁLOGO — o NEO lê o PDF do fornecedor e devolve os produtos que
    valem a pena no formato de card da Mineração (foto · demanda · preço · veredito,
-   clicável pro anúncio). Reusa o pipeline /api/agent/fornecedor (admin-only):
+   clicável pro anúncio). Reusa o pipeline /api/agent/fornecedor (liberado pra todos em 24/09; ML admin-only):
    upload → extração (feedback em etapas) → varredura na Amazon → resultados.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -59,7 +59,7 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
       const extraindo = cat?.status === 'extraindo' || cat?.status === 'enviando'
       const varrendo = cat?.varredura?.status === 'rodando'
       if (extraindo || varrendo || !cat) void carregarStatus()
-    }, 3000)
+    }, 8000)   // 24/09: liberado pra todos — 3 s × N clientes era carga à toa
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cat?.status, cat?.varredura?.status])
