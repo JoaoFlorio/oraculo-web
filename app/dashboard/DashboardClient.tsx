@@ -10,6 +10,8 @@ const AdsAmazon = dynamic(()=>import('./GestaoHub'),{ssr:false,loading:()=><div 
 // Ads Mercado Livre = o MLGestao em modo `soAds` (reusa a tela de Mercado Ads).
 const AdsML = dynamic(()=>import('./MLGestao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando Ads ML…</div>})
 const NeoChat = dynamic(()=>import('./neo/NeoChat'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Acordando o NEO…</div>})
+const Planos = dynamic(()=>import('./Planos'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando…</div>})
+import { GREENN_LINKS } from '@/lib/planos'
 const CatalogoFornecedor = dynamic(()=>import('./CatalogoFornecedor'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando…</div>})
 const MLCalculator = dynamic(()=>import('./MLCalculator'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando calculadora…</div>})
 const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando o garimpo…</div>})
@@ -43,28 +45,25 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
-  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','tutoriais','perfil'],                                                        modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','perfil'], modal:true,  export:true  },
+  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','tutoriais','planos','perfil'],                                                        modal:false, export:false },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
-const GREENN: Record<string,string> = {
-  monthly:  'https://payfast.greenn.com.br/pm36pq4/offer/B0febG',
-  biannual: 'https://payfast.greenn.com.br/pm36pq4/offer/rpgHFd',
-  annual:   'https://payfast.greenn.com.br/pm36pq4/offer/WBkId3',
-  lifetime: 'https://payfast.greenn.com.br/pm36pq4/offer/WBkId3', // fallback → anual
-}
+// 24/09: fonte única em lib/planos.ts (a landing e o painel divergiam: 127/597/997 × 79,90/397/597)
+const GREENN: Record<string,string> = { ...GREENN_LINKS }
 // Preços reais dos planos (fonte: oferta Greenn ativa)
 const PLAN_PRICE: Record<string,string> = {
-  monthly:  'R$ 79,90/mês',
-  biannual: 'R$ 397/semestre',
-  annual:   'R$ 597/ano',
+  monthly:  'R$ 127/mês',
+  biannual: 'R$ 597/semestre',
+  annual:   'R$ 997/ano',
+  lifetime: 'R$ 1.497 (única vez)',
 }
 // Economia REAL do Anual vs 12× Mensal: 12×79,90 = R$ 958,80 − R$ 597 = R$ 361,80 (38%)
-const ANNUAL_ECON     = 12*79.90 - 597
-const ANNUAL_ECON_PCT = Math.round((ANNUAL_ECON/(12*79.90))*100)
+const ANNUAL_ECON     = 12*127 - 997
+const ANNUAL_ECON_PCT = Math.round((ANNUAL_ECON/(12*127))*100)
 const ANNUAL_ECON_FMT = ANNUAL_ECON.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 
 /* ─── Data ───────────────────────────────────────────────────────────────── */
@@ -97,6 +96,7 @@ const NAV = [
   { id:'agente',      label:'Agente NEO'        },
   { id:'extension',   label:'Extensão'          },
   { id:'tutoriais',   label:'Tutoriais'         },
+  { id:'planos',      label:'Planos'            },
   { id:'perfil',      label:'Meu Perfil'        },
 ]
 // Tutoriais em vídeo (Panda Video). Para adicionar/editar um vídeo: pegue a URL
@@ -118,7 +118,7 @@ const NAV_GROUPS = [
   { group:'Mercado Livre', ids:['ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc'] },
   { group:'Ferramentas', ids:['agente','extension'] },
   { group:'Ajuda',       ids:['tutoriais'] },
-  { group:'Conta',       ids:['perfil'] },
+  { group:'Conta',       ids:['planos','perfil'] },
 ]
 // ⭐ A comissão vem do BACKEND, junto de cada produto (`referralRate` e
 // `referralMin`, calculados por lib/comissoes.ts). Aqui ficava uma tabela de 10
@@ -291,6 +291,7 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     extension:  <><rect x="5" y="5" width="18" height="18" rx="3" stroke="currentColor" strokeWidth="1.5"/><path d="M11 5v4a2 2 0 01-2 2H5M19 14h-2a2 2 0 00-2 2v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     agente:     <><circle cx="14" cy="10" r="5" stroke="currentColor" strokeWidth="1.5"/><path d="M10 15c-3 1.5-5 4-5 7h18c0-3-2-5.5-5-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M14 10v3M12 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     financeiro: <><path d="M6 20V14M10 20V10M14 20V6M18 20V12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M6 8l4-3 4 4 4-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></>,
+    planos:     <><path d="M5 21h5v-6H5zM11.5 21h5V9h-5zM18 21h5V4h-5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></>,
     perfil:     <><circle cx="14" cy="10.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5.5 23c1.3-4.4 4.7-6.8 8.5-6.8s7.2 2.4 8.5 6.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     tutoriais:  <><rect x="4" y="7" width="20" height="15" rx="3" stroke="currentColor" strokeWidth="1.5"/><path d="M12 11.5l5 3-5 3z" fill="currentColor"/></>,
     'ml-calc':  <><rect x="6" y="4" width="16" height="20" rx="2.5" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="7" width="10" height="4" rx="1" stroke="currentColor" strokeWidth="1.3"/><path d="M10 15h.01M14 15h.01M18 15h.01M10 19h.01M14 19h.01M18 19h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></>,
@@ -1782,7 +1783,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
     setNav(id); setPage(1)
     setQuery(''); setSearchInput(''); queryRef.current=''  // trocar de aba sai da busca
     setSortBy('default')  // cada aba tem semântica própria — não herda ordenação
-    if(id==='competitor'||id==='saved'||id==='perfil'||id==='ml-calc'||id==='ml-minera'||id==='catalogo'||id==='catalogo-ml'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
+    if(id==='competitor'||id==='saved'||id==='perfil'||id==='planos'||id==='ml-calc'||id==='ml-minera'||id==='catalogo'||id==='catalogo-ml'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
     if(id==='extension'){
       loadIdRef.current++;setLoading(false)
       setProds([]);setDone(false)
@@ -1910,9 +1911,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {/* Os 3 planos — assinatura recorrente (mensal · semestral · anual). Escolha reabre o acesso quando o pagamento é aprovado. */}
             <div style={{padding:'22px 28px 8px',display:'flex',flexDirection:'column',gap:10}}>
               {[
-                {id:'monthly', nome:'Mensal',    preco:'R$ 79,90',  ciclo:'/mês',       extra:'',                                                          melhor:false},
-                {id:'biannual',nome:'Semestral', preco:'R$ 397',    ciclo:'/semestre',  extra:'2 meses grátis vs mensal',                                  melhor:false},
-                {id:'annual',  nome:'Anual',     preco:'R$ 597',    ciclo:'/ano',       extra:`economize R$ ${ANNUAL_ECON_FMT}/ano (${ANNUAL_ECON_PCT}%)`, melhor:true},
+                {id:'monthly', nome:'Mensal',    preco:'R$ 127',    ciclo:'/mês',       extra:'',                                                          melhor:false},
+                {id:'biannual',nome:'Semestral', preco:'R$ 597',    ciclo:'/semestre',  extra:'2 meses grátis vs mensal',                                  melhor:false},
+                {id:'annual',  nome:'Anual',     preco:'R$ 997',    ciclo:'/ano',       extra:`economize R$ ${ANNUAL_ECON_FMT}/ano (${ANNUAL_ECON_PCT}%)`, melhor:true},
               ].map(p=>(
                 <a key={p.id} href={`${GREENN[p.id]}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
                   style={{position:'relative' as const,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,textDecoration:'none',borderRadius:12,padding:'14px 16px',
@@ -2406,6 +2407,19 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             )}
 
             {/* Meu Perfil */}
+            {/* Planos — onde a pessoa está e o próximo degrau (upsell inteligente; checkout na Greenn) */}
+            {nav==='planos'&&(
+              <div style={{padding:'0 4px'}}>
+                <Planos user={{ email:user.email, name:user.name, plan:user.plan, expiresAt:user.expiresAt }}/>
+              </div>
+            )}
+            {/* ⏳ Upsell antes de vencer (pedido do João): mensal/semestral com ≤7 dias vê o degrau de cima em qualquer aba */}
+            {nav!=='planos'&&!isLifetime&&(user.plan==='monthly'||user.plan==='biannual')&&daysLeft!=null&&daysLeft>=0&&daysLeft<=7&&(
+              <div style={{margin:'0 4px 14px',padding:'10px 14px',borderRadius:12,border:'1px solid rgba(240,180,41,.45)',background:'rgba(240,180,41,.08)',display:'flex',flexWrap:'wrap',alignItems:'center',gap:10,justifyContent:'space-between',fontSize:12.5,color:T.t2}}>
+                <span>⏳ Seu plano <b style={{color:T.t1}}>{cfg.label}</b> {user.plan==='monthly'?'renova':'vence'} em <b style={{color:T.gold}}>{daysLeft} dia{daysLeft===1?'':'s'}</b>. Troque para o <b style={{color:T.t1}}>Anual</b> antes e pague o equivalente a <b style={{color:T.gold}}>R$ 83/mês</b>.</span>
+                <button onClick={()=>goNav('planos')} style={{padding:'7px 12px',borderRadius:9,border:'none',background:T.gold,color:'#111',fontWeight:800,fontSize:12,cursor:'pointer'}}>Ver planos →</button>
+              </div>
+            )}
             {nav==='perfil'&&(()=>{
               const PLAN_DAYS: Record<string,number> = { monthly:30, biannual:180, annual:365 }
               const cycleDays  = PLAN_DAYS[user.plan]

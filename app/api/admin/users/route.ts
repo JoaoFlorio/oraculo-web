@@ -36,9 +36,10 @@ async function clientsLevel(req: NextRequest): Promise<'internal' | 'admin' | 's
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
-function calcExpiry(plan: string): Date | null {
+function calcExpiry(plan: string, base?: Date | null): Date | null {
   if (plan === 'lifetime') return null
-  const d    = new Date()
+  // 24/09: renovação/upgrade parte do vencimento atual (se ainda vale) — o cliente não perde os dias que faltavam.
+  const d    = base && base.getTime() > Date.now() ? new Date(base.getTime()) : new Date()
   const days: Record<string, number> = { monthly: 30, biannual: 180, annual: 365 }
   d.setTime(d.getTime() + (days[plan] ?? 30) * DAY_MS)
   return d
@@ -154,8 +155,8 @@ export async function POST(req: NextRequest) {
 
   const phoneVal = phone ? String(phone).trim() : null
   const targetPlan = plan || 'monthly'
-  const expiry     = calcExpiry(targetPlan)
   const exists     = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
+  const expiry     = calcExpiry(targetPlan, exists && exists.plan !== 'lifetime' ? exists.expiresAt : null)
 
   if (exists) {
     // Atualiza plano do usuário existente. Reativa a conta (active=true): uma
