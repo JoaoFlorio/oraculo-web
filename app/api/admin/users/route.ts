@@ -144,8 +144,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!(await checkAuth(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { email, name, plan, phone, skipLicense, licenseKey: providedKey } = await req.json()
+  const { email, name, plan, phone, skipLicense, licenseKey: providedKey, password: senhaDoChamador } = await req.json()
   if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
+  // 23/09 (achado 41): o webhook da Greenn manda a senha que vai no e-mail de acesso, mas esta
+  // rota gerava OUTRA e gravava a sua — o cliente recebia uma senha que não abria. Só o chamador
+  // INTERNO (x-admin-key) pode fornecer a senha; painel/suporte continuam com a gerada aqui.
+  const nivel = await clientsLevel(req)
+  const senhaFornecida = nivel === 'internal' && typeof senhaDoChamador === 'string' && senhaDoChamador.length >= 8 ? senhaDoChamador : null
 
   const phoneVal = phone ? String(phone).trim() : null
   const targetPlan = plan || 'monthly'
@@ -168,8 +173,8 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // Novo usuário: gera senha automática
-  const password = genPassword()
+  // Novo usuário: senha do chamador interno (webhook) ou gerada aqui
+  const password = senhaFornecida || genPassword()
   const hash     = await bcrypt.hash(password, 12)
   const user     = await prisma.user.create({
     data: {

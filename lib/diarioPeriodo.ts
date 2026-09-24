@@ -329,7 +329,7 @@ export function decompor(antes: SnapshotPeriodo, depois: SnapshotPeriodo): Decom
   }
   tarifa('comissao', 'Comissão', 'comissão')
   tarifa('fba', 'Tarifa FBA', 'tarifa FBA')
-  tarifa('taxaPrograma', 'Taxa Amazon pra Todos', 'Taxa Amazon pra Todos')
+  tarifa('taxaPrograma', 'Parcelamento sem juros (Amazon pra Todos)', 'Parcelamento sem juros (Amazon pra Todos)')
 
   const dOut = d('outrasTaxas')
   põe(dOut === null ? null : -dOut, {

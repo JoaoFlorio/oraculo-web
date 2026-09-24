@@ -12,6 +12,25 @@ import { codigoTotpValido, totpDe } from '@/lib/totp'
 // caminhos rodam um bcrypt.compare equivalente.
 const HASH_ISCA = '$2b$12$ZUNqUoaHoA.7urkvufERLuUXm2gEDx1O/4enNAx4ah2JM4vn2ivcq'
 
+// 🔒 23/09 (achado 36): contador ATÔMICO no jsonb — rajadas paralelas de vários IPs somavam
+// uma vez só (read-modify-write) e reabriam margem de força bruta. 5 erros → 15 min dobrando.
+async function registrarFalhaLogin(userId: string): Promise<void> {
+  try {
+    const rows = await prisma.$queryRaw<{ n: number }[]>`
+      UPDATE "User"
+         SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('loginLock',
+               jsonb_build_object('n', COALESCE((metadata->'loginLock'->>'n')::int, 0) + 1,
+                                  'until', COALESCE((metadata->'loginLock'->>'until')::bigint, 0)))
+       WHERE id = ${userId}
+       RETURNING (metadata->'loginLock'->>'n')::int AS n`
+    const n = Number(rows?.[0]?.n || 0)
+    if (n >= 5) {
+      const until = String(Date.now() + Math.min(24 * 3600_000, 15 * 60_000 * Math.pow(2, n - 5)))
+      await prisma.$executeRaw`UPDATE "User" SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('loginLock', jsonb_build_object('n', ${n}::int, 'until', ${until}::bigint)) WHERE id = ${userId}`
+    }
+  } catch (e) { console.error('[login] trava por conta falhou:', e) }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { email, password, code } = await req.json()
@@ -36,9 +55,7 @@ export async function POST(req: NextRequest) {
     }
     const valid = await bcrypt.compare(password, user.password)
     if (!valid) {
-      const n = (Number(lock.n) || 0) + 1
-      const until = n >= 5 ? Date.now() + Math.min(24 * 3600_000, 15 * 60_000 * Math.pow(2, n - 5)) : 0
-      await prisma.user.update({ where: { id: user.id }, data: { metadata: { ...metaLogin, loginLock: { n, until } } as object } }).catch(() => {})
+      await registrarFalhaLogin(user.id)
       return NextResponse.json({ error: 'E-mail ou senha incorretos' }, { status: 401 })
     }
     // 🔐 23/09: 2ª etapa (TOTP) pra quem ativou. Código errado conta na mesma trava por conta.
@@ -47,15 +64,13 @@ export async function POST(req: NextRequest) {
       const cod = String(code || '').trim()
       if (!cod) return NextResponse.json({ error: 'Digite o código do seu app autenticador', totpRequired: true }, { status: 401 })
       if (!(await codigoTotpValido(totp.secret, cod))) {
-        const n = (Number(lock.n) || 0) + 1
-        const until = n >= 5 ? Date.now() + Math.min(24 * 3600_000, 15 * 60_000 * Math.pow(2, n - 5)) : 0
-        await prisma.user.update({ where: { id: user.id }, data: { metadata: { ...metaLogin, loginLock: { n, until } } as object } }).catch(() => {})
+        await registrarFalhaLogin(user.id)
         return NextResponse.json({ error: 'Código inválido', totpRequired: true }, { status: 401 })
       }
     }
     if (lock.n) {
-      const { loginLock: _l, ...resto } = metaLogin
-      await prisma.user.update({ where: { id: user.id }, data: { metadata: resto as object } }).catch(() => {})
+      // zera só a chave loginLock (jsonb -), sem read-modify-write que apagaria totp gravado em paralelo
+      await prisma.$executeRaw`UPDATE "User" SET metadata = COALESCE(metadata, '{}'::jsonb) - 'loginLock' WHERE id = ${user.id}`.catch(() => {})
     }
 
     const denied = accessDenied(user)
