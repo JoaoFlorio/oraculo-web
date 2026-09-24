@@ -56,14 +56,14 @@ const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:numbe
 const GREENN: Record<string,string> = { ...GREENN_LINKS }
 // Preços reais dos planos (fonte: oferta Greenn ativa)
 const PLAN_PRICE: Record<string,string> = {
-  monthly:  'R$ 127/mês',
-  biannual: 'R$ 597/semestre',
-  annual:   'R$ 997/ano',
+  monthly:  'R$ 97/mês',
+  biannual: 'R$ 497/semestre',
+  annual:   'R$ 897/ano',
   lifetime: 'R$ 1.497 (única vez)',
 }
 // Economia REAL do Anual vs 12× Mensal: 12×79,90 = R$ 958,80 − R$ 597 = R$ 361,80 (38%)
-const ANNUAL_ECON     = 12*127 - 997
-const ANNUAL_ECON_PCT = Math.round((ANNUAL_ECON/(12*127))*100)
+const ANNUAL_ECON     = 12*97 - 897
+const ANNUAL_ECON_PCT = Math.round((ANNUAL_ECON/(12*97))*100)
 const ANNUAL_ECON_FMT = ANNUAL_ECON.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
 
 /* ─── Data ───────────────────────────────────────────────────────────────── */
@@ -1911,9 +1911,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {/* Os 3 planos — assinatura recorrente (mensal · semestral · anual). Escolha reabre o acesso quando o pagamento é aprovado. */}
             <div style={{padding:'22px 28px 8px',display:'flex',flexDirection:'column',gap:10}}>
               {[
-                {id:'monthly', nome:'Mensal',    preco:'R$ 127',    ciclo:'/mês',       extra:'',                                                          melhor:false},
-                {id:'biannual',nome:'Semestral', preco:'R$ 597',    ciclo:'/semestre',  extra:'2 meses grátis vs mensal',                                  melhor:false},
-                {id:'annual',  nome:'Anual',     preco:'R$ 997',    ciclo:'/ano',       extra:`economize R$ ${ANNUAL_ECON_FMT}/ano (${ANNUAL_ECON_PCT}%)`, melhor:true},
+                {id:'monthly', nome:'Mensal',    preco:'R$ 97',     ciclo:'/mês',       extra:'',                                                          melhor:false},
+                {id:'biannual',nome:'Semestral', preco:'R$ 497',    ciclo:'/semestre',  extra:'2 meses grátis vs mensal',                                  melhor:false},
+                {id:'annual',  nome:'Anual',     preco:'R$ 897',    ciclo:'/ano',       extra:`economize R$ ${ANNUAL_ECON_FMT}/ano (${ANNUAL_ECON_PCT}%)`, melhor:true},
               ].map(p=>(
                 <a key={p.id} href={`${GREENN[p.id]}?email=${encodeURIComponent(user.email)}`} target="_blank" rel="noreferrer"
                   style={{position:'relative' as const,display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,textDecoration:'none',borderRadius:12,padding:'14px 16px',
@@ -2416,7 +2416,7 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             {/* ⏳ Upsell antes de vencer (pedido do João): mensal/semestral com ≤7 dias vê o degrau de cima em qualquer aba */}
             {nav!=='planos'&&!isLifetime&&(user.plan==='monthly'||user.plan==='biannual')&&daysLeft!=null&&daysLeft>=0&&daysLeft<=7&&(
               <div style={{margin:'0 4px 14px',padding:'10px 14px',borderRadius:12,border:'1px solid rgba(240,180,41,.45)',background:'rgba(240,180,41,.08)',display:'flex',flexWrap:'wrap',alignItems:'center',gap:10,justifyContent:'space-between',fontSize:12.5,color:T.t2}}>
-                <span>⏳ Seu plano <b style={{color:T.t1}}>{cfg.label}</b> {user.plan==='monthly'?'renova':'vence'} em <b style={{color:T.gold}}>{daysLeft} dia{daysLeft===1?'':'s'}</b>. Troque para o <b style={{color:T.t1}}>Anual</b> antes e pague o equivalente a <b style={{color:T.gold}}>R$ 83/mês</b>.</span>
+                <span>⏳ Seu plano <b style={{color:T.t1}}>{cfg.label}</b> {user.plan==='monthly'?'renova':'vence'} em <b style={{color:T.gold}}>{daysLeft} dia{daysLeft===1?'':'s'}</b>. Troque para o <b style={{color:T.t1}}>Anual</b> antes e pague o equivalente a <b style={{color:T.gold}}>R$ 75/mês</b>.</span>
                 <button onClick={()=>goNav('planos')} style={{padding:'7px 12px',borderRadius:9,border:'none',background:T.gold,color:'#111',fontWeight:800,fontSize:12,cursor:'pointer'}}>Ver planos →</button>
               </div>
             )}
