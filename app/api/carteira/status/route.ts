@@ -11,7 +11,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
   try {
-    // plano vem da SESSÃO (define a franquia mensal, hoje 150 pra todos) — não do cliente.
+    // plano vem da SESSÃO (define a franquia mensal, hoje 100 pra todos desde 25/09) — não do cliente.
     const qs = `email=${encodeURIComponent(user.email)}${user.plan ? `&plano=${encodeURIComponent(user.plan)}` : ''}`
     const res = await fetch(`${BACKEND}/api/carteira/status?${qs}`, {
       cache: 'no-store',

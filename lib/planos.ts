@@ -27,7 +27,7 @@ export const GREENN_LINKS: Record<Exclude<PlanoId, 'free'>, string> = {
 export const PLANOS: Plano[] = [
   { id: 'monthly',  nome: 'Mensal',    preco: 97,   ciclo: '/mês',      dias: 30,   porMes: 97,    link: GREENN_LINKS.monthly,
     frase: 'Pra começar agora e enxergar a operação com controle.',
-    destaques: ['Gestão com DRE real da sua conta Amazon', 'Mineração + Calculadora + Extensão', 'Agente NEO com 150 créditos/mês', 'Cancela quando quiser'] },
+    destaques: ['Gestão com DRE real da sua conta Amazon', 'Mineração + Calculadora + Extensão', 'Agente NEO com 100 créditos/mês', 'Cancela quando quiser'] },
   { id: 'biannual', nome: 'Semestral', preco: 497,  ciclo: '/6 meses',  dias: 180,  porMes: 82.83, link: GREENN_LINKS.biannual,
     frase: 'Seis meses de consistência pagando menos por mês.',
     destaques: ['Tudo do Mensal', 'Equivale a R$ 82,83/mês', 'Economiza R$ 85 vs 6 mensais', 'Ou 6x de R$ 92,94 no cartão'] },
