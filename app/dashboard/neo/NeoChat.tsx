@@ -673,7 +673,10 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         data = await res.json().catch(() => null)
         // 4xx é erro nosso (nada a ganhar repetindo). 5xx / resposta não-JSON
         // é transitório: espera e tenta de novo.
-        const transitorio = !data || (res.status >= 500 && res.status !== 504)
+        // 25/09 (custo): 502 'falha no agente' em geral já foi cobrado pelo Google — só repete
+        // quando a resposta nem é JSON (deploy) ou o Google recusou por carga (429/503, não cobra).
+        const codG = Number(data?.detail?.error?.code || 0)
+        const transitorio = !data || res.status === 503 || (res.status === 502 && (codG === 429 || codG === 503))
         if (!transitorio) break
         if (t < 3) { setSeg(0); await new Promise((r) => setTimeout(r, t * 2500)) }
       }
