@@ -12,6 +12,7 @@ const AdsML = dynamic(()=>import('./MLGestao'),{ssr:false,loading:()=><div style
 const NeoChat = dynamic(()=>import('./neo/NeoChat'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Acordando o NEO…</div>})
 const Planos = dynamic(()=>import('./Planos'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando…</div>})
 import { GREENN_LINKS } from '@/lib/planos'
+const Novidades = dynamic(()=>import('./Novidades'),{ssr:false})
 const CatalogoFornecedor = dynamic(()=>import('./CatalogoFornecedor'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando…</div>})
 const MLCalculator = dynamic(()=>import('./MLCalculator'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando calculadora…</div>})
 const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando o garimpo…</div>})
@@ -1893,6 +1894,8 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
       {upgrade&&<UpgradeModal onClose={()=>setUpgrade(false)}/>}
       {detail&&<DetailModal product={detail} onClose={()=>setDetail(null)} promo={promo}/>}
       {promoOpen&&<PromoModal promo={promo} setPromo={setPromo} onClose={()=>setPromoOpen(false)}/>}
+      {/* Novidades (27/09): abre 1× por aparelho; nunca por cima do bloqueio de vencido */}
+      {!expired&&<Novidades onIr={goNav}/>}
 
       {/* BLOQUEIO VENCIDO — overlay premium sem fechar: só renovar ou sair */}
       {expired&&(
