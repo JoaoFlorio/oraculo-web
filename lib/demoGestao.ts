@@ -333,7 +333,9 @@ export function demoInventory(cfg: DemoConfig): any {
     const fulfillable = Math.max(20, Math.round(unidadesMes * cobertura))
     const inbound = Math.round(unidadesMes * (0.2 + 0.3 * Math.abs(Math.sin(i * 2.3 + 1.1))))  // reposição a caminho
     const reserved = Math.round(unidadesMes * 0.04)   // ~1 dia reservado (em separação)
-    return { sku: p.sku, asin: p.asin || demoAsin(p.sku), name: p.name, image: p.image || '', fulfillable, inbound, reserved, unfulfillable: 0, demoBlur: !!cfg.featuredSku && p.sku !== cfg.featuredSku }
+    // velocidadeDia: o /inventory real devolve (getSkuTrend 14d) e o NEO usa pra cobertura. Sem ela a
+    // demo parecia "11 SKUs sem venda" (26/09).
+    return { sku: p.sku, asin: p.asin || demoAsin(p.sku), name: p.name, image: p.image || '', fulfillable, inbound, reserved, unfulfillable: 0, demoBlur: !!cfg.featuredSku && p.sku !== cfg.featuredSku, velocidadeDia: Math.round(unidadesMes / 30 * 1000) / 1000 }
   })
   // ⚠️ A chave é `inventario`, não `itens`: é o nome que o backend real devolve
   // e o único que o painel lê (`GestaoHub` linha ~1091 exige
