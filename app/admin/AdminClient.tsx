@@ -928,12 +928,16 @@ export default function AdminClient({ role, name, previewData }: { role: string;
    backend (neo_usage_events) registra cada chamada à Google — conversa E gerações
    (imagem, A+, vídeo, briefing, catálogo, verificação visual) — com o custo em
    dólar congelado no dia. Aqui é a fatura explicada: por dia, por tipo, por seller.
-   Fonte: GET /api/agent/uso (só admin). Câmbio só pra exibir. */
-const USD_BRL = 5.5
+   Fonte: GET /api/agent/uso (só admin). Câmbio só pra exibir.
+   26/09: o câmbio vem do BACKEND = o da FATURA (PTAX do Banco Central × 1,1383, imposto embutido na
+   tabela em reais do Google). Antes era 5,50 fixo e o painel mostrava ~7% a menos que a fatura. */
 const TIPO_LABEL: Record<string, string> = {
   neo: 'Conversa com o NEO', suporte: 'Conversa (Suporte)', imagem: 'Imagens de anúncio', aplus: 'Conteúdo A+',
   video: 'Vídeo (Omni/Veo)', briefing: 'Briefing de vídeo', catalogo: 'Catálogo de fornecedor (PDF)', visual: 'Verificação visual (catálogo)',
+  cache: 'Cache do NEO (guardar o prompt)', insight: 'Cartões de insight', memoria: 'Memória / resumo de conversa', 'catalogo-ab': 'Teste A/B de catálogo',
 }
+type Falha = { agente: string; status: string; n: number; usd: number; semMedicao: number }
+const STATUS_LABEL: Record<string, string> = { erro: 'conversa que quebrou no meio', 'sem-imagem': 'imagem que voltou sem figura', 'sem-video': 'vídeo que voltou sem vídeo', timeout: 'tempo esgotado (custo desconhecido)' }
 function CustoTab() {
   const [dias, setDias] = useState(7)
   const [d, setD] = useState<any>(null)
@@ -954,6 +958,7 @@ function CustoTab() {
       {sub && <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2 }}>{sub}</div>}
     </div>
   )
+  const USD_BRL = Number(d?.taxa?.brl) || 5.9
   const totalUsd = Number(d?.total?.usd || 0)
   const porDia: any[] = Array.isArray(d?.porDia) ? d.porDia : []
   const porAgente: any[] = Array.isArray(d?.porAgente) ? d.porAgente : []
@@ -964,7 +969,7 @@ function CustoTab() {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <div style={{ fontSize: 12.5, color: C.t2 }}>O que a Google cobra pela IA do Oráculo — conversa e gerações (imagem, A+, vídeo, briefing, catálogo). Dólar congelado no dia; câmbio de exibição R$ {USD_BRL.toFixed(2)}.</div>
+        <div style={{ fontSize: 12.5, color: C.t2 }}>O que a Google cobra pela IA do Oráculo — conversa e gerações (imagem, A+, vídeo, briefing, catálogo). Dólar congelado no dia; câmbio da fatura R$ {USD_BRL.toFixed(2)}{d?.taxa?.fonte ? ` (${d.taxa.fonte})` : ''}.</div>
         <div style={{ display: 'flex', gap: 6 }}>{[1, 7, 30].map(n => <button key={n} onClick={() => setDias(n)} style={chipC(dias === n)}>{n === 1 ? 'Hoje' : `${n} dias`}</button>)}</div>
       </div>
       {erro && <div style={{ ...card, padding: 14, color: C.red || '#F87171', marginBottom: 12 }}>{erro}</div>}
@@ -977,7 +982,15 @@ function CustoTab() {
             {dias > 1 && kpi('Dia mais caro', maisCaro ? brl(maisCaro.usd * USD_BRL) : '—', maisCaro ? `${isoDM(maisCaro.dia)} · ${maisCaro.mensagens} chamadas` : undefined)}
             {dias === 1 && kpi('Chamadas hoje', Number(d.total?.mensagens || 0).toLocaleString('pt-BR'), `${brl(totalUsd * USD_BRL / Math.max(1, Number(d.total?.mensagens || 0)))} por chamada`)}
             {kpi('Tokens de entrada em cache', `${Math.round(100 * Number(d.total?.cache || 0) / Math.max(1, Number(d.total?.input || 0)))}%`, 'quanto da entrada saiu pelo cache (barato)')}
+            {kpi('Cache já economizou', brl(Number(d.economiaCacheUsd || 0) * USD_BRL), 'o Google cobra 10% do token em cache — isto NÃO aparece no campo "Economia" do AI Studio (lá é só crédito)')}
           </div>
+          {Array.isArray(d.falhas) && d.falhas.length > 0 && (
+            <div style={{ ...card, padding: '12px 16px', marginBottom: 12, fontSize: 12.5, color: C.t2 }}>
+              <span style={{ fontWeight: 700, color: C.t1 }}>Chamadas que falharam (podem ter sido cobradas): </span>
+              {(d.falhas as Falha[]).map(f => `${f.n}× ${STATUS_LABEL[f.status] || f.status} (${TIPO_LABEL[f.agente] || f.agente}${Number(f.usd) ? `, ${brl(Number(f.usd) * USD_BRL)}` : ''})`).join(' · ')}
+              {(d.falhas as Falha[]).some(f => f.semMedicao > 0) && <span style={{ color: C.t3 }}> — tempo esgotado entra sem valor: o Google não devolve o consumo.</span>}
+            </div>
+          )}
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 12 }}>
             <div style={{ ...card, padding: '14px 6px' }}>
