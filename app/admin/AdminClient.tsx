@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from 'react'
 
 /* ─── Tokens premium (grafite + ouro, identidade Oráculo) ─────────────────── */
+import CancelarNaGreenn from './CancelarNaGreenn'
+
 const C = {
   bg: '#07080D', card: '#10121B', cardHov: '#161925', line: 'rgba(255,255,255,0.06)',
   lineG: 'rgba(240,180,41,0.30)', gold: '#F0B429', green: '#34D399', red: '#F87171',
@@ -190,7 +192,12 @@ function RevChart({ series, days }: { series: { date: string; amount: number }[]
 export default function AdminClient({ role, name, previewData }: { role: string; name: string; previewData?: any }) {
   // Funcionário (staff) só cadastra cliente; admin vê o centro de decisão completo.
   const isAdmin = role === 'admin'
-  const [tab, setTab] = useState<'overview' | 'clients' | 'new' | 'team' | 'demo' | 'custo'>(isAdmin ? 'overview' : 'new')
+  // 27/09: ?aba=assinaturas (link do push "troca de plano") abre direto a lista "Cancelar na Greenn".
+  const [tab, setTab] = useState<'overview' | 'clients' | 'new' | 'team' | 'demo' | 'custo' | 'assinaturas'>(isAdmin ? 'overview' : 'new')
+  useEffect(() => {
+    const t = setTimeout(() => { try { if (isAdmin && new URLSearchParams(window.location.search).get('aba') === 'assinaturas') setTab('assinaturas') } catch { /* ok */ } }, 0)
+    return () => clearTimeout(t)
+  }, [isAdmin])
   const [totpOpen, setTotpOpen] = useState(false)   // 23/09: 2FA da própria conta
   const [data, setData] = useState<any>(previewData || null)
   const [days, setDays] = useState(90)
@@ -528,7 +535,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {([['overview', 'Visão geral'], ['clients', 'Clientes'], ['new', 'Novo cliente'], ['team', 'Equipe'], ['demo', 'Conta Demo'], ['custo', 'Custo IA']] as const).map(([id, label]) => (
+          {([['overview', 'Visão geral'], ['clients', 'Clientes'], ['new', 'Novo cliente'], ['team', 'Equipe'], ['demo', 'Conta Demo'], ['custo', 'Custo IA'], ['assinaturas', 'Cancelar na Greenn']] as const).map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={chip(tab === id)}>{label}</button>
           ))}
         </div>
@@ -918,6 +925,8 @@ export default function AdminClient({ role, name, previewData }: { role: string;
 
         {/* ═══ CUSTO IA (22/09) — o que a Google cobra, por dia / tipo / seller ═══ */}
         {tab === 'custo' && <CustoTab />}
+        {tab === 'assinaturas' && <CancelarNaGreenn C={C} />}
+        {tab === 'overview' && isAdmin && <CancelarNaGreenn C={C} compacto />}
       </div>
     </div>
   )

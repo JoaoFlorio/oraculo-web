@@ -1,4 +1,5 @@
 'use client'
+import CancelarNaGreenn from './CancelarNaGreenn'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 // TELA DO SUPORTE — admin RESTRITO (role 'support'). Vê SÓ a lista de clientes e
@@ -118,6 +119,9 @@ export default function SupportClient({ name }: { name: string }) {
             <button onClick={logout} style={{ background: 'transparent', border: `1px solid ${C.line2}`, color: C.t2, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit' }}>Sair</button>
           </div>
         </div>
+
+        {/* 27/09: assinaturas antigas pra cancelar na Greenn (troca de plano) — some quando não há nada */}
+        <CancelarNaGreenn C={C} compacto />
 
         {msg && (
           <div style={{ marginBottom: 16, padding: '11px 14px', borderRadius: 10, fontSize: 13, background: msg.ok ? 'rgba(52,211,153,0.08)' : 'rgba(248,113,113,0.08)', border: `1px solid ${msg.ok ? 'rgba(52,211,153,0.3)' : 'rgba(248,113,113,0.3)'}`, color: msg.ok ? C.green : C.red }}>{msg.text}</div>
