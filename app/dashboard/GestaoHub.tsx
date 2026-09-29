@@ -5857,8 +5857,13 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         // venda sem faturamento = falha transitória na estimativa de preço (Pending) → retenta 1x
         if((f.vendas||0)>0 && (f.faturamento||0)<=0 && tries++<2){ setTimeout(load,4000); return }
         setRealDre(f)
+        // 29/09: número guardado ainda VELHO (stale) — mostra "atualizando" e busca de novo a cada 5s
+        // (até ~2 min) em vez de trocar calado no próximo acesso ("o valor muda toda hora").
+        if(f.stale && staleTries++<24) setTimeout(recarregarVelho,5000)
       }).catch(()=>{})
     }
+    let staleTries=0
+    const recarregarVelho=()=>{ if(!alive) return; const r=computeRange(period,customRange); fetch(`/api/amazon/finance?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`).then(x=>x.json()).then(n=>{ if(!alive||!n||!n.linhas) return; setRealDre(n); if(n.stale&&staleTries++<24) setTimeout(recarregarVelho,5000) }).catch(()=>{}) }
     load()
     return ()=>{ alive=false }
   },[amazonConnected,range.from,range.to])
@@ -6120,8 +6125,8 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
           <div>
             <h2 style={{fontFamily:FG,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>{soAds?'Ads · Amazon':'Gestão'}</h2>
             <p style={{fontSize:12,color:t.t2,marginTop:1}}>{soAds
-              ? <>O NEO no comando dos seus anúncios · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':amazonConnected?'carregando dados reais…':'conecte sua conta para começar'}</span></>
-              : <>Visão financeira da sua operação Amazon · <span style={{color:realDre?t.grn:t.goldText,fontWeight:500}}>{realDre?'dados reais da Amazon':amazonConnected?'carregando dados reais…':'conecte sua conta para ver seus dados'}</span></>}</p>
+              ? <>O NEO no comando dos seus anúncios · <span style={{color:realDre&&!realDre.stale?t.grn:t.goldText,fontWeight:500}}>{realDre?(realDre.stale?'atualizando os números…':'dados reais da Amazon'):amazonConnected?'carregando dados reais…':'conecte sua conta para começar'}</span></>
+              : <>Visão financeira da sua operação Amazon · <span style={{color:realDre&&!realDre.stale?t.grn:t.goldText,fontWeight:500}}>{realDre?(realDre.stale?'atualizando os números…':'dados reais da Amazon'):amazonConnected?'carregando dados reais…':'conecte sua conta para ver seus dados'}</span></>}</p>
           </div>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <button onClick={()=>setHide(v=>!v)} title="Ocultar valores"

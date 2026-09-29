@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { SeloAmazon, SeloML } from './SelosMarketplace'
 import { totaisDoPeriodo, lucroDoPeriodo, type AjustePedido } from '@/lib/margemProduto'
 
@@ -119,7 +119,10 @@ export default function GestaoConsolidada() {
     }).catch(() => {})
   }, [])
 
+  // 29/09: número guardado velho (stale) → mostra "Atualizando…" e busca a Amazon de novo até chegar o novo.
+  const geracao = useRef(0)
   const carregar = useCallback(async (d: number) => {
+    const minha = ++geracao.current
     setLoading(true)
     // Janela no fuso de São Paulo (regra da casa: nunca no fuso do servidor).
     const agora = new Date()
@@ -129,11 +132,23 @@ export default function GestaoConsolidada() {
     const fromISO = from.toISOString(), toISO = agora.toISOString()
     const win = PER.find(p => p.d === d)?.w || '30d'
     const [a, m, ad] = await Promise.all([
-      fetch(`/api/amazon/finance?from=${encodeURIComponent(fromISO.slice(0, 10))}&to=${encodeURIComponent(toISO.slice(0, 10))}`).then(r => r.json()).catch(() => null),
+      // 29/09: data E HORA (igual à aba Amazon). Só a data fazia o "Hoje" virar janela vazia (R$ 0,00)
+      // e os outros períodos perderem as vendas de hoje.
+      fetch(`/api/amazon/finance?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`).then(r => r.json()).catch(() => null),
       fetch(`/api/ml/gestao/dre?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`).then(r => r.json()).catch(() => null),
       fetch(`/api/ads/report?window=${win}&from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(toISO)}`).then(r => r.json()).catch(() => null),
     ])
+    if (minha !== geracao.current) return   // trocou de período no meio
     setAmz(a); setMl(m); setAds(ad); setLoading(false)
+    // Número da Amazon ainda velho: rebusca a cada 5s (até ~2 min) sem piscar a tela.
+    for (let i = 0; a?.stale && i < 24; i++) {
+      await new Promise(r => setTimeout(r, 5000))
+      if (minha !== geracao.current) return
+      const agora2 = new Date().toISOString()
+      const novo = await fetch(`/api/amazon/finance?from=${encodeURIComponent(fromISO)}&to=${encodeURIComponent(agora2)}`).then(r => r.json()).catch(() => null)
+      if (minha !== geracao.current) return
+      if (novo?.linhas) { setAmz(novo); if (!novo.stale) break }
+    }
   }, [])
 
   useEffect(() => { carregar(dias) }, [dias, carregar])
@@ -222,6 +237,7 @@ export default function GestaoConsolidada() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' as const }}>
         <h2 style={{ fontSize: 27, fontWeight: 800, color: T.t1, letterSpacing: '-0.03em' }}>Visão geral</h2>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><SeloAmazon size={14} /><SeloML size={14} /></span>
+        {!loading && amz?.stale && <span style={{ fontSize: 11.5, fontWeight: 700, color: T.gold, background: tint(T.gold, 10), border: `1px solid ${tint(T.gold, 30)}`, borderRadius: 999, padding: '4px 10px' }}>Atualizando os números…</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           {PER.map(p => (
             <button key={p.d} onClick={() => setDias(p.d)}
