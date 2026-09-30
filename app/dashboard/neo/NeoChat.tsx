@@ -1148,14 +1148,14 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         {/* Saldo de créditos — some sozinho enquanto a carteira está desligada */}
         <Carteira />
 
-        {/* Sem Amazon conectada */}
+        {/* Sem NENHUMA loja conectada (30/09: quem vende só no Mercado Livre usa o NEO normalmente) */}
         {semConexao && (
           <div className="neoAviso">
-            <div className="neoAvisoT">Conecte sua conta Amazon primeiro</div>
+            <div className="neoAvisoT">Conecte sua loja primeiro</div>
             <div className="neoAvisoTx">
-              O NEO trabalha em cima dos seus números reais — faturamento, margem, estoque, ACOS. Sem a conta conectada ele estaria chutando, e chute não ajuda ninguém.
+              O NEO trabalha em cima dos seus números reais — faturamento, margem, estoque, anúncios. Sem uma loja conectada ele estaria chutando, e chute não ajuda ninguém.
               <br /><br />
-              Vá em <b>Gestão</b> no menu e conecte sua conta. Leva um minuto. Dúvida sobre o Oráculo? Use o botão <b>Suporte</b> no canto da tela.
+              Vá em <b>Gestão</b> no menu e conecte sua conta da <b>Amazon</b> ou do <b>Mercado Livre</b>. Leva um minuto. Dúvida sobre o Oráculo? Use o botão <b>Suporte</b> no canto da tela.
             </div>
           </div>
         )}
