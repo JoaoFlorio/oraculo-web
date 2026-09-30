@@ -11,6 +11,7 @@ import { adsDoProduto, temAdsPorSku, adsSemVenda } from '@/lib/adsProduto'
 import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, lucroDoPeriodo, ajustesDoPedido, ajustesDoProduto, type AjustePedido } from '@/lib/margemProduto'
 import { maturidadeDoPeriodo, type SeloMaturidade } from '@/lib/maturidadePeriodo'
 import { snapshotDoPeriodo, narrarMudancas, reconciliar, normalizarMarcos, chaveDoPeriodo, type SnapshotPeriodo, type MarcosPeriodo, type Diario, type Reconciliacao } from '@/lib/diarioPeriodo'
+import CarregandoDados, { OrigemDasTaxas } from './CarregandoDados'
 import { GRUPOS, TELA_INICIAL, grupoDaTab, grupoPorId, telaAoEntrarNoGrupo, tabPorId } from '@/lib/navegacaoGestao'
 import { totaisDoEstoque, valorDeVenda, valorDeMercadoria } from '@/lib/estoqueFba'
 import { linhasPorCampanha, linhasPorProduto, tacos, periodosCasam, type ProdutoDre as AdsProdutoDre } from '@/lib/adsMetricas'
@@ -851,6 +852,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
     <div className="ora-kpis" style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:13,marginBottom:16}}>
       {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
     </div>
+    {realDre && <OrigemDasTaxas fees={realDre.fees} cores={{gold:t.gold,t1:t.t1,t2:t.t2,t3:t.t3,card:t.card,line:t.line}}/>}
     {/* ⚠️ Produto sem custo cadastrado entra no lucro com CMV ZERO: a receita conta
         inteira e o custo não. O agregado fica otimista e nada avisava. */}
     {realDre && semCusto>0 && (
@@ -5845,6 +5847,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   const [themeKey,setThemeKey]=useState('dark')
   const [amazonConnected,setAmazonConnected]=useState<boolean|null>(null)
   const [realDre,setRealDre]=useState<any>(null)
+  const [dreErro,setDreErro]=useState(false)   // 30/09: falha no cálculo → aviso, nunca barra girando pra sempre
   const [period,setPeriod]=useState(soAds?'30d':'hoje')   // Ads abre em 30 dias (anúncio precisa de janela; "Hoje" mostraria vazio)
   const [customRange,setCustomRange]=useState<{from:Date;to:Date}|null>(null)
   const range=useMemo(()=>computeRange(period,customRange),[period,customRange])
@@ -5895,20 +5898,21 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   useEffect(()=>{
     if(!amazonConnected) return
     let alive=true, tries=0
-    setRealDre(null)
+    setRealDre(null); setDreErro(false)
     const load=()=>{
       fetch(`/api/amazon/finance?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`).then(r=>r.json()).then(f=>{
-        if(!alive||!f||!f.linhas) return
+        if(!alive) return
+        if(!f||!f.linhas){ setDreErro(true); return }
         // venda sem faturamento = falha transitória na estimativa de preço (Pending) → retenta 1x
         if((f.vendas||0)>0 && (f.faturamento||0)<=0 && tries++<2){ setTimeout(load,4000); return }
         setRealDre(f)
         // 29/09: número guardado ainda VELHO (stale) — mostra "atualizando" e busca de novo a cada 5s
         // (até ~2 min) em vez de trocar calado no próximo acesso ("o valor muda toda hora").
-        if(f.stale && staleTries++<24) setTimeout(recarregarVelho,5000)
-      }).catch(()=>{})
+        if(f.stale && staleTries++<48) setTimeout(recarregarVelho,5000)
+      }).catch(()=>{ if(alive) setDreErro(true) })
     }
     let staleTries=0
-    const recarregarVelho=()=>{ if(!alive) return; const r=computeRange(period,customRange); fetch(`/api/amazon/finance?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`).then(x=>x.json()).then(n=>{ if(!alive||!n||!n.linhas) return; setRealDre(n); if(n.stale&&staleTries++<24) setTimeout(recarregarVelho,5000) }).catch(()=>{}) }
+    const recarregarVelho=()=>{ if(!alive) return; const r=computeRange(period,customRange); fetch(`/api/amazon/finance?from=${encodeURIComponent(r.from)}&to=${encodeURIComponent(r.to)}`).then(x=>x.json()).then(n=>{ if(!alive||!n||!n.linhas) return; setRealDre(n); if(n.stale&&staleTries++<48) setTimeout(recarregarVelho,5000) }).catch(()=>{}) }
     load()
     return ()=>{ alive=false }
   },[amazonConnected,range.from,range.to])
@@ -6247,7 +6251,24 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
           </div>
         )}
 
+        {/* 30/09: número guardado nunca passa por "o de agora" — barra de progresso em destaque e números
+            apagados até o cálculo novo chegar (pedido do João). */}
+        {amazonConnected && !soAds && ['resumo','vendas','abc','analit','relat'].includes(tab) && (
+          !realDre && dreErro
+            ? <div role="alert" style={{display:'flex',gap:9,alignItems:'center',background:t.card,border:`1px solid ${t.line}`,borderRadius:12,padding:'12px 15px',marginBottom:14,fontSize:12.5,color:t.t2}}>
+                <i className="ti ti-cloud-off" style={{fontSize:16,color:t.t3}} aria-hidden="true"/>
+                <span>Não consegui buscar seus dados da Amazon agora. <b style={{color:t.t1}}>Nenhum número foi mostrado pra não te mostrar algo errado</b> — tente de novo em instantes.</span>
+                <button onClick={()=>window.location.reload()} style={{marginLeft:'auto',background:t.gold,color:t.dark?'#1c1606':'#3a2a05',border:'none',borderRadius:8,padding:'7px 12px',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Tentar de novo</button>
+              </div>
+          : !realDre
+            ? <CarregandoDados modo="inicial" cores={{gold:t.gold,t1:t.t1,t2:t.t2,t3:t.t3,card:t.card,line:t.line}}/>
+            : realDre.stale
+              ? <CarregandoDados modo="atualizando" previsaoSeg={realDre.previsaoSeg} jaSeg={realDre.recalculandoHaSeg}
+                  horaDoNumero={realDre._computedAt?new Date(realDre._computedAt):null} cores={{gold:t.gold,t1:t.t1,t2:t.t2,t3:t.t3,card:t.card,line:t.line}}/>
+              : null
+        )}
         {/* Conteúdo */}
+        <div style={{opacity:realDre?.stale&&['resumo','vendas','abc','analit','relat'].includes(tab)?0.4:1,transition:'opacity .3s'}}>
         {tab==='resumo' && <Resumo hide={hide} realDre={realDre} selo={selo} diario={diario} recon={recon} cmv={cmv} impostoTotal={totais.imposto} credito={totais.credito} custoEventual={totais.custoEventual} armazenagemMedida={totais.armazenagem} semCusto={totais.semCusto} receitaSemCusto={totais.receitaSemCusto} adsReal={adsData} costs={custoUnit} chart30={dre30} connected={amazonConnected} adsConnected={adsConnected} imposto={imposto} onDetail={setDetail}/>}
         {tab==='vendas' && <Vendas realDre={realDre} costs={costs} extras={extras} imposto={imposto} connected={amazonConnected} hide={hide} adsReal={adsData} onDetail={setDetail} ajustes={ajustes} onAddAjuste={addAjuste} onRemoverAjuste={removeAjuste}/>}
         {tab==='abc'    && <CurvaABC realDre={realDre} costs={custoUnit} adsReal={adsData} inv={inventory} connected={amazonConnected} mockD={abc} hide={hide} imposto={imposto} ajustes={ajustes} onDetail={setDetail}/>}
@@ -6256,6 +6277,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto} isAdmin={isAdmin}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
         {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={custoUnit} adsReal={adsData}/>}
+        </div>
         {tab==='repasse'&& <RepassesHub connected={amazonConnected} range={range} hide={hide}/>}
         {tab==='dre'    && <div style={{marginTop:-8}}><FinanceiroPanel promoActive={promoActive} promoType={promoType}/></div>}
 

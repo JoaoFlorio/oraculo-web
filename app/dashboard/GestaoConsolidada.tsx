@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { SeloAmazon, SeloML } from './SelosMarketplace'
+import CarregandoDados from './CarregandoDados'
 import { totaisDoPeriodo, lucroDoPeriodo, type AjustePedido } from '@/lib/margemProduto'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -141,7 +142,7 @@ export default function GestaoConsolidada() {
     if (minha !== geracao.current) return   // trocou de período no meio
     setAmz(a); setMl(m); setAds(ad); setLoading(false)
     // Número da Amazon ainda velho: rebusca a cada 5s (até ~2 min) sem piscar a tela.
-    for (let i = 0; a?.stale && i < 24; i++) {
+    for (let i = 0; a?.stale && i < 48; i++) {
       await new Promise(r => setTimeout(r, 5000))
       if (minha !== geracao.current) return
       const agora2 = new Date().toISOString()
@@ -237,7 +238,6 @@ export default function GestaoConsolidada() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4, flexWrap: 'wrap' as const }}>
         <h2 style={{ fontSize: 27, fontWeight: 800, color: T.t1, letterSpacing: '-0.03em' }}>Visão geral</h2>
         <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><SeloAmazon size={14} /><SeloML size={14} /></span>
-        {!loading && amz?.stale && <span style={{ fontSize: 11.5, fontWeight: 700, color: T.gold, background: tint(T.gold, 10), border: `1px solid ${tint(T.gold, 30)}`, borderRadius: 999, padding: '4px 10px' }}>Atualizando os números…</span>}
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           {PER.map(p => (
             <button key={p.d} onClick={() => setDias(p.d)}
@@ -252,10 +252,13 @@ export default function GestaoConsolidada() {
       </div>
       <p style={{ fontSize: 12.5, color: T.t3, marginBottom: 16 }}>Suas duas lojas somadas — cada número vem da conta que aquele marketplace cobrou.</p>
 
-      {loading && <div style={{ padding: 40, textAlign: 'center' as const, color: T.t3, fontSize: 13 }}>Somando Amazon e Mercado Livre…</div>}
+      {/* 30/09: carregando/atualizando em destaque, com barra — número guardado nunca passa por "o de agora". */}
+      {loading && <CarregandoDados modo="inicial" marketplace="Amazon e do Mercado Livre" cores={{ gold: T.gold, t1: T.t1, t2: T.t2, t3: T.t3, card: T.card, line: T.line }} />}
+      {!loading && amz?.stale && <CarregandoDados modo="atualizando" previsaoSeg={amz.previsaoSeg} jaSeg={amz.recalculandoHaSeg}
+        horaDoNumero={amz._computedAt ? new Date(amz._computedAt) : null} cores={{ gold: T.gold, t1: T.t1, t2: T.t2, t3: T.t3, card: T.card, line: T.line }} />}
 
       {!loading && (
-        <>
+        <div style={{ opacity: amz?.stale ? 0.4 : 1, transition: 'opacity .3s' }}>
           {(!amzOn || !mlOn) && (
             <div style={{ fontSize: 11.5, color: T.t3, background: tint(T.a, 8), border: `1px solid ${tint(T.a, 25)}`, borderRadius: 10, padding: '9px 13px', marginBottom: 14 }}>
               {!amzOn && !mlOn ? 'Nenhuma loja conectada ainda — conecte a Amazon ou o Mercado Livre para ver a visão somada.'
@@ -341,7 +344,7 @@ export default function GestaoConsolidada() {
               </table>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   )
