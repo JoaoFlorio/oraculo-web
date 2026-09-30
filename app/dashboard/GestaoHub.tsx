@@ -68,9 +68,11 @@ function computeRange(key:string, custom:{from:Date;to:Date}|null):{from:string;
   switch(key){
     case 'hoje':    return {from:startOf(now),to}
     case 'ontem':   {const y=new Date(now);y.setDate(y.getDate()-1);return {from:startOf(y),to:endOf(y)}}
-    case '7d':      return {from:new Date(now.getTime()-7*86400000).toISOString(),to}
-    case '15d':     return {from:new Date(now.getTime()-15*86400000).toISOString(),to}
-    case '30d':     return {from:new Date(now.getTime()-30*86400000).toISOString(),to}
+    // 30/09: DIAS INTEIROS (meia-noite de N dias atrás até agora), igual à aba "Tudo". Janela rolante
+    // (agora − 168h) tirava venda do começo da janela hora a hora: o 7d/30d mudava sem venda nova.
+    case '7d':      return {from:startOf(new Date(now.getTime()-7*86400000)),to}
+    case '15d':     return {from:startOf(new Date(now.getTime()-15*86400000)),to}
+    case '30d':     return {from:startOf(new Date(now.getTime()-30*86400000)),to}
     case 'mes':     return {from:new Date(now.getFullYear(),now.getMonth(),1).toISOString(),to}
     case 'mespass': return {from:new Date(now.getFullYear(),now.getMonth()-1,1).toISOString(),to:new Date(now.getFullYear(),now.getMonth(),0,23,59,59).toISOString()}
     case 'ano':     return {from:new Date(now.getFullYear(),0,1).toISOString(),to}
@@ -287,6 +289,48 @@ function SeloEDiario({selo,diario,hide}:{selo:SeloMaturidade;diario:Diario|null;
    diferença, quem confere descobre dinheiro sem explicação e conclui que a
    ferramenta esconde coisa — pior do que não ter mostrado nada. Por isso o resíduo
    aparece DECLARADO quando existe, em vez de ser diluído numa das linhas. */
+/* ⭐ LIVRO FECHADO (30/09): cada dia de venda FECHA 30 dias depois da compra e não muda mais. O que a
+   Amazon lança depois disso (devolução tardia, taxa que chegou atrasada) aparece AQUI, com pedido, data
+   e motivo — em vez de mexer calado num número que o seller já conferiu. */
+function PosFechamentoCard({pf,hide}:{pf:{total:number;qtd:number;itens:{orderId:string;data:string;valor:number;motivo:string}[]};hide:boolean}){
+  const t=useT()
+  const [aberto,setAberto]=useState(false)
+  const v=(n:number)=>hide?'•••':`${n<0?'−':'+'}${brl2(Math.abs(n))}`
+  const dia=(iso:string)=>{ const d=new Date(iso); return isNaN(d.getTime())?'':d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'}) }
+  return(
+    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:13,padding:'12px 15px',marginBottom:16}}>
+      <button onClick={()=>setAberto(a=>!a)} style={{display:'flex',width:'100%',alignItems:'center',justifyContent:'space-between',gap:10,background:'none',border:'none',padding:0,cursor:'pointer',fontFamily:FG,textAlign:'left' as const}}>
+        <span style={{display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+          <i className="ti ti-lock" style={{fontSize:15,color:t.t3}} aria-hidden="true"/>
+          <span style={{fontSize:12.5,color:t.t1,fontWeight:600}}>Ajustes depois do fechamento</span>
+          <span style={{fontSize:11,color:t.t3}}>· {pf.qtd} lançamento{pf.qtd>1?'s':''}</span>
+        </span>
+        <span style={{display:'flex',alignItems:'center',gap:8}}>
+          <span style={{fontSize:13,fontWeight:700,color:pf.total<0?t.red:t.grn,fontVariantNumeric:'tabular-nums'}}>{v(pf.total)}</span>
+          <i className={`ti ti-chevron-${aberto?'up':'down'}`} style={{fontSize:14,color:t.t3}} aria-hidden="true"/>
+        </span>
+      </button>
+      <div style={{fontSize:11,color:t.t3,lineHeight:1.5,marginTop:6}}>
+        Cada dia de venda <b style={{color:t.t2}}>fecha 30 dias depois da compra</b> e o número dele não muda mais. O que a Amazon lançou depois disso pros pedidos deste período fica aqui, separado — <b style={{color:t.t2}}>não está somado</b> nos números acima.
+      </div>
+      {aberto && (
+        <div style={{marginTop:10,borderTop:`1px solid ${t.line}`}}>
+          {pf.itens.map((it,i)=>(
+            <div key={i} style={{display:'flex',justifyContent:'space-between',gap:12,padding:'8px 0',borderBottom:`1px solid ${t.line}`}}>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:12,color:t.t1}}>{it.motivo}</div>
+                <div style={{fontSize:10.5,color:t.t3,marginTop:2}}>Pedido {it.orderId} · lançado em {dia(it.data)}</div>
+              </div>
+              <span style={{fontSize:12,fontWeight:600,color:it.valor<0?t.red:t.grn,whiteSpace:'nowrap' as const,fontVariantNumeric:'tabular-nums'}}>{v(it.valor)}</span>
+            </div>
+          ))}
+          {pf.qtd>pf.itens.length && <div style={{fontSize:10.5,color:t.t3,paddingTop:8}}>Mostrando os {pf.itens.length} mais recentes de {pf.qtd}.</div>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ReconciliacaoCard({rec,hide}:{rec:Reconciliacao;hide:boolean}){
   const t=useT()
   const [aberto,setAberto]=useState(false)
@@ -817,6 +861,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
         </span>
       </div>
     )}
+    {realDre?.posFechamento?.qtd>0 && <PosFechamentoCard pf={realDre.posFechamento} hide={hide}/>}
     {/* 2) Gráfico de receitas — sempre 30 dias por data, largura cheia */}
     <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'16px 18px',marginBottom:16}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
@@ -4425,7 +4470,7 @@ function Relatorio({realDre,inv,costs={},adsReal}:{realDre?:any;inv?:any;costs?:
       // ⭐ A decomposição do valor da venda abre a planilha (régua 01/09): valor da
       // venda − descontos + frete + embrulho = recebido (receita bruta) — a mesma
       // identidade da lupinha; payload antigo (sem principal) exporta '' nas novas.
-      gen:()=>toCSV(['Linha','Valor (R$)'],[['Valor da venda (preço do anúncio)',L.principal??''],['Cupom/desconto concedido',L.promocoes??''],['Frete pago pelo comprador',L.freteReceita??''],['Embrulho pra presente',L.embrulho??''],['Recebido da venda (receita bruta)',L.receitaBruta||0],['Devoluções',L.devolucoes||0],['Receita líquida',L.receitaLiquida||0],['Comissão',L.comissao||0],['Tarifa FBA',L.fba||0],['Parcelamento sem juros (Amazon pra Todos)',L.taxaPrograma||0],['Outras taxas',L.outrasTaxas||0],['Armazenagem',L.armazenagem||0],['Assinatura',L.assinatura||0],['Líq. Marketplace',realDre?.liqMarketplace||0],['Ads',adsReal?.ready?(Number(adsReal.spend)||0):''],['Reembolsos e ajustes',L.ajustes||0]])},
+      gen:()=>toCSV(['Linha','Valor (R$)'],[['Valor da venda (preço do anúncio)',L.principal??''],['Cupom/desconto concedido',L.promocoes??''],['Frete pago pelo comprador',L.freteReceita??''],['Embrulho pra presente',L.embrulho??''],['Recebido da venda (receita bruta)',L.receitaBruta||0],['Devoluções',L.devolucoes||0],['Receita líquida',L.receitaLiquida||0],['Comissão',L.comissao||0],['Tarifa FBA',L.fba||0],['Parcelamento sem juros (Amazon pra Todos)',L.taxaPrograma||0],['Outras taxas',L.outrasTaxas||0],['Armazenagem',L.armazenagem||0],['Assinatura',L.assinatura||0],['Líq. Marketplace',realDre?.liqMarketplace||0],['Ads',adsReal?.ready?(Number(adsReal.spend)||0):''],['Reembolsos e ajustes',L.ajustes||0],['Ajustes depois do fechamento (fora dos números acima)',L.ajustesPosFechamento||0]])},
   ]
   return(<>
     <Hint>Relatórios reais exportáveis em CSV (abre direto no Excel).</Hint>
@@ -5903,7 +5948,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   useEffect(()=>{
     if(!amazonConnected) return
     let alive=true
-    const now=new Date(); const from=new Date(now.getTime()-30*86400000).toISOString(); const to=now.toISOString()
+    const now=new Date(); const d30=new Date(now.getTime()-30*86400000); const from=new Date(d30.getFullYear(),d30.getMonth(),d30.getDate()).toISOString(); const to=now.toISOString()
     fetch(`/api/amazon/finance?daily=1&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`).then(r=>r.json()).then(f=>{ if(alive&&f&&f.daily) setDre30(f) }).catch(()=>{})
     return ()=>{ alive=false }
   },[amazonConnected])
