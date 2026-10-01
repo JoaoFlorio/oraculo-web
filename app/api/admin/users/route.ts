@@ -145,7 +145,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!(await checkAuth(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
 
-  const { email, name, plan, phone, skipLicense, licenseKey: providedKey, password: senhaDoChamador } = await req.json()
+  const { email, name, plan, phone, skipLicense, licenseKey: providedKey, password: senhaDoChamador, expiresAt: validadeDoChamador, teste: testeDoChamador } = await req.json()
   if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
   // 23/09 (achado 41): o webhook da Greenn manda a senha que vai no e-mail de acesso, mas esta
   // rota gerava OUTRA e gravava a sua — o cliente recebia uma senha que não abria. Só o chamador
@@ -156,14 +156,21 @@ export async function POST(req: NextRequest) {
   const phoneVal = phone ? String(phone).trim() : null
   const targetPlan = plan || 'monthly'
   const exists     = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
-  const expiry     = calcExpiry(targetPlan, exists && exists.plan !== 'lifetime' ? exists.expiresAt : null)
+  // 01/10 — TESTE GRÁTIS (webhook da Greenn, só chamador INTERNO): validade exata (7 dias) e a marca
+  // `metadata.teste` (a tela troca "renove" por "teste até dd/mm"). Venda paga do webhook vem SEM teste → limpa a marca.
+  const interno = nivel === 'internal'
+  const validadeTeste = interno && typeof validadeDoChamador === 'string' && !isNaN(Date.parse(validadeDoChamador)) ? new Date(validadeDoChamador) : null
+  const marcaTeste = interno && testeDoChamador && typeof testeDoChamador.ate === 'string' ? { ate: testeDoChamador.ate, creditos: Number(testeDoChamador.creditos) || 10 } : null
+  const expiry     = validadeTeste ?? calcExpiry(targetPlan, exists && exists.plan !== 'lifetime' ? exists.expiresAt : null)
+  const metaBase   = (exists?.metadata && typeof exists.metadata === 'object' ? exists.metadata : {}) as Record<string, unknown>
+  const metadataNova = interno ? (() => { const m = { ...metaBase }; if (marcaTeste) m.teste = marcaTeste; else delete m.teste; return m })() : undefined
 
   if (exists) {
     // Atualiza plano do usuário existente. Reativa a conta (active=true): uma
     // compra/renovação sempre restaura o acesso de quem estava bloqueado/expirado.
     const updated = await prisma.user.update({
       where: { id: exists.id },
-      data:  { plan: targetPlan, expiresAt: expiry, active: true, ...(phoneVal ? { phone: phoneVal } : {}) },
+      data:  { plan: targetPlan, expiresAt: expiry, active: true, ...(phoneVal ? { phone: phoneVal } : {}), ...(metadataNova ? { metadata: metadataNova as object } : {}) },
     })
     // Gera licença só se não vier uma pronta (skipLicense = chamada via webhook)
     const licKey = skipLicense ? (providedKey || null) : await createBackendLicense(email, targetPlan)
@@ -186,6 +193,7 @@ export async function POST(req: NextRequest) {
       active:    true,
       expiresAt: expiry,
       phone:     phoneVal,
+      ...(marcaTeste ? { metadata: { teste: marcaTeste } } : {}),
     },
   })
 

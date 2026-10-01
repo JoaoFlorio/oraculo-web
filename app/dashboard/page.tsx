@@ -31,10 +31,12 @@ export default async function DashboardPage() {
   // em metadata.terms via /api/user/accept-terms). Admin/staff/demo são isentos (equipe
   // e conta de apresentação — não são consumidores do contrato de adesão).
   let needsTerms = false
+  let teste: { ate: string; creditos: number } | null = null   // 01/10: teste grátis de 7 dias (Greenn)
   if (!user.role || user.role === 'client') {
     const u = await prisma.user.findUnique({ where: { id: user.id }, select: { metadata: true } })
-    const terms = ((u?.metadata ?? {}) as Record<string, any>).terms
-    needsTerms = terms?.version !== TERMS_VERSION
+    const meta = (u?.metadata ?? {}) as Record<string, any>
+    needsTerms = meta.terms?.version !== TERMS_VERSION
+    if (meta.teste?.ate && Date.parse(meta.teste.ate) > Date.now()) teste = { ate: String(meta.teste.ate), creditos: Number(meta.teste.creditos) || 10 }
   }
 
   return (
@@ -43,7 +45,7 @@ export default async function DashboardPage() {
       <AppSplash />
       {/* Recarrega sozinho quando há build novo (PWA guarda HTML em cache) */}
       <VersionGuard v={process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'dev'} />
-      <DashboardClient user={user} gestaoEnabled={gestaoEnabled} />
+      <DashboardClient user={user} gestaoEnabled={gestaoEnabled} teste={teste} />
       {/* isAdmin libera o simulador de venda no guia do app (o servidor também
           exige admin — o cliente nunca deve receber um "💰 Nova venda!" falso). */}
       <AppInstall isAdmin={user.role === 'admin'} />

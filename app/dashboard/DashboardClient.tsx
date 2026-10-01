@@ -1381,7 +1381,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
 }
 
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
-export default function DashboardClient({user,gestaoEnabled=false}:{user:any;gestaoEnabled?:boolean}){
+export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{user:any;gestaoEnabled?:boolean;teste?:{ate:string;creditos:number}|null}){
   const router = useRouter()
   // Aba de entrada. Gestão primeiro pra quem tem acesso: é a tela de trabalho
   // do dia (os números da operação), e assim o painel abre SEM disparar a
@@ -1626,7 +1626,9 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
   // a interação visual — sem assinar, não dá pra mexer em nada.
   useEffect(()=>{ if(!expired) return; const prev=document.body.style.overflow; document.body.style.overflow='hidden'; return ()=>{document.body.style.overflow=prev} },[expired])
   const renewGrace   = false   // não há mais janela de folga — venceu já é `expired`
-  const expiringSoon = !expired && !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 5 && daysLeft > 0
+  // 01/10: no TESTE GRÁTIS não existe "renove" — a 1ª mensalidade cai sozinha no cartão cadastrado na Greenn.
+  const emTeste      = !!teste && Date.parse(teste.ate) > Date.now()
+  const expiringSoon = !emTeste && !expired && !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 5 && daysLeft > 0
 
   // ASINs já mostrados, por aba+categoria → garante novidade a cada "Atualizar"
   const seenRef = useRef<Record<string, Set<string>>>({})
@@ -2210,6 +2212,13 @@ export default function DashboardClient({user,gestaoEnabled=false}:{user:any;ges
             </div>
           )}
 
+          {/* 01/10: TESTE GRÁTIS — quanto falta e o que acontece depois (sem botão de comprar de novo) */}
+          {emTeste&&teste&&(()=>{const ate=new Date(teste.ate);const d=Math.max(0,Math.ceil((ate.getTime()-Date.now())/86400000));return(
+            <div style={{background:`linear-gradient(90deg, ${tint(T.gold,12)} 0%, ${tint(T.gold,6)} 100%)`,borderBottom:`1px solid ${tint(T.gold,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:10,flexShrink:0,flexWrap:'wrap' as const}}>
+              <span style={{fontSize:11,color:T.t1,flex:1,minWidth:220}}>
+                🎁 <strong style={{color:T.gold}}>Teste grátis</strong> — {d<=0?'termina hoje':<>termina em <strong className="ora-num" style={{color:T.gold}}>{d} {d===1?'dia':'dias'}</strong></>} ({ate.toLocaleDateString('pt-BR')}). Depois disso, o Mensal (R$ 97/mês) é cobrado no cartão que você cadastrou, sem precisar fazer nada. No teste você tem <strong>{teste.creditos} créditos</strong> pra gerar imagens e anúncios com o NEO.
+              </span>
+            </div>)})()}
           {/* Aviso de vencimento — 5 dias, âmbar→dourado, com atalho pro Anual */}
           {expiringSoon&&(
             <div style={{background:`linear-gradient(90deg, ${tint(T.a,10)} 0%, ${tint(T.gold,10)} 100%)`,borderBottom:`1px solid ${tint(T.gold,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:12,flexShrink:0,flexWrap:'wrap' as const}}>
