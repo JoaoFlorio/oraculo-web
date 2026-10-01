@@ -95,7 +95,7 @@ export async function getSession() {
  * plano / sessão inválida continuam barrados (user: null → login).
  * ⚠️ NÃO usar isto pra servir DADOS: as APIs seguem no getSession() (o vencido
  * leva 401). Isto é só pra a CASCA do dashboard renderizar o overlay bloqueante. */
-export async function getSessionOrExpired(): Promise<{ user: Awaited<ReturnType<typeof getSession>>; expired: boolean }> {
+export async function getSessionOrExpired(): Promise<{ user: Awaited<ReturnType<typeof getSession>>; expired: boolean; motivo?: 'expired' | 'inactive' | 'free' }> {
   const cookieStore = await cookies()
   const token = cookieStore.get(COOKIE)?.value
   if (!token) return { user: null, expired: false }
@@ -110,8 +110,10 @@ export async function getSessionOrExpired(): Promise<{ user: Awaited<ReturnType<
   if (!user) return { user: null, expired: false }
   const deny = accessDenied(user)
   if (!deny) return { user, expired: false }
-  if (deny === 'expired') return { user, expired: true }   // entra só pra ver a tela de pagar
-  return { user: null, expired: false }                     // notfound/inactive/free → login
+  // 01/10 (João: "o cara coloca e-mail e senha, entra, e está tudo travado com a tela de planos"): vencido,
+  // bloqueado/reembolsado e sem plano entram SÓ pra ver a TELA DE PAGAMENTO (dashboard/Paywall). Dados seguem 401.
+  if (deny === 'expired' || deny === 'inactive' || deny === 'free') return { user, expired: true, motivo: deny }
+  return { user: null, expired: false }                     // notfound → login
 }
 
 // Sessão de equipe (admin/staff) — usada pelas rotas /api/admin e pela página /admin.

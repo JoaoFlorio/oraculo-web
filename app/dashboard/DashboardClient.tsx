@@ -364,9 +364,9 @@ function ScoreRing({score}:{score:number}){
 /* ─── Upgrade modal ──────────────────────────────────────────────────────── */
 function UpgradeModal({onClose}:{onClose:()=>void}){
   const plans = [
-    { id:'monthly',  label:'Mensal',    price:'R$ 79,90', period:'/mês',      color:T.pur,  features:['7 ferramentas (+ Gestão em breve)','Extensão Chrome incluída','Agente IA ilimitado','Simulador Financeiro'] },
-    { id:'biannual', label:'Semestral', price:'R$ 397',   period:'/6 meses',  color:T.gold, features:['Tudo do plano Mensal','6 meses de acesso','Exportar CSV','Prioridade no suporte'], best:true },
-    { id:'annual',   label:'Anual',     price:'R$ 597',   period:'/ano',      color:T.g,    features:['Tudo do plano Semestral','12 meses de acesso','Suporte VIP','Acesso antecipado a novidades'] },
+    { id:'monthly',  label:'Mensal',    price:'R$ 97',    period:'/mês',      color:T.pur,  features:['7 ferramentas (+ Gestão em breve)','Extensão Chrome incluída','Agente IA ilimitado','Simulador Financeiro'] },
+    { id:'biannual', label:'Semestral', price:'R$ 497',   period:'/6 meses',  color:T.gold, features:['Tudo do plano Mensal','6 meses de acesso','Exportar CSV','Prioridade no suporte'], best:true },
+    { id:'annual',   label:'Anual',     price:'R$ 897',   period:'/ano',      color:T.g,    features:['Tudo do plano Semestral','12 meses de acesso','Suporte VIP','Acesso antecipado a novidades'] },
   ]
   return(
     <div onClick={e=>e.target===e.currentTarget&&onClose()}
@@ -2453,9 +2453,9 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                 : (daysLeft!==null&&daysLeft<=10) ? T.a
                 : T.g
               const plans = [
-                { id:'monthly',  label:'Mensal',    price:'R$ 79,90', period:'/ 30 dias'  },
-                { id:'biannual', label:'Semestral', price:'R$ 397',   period:'/ 180 dias' },
-                { id:'annual',   label:'Anual',     price:'R$ 597',   period:'/ 365 dias', best:true },
+                { id:'monthly',  label:'Mensal',    price:'R$ 97',    period:'/ 30 dias'  },
+                { id:'biannual', label:'Semestral', price:'R$ 497',   period:'/ 180 dias' },
+                { id:'annual',   label:'Anual',     price:'R$ 897',   period:'/ 365 dias', best:true },
               ]
               const cardStyle: React.CSSProperties = { background:T.card, border:`1px solid ${T.line}`, borderRadius:14, padding:'22px 24px', boxShadow:'var(--elev1)' }
               return(
@@ -2834,7 +2834,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                       style={{background:T.goldG,color:'#02020A',fontWeight:700,fontSize:12,padding:'13px 32px',borderRadius:10,border:'none',cursor:'pointer',letterSpacing:'0.1em',textTransform:'uppercase' as const,boxShadow:'0 4px 24px rgba(240,180,41,0.35)',marginBottom:8}}>
                       Desbloquear todos os produtos
                     </button>
-                    <div style={{fontSize:10,color:T.t3}}>A partir de R$ 79,90/mês · Cancele quando quiser</div>
+                    <div style={{fontSize:10,color:T.t3}}>A partir de R$ 97/mês · Cancele quando quiser</div>
                   </div>
                 )}
 

@@ -73,13 +73,11 @@ export async function POST(req: NextRequest) {
       await prisma.$executeRaw`UPDATE "User" SET metadata = COALESCE(metadata, '{}'::jsonb) - 'loginLock' WHERE id = ${user.id}`.catch(() => {})
     }
 
+    // 01/10: vencido / bloqueado / sem plano ENTRA (senha conferida) e cai na TELA DE PAGAMENTO — antes levava
+    // um 403 no login e nunca via os planos. Toda rota de dados segue barrando (getSession → 401).
     const denied = accessDenied(user)
-    if (denied === 'inactive')
-      return NextResponse.json({ error: 'Conta inativa. Entre em contato com o suporte.' }, { status: 403 })
-    if (denied === 'expired')
-      return NextResponse.json({ error: 'Seu acesso expirou. Renove seu plano para voltar a usar o Oráculo.' }, { status: 403 })
-    if (denied)  // 'free' / 'notfound' → sem plano pago ativo
-      return NextResponse.json({ error: 'Você não tem um plano ativo. Adquira o Oráculo para acessar.' }, { status: 403 })
+    if (denied === 'notfound')
+      return NextResponse.json({ error: 'Conta não encontrada.' }, { status: 403 })
 
     const token = await createToken(user.id, user.role)
     // 🔔 23/09: acesso a conta PRIVILEGIADA avisa o dono por e-mail (IP/hora/navegador).

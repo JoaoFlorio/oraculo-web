@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db'
 import { TERMS_VERSION } from '@/lib/terms'
 import DashboardClient from './DashboardClient'
 import TermsGate from './TermsGate'
+import Paywall from './Paywall'
 import AppInstall from './AppInstall'
 import AppSplash from './AppSplash'
 import VersionGuard from './VersionGuard'
@@ -12,8 +13,16 @@ import AssistenteFab from './AssistenteFab'
 export default async function DashboardPage() {
   // Vencido ENTRA (pra ver o overlay "venceu + pagar") em vez de ir pro /login;
   // sem conta/inativo/sem plano → login. As APIs seguem barrando o vencido (401).
-  const { user } = await getSessionOrExpired()
+  const { user, motivo } = await getSessionOrExpired()
   if (!user) redirect('/login')
+  // 01/10: sem acesso pago (vencido, bloqueado, sem plano) → SÓ a tela de pagamento. Nada do painel é renderizado
+  // (nem termos, nem app, nem assistente) — "se não pagar, não acessa nada".
+  if (motivo) return (
+    <>
+      <VersionGuard v={process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'dev'} />
+      <Paywall email={user.email} plan={user.plan ?? null} expiresAt={user.expiresAt ? new Date(user.expiresAt).toISOString() : null} motivo={motivo} />
+    </>
+  )
   // Gate da Gestão: LIBERADO PARA TODOS (19/07/2026). O gate existia enquanto o
   // app SP-API estava em Draft; com as aprovações da Amazon saídas e sem plano
   // grátis no produto (quem não pagou nem chega aqui — ver accessDenied), todo
