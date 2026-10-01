@@ -142,6 +142,46 @@ function Kpi({ label, valor, cor, ajuda }: { label: string; valor: string; cor: 
   )
 }
 
+// ── CURVA ABC + CSV (01/10 — paridade com a Amazon) ────────────────────────────
+// Mesma régua da Curva ABC da Amazon (GestaoHub.classificarABC): ordena pelo eixo, A até 80% acumulado, B até 95%,
+// resto C. Eixo "lucro" só quando há custo cadastrado (lucro desconhecido não entra — não vira zero).
+// Diagnóstico cruza a classe com a margem vs a média, igual a Amazon: chefe / armadilha / oportunidade / peso morto.
+export function classeAbcMl(produtos: Produto[], eixo: 'receita' | 'lucro'): Map<string, 'A' | 'B' | 'C'> {
+  const valor = (p: Produto) => eixo === 'lucro' ? (p.temCusto && p.lucroFinal != null ? p.lucroFinal : null) : p.receita
+  const ord = produtos.filter(p => valor(p) != null).sort((a, b) => (valor(b) as number) - (valor(a) as number))
+  const tot = ord.reduce((s, p) => s + Math.max(0, valor(p) as number), 0)
+  const out = new Map<string, 'A' | 'B' | 'C'>()
+  let cum = 0, aDone = false, bDone = false
+  for (const p of ord) {
+    cum += Math.max(0, valor(p) as number)
+    const acum = tot > 0 ? cum / tot * 100 : 0
+    let cls: 'A' | 'B' | 'C'
+    if (!aDone) { cls = 'A'; if (acum >= 80) aDone = true } else if (!bDone) { cls = 'B'; if (acum >= 95) bDone = true } else cls = 'C'
+    out.set(p.itemId, cls)
+  }
+  return out
+}
+function diagAbc(cls: 'A' | 'B' | 'C', margem: number | null, media: number | null): { rotulo: string; cor: string } | null {
+  if (margem == null || media == null) return null
+  if (cls === 'A') return margem >= media ? { rotulo: 'Carro-chefe', cor: T.g } : { rotulo: 'Armadilha', cor: T.r }
+  return margem >= media ? { rotulo: 'Oportunidade', cor: T.gold } : { rotulo: 'Peso morto', cor: T.a }
+}
+function csvMl(headers: string[], rows: Array<Array<string | number | null>>): string {
+  const esc = (v: string | number | null) => {
+    if (v == null) return ''
+    if (typeof v === 'number') return String(v).replace('.', ',')
+    return /[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+  }
+  return [headers.map(esc).join(';'), ...rows.map(r => r.map(esc).join(';'))].join('\n')
+}
+function baixarCsvMl(nome: string, conteudo: string) {
+  const blob = new Blob(['\ufeff' + conteudo], { type: 'text/csv;charset=utf-8' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob); a.download = nome
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+
 // ── Navegação (espelha GRUPOS/TABS da Amazon) ──────────────────────────────────
 const TABS_ML = [
   { id: 'resumo',   label: 'Resumo',        icon: 'ti-layout-dashboard' },
@@ -307,6 +347,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
   const [customRange, setCustomRange] = useState<{ from: string; to: string }>({ from: '', to: '' })  // período "Personalizado" (YYYY-MM-DD)
   const [grupo, setGrupo] = useState(soAds ? 'anuncio' : 'venda')
   const [tab, setTab] = useState<TabMl>(soAds ? 'ads' : 'resumo')
+  const [eixoAbc, setEixoAbc] = useState<'receita' | 'lucro'>('receita')
   const [dre, setDre] = useState<Dre | null>(null)
   const [chart30, setChart30] = useState<{ daily: Dre['daily']; from: string; to: string; netRatio: number | null } | null>(null)
   const [pilotoMl, setPilotoMl] = useState<any>(null)   // Piloto NEO do Mercado Ads (admin): recomendações de ROI, sempre 30d
@@ -912,15 +953,53 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                   <Chip label="Margem média" valor={cm ? pc(margem) : '—'} cor={cm ? (margem >= 0 ? T.g : T.r) : T.t3} money />
                 </div>
                 {!cm && <div style={{ fontSize: 10.5, color: T.t3, marginBottom: 14 }}>A margem média aparece quando você informa os custos (CMV) em Gerenciamento.</div>}
-                <TableH minWidth={1020} head={[
-                  { label: 'Produto', w: '24%' }, { label: 'Un.', right: true }, { label: 'Faturado', right: true },
+                {(() => {
+                  const eixo = cm ? eixoAbc : 'receita'
+                  const btn = (on: boolean) => ({ fontSize: 11.5, fontWeight: on ? 700 : 500, padding: '5px 12px', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit', background: on ? tint(T.gold, 15) : T.card, color: on ? T.gold : T.t2, border: `1px solid ${on ? tint(T.gold, 45) : T.line}` })
+                  const pr = (n: number | null | undefined) => n == null ? null : Math.round(n * 100) / 100
+                  const abc = classeAbcMl(dre.produtos, eixo)
+                  const sufixo = perLabel.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\W+/g, '-').toLowerCase()
+                  const csvProdutos = () => baixarCsvMl(`oraculo-ml-produtos-${sufixo}.csv`, csvMl(
+                    ['Produto', 'Anúncio (MLB)', 'Curva ABC', 'Pedidos', 'Unidades', 'Faturado', 'Tarifa ML', 'Envio', 'Líquido ML', 'Imposto', 'CMV', 'Lucro', 'Margem %', 'Custo Ads', 'Lucro pós Ads'],
+                    dre.produtos.map(p => [p.titulo, p.itemId, abc.get(p.itemId) || '', p.pedidos, p.qty, pr(p.receita), pr(p.tarifa), pr(p.envio), pr(p.liquido), pr(p.imposto), pr(p.cmv), p.temCusto ? pr(p.lucroFinal) : null,
+                      p.temCusto && p.lucroFinal != null && p.receita > 0 ? pr(p.lucroFinal / p.receita * 100) : null, pr(p.custoAds), p.temCusto ? pr(p.lucroPosAds) : null])))
+                  const csvPedidos = () => baixarCsvMl(`oraculo-ml-pedidos-${sufixo}.csv`, csvMl(
+                    ['Data', 'Pedido', 'Status', 'Produto', 'Unidades', 'Valor', 'Tarifa ML', 'Envio', 'Líquido ML', 'Imposto', 'CMV', 'Lucro'],
+                    dre.pedidos.map(o => [o.data, o.orderId, o.status, o.titulo, o.qty, pr(o.receita), pr(o.tarifa), pr(o.envio), pr(o.liquido), pr(o.imposto), pr(o.cmv), pr(o.lucroFinal)])))
+                  const csvDre = () => baixarCsvMl(`oraculo-ml-dre-${sufixo}.csv`, csvMl(['Linha', 'Valor (R$)'], [
+                    ['Vendas (pedidos)', dre.vendas], ['Unidades', dre.unidades], ['Faturado', pr(dre.receita)],
+                    ['Devoluções', dre.devolucoes ? pr(-dre.devolucoes.valor) : null], ['Tarifa de venda', pr(-dre.tarifaVenda)], ['Envio (custo do vendedor)', pr(-dre.envio)],
+                    ['Frete perdido em devoluções', dre.devolucoes ? pr(-dre.devolucoes.envioPerdido) : null],
+                    ['Líquido Mercado Livre', pr(dre.liquidoML)], [`Imposto (${String(dre.aliquota).replace('.', ',')}%)`, pr(-dre.imposto)], ['CMV', pr(-dre.cmv)],
+                    ['Lucro antes do Ads', pr(dre.lucroFinal)], ['Mercado Ads', dre.ads == null ? null : pr(-dre.ads)], ['Lucro pós Ads', pr(dre.lucroPosAds)],
+                  ]))
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' as const, marginBottom: 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
+                        <span style={{ fontSize: 11.5, color: T.t3, marginRight: 2 }}>Curva ABC por</span>
+                        <button style={btn(eixo === 'receita')} onClick={() => setEixoAbc('receita')}>Faturamento</button>
+                        <button style={{ ...btn(eixo === 'lucro'), opacity: cm ? 1 : 0.45, cursor: cm ? 'pointer' : 'not-allowed' }} disabled={!cm} title={cm ? '' : 'Cadastre o custo em Gerenciamento'} onClick={() => setEixoAbc('lucro')}>Lucro</button>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
+                        <span style={{ fontSize: 11.5, color: T.t3, marginRight: 2 }}><i className="ti ti-download" /> Exportar CSV</span>
+                        <button style={btn(false)} onClick={csvProdutos}>Produtos</button>
+                        <button style={btn(false)} onClick={csvPedidos}>Pedidos</button>
+                        <button style={btn(false)} onClick={csvDre}>DRE</button>
+                      </div>
+                    </div>
+                  )
+                })()}
+                <TableH minWidth={1100} head={[
+                  { label: 'Produto', w: '24%' }, { label: 'ABC' }, { label: 'Un.', right: true }, { label: 'Faturado', right: true },
                   { label: 'Líquido ML', right: true }, { label: 'Imposto', right: true }, { label: 'CMV', right: true },
                   { label: 'Lucro', right: true }, { label: 'Margem', right: true }, { label: 'Custo Ads', right: true },
                   { label: 'Lucro pós ADS', right: true }, { label: 'MPA', right: true }, { label: '', right: true, w: '48px' },
                 ]}>
-                  {dre.produtos.map(p => {
+                  {(() => { const abcMap = classeAbcMl(dre.produtos, cm ? eixoAbc : 'receita'); return dre.produtos.map(p => {
                     const temLucro = p.temCusto && p.lucroFinal != null
                     const mrg = temLucro && p.receita > 0 ? (p.lucroFinal as number) / p.receita * 100 : null
+                    const cls = abcMap.get(p.itemId) || null
+                    const dg = cls ? diagAbc(cls, mrg, cm ? margem : null) : null
                     return (
                       <tr key={p.itemId}>
                         <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}` }}>
@@ -931,6 +1010,10 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                               <div style={{ fontSize: 10, color: T.t3 }}>{p.itemId} · {p.pedidos} pedido{p.pedidos === 1 ? '' : 's'}</div>
                             </div>
                           </div>
+                        </td>
+                        <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, whiteSpace: 'nowrap' as const }}>
+                          {cls ? <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 8px', borderRadius: 6, background: tint(cls === 'A' ? T.g : cls === 'B' ? T.gold : T.t3, 16), color: cls === 'A' ? T.g : cls === 'B' ? T.gold : T.t3 }}>{cls}</span> : <span style={{ color: T.t3 }}>—</span>}
+                          {dg && <div style={{ fontSize: 9.5, fontWeight: 600, color: dg.cor, marginTop: 3 }}>{dg.rotulo}</div>}
                         </td>
                         <td style={cellNum}>{p.qty}</td>
                         <td className="ml-money" style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
@@ -945,10 +1028,10 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                         <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}><ZoomBtn onClick={() => setDetail(p)} /></td>
                       </tr>
                     )
-                  })}
+                  }) })()}
                 </TableH>
                 <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
-                  Lucro, Margem e MPA aparecem nos produtos com custo cadastrado (informe em <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, textDecoration: 'underline' }}>Gerenciamento</button>). Clique no <i className="ti ti-eye" style={{ fontSize: 13, color: T.gold }} /> pra ver a conta completa.
+                  <strong>ABC</strong>: A = os produtos que somam 80% do {cm && eixoAbc === 'lucro' ? 'lucro' : 'faturamento'}, B = até 95%, C = o resto. O diagnóstico cruza a classe com a margem média ({cm ? pc(margem) : 'precisa de custo'}): <strong>Armadilha</strong> = vende muito e ganha pouco. Lucro, Margem e MPA aparecem nos produtos com custo cadastrado (informe em <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, textDecoration: 'underline' }}>Gerenciamento</button>). Clique no <i className="ti ti-eye" style={{ fontSize: 13, color: T.gold }} /> pra ver a conta completa.
                 </div>
               </>
             ) : (
