@@ -31,6 +31,8 @@ export const TABS = [
   { id: 'analit',  label: 'Analítico',     icon: 'ti-chart-dots' },
   { id: 'gerenc',  label: 'Gerenciamento', icon: 'ti-adjustments' },
   { id: 'fulfil',  label: 'Estoque FBA',   icon: 'ti-truck-delivery' },
+  // 30/09: pedir avaliação automático (Solicitations API) — o cliente liga, 7º dia após a entrega.
+  { id: 'avaliac', label: 'Avaliações',    icon: 'ti-star' },
   { id: 'relat',   label: 'Relatório',     icon: 'ti-file-text' },
   { id: 'repasse', label: 'Repasses',      icon: 'ti-arrow-bar-to-down' },
   { id: 'dre',     label: 'DRE por planilha', icon: 'ti-building-bank' },
@@ -52,8 +54,8 @@ export const GRUPOS: GrupoGestao[] = [
   {
     id: 'venda', label: 'Vendas', icon: 'ti-shopping-cart',
     // O Resumo mora aqui: é a capa da Gestão e a tela que abre.
-    pergunta: 'Como está indo: o panorama do período, os pedidos um a um e o estoque.',
-    tabs: ['resumo', 'vendas', 'fulfil'],
+    pergunta: 'Como está indo: o panorama do período, os pedidos um a um, o estoque e as avaliações.',
+    tabs: ['resumo', 'vendas', 'fulfil', 'avaliac'],
   },
   {
     id: 'result', label: 'Resultado', icon: 'ti-chart-pie',

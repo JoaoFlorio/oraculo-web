@@ -12,6 +12,7 @@ import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, lucroDoPeriodo,
 import { maturidadeDoPeriodo, type SeloMaturidade } from '@/lib/maturidadePeriodo'
 import { snapshotDoPeriodo, narrarMudancas, reconciliar, normalizarMarcos, chaveDoPeriodo, type SnapshotPeriodo, type MarcosPeriodo, type Diario, type Reconciliacao } from '@/lib/diarioPeriodo'
 import CarregandoDados, { OrigemDasTaxas } from './CarregandoDados'
+import Avaliacoes from './Avaliacoes'
 import { GRUPOS, TELA_INICIAL, grupoDaTab, grupoPorId, telaAoEntrarNoGrupo, tabPorId } from '@/lib/navegacaoGestao'
 import { totaisDoEstoque, valorDeVenda, valorDeMercadoria } from '@/lib/estoqueFba'
 import { linhasPorCampanha, linhasPorProduto, tacos, periodosCasam, type ProdutoDre as AdsProdutoDre } from '@/lib/adsMetricas'
@@ -6275,6 +6276,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         {tab==='ads'    && <Ads m={m} hide={hide} adsReal={adsData} adsConnected={adsConnected} adsLoading={adsLoading} isAdmin={isAdmin} margemAds={margemRef} realDre={realDre} inv={inventory}/>}
         {tab==='analit' && <Analitico realDre={realDre} hide={hide} connected={amazonConnected} mockM={m} costs={custoUnit} imposto={imposto} adsReal={adsData}/>}
         {tab==='gerenc' && <Gerenciamento realDre={realDre} inv={inventory} costs={costs} extras={extras} onCost={setCost} onExtra={setExtra} mockM={m} hide={hide} connected={amazonConnected} imposto={imposto} onImposto={saveImposto} isAdmin={isAdmin}/>}
+        {tab==='avaliac' && <Avaliacoes t={{card:t.card,line:t.line,t1:t.t1,t2:t.t2,t3:t.t3,gold:t.gold,grn:t.grn,red:t.red,dark:!!t.dark}}/>}
         {tab==='fulfil' && <Fulfillment inv={inventory} realDre={realDre} connected={amazonConnected} mockM={m} costs={custoUnit} hide={hide}/>}
         {tab==='relat'  && <Relatorio realDre={realDre} inv={inventory} costs={custoUnit} adsReal={adsData}/>}
         </div>
