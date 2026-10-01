@@ -45,6 +45,7 @@ type Dre = {
   nickname?: string | null
   vendas: number; unidades: number
   receita: number; tarifaVenda: number; envio: number; enviosPendentes: number
+  devolucoes?: { pedidos: number; valor: number; envioPerdido: number }; receitaBruta?: number
   liquidoML: number
   aliquota: number; imposto: number; cmv: number; lucroFinal: number
   adsConnected: boolean; ads: number | null; tacos: number | null; lucroPosAds: number | null; mpa: number | null
@@ -647,6 +648,14 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                 <Kpi label="MPA" valor={(dre.mpa == null || !cm) ? '—' : pc(dre.mpa)} cor={T.g}
                   ajuda={dre.adsConnected ? 'Margem Pós-Anúncio: lucro pós ads ÷ faturamento. A margem final da operação.' : ADS_TIP} />
               </div>
+              {/* 01/10: devoluções (paridade com a Amazon) — entregue e depois reembolsado; o frete pago não volta. */}
+              {(dre.devolucoes?.pedidos ?? 0) > 0 && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '11px 14px', marginBottom: 16, fontSize: 12.5, color: T.t2 }}>
+                  <i className="ti ti-arrow-back-up" style={{ fontSize: 16, color: T.r }} aria-hidden="true" />
+                  <span><strong style={{ color: T.t1 }}>Devoluções:</strong> {dre.devolucoes!.pedidos} pedido{dre.devolucoes!.pedidos === 1 ? '' : 's'} · <strong style={{ color: T.r }}>{brl(dre.devolucoes!.valor)}</strong> devolvido{dre.devolucoes!.envioPerdido > 0 ? <> · frete perdido <strong style={{ color: T.r }}>{brl(dre.devolucoes!.envioPerdido)}</strong></> : null}</span>
+                  <span style={{ fontSize: 11.5, color: T.t3 }}>Venda entregue e depois reembolsada. Já fora do faturamento; o frete que você pagou nelas já saiu do Líquido.</span>
+                </div>
+              )}
 
               {/* Gráfico "Resumo de Receitas" */}
               <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, padding: '16px 16px 10px', marginBottom: 16, boxShadow: 'var(--elev1)' }}>
