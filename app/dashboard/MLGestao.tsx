@@ -146,6 +146,7 @@ function Kpi({ label, valor, cor, ajuda }: { label: string; valor: string; cor: 
 const TABS_ML = [
   { id: 'resumo',   label: 'Resumo',        icon: 'ti-layout-dashboard' },
   { id: 'pedidos',  label: 'Pedidos',       icon: 'ti-cash' },
+  { id: 'estoque',  label: 'Estoque Full',  icon: 'ti-truck-delivery' },   // 01/10: paridade com o Estoque FBA
   { id: 'produtos', label: 'Por produto',   icon: 'ti-chart-bar' },
   { id: 'ads',      label: 'Ads',           icon: 'ti-speakerphone' },
   { id: 'gerenc',   label: 'Gerenciamento', icon: 'ti-adjustments' },
@@ -154,8 +155,8 @@ type TabMl = (typeof TABS_ML)[number]['id']
 
 const GRUPOS_ML: Array<{ id: string; label: string; icon: string; pergunta: string; tabs: TabMl[] }> = [
   { id: 'venda',  label: 'Vendas',    icon: 'ti-shopping-cart',
-    pergunta: 'Como está indo: o panorama do período e os pedidos um a um.',
-    tabs: ['resumo', 'pedidos'] },
+    pergunta: 'Como está indo: o panorama do período, os pedidos um a um e o estoque.',
+    tabs: ['resumo', 'pedidos', 'estoque'] },
   { id: 'result', label: 'Resultado', icon: 'ti-chart-pie',
     pergunta: 'Quais produtos rendem de verdade depois das taxas do ML e do anúncio.',
     tabs: ['produtos'] },
@@ -622,6 +623,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
           {/* ── RESUMO (paridade com a Amazon: 12 KPIs + gráfico + Top produtos) ── */}
           {tab === 'resumo' && (
             <>
+              <ReputacaoMl />
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 13, marginBottom: 16 }}>
                 <Kpi label="Faturamento" valor={brl(fat)} cor={T.blue}
                   ajuda="O valor dos anúncios (preço × unidades) nos pedidos válidos do período. O frete pago pelo comprador é repasse ao transportador — não entra. Pedido cancelado também não (o painel do ML soma cancelado em 'vendas brutas')." />
@@ -759,6 +761,8 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
           )}
 
           {/* ── PEDIDOS ── cada pedido é um CARTÃO, cada item uma linha com foto ── */}
+          {tab === 'estoque' && <EstoqueMl />}
+
           {tab === 'pedidos' && (
             dre.pedidos.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
@@ -1123,6 +1127,99 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
           custoUn={custos[detail.itemId] ? Number(String(custos[detail.itemId]).replace(',', '.')) : null}
           onClose={() => setDetail(null)} />
       )}
+    </div>
+  )
+}
+
+
+// ── 01/10 — ESTOQUE FULL do ML (paridade com o Estoque FBA da Amazon) ─────────────────────────────────────────
+type ItemEst = { itemId: string; titulo: string; foto: string | null; status: string; full: boolean; logistica: string | null
+  disponivel: number | null; naoDisponivel: number | null; motivosNaoDisponivel: Array<{ status: string; quantidade: number }>
+  vendidos30: number; vendaDia: number; coberturaDias: number | null; alerta: 'ruptura' | 'acabando' | 'parado' | null }
+function EstoqueMl() {
+  const [d, setD] = useState<{ itens: ItemEst[]; resumo: any; atualizadoEm?: string; demo?: boolean } | null>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  const [filtro, setFiltro] = useState<'todos' | 'full' | 'alerta'>('todos')
+  useEffect(() => {
+    let vivo = true
+    fetch('/api/ml/gestao/estoque', { cache: 'no-store' })
+      .then(async r => ({ ok: r.ok, j: await r.json().catch(() => null) }))
+      .then(({ ok, j }) => { if (!vivo) return; if (ok && j?.itens) setD(j); else setErro('Não consegui ler o estoque no Mercado Livre agora.') })
+      .catch(() => { if (vivo) setErro('Não consegui ler o estoque no Mercado Livre agora.') })
+    return () => { vivo = false }
+  }, [])
+  if (erro) return <div style={{ fontSize: 13, color: T.t2, padding: 16 }}>{erro}</div>
+  if (!d) return <div style={{ fontSize: 13, color: T.t3, padding: 16 }}>Lendo seu estoque no Mercado Livre…</div>
+  const r = d.resumo || {}
+  const lista = d.itens.filter(i => filtro === 'todos' ? true : filtro === 'full' ? i.full : !!i.alerta)
+  const selo = (a: ItemEst['alerta']) => a === 'ruptura' ? { t: 'SEM ESTOQUE', c: T.r } : a === 'acabando' ? { t: 'ACABANDO', c: T.a } : a === 'parado' ? { t: 'PARADO', c: T.t3 } : null
+  const motivo: Record<string, string> = { transfer: 'em transferência', damaged: 'danificado', lost: 'perdido', withdrawal: 'em retirada', internal_process: 'processo interno', not_supported: 'não suportado' }
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 14 }}>
+        {[['Anúncios', r.anuncios], ['No Full', r.noFull], ['Unidades no Full', r.unidadesFull], ['Sem estoque (vendendo)', r.ruptura], ['Acabando (< 15 dias)', r.acabando], ['Parados (sem venda 30d)', r.parados]].map(([l, v]) => (
+          <div key={String(l)} style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11.5, color: T.t3 }}>{l}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: T.t1, marginTop: 4 }}>{Number(v || 0).toLocaleString('pt-BR')}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+        {(['todos', 'full', 'alerta'] as const).map(f => (
+          <button key={f} onClick={() => setFiltro(f)} style={{ fontSize: 11.5, fontWeight: 700, padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit',
+            background: filtro === f ? tint(T.gold, 15) : T.card, border: `1px solid ${filtro === f ? tint(T.gold, 45) : T.line}`, color: filtro === f ? T.gold : T.t3 }}>
+            {f === 'todos' ? 'Todos' : f === 'full' ? 'Só Full' : 'Com alerta'}
+          </button>
+        ))}
+        {d.atualizadoEm && <span style={{ marginLeft: 'auto', fontSize: 11, color: T.t4 }}>lido do Mercado Livre às {new Date(d.atualizadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>}
+      </div>
+      {lista.length === 0 && <div style={{ fontSize: 13, color: T.t3, padding: 16 }}>{d.demo ? 'Conta de demonstração — sem estoque real.' : 'Nenhum anúncio neste filtro.'}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 8 }}>
+        {lista.map(i => { const sl = selo(i.alerta); return (
+          <div key={i.itemId} style={{ display: 'flex', gap: 12, alignItems: 'center', background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '10px 12px' }}>
+            {i.foto ? <img src={i.foto} alt="" width={44} height={44} style={{ borderRadius: 8, objectFit: 'cover' as const, background: '#fff' }} /> : <div style={{ width: 44, height: 44 }} />}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12.5, color: T.t1, fontWeight: 600, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.titulo}</div>
+              <div style={{ fontSize: 11, color: T.t3, marginTop: 2 }}>
+                {i.full ? 'Full' : i.logistica === 'self_service' ? 'Flex' : 'Envio próprio/Coleta'} · {i.vendidos30} vendido{i.vendidos30 === 1 ? '' : 's'} em 30 dias{i.status === 'paused' ? ' · anúncio pausado' : ''}
+                {(i.naoDisponivel || 0) > 0 && <> · {i.motivosNaoDisponivel.map(m => `${m.quantidade} ${motivo[m.status] || m.status}`).join(', ')}</>}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' as const, minWidth: 110 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.t1 }}>{i.disponivel == null ? '—' : `${i.disponivel} un.`}</div>
+              <div style={{ fontSize: 11, color: T.t3 }}>{i.coberturaDias != null ? `dura ~${i.coberturaDias} dias` : i.vendaDia > 0 ? '' : 'sem venda no período'}</div>
+              {sl && <span style={{ fontSize: 9.5, fontWeight: 800, color: sl.c, border: `1px solid ${sl.c}`, borderRadius: 5, padding: '1px 6px' }}>{sl.t}</span>}
+            </div>
+          </div>
+        ) })}
+      </div>
+    </div>
+  )
+}
+
+// ── 01/10 — REPUTAÇÃO do vendedor no ML (nível, MercadoLíder e as 3 métricas que derrubam a cor) ─────────────────
+function ReputacaoMl() {
+  const [r, setR] = useState<any>(null)
+  useEffect(() => {
+    let vivo = true
+    fetch('/api/ml/gestao/reputacao', { cache: 'no-store' }).then(x => x.ok ? x.json() : null).then(j => { if (vivo && j && !j.error) setR(j) }).catch(() => {})
+    return () => { vivo = false }
+  }, [])
+  if (!r) return null
+  const cor: Record<string, string> = { verde: '#00A650', 'verde-claro': '#7BC74D', amarela: '#FFE600', laranja: '#FF7733', vermelha: '#F23D4F' }
+  const met = (nome: string, m: { pct: number; qtd: number } | null, limite: number) => m && (
+    <span style={{ fontSize: 11.5, color: m.pct > limite ? T.r : T.t2 }}>{nome} <strong style={{ color: m.pct > limite ? T.r : T.t1 }}>{m.pct.toLocaleString('pt-BR')}%</strong></span>
+  )
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.t1 }}>
+        <span style={{ width: 12, height: 12, borderRadius: 3, background: cor[r.cor] || T.t4 }} />
+        Reputação {r.nome}{r.mercadoLider ? ` · MercadoLíder ${r.mercadoLider}` : ''}
+      </span>
+      <span style={{ fontSize: 11.5, color: T.t3 }}>{Number(r.vendas365 || 0).toLocaleString('pt-BR')} vendas no ano</span>
+      {met('Reclamações', r.reclamacoes, 1)}
+      {met('Atrasos no envio', r.atrasos, 6)}
+      {met('Cancelamentos', r.cancelamentos, 0.5)}
     </div>
   )
 }
