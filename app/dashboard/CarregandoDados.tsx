@@ -80,7 +80,7 @@ export function AvisoIsencao({ isencao, cores }: { isencao: Isencao; cores: Core
   const isentas: string[] = [], parciais: string[] = []
   if (isencao.comissao === 'isenta') isentas.push('comissão'); else if (isencao.comissao === 'parcial') parciais.push('comissão')
   if (isencao.fba === 'isenta') isentas.push('tarifa FBA'); else if (isencao.fba === 'parcial') parciais.push('tarifa FBA')
-  if (isencao.parcelamento === 'isento') isentas.push('parcelamento sem juros')
+  // Parcelamento zerado NÃO é promoção (só existe quando o comprador parcela) — o Oráculo já usa o medido na conta.
   if (!isentas.length && !parciais.length) return null
   const C = cores
   const lista = (l: string[]) => l.length > 1 ? l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1] : l[0]
