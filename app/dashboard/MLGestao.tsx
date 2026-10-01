@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -188,6 +188,7 @@ const TABS_ML = [
   { id: 'pedidos',  label: 'Pedidos',       icon: 'ti-cash' },
   { id: 'estoque',  label: 'Estoque Full',  icon: 'ti-truck-delivery' },   // 01/10: paridade com o Estoque FBA
   { id: 'produtos', label: 'Por produto',   icon: 'ti-chart-bar' },
+  { id: 'repasse',  label: 'Repasses',      icon: 'ti-building-bank' },   // 01/10: quanto caiu (Mercado Pago)
   { id: 'ads',      label: 'Ads',           icon: 'ti-speakerphone' },
   { id: 'gerenc',   label: 'Gerenciamento', icon: 'ti-adjustments' },
 ] as const
@@ -198,8 +199,8 @@ const GRUPOS_ML: Array<{ id: string; label: string; icon: string; pergunta: stri
     pergunta: 'Como está indo: o panorama do período, os pedidos um a um e o estoque.',
     tabs: ['resumo', 'pedidos', 'estoque'] },
   { id: 'result', label: 'Resultado', icon: 'ti-chart-pie',
-    pergunta: 'Quais produtos rendem de verdade depois das taxas do ML e do anúncio.',
-    tabs: ['produtos'] },
+    pergunta: 'Quais produtos rendem de verdade depois das taxas do ML e do anúncio — e quanto já caiu na conta.',
+    tabs: ['produtos', 'repasse'] },
   { id: 'anuncio', label: 'Ads', icon: 'ti-speakerphone',
     pergunta: 'Quanto o Mercado Ads custou e o que ele trouxe de volta.',
     tabs: ['ads'] },
@@ -348,6 +349,8 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
   const [grupo, setGrupo] = useState(soAds ? 'anuncio' : 'venda')
   const [tab, setTab] = useState<TabMl>(soAds ? 'ads' : 'resumo')
   const [eixoAbc, setEixoAbc] = useState<'receita' | 'lucro'>('receita')
+  // Janela dos Repasses FIXA por período (o `to` de janela() é "agora" — mudaria a cada render e refaria a busca sem parar).
+  const janelaRepasse = useMemo(() => janela(periodo, customRange), [periodo, customRange])
   const [dre, setDre] = useState<Dre | null>(null)
   const [chart30, setChart30] = useState<{ daily: Dre['daily']; from: string; to: string; netRatio: number | null } | null>(null)
   const [pilotoMl, setPilotoMl] = useState<any>(null)   // Piloto NEO do Mercado Ads (admin): recomendações de ROI, sempre 30d
@@ -803,6 +806,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
 
           {/* ── PEDIDOS ── cada pedido é um CARTÃO, cada item uma linha com foto ── */}
           {tab === 'estoque' && <EstoqueMl />}
+          {tab === 'repasse' && <RepassesMl janela={janelaRepasse} perLabel={perLabel} />}
 
           {tab === 'pedidos' && (
             dre.pedidos.length > 0 ? (
@@ -1222,6 +1226,77 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
 type ItemEst = { itemId: string; titulo: string; foto: string | null; status: string; full: boolean; logistica: string | null
   disponivel: number | null; naoDisponivel: number | null; motivosNaoDisponivel: Array<{ status: string; quantidade: number }>
   vendidos30: number; vendaDia: number; coberturaDias: number | null; alerta: 'ruptura' | 'acabando' | 'parado' | null }
+// ── REPASSES (01/10) — o que o Mercado Pago já liberou + a agenda do que vai cair ─────────────────
+function RepassesMl({ janela: jn, perLabel }: { janela: { from: string; to: string }; perLabel: string }) {
+  const [d, setD] = useState<any>(null)
+  const [erro, setErro] = useState<string | null>(null)
+  useEffect(() => {
+    let vivo = true
+    setD(null); setErro(null)
+    fetch(`/api/ml/gestao/repasses?from=${encodeURIComponent(jn.from)}&to=${encodeURIComponent(jn.to)}`, { cache: 'no-store' })
+      .then(async r => ({ ok: r.ok, j: await r.json().catch(() => null) }))
+      .then(({ ok, j }) => { if (!vivo) return; if (ok && j?.recebido) setD(j); else if (j?.conectado === false) setErro('Conecte sua conta do Mercado Livre pra ver os repasses.'); else setErro('Não consegui ler os repasses no Mercado Pago agora.') })
+      .catch(() => { if (vivo) setErro('Não consegui ler os repasses no Mercado Pago agora.') })
+    return () => { vivo = false }
+  }, [jn.from, jn.to])
+  if (erro) return <div style={{ fontSize: 13, color: T.t2, padding: 16 }}>{erro}</div>
+  if (!d) return <div style={{ fontSize: 13, color: T.t3, padding: 16 }}>Lendo seus repasses no Mercado Pago…</div>
+  const dia = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' }) : '—'
+  const cards: Array<[string, number, number, string, string]> = [
+    [`Caiu na conta · ${perLabel.toLowerCase()}`, d.recebido.valor, d.recebido.pagamentos, T.g, 'liberado no Mercado Pago no período'],
+    ['A liberar', d.aLiberar.valor, d.aLiberar.pagamentos, T.gold, 'vendas aprovadas esperando a data de liberação'],
+    ['Retido em mediação', d.mediacao.valor, d.mediacao.pagamentos, T.a, 'reclamação aberta — o ML segura até resolver'],
+    ['Estornado', d.estornado.valor, d.estornado.pagamentos, T.r, 'devolvido ao comprador (vendas do período)'],
+  ]
+  const proximos = (d.agenda || []).filter((a: any) => a.dia !== 'sem data').slice(0, 14)
+  const maxAg = Math.max(1, ...proximos.map((a: any) => a.valor))
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12, marginBottom: 16 }}>
+        {cards.map(([l, v, n, c, h]) => (
+          <div key={l} style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '12px 14px' }}>
+            <div style={{ fontSize: 11.5, color: T.t3 }}>{l}</div>
+            <div className="ml-money" style={{ fontSize: 22, fontWeight: 800, color: c, marginTop: 4 }}>{brl(v)}</div>
+            <div style={{ fontSize: 10.5, color: T.t4, marginTop: 2 }}>{n} pagamento{n === 1 ? '' : 's'} · {h}</div>
+          </div>
+        ))}
+      </div>
+      {proximos.length > 0 && (
+        <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '12px 14px', marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: T.t1, marginBottom: 10 }}>Agenda — quando cai</div>
+          {proximos.map((a: any) => (
+            <div key={a.dia} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span style={{ width: 46, fontSize: 11.5, color: T.t2, fontVariantNumeric: 'tabular-nums' as const }}>{a.dia.slice(8, 10)}/{a.dia.slice(5, 7)}</span>
+              <div style={{ flex: 1, height: 8, borderRadius: 4, background: tint(T.gold, 12) }}><div style={{ width: `${Math.max(3, a.valor / maxAg * 100)}%`, height: 8, borderRadius: 4, background: T.gold }} /></div>
+              <span className="ml-money" style={{ width: 110, textAlign: 'right' as const, fontSize: 12, fontWeight: 600, color: T.t1 }}>{brl(a.valor)}</span>
+              <span style={{ width: 30, fontSize: 10.5, color: T.t3 }}>{a.pagamentos}×</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {d.itens?.length > 0 && (
+        <TableH minWidth={720} head={[{ label: 'Pedido' }, { label: 'Aprovado' }, { label: 'Libera em' }, { label: 'Situação' }, { label: 'Venda', right: true }, { label: 'Líquido', right: true }]}>
+          {d.itens.slice(0, 150).map((r: any) => (
+            <tr key={r.pagamentoId}>
+              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2 }}>{r.pedidoId}</td>
+              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2 }}>{dia(r.aprovadoEm)}</td>
+              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2 }}>{dia(r.liberaEm)}</td>
+              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}` }}>{r.situacao === 'recebido' ? <Pill kind="grn">caiu</Pill> : r.situacao === 'mediacao' ? <Pill kind="red">mediação</Pill> : <Pill kind="gold">a liberar</Pill>}</td>
+              <td className="ml-money" style={{ ...cellNum }}>{brl(r.bruto)}</td>
+              <td className="ml-money" style={{ ...cellNum, fontWeight: 600, color: r.liquido != null ? T.t1 : T.t3 }}>{r.liquido != null ? brl(r.liquido) : '—'}</td>
+            </tr>
+          ))}
+        </TableH>
+      )}
+      <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
+        Lido direto do <strong>Mercado Pago</strong>: o líquido já vem sem tarifa e frete do ML. Só entram pagamentos ligados a pedidos do Mercado Livre (Pix, transferências e assinaturas ficam de fora). “Caiu na conta” = liberado no saldo do Mercado Pago (o saque pro banco é com você).
+        {d.parcial && <> <strong style={{ color: T.a }}>Período muito grande: mostrando os primeiros 1.000 pagamentos.</strong></>}
+        {d.semLiquido > 0 && <> {d.semLiquido} pagamento(s) sem líquido informado pelo Mercado Pago (aparecem com “—” e não somam).</>}
+      </div>
+    </div>
+  )
+}
+
 function EstoqueMl() {
   const [d, setD] = useState<{ itens: ItemEst[]; resumo: any; atualizadoEm?: string; demo?: boolean } | null>(null)
   const [erro, setErro] = useState<string | null>(null)
