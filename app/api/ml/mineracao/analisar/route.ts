@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q') || ''
   try {
     const r = await fetch(`${BACKEND}/api/ml/mineracao/analisar?q=${encodeURIComponent(q)}`,
-      { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
+      { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '', 'x-user-email': user.email } })
     return NextResponse.json(await r.json(), { status: r.status })
   } catch {
     return NextResponse.json({ error: 'Erro ao analisar o anúncio' }, { status: 500 })

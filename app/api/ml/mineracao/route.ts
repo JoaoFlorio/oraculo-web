@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   if (sp.get('bust') === '1') qs.set('bust', '1')
   try {
     const r = await fetch(`${BACKEND}/api/ml/mineracao/?${qs.toString()}`,
-      { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
+      { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '', 'x-user-email': user.email } })
     return NextResponse.json(await r.json(), { status: r.status })
   } catch {
     return NextResponse.json({ error: 'Erro no garimpo' }, { status: 500 })

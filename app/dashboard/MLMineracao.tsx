@@ -21,6 +21,7 @@ const T = {
   gold: 'var(--gold)', g: 'var(--g)', a: 'var(--a)', r: 'var(--r)', pur: 'var(--pur)',
   t1: 'var(--t1)', t2: 'var(--t2)', t3: 'var(--t3)', t4: 'var(--t4)',
 }
+const REP_NOME: Record<string, string> = { green: 'reputação verde', yellow: 'reputação amarela', red: 'reputação laranja/vermelha (sem subsídio de frete)' }
 const tint = (v: string, pct: number) => `color-mix(in srgb, ${v} ${pct}%, transparent)`
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -30,6 +31,7 @@ export type Produto = {
   comissao: number | null; comissaoPct: number | null; envio: number | null
   voceRecebe: number | null; margemPct: number | null; permalink: string | null
   custoAlvo: { m20: number; m30: number; m40: number } | null
+  premissas?: { reputacao: 'green' | 'yellow' | 'red'; impostoPct: number }   // 01/10: premissas DA CONTA do usuário
   concorrencia: { ofertas: number; vendedores: number; precoMin: number; precoMax: number; lojasOficiais: number; usandoFull: number; amostra: number } | null
   sinais: string[]
   marca: string | null; revendavel: boolean; fonteNome?: string
@@ -270,7 +272,8 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
       : { l: '—', c: T.t3 })
 
   // Simulador: comissão real (% da categoria) + envio real medido.
-  const pct = p.comissaoPct ?? (p.preco > 0 && p.comissao != null ? +(p.comissao / p.preco * 100).toFixed(1) : 13)
+  const pctMedido = p.comissaoPct ?? (p.preco > 0 && p.comissao != null ? +(p.comissao / p.preco * 100).toFixed(1) : null)
+  const pct = pctMedido ?? 13   // sem tarifa medida: 13% = média do Clássico, DECLARADO na linha como estimativa
   const tarifa = +(price * pct / 100).toFixed(2)
   const envioVal = p.envio
   const profit = +(price - tarifa - (envioVal || 0) - cost).toFixed(2)
@@ -450,7 +453,7 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
               <div style={{ padding: '0 16px' }}>
                 {[
                   { l: 'Preço de venda', v: `R$ ${fmtR(price)}`, neg: false },
-                  { l: `Tarifa do ML (${pct.toFixed(1).replace('.', ',')}%)`, v: `− R$ ${fmtR(tarifa)}`, neg: true },
+                  { l: `Tarifa do ML (${pct.toFixed(1).replace('.', ',')}%${pctMedido == null ? ' · estimada, não medida' : ''})`, v: `− R$ ${fmtR(tarifa)}`, neg: true },
                   { l: 'Envio (custo real do seller)', v: envioVal != null ? `− R$ ${fmtR(envioVal)}` : 'não medido', neg: true },
                   { l: 'Custo do produto', v: `− R$ ${fmtR(cost)}`, neg: true },
                 ].map((row, i) => (
@@ -470,7 +473,7 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
                 ))}
               </div>
             </div>
-            <div style={{ fontSize: 9.5, color: T.t4, marginTop: 6 }}>Tarifa e envio são os REAIS medidos pra este anúncio (reputação verde) — não é estimativa de tabela. Imposto e Ads ficam por sua conta.</div>
+            <div style={{ fontSize: 9.5, color: T.t4, marginTop: 6 }}>{pctMedido == null ? 'Tarifa ESTIMADA (o ML não devolveu a deste anúncio); ' : 'Tarifa e envio são os REAIS medidos pra este anúncio — '}envio calculado com a {REP_NOME[p.premissas?.reputacao || 'green']}{p.premissas ? ' (a da sua conta)' : ''}. Imposto e Ads ficam por sua conta.</div>
           </div>
           {/* Previsão mensal */}
           <div>
@@ -845,7 +848,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
 
       <p style={{ fontSize: 10.5, color: T.t4, marginTop: 16, lineHeight: 1.5 }}>
         <strong>GENÉRICO</strong> = sem marca dominando — dá pra comprar genérico e revender (marca de supermercado e marca grande aparecem no card, sem o selo).
-        <strong> Recebe</strong> = preço − comissão real − envio real (reputação verde), antes de imposto/custo/Ads. <strong>Compre até</strong> = o máximo a pagar no fornecedor pra fechar naquela margem (imposto 4% embutido). O score resume margem + posição no ranking + genérico.
+        <strong> Recebe</strong> = preço − comissão real − envio real ({produtos[0]?.premissas ? `${REP_NOME[produtos[0].premissas.reputacao]} — a da sua conta` : 'reputação verde'}), antes de imposto/custo/Ads. <strong>Compre até</strong> = o máximo a pagar no fornecedor pra fechar naquela margem (imposto {produtos[0]?.premissas ? `${String(produtos[0].premissas.impostoPct).replace('.', ',')}% — o cadastrado na sua Gestão ML` : '4%'} embutido). O score resume margem + posição no ranking + genérico.
       </p>
 
       {detail && <MLDetalheModal p={detail} onClose={() => setDetail(null)} />}
