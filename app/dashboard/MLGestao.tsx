@@ -1245,6 +1245,7 @@ function RepassesMl({ janela: jn, perLabel }: { janela: { from: string; to: stri
   const cards: Array<[string, number, number, string, string]> = [
     [`Caiu na conta · ${perLabel.toLowerCase()}`, d.recebido.valor, d.recebido.pagamentos, T.g, 'liberado no Mercado Pago no período'],
     ['A liberar', d.aLiberar.valor, d.aLiberar.pagamentos, T.gold, 'vendas aprovadas esperando a data de liberação'],
+    ...(d.atrasado?.pagamentos ? [['Passou da data e não liberou', d.atrasado.valor, d.atrasado.pagamentos, T.r, 'entrega não confirmada ou retenção do ML — vale abrir no Mercado Pago'] as [string, number, number, string, string]] : []),
     ['Retido em mediação', d.mediacao.valor, d.mediacao.pagamentos, T.a, 'reclamação aberta — o ML segura até resolver'],
     ['Estornado', d.estornado.valor, d.estornado.pagamentos, T.r, 'devolvido ao comprador (vendas do período)'],
   ]
@@ -1281,7 +1282,7 @@ function RepassesMl({ janela: jn, perLabel }: { janela: { from: string; to: stri
               <td style={{ padding: '8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2 }}>{r.pedidoId}</td>
               <td style={{ padding: '8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2 }}>{dia(r.aprovadoEm)}</td>
               <td style={{ padding: '8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2 }}>{dia(r.liberaEm)}</td>
-              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}` }}>{r.situacao === 'recebido' ? <Pill kind="grn">caiu</Pill> : r.situacao === 'mediacao' ? <Pill kind="red">mediação</Pill> : <Pill kind="gold">a liberar</Pill>}</td>
+              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}` }}>{r.situacao === 'recebido' ? <Pill kind="grn">caiu</Pill> : r.situacao === 'mediacao' ? <Pill kind="red">mediação</Pill> : r.situacao === 'atrasado' ? <Pill kind="red">atrasado</Pill> : <Pill kind="gold">a liberar</Pill>}</td>
               <td className="ml-money" style={{ ...cellNum }}>{brl(r.bruto)}</td>
               <td className="ml-money" style={{ ...cellNum, fontWeight: 600, color: r.liquido != null ? T.t1 : T.t3 }}>{r.liquido != null ? brl(r.liquido) : '—'}</td>
             </tr>
