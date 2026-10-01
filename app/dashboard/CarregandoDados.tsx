@@ -66,7 +66,32 @@ export function OrigemDasTaxas({ fees, cores }: { fees?: { pedidosReais?: number
     <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 11.5, color: C.t2, lineHeight: 1.5, margin: '-4px 0 14px' }}>
       <i className="ti ti-info-circle" style={{ fontSize: 14, color: C.t3, marginTop: 1 }} aria-hidden="true" />
       <span>
-        <b style={{ color: C.t1 }}>Taxas da Amazon:</b> {n(reais)} pedido{reais === 1 ? '' : 's'} com a taxa já cobrada (valor real) · <b style={{ color: C.t1 }}>{n(est)}</b> ainda não cobrado{est === 1 ? '' : 's'} — pra esses, a taxa é a que a própria Amazon calcula pro seu produto, e troca pela cobrança real em poucos dias.
+        <b style={{ color: C.t1 }}>Taxas da Amazon:</b> {n(reais)} pedido{reais === 1 ? '' : 's'} com a taxa já cobrada (valor real) · <b style={{ color: C.t1 }}>{n(est)}</b> ainda não cobrado{est === 1 ? '' : 's'} — pra esses, usamos o que a Amazon cobrou de você na última venda faturada do mesmo produto (ou a calculadora dela, se o produto ainda não vendeu), e troca pela cobrança real em poucos dias.
+      </span>
+    </div>
+  )
+}
+
+type Isencao = { comissao: 'isenta' | 'parcial' | null; fba: 'isenta' | 'parcial' | null; parcelamento: 'isento' | null; itensMedidos: number } | null | undefined
+
+/** 01/10 — PROMOÇÃO DA AMAZON NA CONTA: a tarifa R$ 0 é real (medida no que a Amazon cobrou), não falha do Oráculo. */
+export function AvisoIsencao({ isencao, cores }: { isencao: Isencao; cores: Cores }) {
+  if (!isencao) return null
+  const isentas: string[] = [], parciais: string[] = []
+  if (isencao.comissao === 'isenta') isentas.push('comissão'); else if (isencao.comissao === 'parcial') parciais.push('comissão')
+  if (isencao.fba === 'isenta') isentas.push('tarifa FBA'); else if (isencao.fba === 'parcial') parciais.push('tarifa FBA')
+  if (isencao.parcelamento === 'isento') isentas.push('parcelamento sem juros')
+  if (!isentas.length && !parciais.length) return null
+  const C = cores
+  const lista = (l: string[]) => l.length > 1 ? l.slice(0, -1).join(', ') + ' e ' + l[l.length - 1] : l[0]
+  return (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: C.card, border: `1px solid ${C.gold}55`, borderRadius: 12, padding: '12px 15px', margin: '0 0 14px' }}>
+      <span style={{ fontSize: 18, lineHeight: 1 }} aria-hidden>🎁</span>
+      <span style={{ fontSize: 12.5, color: C.t2, lineHeight: 1.6 }}>
+        <b style={{ color: C.t1 }}>Sua conta está numa promoção da Amazon.</b>{' '}
+        {isentas.length > 0 && <>Nas suas últimas {isencao.itensMedidos >= 20 ? 20 : isencao.itensMedidos} vendas faturadas a Amazon <b style={{ color: C.t1 }}>não cobrou {lista(isentas)}</b> — por isso essas tarifas aparecem como R$ 0: é exatamente o que ela está cobrando de você. </>}
+        {parciais.length > 0 && <>A {lista(parciais)} {parciais.length > 1 ? 'estão sendo cobradas' : 'está sendo cobrada'} só em parte das vendas (alguns produtos estão isentos) — cada produto mostra o que a Amazon cobrou nele. </>}
+        Quando a promoção acabar, as tarifas voltam a aparecer sozinhas.
       </span>
     </div>
   )

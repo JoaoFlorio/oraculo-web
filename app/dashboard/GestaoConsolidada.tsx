@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { SeloAmazon, SeloML } from './SelosMarketplace'
-import CarregandoDados from './CarregandoDados'
+import CarregandoDados, { AvisoIsencao } from './CarregandoDados'
 import { totaisDoPeriodo, lucroDoPeriodo, type AjustePedido } from '@/lib/margemProduto'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -259,6 +259,7 @@ export default function GestaoConsolidada() {
 
       {!loading && (
         <div style={{ opacity: amz?.stale ? 0.4 : 1, transition: 'opacity .3s' }}>
+          <AvisoIsencao isencao={amz?.isencaoTarifas} cores={{ gold: T.gold, t1: T.t1, t2: T.t2, t3: T.t3, card: T.card, line: T.line }} />
           {(!amzOn || !mlOn) && (
             <div style={{ fontSize: 11.5, color: T.t3, background: tint(T.a, 8), border: `1px solid ${tint(T.a, 25)}`, borderRadius: 10, padding: '9px 13px', marginBottom: 14 }}>
               {!amzOn && !mlOn ? 'Nenhuma loja conectada ainda — conecte a Amazon ou o Mercado Livre para ver a visão somada.'

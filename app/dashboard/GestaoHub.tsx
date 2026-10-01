@@ -11,7 +11,7 @@ import { adsDoProduto, temAdsPorSku, adsSemVenda } from '@/lib/adsProduto'
 import { margemDoProduto, custosFixosDoPeriodo, totaisDoPeriodo, lucroDoPeriodo, ajustesDoPedido, ajustesDoProduto, type AjustePedido } from '@/lib/margemProduto'
 import { maturidadeDoPeriodo, type SeloMaturidade } from '@/lib/maturidadePeriodo'
 import { snapshotDoPeriodo, narrarMudancas, reconciliar, normalizarMarcos, chaveDoPeriodo, type SnapshotPeriodo, type MarcosPeriodo, type Diario, type Reconciliacao } from '@/lib/diarioPeriodo'
-import CarregandoDados, { OrigemDasTaxas } from './CarregandoDados'
+import CarregandoDados, { OrigemDasTaxas, AvisoIsencao } from './CarregandoDados'
 import Avaliacoes from './Avaliacoes'
 import { GRUPOS, TELA_INICIAL, grupoDaTab, grupoPorId, telaAoEntrarNoGrupo, tabPorId } from '@/lib/navegacaoGestao'
 import { totaisDoEstoque, valorDeVenda, valorDeMercadoria } from '@/lib/estoqueFba'
@@ -854,6 +854,7 @@ function Resumo({hide,realDre,cmv=0,impostoTotal=0,credito=0,custoEventual=0,arm
       {shownKpis.map((k:any,i:number)=><KPI key={i} {...k} hide={hide}/>)}
     </div>
     {realDre && <OrigemDasTaxas fees={realDre.fees} cores={{gold:t.gold,t1:t.t1,t2:t.t2,t3:t.t3,card:t.card,line:t.line}}/>}
+    {realDre && <AvisoIsencao isencao={realDre.isencaoTarifas} cores={{gold:t.gold,t1:t.t1,t2:t.t2,t3:t.t3,card:t.card,line:t.line}}/>}
     {/* ⚠️ Produto sem custo cadastrado entra no lucro com CMV ZERO: a receita conta
         inteira e o custo não. O agregado fica otimista e nada avisava. */}
     {realDre && semCusto>0 && (
