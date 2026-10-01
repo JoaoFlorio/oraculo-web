@@ -608,6 +608,16 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
             </div>
           )}
 
+          {/* 01/10: frete de venda ainda não medido pelo ML → o líquido está otimista; dizer isso em vez de somar 0 calado. */}
+          {dre.enviosPendentes > 0 && tab !== 'gerenc' && (
+            <div style={{ fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 16, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+              <i className="ti ti-truck" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
+              <div>
+                <strong style={{ color: T.t1 }}>{dre.enviosPendentes} venda{dre.enviosPendentes === 1 ? '' : 's'} ainda sem o custo de envio medido</strong> — o Mercado Livre ainda não fechou o frete {dre.enviosPendentes === 1 ? 'dela' : 'delas'}, então o Líquido e o Lucro aparecem um pouco <b>maiores</b> do que vão ficar. Atualiza sozinho em minutos.
+              </div>
+            </div>
+          )}
+
           {/* ── RESUMO (paridade com a Amazon: 12 KPIs + gráfico + Top produtos) ── */}
           {tab === 'resumo' && (
             <>
@@ -743,6 +753,9 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
           {tab === 'pedidos' && (
             dre.pedidos.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+                {dre.vendas > dre.pedidos.length && (
+                  <div style={{ fontSize: 11.5, color: T.t3 }}>Mostrando os {dre.pedidos.length} pedidos mais recentes de {dre.vendas} no período — os números do Resumo somam todos.</div>
+                )}
                 {dre.pedidos.map(o => (
                   <div key={o.orderId} style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: 'var(--elev1)', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${tint(T.line, 70)}`, flexWrap: 'wrap' }}>
