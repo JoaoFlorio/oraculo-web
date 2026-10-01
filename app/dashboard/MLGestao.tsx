@@ -1056,7 +1056,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                     ajuda="Margem Pós-Anúncio: lucro pós ads ÷ faturamento." />
                 </div>
 
-                {/* 🔮 PILOTO NEO (admin) — recomendação de ROI por campanha (MPA = margem − ACOS) */}
+                {/* 🔮 PILOTO NEO (ver: todos desde 01/10 · aplicar: admin) — recomendação de ROI por campanha (MPA = margem − ACOS) */}
                 {pilotoMl?.campanhas?.length > 0 && (() => {
                   const ACAO: Record<string, { lbl: string; cor: string; ic: string }> = {
                     'pausar': { lbl: 'pausar', cor: T.r, ic: 'ti-player-pause' },
@@ -1112,7 +1112,10 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                                   )}
                                 </div>
                               </div>
-                              {['pausar', 'baixar-meta', 'subir-orcamento'].includes(c.acao) && (
+                              {!pilotoMl.podeAplicar && ['pausar', 'baixar-meta', 'subir-orcamento'].includes(c.acao) && (
+                                <span style={{ fontSize: 10.5, color: T.t3, maxWidth: 160, textAlign: 'right' as const }}>ajuste no painel do Mercado Ads</span>
+                              )}
+                              {pilotoMl.podeAplicar && ['pausar', 'baixar-meta', 'subir-orcamento'].includes(c.acao) && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <button onClick={() => aplicarMl(c)} disabled={aplicandoMl === c.id}
                                     style={{ fontSize: 11.5, fontWeight: 700, color: '#fff', background: a.cor, border: 'none', borderRadius: 8, padding: '7px 13px', cursor: aplicandoMl === c.id ? 'default' : 'pointer', fontFamily: 'inherit', opacity: aplicandoMl === c.id ? 0.6 : 1, whiteSpace: 'nowrap' as const }}>

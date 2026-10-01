@@ -3,8 +3,7 @@ export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
 
 // Proxy do CATÁLOGO DE FORNECEDOR do NEO (minerador). 24/09: LIBERADO pra todos os
-// clientes na Amazon (pedido do João). O cruzamento no Mercado Livre segue admin-only
-// enquanto o ML inteiro está em teste.
+// clientes na Amazon (pedido do João). 01/10: o cruzamento no Mercado Livre também.
 // Mesmo encanamento dos demais proxies: sessão → user.email (nunca da URL),
 // BACKEND_URL + INTERNAL_KEY. O corpo do POST é o PDF cru (stream até o backend).
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
@@ -20,7 +19,6 @@ export async function POST(req: NextRequest) {
   // ?marketplace=ml cruza o MESMO catálogo no Mercado Livre (default amazon) — admin-only.
   if (req.nextUrl.searchParams.get('op') === 'varrer') {
     const mkt = req.nextUrl.searchParams.get('marketplace') === 'ml' ? 'ml' : 'amazon'
-    if (mkt === 'ml' && user.role !== 'admin') return NextResponse.json({ error: 'Mercado Livre em teste (admin only)' }, { status: 403 })
     try {
       const res = await fetch(`${BACKEND}/api/fornecedor/varrer?email=${encodeURIComponent(user.email)}&marketplace=${mkt}`, {
         method: 'POST', headers: { 'x-internal-key': KEY }, signal: AbortSignal.timeout(20_000),
@@ -50,7 +48,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const endpoint = req.nextUrl.searchParams.get('resultados') === '1' ? 'resultados' : 'status'
   const mkt = req.nextUrl.searchParams.get('marketplace') === 'ml' ? 'ml' : 'amazon'
-  if (user.role === 'demo' || (mkt === 'ml' && user.role !== 'admin')) return NextResponse.json({ status: 'nenhum' })
+  if (user.role === 'demo') return NextResponse.json({ status: 'nenhum' })
   // streaming: repassa ?parcial=1 (resultados da varredura ainda rodando)
   const parcial = req.nextUrl.searchParams.get('parcial') === '1' ? '&parcial=1' : ''
   try {

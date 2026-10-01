@@ -1412,7 +1412,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
       ((id!=='financeiro' && id!=='ads') || gestaoEnabled)      // Ads Amazon usa a conta de seller
       && ((!id.startsWith('ml-') && id!=='ads-ml') || mlEnabled) // Ads Mercado Livre só com ML ligado
       // Analisar Catálogo (Amazon): liberado pra todos em 24/09
-      && (id!=='catalogo-ml' || user.role==='admin')             // Analisar Catálogo ML: admin-only (em teste)
+      // Analisar Catálogo ML: liberado pra todos em 01/10 ("pode fazer tudo" do João)
     )}))
     .filter(g=>g.ids.length>0)
   const [cat,      setCat]      = useState('all')
@@ -2666,8 +2666,8 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
               </div>
             )}
 
-            {/* Analisar Catálogo ML — mesmo catálogo cruzado contra os rankings do Mercado Livre (admin) */}
-            {nav==='catalogo-ml'&&user.role==='admin'&&(
+            {/* Analisar Catálogo ML — mesmo catálogo cruzado contra os rankings do Mercado Livre (liberado 01/10) */}
+            {nav==='catalogo-ml'&&(
               <div style={{padding:'0 4px'}}>
                 <CatalogoFornecedor marketplace="ml"/>
               </div>
