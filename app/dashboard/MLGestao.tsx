@@ -151,6 +151,7 @@ export function classeAbcMl(produtos: Produto[], eixo: 'receita' | 'lucro'): Map
   const ord = produtos.filter(p => valor(p) != null).sort((a, b) => (valor(b) as number) - (valor(a) as number))
   const tot = ord.reduce((s, p) => s + Math.max(0, valor(p) as number), 0)
   const out = new Map<string, 'A' | 'B' | 'C'>()
+  if (tot <= 0) return out   // revisão 02/10: tudo ≤ 0 (só prejuízo) virava "A" — sem soma positiva não existe curva
   let cum = 0, aDone = false, bDone = false
   for (const p of ord) {
     cum += Math.max(0, valor(p) as number)
@@ -349,8 +350,6 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
   const [grupo, setGrupo] = useState(soAds ? 'anuncio' : 'venda')
   const [tab, setTab] = useState<TabMl>(soAds ? 'ads' : 'resumo')
   const [eixoAbc, setEixoAbc] = useState<'receita' | 'lucro'>('receita')
-  // Janela dos Repasses FIXA por período (o `to` de janela() é "agora" — mudaria a cada render e refaria a busca sem parar).
-  const janelaRepasse = useMemo(() => janela(periodo, customRange), [periodo, customRange])
   const [dre, setDre] = useState<Dre | null>(null)
   const [chart30, setChart30] = useState<{ daily: Dre['daily']; from: string; to: string; netRatio: number | null } | null>(null)
   const [pilotoMl, setPilotoMl] = useState<any>(null)   // Piloto NEO do Mercado Ads (admin): recomendações de ROI, sempre 30d
@@ -539,6 +538,11 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
   const vendas = dre?.vendas || 0
   const ticket = vendas > 0 ? fat / vendas : 0
   const margem = fat > 0 ? lucroBruto / fat * 100 : 0
+  // Média do diagnóstico ABC só sobre quem TEM custo (revisão 02/10: a margem geral conta CMV 0 dos sem custo e ficava
+  // inflada — produto A com 15% virava "Armadilha" sem ser).
+  const comCusto = (dre?.produtos || []).filter(p => p.temCusto && p.lucroFinal != null)
+  const recCusto = comCusto.reduce((s, p) => s + p.receita, 0)
+  const margemComCusto = recCusto > 0 ? comCusto.reduce((s, p) => s + (p.lucroFinal as number), 0) / recCusto * 100 : null
   const roi = cmvTot > 0 ? lucroBruto / cmvTot * 100 : 0
   const fatTot = (dre?.produtos || []).reduce((s, p) => s + p.receita, 0)
   const chartData = chart30 ? fillDaily(chart30.daily, chart30.from, chart30.to).map(x => ({ ...x, liq: chart30.netRatio == null ? null : Math.round(x.receita * chart30.netRatio * 100) / 100 })) : []
@@ -806,7 +810,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
 
           {/* ── PEDIDOS ── cada pedido é um CARTÃO, cada item uma linha com foto ── */}
           {tab === 'estoque' && <EstoqueMl />}
-          {tab === 'repasse' && <RepassesMl janela={janelaRepasse} perLabel={perLabel} />}
+          {tab === 'repasse' && <RepassesMl periodo={periodo} customRange={customRange} perLabel={perLabel} />}
 
           {tab === 'pedidos' && (
             dre.pedidos.length > 0 ? (
@@ -969,13 +973,20 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                       p.temCusto && p.lucroFinal != null && p.receita > 0 ? pr(p.lucroFinal / p.receita * 100) : null, pr(p.custoAds), p.temCusto ? pr(p.lucroPosAds) : null])))
                   const csvPedidos = () => baixarCsvMl(`oraculo-ml-pedidos-${sufixo}.csv`, csvMl(
                     ['Data', 'Pedido', 'Status', 'Produto', 'Unidades', 'Valor', 'Tarifa ML', 'Envio', 'Líquido ML', 'Imposto', 'CMV', 'Lucro'],
-                    dre.pedidos.map(o => [o.data, o.orderId, o.status, o.titulo, o.qty, pr(o.receita), pr(o.tarifa), pr(o.envio), pr(o.liquido), pr(o.imposto), pr(o.cmv), pr(o.lucroFinal)])))
+                    [
+                      // revisão 02/10: data em horário de Brasília (vinha "Thu Oct 01… GMT" em UTC) e nº do pedido como texto
+                      // (16 dígitos — o Excel arredondava pra 15 e zerava o último).
+                      ...dre.pedidos.map(o => [o.data ? new Date(o.data).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '', `="${o.orderId}"`, o.status, o.titulo, o.qty, pr(o.receita), pr(o.tarifa), pr(o.envio), pr(o.liquido), pr(o.imposto), pr(o.cmv), pr(o.lucroFinal)] as Array<string | number | null>),
+                      ...(dre.vendas > dre.pedidos.length ? [[`⚠️ lista com os ${dre.pedidos.length} pedidos mais recentes de ${dre.vendas} — use um período menor pra exportar todos`] as Array<string | number | null>] : []),
+                    ]))
                   const csvDre = () => baixarCsvMl(`oraculo-ml-dre-${sufixo}.csv`, csvMl(['Linha', 'Valor (R$)'], [
-                    ['Vendas (pedidos)', dre.vendas], ['Unidades', dre.unidades], ['Faturado', pr(dre.receita)],
-                    ['Devoluções', dre.devolucoes ? pr(-dre.devolucoes.valor) : null], ['Tarifa de venda', pr(-dre.tarifaVenda)], ['Envio (custo do vendedor)', pr(-dre.envio)],
+                    // revisão 02/10: "Faturado" (dre.receita) já vem SEM as devoluções — a 1ª linha é o bruto, pra fechar a conta.
+                    ['Vendas (pedidos)', dre.vendas], ['Unidades', dre.unidades], ['Faturado bruto', pr(dre.receitaBruta ?? dre.receita)],
+                    ['Devoluções', dre.devolucoes && dre.receitaBruta != null ? pr(-dre.devolucoes.valor) : null], ['Tarifa de venda', pr(-dre.tarifaVenda)], ['Envio (custo do vendedor)', pr(-dre.envio)],
                     ['Frete perdido em devoluções', dre.devolucoes ? pr(-dre.devolucoes.envioPerdido) : null],
-                    ['Líquido Mercado Livre', pr(dre.liquidoML)], [`Imposto (${String(dre.aliquota).replace('.', ',')}%)`, pr(-dre.imposto)], ['CMV', pr(-dre.cmv)],
-                    ['Lucro antes do Ads', pr(dre.lucroFinal)], ['Mercado Ads', dre.ads == null ? null : pr(-dre.ads)], ['Lucro pós Ads', pr(dre.lucroPosAds)],
+                    ['Líquido Mercado Livre', pr(dre.liquidoML)], [`Imposto (${String(dre.aliquota).replace('.', ',')}%)`, pr(-dre.imposto)], ['CMV', cm ? pr(-dre.cmv) : null],
+                    // sem custo cadastrado o lucro é "não sei" (a tela mostra —), não um número otimista
+                    ['Lucro antes do Ads', cm ? pr(dre.lucroFinal) : null], ['Mercado Ads', dre.ads == null ? null : pr(-dre.ads)], ['Lucro pós Ads', cm ? pr(dre.lucroPosAds) : null],
                   ]))
                   return (
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' as const, marginBottom: 12 }}>
@@ -1003,7 +1014,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                     const temLucro = p.temCusto && p.lucroFinal != null
                     const mrg = temLucro && p.receita > 0 ? (p.lucroFinal as number) / p.receita * 100 : null
                     const cls = abcMap.get(p.itemId) || null
-                    const dg = cls ? diagAbc(cls, mrg, cm ? margem : null) : null
+                    const dg = cls ? diagAbc(cls, mrg, margemComCusto) : null
                     return (
                       <tr key={p.itemId}>
                         <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}` }}>
@@ -1035,7 +1046,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                   }) })()}
                 </TableH>
                 <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
-                  <strong>ABC</strong>: A = os produtos que somam 80% do {cm && eixoAbc === 'lucro' ? 'lucro' : 'faturamento'}, B = até 95%, C = o resto. O diagnóstico cruza a classe com a margem média ({cm ? pc(margem) : 'precisa de custo'}): <strong>Armadilha</strong> = vende muito e ganha pouco. Lucro, Margem e MPA aparecem nos produtos com custo cadastrado (informe em <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, textDecoration: 'underline' }}>Gerenciamento</button>). Clique no <i className="ti ti-eye" style={{ fontSize: 13, color: T.gold }} /> pra ver a conta completa.
+                  <strong>ABC</strong>: A = os produtos que somam 80% do {cm && eixoAbc === 'lucro' ? 'lucro' : 'faturamento'}, B = até 95%, C = o resto. O diagnóstico cruza a classe com a margem média dos produtos com custo ({margemComCusto != null ? pc(margemComCusto) : 'precisa de custo'}): <strong>Armadilha</strong> = vende muito e ganha pouco. Lucro, Margem e MPA aparecem nos produtos com custo cadastrado (informe em <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, textDecoration: 'underline' }}>Gerenciamento</button>). Clique no <i className="ti ti-eye" style={{ fontSize: 13, color: T.gold }} /> pra ver a conta completa.
                 </div>
               </>
             ) : (
@@ -1227,18 +1238,24 @@ type ItemEst = { itemId: string; titulo: string; foto: string | null; status: st
   disponivel: number | null; naoDisponivel: number | null; motivosNaoDisponivel: Array<{ status: string; quantidade: number }>
   vendidos30: number; vendaDia: number; coberturaDias: number | null; alerta: 'ruptura' | 'acabando' | 'parado' | null }
 // ── REPASSES (01/10) — o que o Mercado Pago já liberou + a agenda do que vai cair ─────────────────
-function RepassesMl({ janela: jn, perLabel }: { janela: { from: string; to: string }; perLabel: string }) {
+function RepassesMl({ periodo, customRange, perLabel }: { periodo: string; customRange: { from: string; to: string }; perLabel: string }) {
   const [d, setD] = useState<any>(null)
   const [erro, setErro] = useState<string | null>(null)
+  // A janela é calculada NA HORA da busca (revisão 02/10: memorizada no pai, o "até agora" congelava na hora em que o
+  // período foi escolhido). Deps são strings → não entra em loop. Personalizado incompleto não busca.
+  const customIncompleto = periodo === 'custom' && !(customRange.from && customRange.to)
   useEffect(() => {
+    if (customIncompleto) return
     let vivo = true
     setD(null); setErro(null)
+    const jn = janela(periodo, customRange)
     fetch(`/api/ml/gestao/repasses?from=${encodeURIComponent(jn.from)}&to=${encodeURIComponent(jn.to)}`, { cache: 'no-store' })
       .then(async r => ({ ok: r.ok, j: await r.json().catch(() => null) }))
       .then(({ ok, j }) => { if (!vivo) return; if (ok && j?.recebido) setD(j); else if (j?.conectado === false) setErro('Conecte sua conta do Mercado Livre pra ver os repasses.'); else setErro('Não consegui ler os repasses no Mercado Pago agora.') })
       .catch(() => { if (vivo) setErro('Não consegui ler os repasses no Mercado Pago agora.') })
     return () => { vivo = false }
-  }, [jn.from, jn.to])
+  }, [periodo, customRange.from, customRange.to]) // eslint-disable-line
+  if (customIncompleto) return <div style={{ fontSize: 13, color: T.t3, padding: 16 }}>Escolha as duas datas do período personalizado.</div>
   if (erro) return <div style={{ fontSize: 13, color: T.t2, padding: 16 }}>{erro}</div>
   if (!d) return <div style={{ fontSize: 13, color: T.t3, padding: 16 }}>Lendo seus repasses no Mercado Pago…</div>
   const dia = (iso: string | null) => iso ? new Date(iso).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' }) : '—'

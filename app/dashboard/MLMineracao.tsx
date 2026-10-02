@@ -562,6 +562,8 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
   const [catRaiz, setCatRaiz] = useState<string>(() => { try { return localStorage.getItem('oraculo_ml_minera_cat') || 'MLB1574' } catch { return 'MLB1574' } })
   const [sub, setSub] = useState<string>('')
   const [produtos, setProdutos] = useState<Produto[]>([])
+  // revisão 02/10: premissas da CONTA vêm no topo da resposta (o 1º card pode vir sem elas quando faltou tarifa/frete)
+  const [premissas, setPremissas] = useState<{ reputacao: 'green' | 'yellow' | 'red'; impostoPct: number } | null>(null)
   const [loading, setLoading] = useState(false)
   const [carregandoMais, setCarregandoMais] = useState(false)
   const [fim, setFim] = useState(false)
@@ -613,6 +615,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
       const d = await r.json()
       if (!r.ok || d.error) { if (page === 0) { setErro(d.error || 'Não foi possível garimpar agora.'); setProdutos([]) } return false }
       const lista: Produto[] = d.produtos || []
+      if (d.premissas) setPremissas(d.premissas)
       const novos = lista.filter(p => !vistosRef.current.has(p.id))
       novos.forEach(p => vistosRef.current.add(p.id))
       if (novos.length) setProdutos(prev => page === 0 ? novos : [...prev, ...novos])
@@ -848,7 +851,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
 
       <p style={{ fontSize: 10.5, color: T.t4, marginTop: 16, lineHeight: 1.5 }}>
         <strong>GENÉRICO</strong> = sem marca dominando — dá pra comprar genérico e revender (marca de supermercado e marca grande aparecem no card, sem o selo).
-        <strong> Recebe</strong> = preço − comissão real − envio real ({produtos[0]?.premissas ? `${REP_NOME[produtos[0].premissas.reputacao]} — a da sua conta` : 'reputação verde'}), antes de imposto/custo/Ads. <strong>Compre até</strong> = o máximo a pagar no fornecedor pra fechar naquela margem (imposto {produtos[0]?.premissas ? `${String(produtos[0].premissas.impostoPct).replace('.', ',')}% — o cadastrado na sua Gestão ML` : '4%'} embutido). O score resume margem + posição no ranking + genérico.
+        <strong> Recebe</strong> = preço − comissão real − envio real ({premissas ? `${REP_NOME[premissas.reputacao]} — a da sua conta` : 'reputação verde'}), antes de imposto/custo/Ads. <strong>Compre até</strong> = o máximo a pagar no fornecedor pra fechar naquela margem (imposto {premissas ? `${String(premissas.impostoPct).replace('.', ',')}% — o cadastrado na sua Gestão ML` : '4%'} embutido). O score resume margem + posição no ranking + genérico.
       </p>
 
       {detail && <MLDetalheModal p={detail} onClose={() => setDetail(null)} />}

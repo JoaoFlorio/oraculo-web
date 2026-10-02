@@ -115,7 +115,8 @@ function ModalityCard({ nome, cor, m, hint, freteLabel }: { nome: string; cor: s
       {m.frete > 0 && <Row label={freteLabel || 'Frete (Mercado Envios)'} val={`− ${brl(m.frete)}`} color={freteLabel ? T.g : undefined} />}
       {m.ads > 0 && <Row label="Mercado Ads" val={`− ${brl(m.ads)}`} />}
       {(m.armazenagem || 0) > 0 && <Row label="Armazenagem no Full" val={`− ${brl(m.armazenagem || 0)}`} />}
-      {(() => { const t = m.comissao + m.frete + (m.armazenagem || 0); return <Row label={`Total que o ML desconta (${m.receita > 0 ? pct(t / m.receita * 100) : '—'} do preço)`} val={`− ${brl(t)}`} color={T.r} /> })()}
+      {/* revisão 02/10: o frete só é do ML quando foi MEDIDO no ML (no Flex/manual é o seu custo de entrega) */}
+      {(() => { const t = m.comissao + (freteLabel && !/Flex/.test(freteLabel) ? m.frete : 0) + (m.armazenagem || 0); return <Row label={`Total que o ML desconta (${m.receita > 0 ? pct(t / m.receita * 100) : '—'} do preço)`} val={`− ${brl(t)}`} color={T.r} /> })()}
       <Row label="Lucro por venda" val={brl(m.lucro)} strong color={lucroCor} />
       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: tint(lucroCor, 10), borderRadius: 10, padding: '8px 0' }}>
         <span style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Margem</span>

@@ -78,6 +78,10 @@ export async function POST(req: NextRequest) {
     const denied = accessDenied(user)
     if (denied === 'notfound')
       return NextResponse.json({ error: 'Conta não encontrada.' }, { status: 403 })
+    // revisão 02/10: equipe (admin/support/staff) INATIVA não tem plano pra pagar — ganhava sessão, caía num 404 do /admin
+    // e ainda disparava o e-mail de "novo acesso". Pra equipe, inativo continua barrado no login.
+    if (denied && ['admin', 'support', 'staff'].includes(String(user.role || '')))
+      return NextResponse.json({ error: 'Acesso desativado. Fale com o administrador.' }, { status: 403 })
 
     const token = await createToken(user.id, user.role)
     // 🔔 23/09: acesso a conta PRIVILEGIADA avisa o dono por e-mail (IP/hora/navegador).
