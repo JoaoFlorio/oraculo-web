@@ -17,8 +17,10 @@ type Modality = {
   custoFixo: number; parcelamento: number
   imposto: number; custo: number; frete: number; ads: number
   despesas: number; lucro: number; margem: number
+  armazenagem?: number   // 02/10: Full — armazenagem (+ estoque antigo) por unidade
   fonte: 'api' | 'estimativa'
 }
+type Full = { tamanho: 'P' | 'M' | 'G' | 'XG' | null; fonteTamanho: 'embalagem' | 'produto' | 'voce' | null; medidas: { dims: number[]; pesoKg: number | null } | null; dias: number; diaria: number | null; armazenagem: number; estoqueAntigo: number; custoUn: number }
 type Envio = { custoVendedor: number; custoCheio: number | null; subsidioPct: number | null; reputacao: string; pesoFaturavel: number | null; cenario: 'frete-gratis' | 'logistica'; fonte: 'api' }
 type CalcResp = {
   input: { price: number; cost: number; taxPct: number; frete: number; adsPct: number; categoryId: string | null; itemId: string | null; dimensions: string | null; logisticType: string }
@@ -27,6 +29,9 @@ type CalcResp = {
   aviso: string | null
   freteObrigatorio: boolean
   envio: Envio | null
+  freteNaoCalculado?: boolean
+  logistica?: { tipo: string; nome: string; origem: 'pagina' | 'anuncio' | 'padrao' }
+  full?: Full | null
   modalities: { classico: Modality; premium: Modality }
   error?: string
 }
@@ -109,6 +114,7 @@ function ModalityCard({ nome, cor, m, hint, freteLabel }: { nome: string; cor: s
       <Row label="Custo do produto" val={`− ${brl(m.custo)}`} />
       {m.frete > 0 && <Row label={freteLabel || 'Frete (Mercado Envios)'} val={`− ${brl(m.frete)}`} color={freteLabel ? T.g : undefined} />}
       {m.ads > 0 && <Row label="Mercado Ads" val={`− ${brl(m.ads)}`} />}
+      {(m.armazenagem || 0) > 0 && <Row label="Armazenagem no Full" val={`− ${brl(m.armazenagem || 0)}`} />}
       <Row label="Lucro por venda" val={brl(m.lucro)} strong color={lucroCor} />
       <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: tint(lucroCor, 10), borderRadius: 10, padding: '8px 0' }}>
         <span style={{ fontSize: 11, color: T.t3, fontWeight: 600 }}>Margem</span>
@@ -137,6 +143,10 @@ export default function MLCalculator() {
     try { return localStorage.getItem('oraculo_ml_reputacao') || 'green' } catch { return 'green' }
   })
   useEffect(() => { try { localStorage.setItem('oraculo_ml_reputacao', reputacao) } catch {} }, [reputacao])
+  // 02/10: modalidade de envio (auto = a do anúncio colado; sem link, Coleta) + Full (tamanho e dias até vender).
+  const [modalidade, setModalidade] = useState('auto')
+  const [diasFull, setDiasFull] = useState('30')
+  const [tamanhoFull, setTamanhoFull] = useState('auto')
   const [data, setData] = useState<CalcResp | null>(null)
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -160,6 +170,9 @@ export default function MLCalculator() {
       const a = numify(alt), l = numify(larg), c = numify(comp), g = numify(peso)
       if (!itemId && a > 0 && l > 0 && c > 0 && g > 0) body.dimensions = `${a}x${l}x${c},${g}`
       body.reputation = reputacao
+      if (modalidade !== 'auto') body.logisticType = modalidade
+      body.diasFull = numify(diasFull) || 30
+      if (tamanhoFull !== 'auto') body.tamanhoFull = tamanhoFull
       const r = await fetch('/api/ml/calc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const j: CalcResp = await r.json()
       if (id !== seq.current) return // resposta velha, ignora
@@ -175,13 +188,16 @@ export default function MLCalculator() {
     } finally {
       if (id === seq.current) setLoading(false)
     }
-  }, [link, price, cost, taxPct, frete, adsPct, alt, larg, comp, peso, reputacao])
+  }, [link, price, cost, taxPct, frete, adsPct, alt, larg, comp, peso, reputacao, modalidade, diasFull, tamanhoFull])
 
   // Debounce: recalcula ~450ms depois da última tecla.
   useEffect(() => { const t = setTimeout(calc, 450); return () => clearTimeout(t) }, [calc])
 
   const real = data?.fonte === 'api'
   const item = data?.item
+  const freteLabel = data?.envio
+    ? `${data.envio.cenario === 'logistica' ? 'Gestão do envio (comprador paga o frete)' : 'Frete grátis que você paga'}${data.logistica?.nome ? ` · ${data.logistica.nome}` : ''}`
+    : data?.logistica?.tipo === 'self_service' ? 'Sua entrega (Flex)' : undefined
 
   return (
     <div style={{ maxWidth: 980, margin: '0 auto', width: '100%', paddingTop: 20 }}>
@@ -236,9 +252,38 @@ export default function MLCalculator() {
               <option value="red">🔴 Vermelha / conta nova</option>
             </select>
           </Field>
-          <Field label="Frete (manual)" hint={data?.envio ? '✓ Frete real da API em uso — este campo é ignorado.' : (data?.freteObrigatorio ? '⚠️ ≥R$79 o frete grátis é obrigatório. Cole o link ou informe as medidas p/ o valor real.' : 'Só se você paga o frete e não informou link/medidas.')}>
-            <NumInput value={frete} onChange={setFrete} prefix="R$" placeholder="0,00" />
+          <Field label="Modalidade de envio" hint={data?.logistica ? `Na conta: ${data.logistica.nome}${data.logistica.origem === 'anuncio' ? ' (a do anúncio)' : data.logistica.origem === 'padrao' ? ' (padrão sem link)' : ''}. Full, Coleta e Agência pagam o mesmo frete; o Full soma a armazenagem.` : 'Full, Coleta e Agência pagam o mesmo frete; o Full soma a armazenagem.'}>
+            <select value={modalidade} onChange={e => setModalidade(e.target.value)} style={{ ...inputStyle, cursor: 'pointer' }}>
+              <option value="auto">⚡ Automático (a do anúncio)</option>
+              <option value="fulfillment">📦 Full</option>
+              <option value="drop_off">🚚 Coleta</option>
+              <option value="xd_drop_off">🏪 Agência</option>
+              <option value="self_service">🛵 Flex (você entrega)</option>
+            </select>
           </Field>
+          {data?.full && (
+            <Field label="Full — tamanho e dias até vender" hint={data.full.tamanho
+              ? `Tamanho ${data.full.tamanho}${data.full.fonteTamanho === 'embalagem' ? ' pelas medidas da embalagem' : data.full.fonteTamanho === 'produto' ? ' pelas medidas do produto (a caixa pode ser maior — confira)' : ' escolhido por você'} · R$ ${String(data.full.diaria).replace('.', ',')}/dia × ${data.full.dias} dias = ${brl(data.full.custoUn)} por unidade${data.full.estoqueAntigo > 0 ? ` (inclui ${brl(data.full.estoqueAntigo)} de estoque antigo)` : ''}.`
+              : '⚠️ Sem as medidas do produto — escolha o tamanho pra entrar a armazenagem.'}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <select value={tamanhoFull} onChange={e => setTamanhoFull(e.target.value)} style={{ ...inputStyle, cursor: 'pointer', flex: 1 }}>
+                  <option value="auto">⚡ Automático{data.full.fonteTamanho !== 'voce' && data.full.tamanho ? ` (${data.full.tamanho})` : ''}</option>
+                  <option value="P">P · até 12×15×25 cm</option>
+                  <option value="M">M · até 28×36×51 cm</option>
+                  <option value="G">G · até 60×60×70 cm</option>
+                  <option value="XG">XG · maior ou &gt; 18 kg</option>
+                </select>
+                <div style={{ width: 110 }}><NumInput value={diasFull} onChange={setDiasFull} suffix="dias" /></div>
+              </div>
+            </Field>
+          )}
+          {/* 02/10: frete manual só quando o ML NÃO deixou calcular (nada de "frete 0" pedindo pro cliente adivinhar). */}
+          {data && !data.envio && (
+            <Field label={data.logistica?.tipo === 'self_service' ? 'Custo da sua entrega (Flex)' : 'Frete que você paga (não consegui calcular)'}
+              hint={data.logistica?.tipo === 'self_service' ? 'No Flex você entrega e o ML paga um bônus pela entrega — informe o seu custo líquido por envio.' : (data.freteObrigatorio ? '⚠️ ≥R$79 o frete grátis é obrigatório. Cole o link ou informe as medidas pra eu calcular o valor real.' : 'Cole o link ou informe as medidas pra eu calcular o custo de envio real.')}>
+              <NumInput value={frete} onChange={setFrete} prefix="R$" placeholder="0,00" />
+            </Field>
+          )}
         </div>
 
         {/* ── Coluna de resultados ── */}
@@ -282,8 +327,8 @@ export default function MLCalculator() {
 
           {data && (
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', opacity: loading ? 0.55 : 1, transition: 'opacity .15s' }}>
-              <ModalityCard nome="Clássico" cor={T.pur} m={data.modalities.classico} hint="Mais barato, sem destaque nas buscas." freteLabel={data.envio ? (data.envio.cenario === 'logistica' ? 'Logística ML (comprador paga o frete)' : 'Frete real (Mercado Envios)') : undefined} />
-              <ModalityCard nome="Premium" cor={T.gold} m={data.modalities.premium} hint="Comissão maior, mais exposição + parcelamento sem juros." freteLabel={data.envio ? (data.envio.cenario === 'logistica' ? 'Logística ML (comprador paga o frete)' : 'Frete real (Mercado Envios)') : undefined} />
+              <ModalityCard nome="Clássico" cor={T.pur} m={data.modalities.classico} hint="Mais barato, sem destaque nas buscas." freteLabel={freteLabel} />
+              <ModalityCard nome="Premium" cor={T.gold} m={data.modalities.premium} hint="Comissão maior, mais exposição + parcelamento sem juros." freteLabel={freteLabel} />
             </div>
           )}
 
