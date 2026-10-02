@@ -1316,7 +1316,7 @@ function RepassesMl({ periodo, customRange, perLabel }: { periodo: string; custo
 }
 
 function EstoqueMl() {
-  const [d, setD] = useState<{ itens: ItemEst[]; resumo: any; atualizadoEm?: string; demo?: boolean } | null>(null)
+  const [d, setD] = useState<{ itens: ItemEst[]; resumo: any; atualizadoEm?: string; demo?: boolean; parcial?: boolean } | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<'todos' | 'full' | 'alerta'>('todos')
   useEffect(() => {
@@ -1335,6 +1335,9 @@ function EstoqueMl() {
   const motivo: Record<string, string> = { transfer: 'em transferência', damaged: 'danificado', lost: 'perdido', withdrawal: 'em retirada', internal_process: 'processo interno', not_supported: 'não suportado' }
   return (
     <div>
+      {d.parcial && <div style={{ fontSize: 12, color: T.a, background: tint(T.a, 10), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 10, padding: '8px 12px', marginBottom: 12 }}>
+        ⚠️ Lista PARCIAL: o Mercado Livre não devolveu todos os anúncios agora (ou você tem mais de 500 por status). Os números abaixo não incluem os que faltaram.
+      </div>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 14 }}>
         {[['Anúncios', r.anuncios], ['No Full', r.noFull], ['Unidades no Full', r.unidadesFull], ['Sem estoque (vendendo)', r.ruptura], ['Acabando (< 15 dias)', r.acabando], ['Parados (sem venda 30d)', r.parados]].map(([l, v]) => (
           <div key={String(l)} style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '12px 14px' }}>
