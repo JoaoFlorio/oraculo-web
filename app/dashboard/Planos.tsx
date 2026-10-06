@@ -10,6 +10,9 @@
    Checkout continua na Greenn (mesmo e-mail). Preços/links: lib/planos.ts (fonte única). */
 import React, { useState } from 'react'
 import { PLANOS, RANK, planoDe, fmt, checkout, recomendacao, type PlanoId } from '@/lib/planos'
+import { useVisualNovo } from './ouro/useVisualNovo'
+import { CabecalhoOuro, IcOuro } from './ouro/Ouro'
+import o from './Planos.ouro.module.css'
 
 const CSS = `
 .pl{--au:#F0B429;--au2:#FFD466;--au3:#9A6B06;max-width:1120px;padding:6px 0 48px;font-family:inherit}
@@ -101,6 +104,7 @@ function Trilha({ atual }: { atual: number }) {
 
 export default function Planos({ user }: { user: { email: string; name?: string; plan: string; expiresAt?: string | Date | null } }) {
   const [agora] = useState(() => Date.now())
+  const novo = useVisualNovo()
   const atual = planoDe(user.plan)
   const rankAtual = RANK[(user.plan as PlanoId)] ?? 0
   const top = user.plan === 'lifetime'
@@ -112,6 +116,166 @@ export default function Planos({ user }: { user: { email: string; name?: string;
   const rec = recomendacao(user.plan, daysLeft)
   const primeiroNome = (user.name || '').trim().split(' ')[0] || 'você'
   const mensal = planoDe('monthly')!
+
+  if (novo) {
+    const vencendo = !top && daysLeft != null && daysLeft >= 0 && daysLeft <= 7
+    const metal: Record<string, string> = { monthly: o.grafite, biannual: o.prata, annual: o.ouro, lifetime: o.fund }
+    const gradMedalha: Record<string, string> = { monthly: 'plo-m-grafite', biannual: 'plo-m-prata', annual: 'plo-m-ouro', lifetime: 'plo-m-ouro' }
+    const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ')
+    return (
+      <div className={o.pagina}>
+        {/* gradientes das medalhas e do olho do cartão */}
+        <svg className={o.defs} aria-hidden="true"><defs>
+          <linearGradient id="plo-m-grafite" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#FFE0C4" /><stop offset=".45" stopColor="#EE9A5E" /><stop offset="1" stopColor="#9A4F22" /></linearGradient>
+          <linearGradient id="plo-m-prata" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#FFFBEA" /><stop offset=".45" stopColor="#F3D88E" /><stop offset="1" stopColor="#B8913C" /></linearGradient>
+          <linearGradient id="plo-m-ouro" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#FFF1C4" /><stop offset=".45" stopColor="#FFC83D" /><stop offset="1" stopColor="#B9801A" /></linearGradient>
+          <linearGradient id="plo-g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFF1C4" /><stop offset=".55" stopColor="#FFC83D" /><stop offset="1" stopColor="#B9801A" /></linearGradient>
+        </defs></svg>
+
+        <CabecalhoOuro grupo="Conta" titulo="Seu" destaque="plano"
+          sub={<>Onde você está e até onde dá pra subir. A troca é feita <strong>aqui mesmo</strong>, com o e-mail desta conta.</>} />
+
+        {/* BANNER — o plano atual */}
+        <div className={cx(o.borda, top && o.bordaGira, vencendo && o.bordaUrgente, o.entra)}>
+          <section className={o.hero}>
+            <div className={o.heroTxt}>
+              <span className={cx(o.tag, vencendo && o.tagAlerta)}><i aria-hidden="true" />{top ? 'Membro fundador' : 'Seu plano'}</span>
+              <h2 className={o.heroTitulo}>
+                {top ? <><em>Fundador Vitalício</em></> : atual ? <>{atual.nome} <em>Oráculo</em></> : <>Sem plano <em>ativo</em></>}
+              </h2>
+              <p className={o.heroSub}>
+                {top
+                  ? <>Acesso a tudo, para sempre, com todas as atualizações incluídas. Não existe degrau acima deste, {primeiroNome}.</>
+                  : atual && expiresAt
+                    ? <>{fmt(atual.preco)}{atual.ciclo}. {daysLeft != null && daysLeft >= 0 ? <>{user.plan === 'monthly' ? 'Renova' : 'Vence'} em <b>{expiresAt.toLocaleDateString('pt-BR')}</b>.</> : <>Venceu em {expiresAt.toLocaleDateString('pt-BR')}.</>} Abaixo, até onde dá pra subir.</>
+                    : <>Escolha um plano abaixo pra liberar o Oráculo completo.</>}
+              </p>
+              {(top || (daysLeft != null && daysLeft >= 0)) && (
+                <div className={o.selos}>
+                  {top && <span className={cx(o.selo, o.seloOk)}>sem mensalidade</span>}
+                  {top && <span className={cx(o.selo, o.seloOk)}>atualizações incluídas</span>}
+                  {vencendo && <span className={cx(o.selo, o.seloAviso)}>{daysLeft} dia{daysLeft === 1 ? '' : 's'} pro vencimento</span>}
+                  {!top && daysLeft != null && daysLeft > 7 && <span className={cx(o.selo, o.seloOk)}>ativo</span>}
+                </div>
+              )}
+              {pct != null && (
+                <div className={o.ciclo} aria-label={`ciclo ${Math.round(pct)}% usado`}>
+                  <div className={o.cicloTopo}>
+                    <b>{daysLeft != null && daysLeft >= 0 ? daysLeft : 0}<small>dias restantes</small></b>
+                    <span>ciclo {Math.round(pct)}% usado</span>
+                  </div>
+                  <div className={o.barra}><i style={{ width: `${Math.round(pct)}%` }} /></div>
+                </div>
+              )}
+            </div>
+            <div className={o.cena} aria-hidden="true">
+              <div className={o.cartao}>
+                <div className={o.c}>
+                  <div className={o.cTopo}><b>ORÁCULO</b><small>{top ? 'Fundador' : atual ? atual.nome : 'Sem plano'}</small></div>
+                  <div className={o.cMeio}>
+                    <span className={o.chip} />
+                    <svg viewBox="0 0 1000 440"><g fill="none" stroke="url(#plo-g)" strokeWidth="30" strokeLinejoin="round"><path d="M70 220Q500-90 930 220Q500 530 70 220Z" /><path d="M70 220Q500-20 930 220Q500 460 70 220Z" strokeWidth="22" /><circle cx="500" cy="220" r="105" strokeWidth="22" /></g><g stroke="url(#plo-g)" strokeWidth="12" strokeLinecap="round"><path d="M500 186V150M524 196l25-25M534 220h36M524 244l25 25M500 254v36M476 244l-25 25M466 220h-36M476 196l-25-25" /></g><circle cx="500" cy="220" r="22" fill="#FFF1C4" /></svg>
+                  </div>
+                  <div className={o.cBaixo}>
+                    <div><small>Membro</small><b>{(user.name || '').trim() || primeiroNome}</b></div>
+                    <div style={{ textAlign: 'right' }}>
+                      <small>{top ? 'Válido até' : daysLeft != null && daysLeft < 0 ? 'Venceu em' : user.plan === 'monthly' ? 'Renova em' : 'Válido até'}</small>
+                      {top ? <b className={o.inf}>∞</b> : <b>{expiresAt ? expiresAt.toLocaleDateString('pt-BR') : '—'}</b>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* OS PLANOS */}
+        <div className={o.secao}>Os planos do Oráculo</div>
+        <div className={o.grade}>
+          {PLANOS.map((p, i) => {
+            const r = RANK[p.id]
+            const ehAtual = p.id === user.plan
+            const acima = r > rankAtual
+            const recomendado = rec.alvo?.id === p.id
+            const fund = p.id === 'lifetime'
+            return (
+              <div key={p.id} className={cx(o.slot, metal[p.id], o.entra)} style={{ animationDelay: `${.1 + i * .08}s` }}>
+                {ehAtual && <span className={cx(o.marca, o.marcaAtual)}><i aria-hidden="true" />Você está aqui</span>}
+                {!ehAtual && recomendado && <span className={cx(o.marca, o.marcaProx)}><i aria-hidden="true" />Próximo degrau</span>}
+                <div className={cx(o.casca, fund && o.cascaFund)}>
+                <article className={cx(o.pc, ehAtual && o.atual, !ehAtual && recomendado && o.recomendado, !acima && !ehAtual && o.abaixo)}>
+                  <div className={o.medalha}>
+                    <i className={o.anel} aria-hidden="true" />
+                    <svg viewBox="0 0 1000 440" aria-hidden="true"><g fill="none" stroke={`url(#${gradMedalha[p.id]})`} strokeWidth="40" strokeLinejoin="round"><path d="M70 220Q500-90 930 220Q500 530 70 220Z" /><circle cx="500" cy="220" r="105" strokeWidth="30" /></g><circle cx="500" cy="220" r="34" fill={`url(#${gradMedalha[p.id]})`} /></svg>
+                  </div>
+                  <h3 className={o.nome}>{p.nome}</h3>
+                  <div className={o.preco}><b>{fmt(p.preco)}</b><small>{p.ciclo}</small></div>
+                  {p.id === 'monthly'
+                    ? <span className={cx(o.econ, o.econLivre)}>{fmt(mensal.preco * 12)} por ano</span>
+                    : p.porMes
+                      ? <span className={o.econ}>≈ {fmt(Math.round(p.porMes * 100) / 100)}/mês</span>
+                      : <span className={o.econ}>Para sempre</span>}
+                  <p className={o.frase}>{p.frase}</p>
+                  <ul className={o.lista}>{p.destaques.map(d => <li key={d}>{d}</li>)}</ul>
+                  {ehAtual ? <div className={cx(o.estado, o.estadoAtual)}>Você está aqui</div>
+                    : acima ? <a className={cx(o.btn, recomendado ? o.btnCheio : o.btnVazio, recomendado && o.btnPulsa)} href={checkout(p.id as Exclude<PlanoId, 'free'>, user.email)} target="_blank" rel="noreferrer">
+                        {fund ? 'Virar Fundador' : `Subir para o ${p.nome}`} <span aria-hidden="true">→</span>
+                      </a>
+                    : <div className={cx(o.estado, o.estadoIncl)}>Já incluso no seu plano</div>}
+                </article>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        {/* O PRÓXIMO DEGRAU, com os números */}
+        <section className={cx(o.reco, rec.urgente && o.recoUrgente, !rec.alvo && o.recoTopo, o.entra)} style={{ animationDelay: '.45s' }}>
+          {!rec.alvo && <div className={o.coroa} aria-hidden="true"><i />{IcOuro.brilho}</div>}
+          <div>
+            <div className={o.recoKicker}>{rec.urgente ? 'Atenção ao prazo' : rec.alvo ? 'Próximo degrau' : 'Topo da escada'}</div>
+            <h3 className={o.recoTitulo}>{rec.titulo}</h3>
+            <p className={o.recoTexto}>{rec.texto}</p>
+            {rec.alvo && rec.alvo.id !== 'lifetime' && (
+              <div className={o.nums}>
+                <div className={o.num}><small>12 meses no mensal</small><b>{fmt(mensal.preco * 12)}</b></div>
+                <div className={o.num}><small>{rec.alvo.nome} por ano</small><b>{fmt(rec.alvo.preco)}</b></div>
+                <div className={cx(o.num, o.numOuro)}><small>a menos por ano</small><b>{fmt(mensal.preco * 12 - rec.alvo.preco)}</b></div>
+              </div>
+            )}
+            {rec.alvo && rec.alvo.id === 'lifetime' && atual && (
+              <div className={o.nums}>
+                <div className={o.num}><small>{atual.nome} por ciclo</small><b>{fmt(atual.preco)}</b></div>
+                <div className={o.num}><small>Fundador, uma vez só</small><b>{fmt(rec.alvo.preco)}</b></div>
+                <div className={cx(o.num, o.numOuro)}><small>pra se pagar</small><b>{atual.dias ? `${Math.ceil(rec.alvo.preco / (atual.preco / (atual.dias / 30)))} meses` : '—'}</b></div>
+              </div>
+            )}
+          </div>
+          {rec.alvo && (
+            <div className={o.acoes}>
+              <a className={o.acaoOuro} href={checkout(rec.alvo.id as Exclude<PlanoId, 'free'>, user.email)} target="_blank" rel="noreferrer">
+                {rec.alvo.id === 'lifetime' ? 'Virar Fundador' : `Pagar por ano · ${fmt(rec.alvo.preco)}`} <span aria-hidden="true">→</span>
+              </a>
+              {rec.alternativa && (
+                <a className={o.acaoSec} href={checkout(rec.alternativa.id as Exclude<PlanoId, 'free'>, user.email)} target="_blank" rel="noreferrer">
+                  Ou por semestre · {fmt(rec.alternativa.preco)}
+                </a>
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* COMO FUNCIONA A TROCA */}
+        <div className={cx(o.troca, o.entra)} style={{ animationDelay: '.55s' }}>
+          <span aria-hidden="true">{IcOuro.escudo}</span>
+          <div>
+            Como funciona a troca: o pagamento é na Greenn, <b>com o mesmo e-mail desta conta ({user.email})</b>. O Oráculo reconhece a compra e muda seu plano sozinho em poucos minutos, somando os dias que ainda faltavam do plano atual.
+            Se você tinha assinatura recorrente, nossa equipe cancela a anterior pra não cobrar duas vezes. Dúvida: <a href="mailto:atendimento@oraculojf.com.br">atendimento@oraculojf.com.br</a>.
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="pl">

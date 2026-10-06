@@ -1,5 +1,6 @@
 'use client'
 import React, { useState, useMemo, useEffect, useRef, useContext, createContext } from 'react'
+import { CabecalhoOuro } from './ouro/Ouro'
 import { createPortal } from 'react-dom'
 import dynamic from 'next/dynamic'
 import {
@@ -572,11 +573,13 @@ function KPI({label,value,color,hide,tip}:{label:string;value:string;delta?:stri
     return ()=>document.removeEventListener('click',fechar)
   },[aberto])
   return(
-    <div style={{background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'18px 14px 18px',textAlign:'center' as const,position:'relative' as const,minHeight:96,display:'flex',flexDirection:'column' as const,justifyContent:'center',boxShadow:'var(--elev1)'}}>
+    <div style={t.key==='ouro'
+      ? {background:`radial-gradient(90% 90% at 100% 0%, color-mix(in srgb, ${color} 13%, transparent), transparent 60%), linear-gradient(180deg,rgba(22,21,15,.94),rgba(10,11,14,.94))`,border:'1px solid rgba(255,200,61,.13)',borderRadius:18,padding:'18px 18px 20px',textAlign:'left' as const,position:'relative' as const,minHeight:108,display:'flex',flexDirection:'column' as const,justifyContent:'flex-end',boxShadow:'0 26px 50px -34px rgba(0,0,0,.9)',overflow:'visible'}
+      : {background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'18px 14px 18px',textAlign:'center' as const,position:'relative' as const,minHeight:96,display:'flex',flexDirection:'column' as const,justifyContent:'center',boxShadow:'var(--elev1)'}}>
       {/* Faixa de acento no topo — a MESMA em todo card (só a cor muda por métrica);
           antes a cor ia na borda inteira e o azul/violeta sumiam no escuro enquanto
           o verde brilhava, dando cara de layout quebrado. Agora o grid fica uniforme. */}
-      <div aria-hidden style={{position:'absolute' as const,top:0,left:0,right:0,height:3,background:color,borderTopLeftRadius:13,borderTopRightRadius:13}}/>
+      <div aria-hidden style={{position:'absolute' as const,top:0,left:t.key==='ouro'?18:0,right:t.key==='ouro'?18:0,height:t.key==='ouro'?2:3,background:t.key==='ouro'?`linear-gradient(90deg,${color},transparent)`:color,borderTopLeftRadius:13,borderTopRightRadius:13}}/>
       {tip
         ? <button aria-label={`O que é ${label}`} onClick={e=>{e.stopPropagation();setAberto(v=>!v)}}
             style={{position:'absolute' as const,top:5,right:6,background:'transparent',border:'none',cursor:'pointer',padding:4,lineHeight:1}}>
@@ -589,8 +592,12 @@ function KPI({label,value,color,hide,tip}:{label:string;value:string;delta?:stri
           {tip}
         </div>
       )}
-      <div style={{fontFamily:FG,fontSize:12.5,color:t.t2,fontWeight:500,marginBottom:9,lineHeight:1.25}}>{label}</div>
-      <div style={{fontFamily:FG,fontWeight:700,fontSize:25,letterSpacing:'-0.01em',color:t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}}>{value}</div>
+      <div style={t.key==='ouro'
+        ? {fontFamily:'var(--tg-mono),monospace',fontSize:10.5,letterSpacing:'.14em',textTransform:'uppercase' as const,color:t.t3,fontWeight:600,marginBottom:10,lineHeight:1.3,paddingRight:18}
+        : {fontFamily:FG,fontSize:12.5,color:t.t2,fontWeight:500,marginBottom:9,lineHeight:1.25}}>{label}</div>
+      <div style={t.key==='ouro'
+        ? {fontFamily:'var(--tg-display),Archivo,sans-serif',fontStretch:'106%',fontWeight:800,fontSize:30,lineHeight:1,letterSpacing:'-0.03em',color:t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}
+        : {fontFamily:FG,fontWeight:700,fontSize:25,letterSpacing:'-0.01em',color:t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}}>{value}</div>
     </div>
   )
 }
@@ -5806,9 +5813,11 @@ export function BarraGestao({grupo,tab,semCusto,onGrupo,onTab}:{
           <button key={gr.id} onClick={()=>onGrupo(gr.id)} aria-current={on?'page':undefined}
             title={gr.pergunta}
             style={{display:'flex',alignItems:'center',gap:7,
-              padding:'9px 15px',borderRadius:11,cursor:'pointer',fontFamily:'inherit',flexShrink:0,
-              fontSize:13,fontWeight:on?700:600,whiteSpace:'nowrap' as const,
-              border:`1px solid ${on?t.gold:t.line}`,background:on?t.gold:t.card,
+              padding:t.key==='ouro'?'11px 18px':'9px 15px',borderRadius:t.key==='ouro'?999:11,cursor:'pointer',fontFamily:'inherit',flexShrink:0,
+              fontSize:t.key==='ouro'?14:13,fontWeight:on?700:600,whiteSpace:'nowrap' as const,
+              border:`1px solid ${on?(t.key==='ouro'?'transparent':t.gold):(t.key==='ouro'?'rgba(243,238,226,.12)':t.line)}`,
+              background:on?(t.key==='ouro'?'linear-gradient(180deg,#FFE7A3,#FFC83D 50%,#EBA31A)':t.gold):(t.key==='ouro'?'rgba(255,255,255,.03)':t.card),
+              boxShadow:on&&t.key==='ouro'?'0 10px 26px -12px rgba(255,200,61,.75)':undefined,
               color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2}}>
             <i className={`ti ${gr.icon}`} style={{fontSize:15}} aria-hidden="true"/>{gr.label}
             {badge!==null && (
@@ -5832,8 +5841,8 @@ export function BarraGestao({grupo,tab,semCusto,onGrupo,onTab}:{
           const on=tab===id
           return(
             <button key={id} onClick={()=>onTab(id)} aria-current={on?'page':undefined}
-              style={{display:'flex',alignItems:'center',gap:6,fontSize:12.5,whiteSpace:'nowrap' as const,
-                padding:'7px 11px',borderRadius:8,cursor:'pointer',fontFamily:'inherit',border:'1px solid transparent',
+              style={{display:'flex',alignItems:'center',gap:6,fontSize:t.key==='ouro'?13.5:12.5,whiteSpace:'nowrap' as const,
+                padding:t.key==='ouro'?'8px 14px':'7px 11px',borderRadius:t.key==='ouro'?999:8,cursor:'pointer',fontFamily:'inherit',border:`1px solid ${t.key==='ouro'&&on?'rgba(255,200,61,.35)':'transparent'}`,
                 background:on?(t.dark?'rgba(240,180,41,0.13)':'rgba(240,180,41,0.16)'):'transparent',
                 color:on?t.goldText:t.t2,fontWeight:on?700:500,flexShrink:0}}>
               <i className={`ti ${tb.icon}`} style={{fontSize:14}} aria-hidden="true"/>{tb.label}
@@ -6188,8 +6197,18 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         <link rel="stylesheet" precedence="default" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&family=Roboto:wght@400;500;700&display=swap"/>
         <link rel="stylesheet" precedence="default" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.24.0/dist/tabler-icons.min.css"/>
 
-        {/* Header */}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
+        {/* Header — visual novo (só admin) */}
+        {t.key==='ouro' && (
+          <CabecalhoOuro grupo={soAds?'Ads · Amazon':'Gestão · Amazon'} titulo={soAds?'NEO no comando dos':'O lucro real da'} destaque={soAds?'anúncios':'sua operação'}
+            sub={<><span style={{display:'inline-flex',alignItems:'center',gap:7}}><span style={{width:7,height:7,borderRadius:'50%',background:realDre&&!realDre.stale?t.grn:t.gold,boxShadow:`0 0 10px ${realDre&&!realDre.stale?t.grn:t.gold}`}}/>{realDre?(realDre.stale?'atualizando os números…':'dados reais da Amazon'):amazonConnected?'carregando dados reais…':(soAds?'conecte sua conta para começar':'conecte sua conta para ver seus dados')}</span></>}
+            acoes={<>
+              <button onClick={()=>setHide(v=>!v)} title="Ocultar valores" style={{background:'rgba(255,255,255,.03)',border:'1px solid rgba(243,238,226,.12)',borderRadius:999,width:44,height:44,color:t.t2,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <i className={`ti ti-${hide?'eye-off':'eye'}`} style={{fontSize:19}} aria-hidden="true"/>
+              </button>
+              <PeriodPicker value={period} custom={customRange} onChange={(k,r)=>{ setPeriod(k); setCustomRange(r) }}/>
+            </>}/>
+        )}
+        {t.key!=='ouro' && <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
           <div>
             <h2 style={{fontFamily:FG,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>{soAds?'Ads · Amazon':'Gestão'}</h2>
             <p style={{fontSize:12,color:t.t2,marginTop:1}}>{soAds
@@ -6203,7 +6222,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
             </button>
             <PeriodPicker value={period} custom={customRange} onChange={(k,r)=>{ setPeriod(k); setCustomRange(r) }}/>
           </div>
-        </div>
+        </div>}
 
         {/* Conexão Amazon */}
         {amazonConnected===false && (

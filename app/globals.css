@@ -766,3 +766,100 @@ select.ouro-entrada{ cursor:pointer; }
 @keyframes ouroBrilho{ 0%{ background-position:100% 0 } 100%{ background-position:-100% 0 } }
 @media (max-width:1100px){ .calc-ouro-grade{ grid-template-columns:1fr; } .calc-ouro-entradas{ position:static; } }
 @media (max-width:640px){ .calc-ouro-mods, .calc-ouro-fantasmas{ grid-template-columns:1fr; } .calc-ouro-quatro{ grid-template-columns:1fr 1fr; } }
+
+/* ── Busca em destaque e faixa de recursos (visual novo) ── */
+.ouro-busca{ position:relative; display:flex; align-items:center; gap:10px; max-width:880px; padding:8px 8px 8px 52px; border-radius:999px;
+  border:1px solid rgba(255,200,61,.3); background:linear-gradient(180deg,rgba(22,21,15,.95),rgba(10,11,14,.95)); box-shadow:0 30px 60px -34px rgba(0,0,0,.9), 0 0 60px -36px rgba(255,200,61,.6); transition:border-color .2s, box-shadow .2s; }
+.ouro-busca:focus-within{ border-color:rgba(255,200,61,.65); box-shadow:0 0 0 4px rgba(255,200,61,.12), 0 30px 60px -34px rgba(0,0,0,.9); }
+.ouro-busca-ic{ position:absolute; left:20px; width:20px; height:20px; color:#FFC83D; }
+.ouro-busca input{ flex:1; min-width:0; height:46px; border:0; outline:none; background:none; color:#F3EEE2; font-family:inherit; font-size:16px; }
+.ouro-busca input::placeholder{ color:#6E695E; }
+.ouro-busca .ouro-busca-mono{ font-family:var(--tg-mono),monospace; letter-spacing:.12em; text-transform:uppercase; }
+.ouro-busca .ouro-botao{ flex:none; height:46px; }
+.ouro-gira{ width:16px; height:16px; border-radius:50%; border:2.5px solid rgba(26,18,4,.25); border-top-color:#1a1204; animation:ouroGira .8s linear infinite; }
+.ouro-recursos{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+.ouro-recurso{ display:flex; gap:14px; align-items:flex-start; padding:18px; border-radius:18px; border:1px solid rgba(243,238,226,.08); background:rgba(255,255,255,.025); transition:border-color .25s, transform .25s; }
+.ouro-recurso:hover{ border-color:rgba(255,200,61,.35); transform:translateY(-2px); }
+.ouro-recurso-ic{ flex:none; width:42px; height:42px; border-radius:13px; display:grid; place-items:center; color:#FFC83D; background:radial-gradient(circle at 35% 30%,rgba(255,231,163,.28),rgba(255,200,61,.07)); border:1px solid rgba(255,200,61,.3); }
+.ouro-recurso-ic svg{ width:21px; height:21px; }
+.ouro-recurso b{ display:block; font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:106%; font-weight:700; font-size:15px; color:#F3EEE2; }
+.ouro-recurso p{ margin:5px 0 0; font-size:13px; line-height:1.5; color:#B9B3A6; }
+.ouro-chips{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.ouro-chips > span{ font-size:12px; color:#7E796E; margin-right:4px; }
+.ouro-chip{ padding:7px 12px; border-radius:999px; border:1px solid rgba(243,238,226,.1); background:rgba(255,255,255,.03); color:#CFC8B8; font-family:var(--tg-mono),monospace; font-size:11.5px; cursor:pointer; transition:border-color .2s, color .2s; }
+.ouro-chip:hover{ border-color:rgba(255,200,61,.45); color:#FFE7A3; }
+.ouro-pagina{ width:100%; max-width:1180px; margin:0 auto; display:flex; flex-direction:column; gap:22px; }
+.ouro-nota{ font-size:12px; line-height:1.55; color:#7E796E; max-width:760px; }
+.ouro-erro{ padding:13px 16px; border-radius:14px; font-size:13.5px; line-height:1.55; color:#FCA5A5; background:rgba(255,122,110,.08); border:1px solid rgba(255,122,110,.3); max-width:880px; }
+@media (max-width:640px){ .ouro-busca{ border-radius:22px; flex-wrap:wrap; padding:10px 10px 10px 46px; } .ouro-busca .ouro-botao{ width:100%; } .ouro-busca-ic{ top:22px; left:17px; } }
+
+/* ── Extensão e Tutoriais · visual novo ── */
+.ext-ouro{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:22px; align-items:start; }
+.ext-ouro-chave{ display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px 14px 14px 20px; border-radius:16px; border:1px solid rgba(255,200,61,.35); background:rgba(255,200,61,.05); }
+.ext-ouro-chave span{ font-size:17px; font-weight:600; color:#FFE7A3; letter-spacing:.06em; word-break:break-all; }
+.ext-ouro-passos{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.ext-ouro-passos div{ display:flex; gap:12px; align-items:flex-start; padding:14px; border-radius:16px; border:1px solid rgba(243,238,226,.08); background:rgba(255,255,255,.025); font-size:13px; line-height:1.5; color:#CFC8B8; }
+.ext-ouro-passos b{ flex:none; display:grid; place-items:center; width:24px; height:24px; border-radius:50%; font-family:var(--tg-mono),monospace; font-size:11px; color:#1a1204; background:linear-gradient(180deg,#FFE7A3,#FFC83D); }
+.ext-ouro-mock{ position:sticky; top:12px; border-radius:20px; overflow:hidden; border:1px solid rgba(255,200,61,.18); background:#0B0C0E; box-shadow:0 40px 80px -40px rgba(0,0,0,.9), 0 0 80px -40px rgba(255,200,61,.5); }
+.ext-ouro-barra{ display:flex; align-items:center; gap:7px; padding:12px 14px; background:#141513; border-bottom:1px solid rgba(255,255,255,.06); }
+.ext-ouro-barra i{ width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,.15); }
+.ext-ouro-barra span{ flex:1; margin-left:8px; padding:6px 12px; border-radius:999px; background:rgba(255,255,255,.05); font-family:var(--tg-mono),monospace; font-size:11px; color:#8E887B; }
+.ext-ouro-barra em{ width:26px; height:26px; border-radius:8px; display:grid; place-items:center; background:rgba(255,200,61,.12); border:1px solid rgba(255,200,61,.45); box-shadow:0 0 16px rgba(255,200,61,.35); }
+.ext-ouro-barra em svg{ width:18px; }
+.ext-ouro-pag{ position:relative; display:grid; grid-template-columns:44% 1fr; gap:16px; padding:22px; min-height:300px; }
+.ext-ouro-foto{ aspect-ratio:1; border-radius:14px; background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.02)); }
+.ext-ouro-linhas i, .ext-ouro-pop-l i{ display:block; height:10px; margin-bottom:9px; border-radius:6px; background:linear-gradient(90deg,rgba(255,255,255,.06),rgba(255,231,163,.12),rgba(255,255,255,.06)); background-size:200% 100%; animation:ouroBrilho 2.4s ease-in-out infinite; }
+.ext-ouro-pop{ position:absolute; right:16px; top:14px; width:56%; padding:14px; border-radius:16px; border:1px solid rgba(255,200,61,.4); background:linear-gradient(180deg,rgba(24,22,14,.97),rgba(12,12,12,.97)); box-shadow:0 24px 50px -20px rgba(0,0,0,.9), 0 0 40px -18px rgba(255,200,61,.6); animation:extPop 5s ease-in-out infinite; }
+.ext-ouro-pop-cab{ display:flex; align-items:center; gap:8px; margin-bottom:12px; font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:120%; font-weight:600; font-size:11px; letter-spacing:.24em; color:#F3EEE2; }
+.ext-ouro-pop-cab svg{ width:22px; }
+.ext-ouro-pop-l{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:7px 0; border-top:1px solid rgba(255,255,255,.06); }
+.ext-ouro-pop-l span{ font-size:11.5px; color:#B9B3A6; white-space:nowrap; }
+.ext-ouro-pop-l i{ width:44%; margin:0; }
+@keyframes extPop{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-6px) } }
+.tut-ouro{ display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr)); gap:20px; }
+.tut-ouro-item{ border-radius:22px; overflow:hidden; border:1px solid rgba(255,200,61,.16); background:linear-gradient(180deg,rgba(22,21,15,.94),rgba(10,11,14,.94)); box-shadow:0 30px 60px -36px rgba(0,0,0,.9); }
+.tut-ouro-video{ position:relative; padding-top:56.25%; background:#000; }
+.tut-ouro-video iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; }
+.tut-ouro-txt{ padding:18px 22px 22px; }
+.tut-ouro-txt span{ font-family:var(--tg-mono),monospace; font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:#FFE7A3; }
+.tut-ouro-txt b{ display:block; margin-top:6px; font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:106%; font-weight:800; font-size:19px; letter-spacing:-.02em; color:#F3EEE2; }
+.tut-ouro-txt p{ margin:6px 0 0; font-size:13.5px; line-height:1.6; color:#B9B3A6; }
+@media (max-width:1000px){ .ext-ouro{ grid-template-columns:1fr; } .ext-ouro-mock{ position:static; } }
+@media (max-width:560px){ .ext-ouro-passos{ grid-template-columns:1fr; } }
+
+/* ── Meu Perfil · visual novo ── */
+.perfil-ouro{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:18px; align-items:start; }
+.perfil-ouro-id{ display:flex; align-items:center; gap:20px; background:radial-gradient(90% 120% at 0% 0%,rgba(255,200,61,.12),transparent 60%),linear-gradient(180deg,rgba(22,21,15,.94),rgba(10,11,14,.94)) !important; }
+.perfil-ouro-foto{ position:relative; flex:none; width:96px; height:96px; border-radius:50%; padding:0; cursor:pointer; overflow:hidden; display:grid; place-items:center;
+  border:2px solid rgba(255,200,61,.6); background:rgba(255,200,61,.1); box-shadow:0 0 0 6px rgba(255,200,61,.08), 0 0 40px -6px rgba(255,200,61,.5); }
+.perfil-ouro-foto img{ width:100%; height:100%; object-fit:cover; }
+.perfil-ouro-foto > span:first-child{ font-family:var(--tg-display),'Archivo',sans-serif; font-weight:800; font-size:34px; color:#FFC83D; }
+.perfil-ouro-nome{ font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:108%; font-weight:800; font-size:26px; letter-spacing:-.025em; color:#F3EEE2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.perfil-ouro-email{ margin-top:4px; font-size:13.5px; color:#8E887B; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.perfil-ouro-dias{ font-family:var(--tg-display),'Archivo',sans-serif; font-weight:800; font-size:44px; line-height:1; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+.perfil-ouro-vit{ display:flex; align-items:center; gap:16px; padding:16px; border-radius:16px; border:1px solid rgba(255,200,61,.3); background:rgba(255,200,61,.06); }
+.perfil-ouro-vit.verde{ border-color:rgba(63,215,155,.3); background:rgba(63,215,155,.06); }
+.perfil-ouro-vit b{ flex:none; display:grid; place-items:center; width:52px; height:52px; border-radius:50%; font-family:var(--tg-display),'Archivo',sans-serif; font-size:26px; color:#1a1204; background:linear-gradient(180deg,#FFE7A3,#FFC83D); box-shadow:0 0 24px rgba(255,200,61,.5); }
+.perfil-ouro-vit.verde b{ color:#05210F; background:linear-gradient(180deg,#8EF5C4,#3FD79B); box-shadow:0 0 24px rgba(63,215,155,.45); }
+.perfil-ouro-vit strong{ display:block; font-family:var(--tg-display),'Archivo',sans-serif; font-size:16px; color:#F3EEE2; }
+.perfil-ouro-vit span{ display:block; margin-top:3px; font-size:13px; line-height:1.5; color:#B9B3A6; }
+.perfil-ouro-plano{ display:flex; align-items:center; gap:14px; padding:14px 16px; border-radius:16px; border:1px solid rgba(243,238,226,.08); background:rgba(255,255,255,.025); }
+.perfil-ouro-plano[data-best="1"]{ border-color:rgba(255,200,61,.4); background:rgba(255,200,61,.06); box-shadow:0 0 30px -14px rgba(255,200,61,.5); }
+.perfil-ouro-plano b{ font-family:var(--tg-display),'Archivo',sans-serif; font-size:15.5px; color:#F3EEE2; }
+.perfil-ouro-plano span{ font-size:14px; font-weight:700; color:#FFE7A3; }
+.perfil-ouro-plano small{ font-size:12px; color:#7E796E; }
+.perfil-ouro-sec{ display:inline-flex; align-items:center; height:40px; padding:0 18px; border-radius:999px; border:1px solid rgba(255,200,61,.35); color:#FFC83D; text-decoration:none; font-weight:700; font-size:14px; }
+@media (max-width:1000px){ .perfil-ouro{ grid-template-columns:1fr; } }
+@media (max-width:520px){ .perfil-ouro-id{ flex-direction:column; text-align:center; } .perfil-ouro-nome,.perfil-ouro-email{ white-space:normal; } }
+
+/* ── Mais Vendidos · ferramentas (visual novo) ── */
+.mv-ouro-ferr{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-top:-6px; }
+.mv-ouro-busca{ position:relative; display:flex; align-items:center; gap:8px; flex:1 1 380px; max-width:620px; padding:5px 5px 5px 44px; border-radius:999px; border:1px solid rgba(255,200,61,.25); background:rgba(255,255,255,.03); transition:border-color .2s, box-shadow .2s; }
+.mv-ouro-busca:focus-within{ border-color:rgba(255,200,61,.6); box-shadow:0 0 0 4px rgba(255,200,61,.12); }
+.mv-ouro-busca > span{ position:absolute; left:16px; width:18px; height:18px; color:#FFC83D; }
+.mv-ouro-busca input{ flex:1; min-width:0; height:40px; border:0; outline:none; background:none; color:#F3EEE2; font-family:inherit; font-size:15px; }
+.mv-ouro-x{ background:none; border:0; color:#B9B3A6; font-size:20px; cursor:pointer; padding:0 6px; }
+.mv-ouro-sel{ width:auto !important; height:50px !important; border-radius:999px !important; padding:0 18px !important; font-weight:600; }
+.mv-ouro-sel[data-on="1"]{ border-color:rgba(255,200,61,.45) !important; color:#FFE7A3 !important; }
+.mv-ouro-sec{ height:50px; padding:0 18px; border-radius:999px; border:1px solid rgba(243,238,226,.12); background:rgba(255,255,255,.03); color:#CFC8B8; font-family:inherit; font-weight:600; font-size:14px; cursor:pointer; transition:border-color .2s, color .2s; }
+.mv-ouro-sec:hover{ border-color:rgba(255,200,61,.45); color:#FFE7A3; }

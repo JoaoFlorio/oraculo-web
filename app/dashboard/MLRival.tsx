@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { CardProduto, MLDetalheModal, type Produto } from './MLMineracao'
+import { useVisualNovo } from './ouro/useVisualNovo'
+import { CabecalhoOuro, BuscaOuro, RecursosOuro, VazioOuro, IcOuro } from './ouro/Ouro'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ANÁLISE RIVAL — MERCADO LIVRE. Cola o link (ou MLB) de um anúncio de outro
@@ -23,6 +25,7 @@ export default function MLRival() {
   const [erro, setErro] = useState<string | null>(null)
   const [produto, setProduto] = useState<Produto | null>(null)
   const [modal, setModal] = useState(false)
+  const novo = useVisualNovo()
 
   const analisar = async () => {
     const alvo = q.trim()
@@ -36,6 +39,37 @@ export default function MLRival() {
       setModal(true)   // já abre a análise completa, que é o que o cliente veio buscar
     } catch { setErro('Falha de conexão.') }
     finally { setLoading(false) }
+  }
+
+  if (novo) {
+    const exemplos = ['mercadolivre.com.br/p/MLB63904966', 'MLB63904966']
+    return (
+      <div className="ouro-pagina">
+        <CabecalhoOuro grupo="Mercado Livre" titulo="Análise do" destaque="concorrente"
+          sub={<>Cole o link de qualquer anúncio do Mercado Livre e veja a análise completa: <strong>taxas reais, quanto sobra, concorrência e como melhorar</strong>.</>} />
+        <BuscaOuro valor={q} onValor={setQ} onEnviar={analisar} carregando={loading} placeholder="Cole o link do anúncio ou o código MLB…" />
+        <div className="ouro-chips"><span>Exemplos que funcionam:</span>{exemplos.map(e => <button key={e} type="button" className="ouro-chip" onClick={() => setQ(e)}>{e}</button>)}</div>
+        {erro && <div className="ouro-erro">{erro}</div>}
+        {produto && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14, maxWidth: 520 }}>
+            <div className="ora-card-in"><CardProduto p={produto} onOpen={() => setModal(true)} /></div>
+          </div>
+        )}
+        {!produto && !erro && !loading && (
+          <>
+            <RecursosOuro itens={[
+              { icone: IcOuro.moeda, titulo: 'Taxas e envio reais', texto: 'Comissão da categoria e frete calculados pelo próprio Mercado Livre.' },
+              { icone: IcOuro.grafico, titulo: 'Quanto sobra', texto: '"Você recebe", compre até e margem de cada venda.' },
+              { icone: IcOuro.rival, titulo: 'Concorrência do catálogo', texto: 'Quantos vendem o mesmo produto e a que preço.' },
+              { icone: IcOuro.brilho, titulo: 'Como melhorar', texto: 'Score, simulador e o que mudar no anúncio.' },
+            ]} />
+            <p className="ouro-nota">A análise usa os mesmos motores do garimpo: comissão real da categoria, envio real (reputação verde) e a concorrência do catálogo. Alguns anúncios avulsos o ML fecha pra consulta — nesses, cole o link da página do produto (/p/MLB…).</p>
+          </>
+        )}
+        {loading && <div className="ouro-cartao"><VazioOuro icone={IcOuro.lupa} titulo="Analisando o anúncio…" texto="Buscando taxas, envio e concorrência no Mercado Livre." /></div>}
+        {modal && produto && <MLDetalheModal p={produto} onClose={() => setModal(false)} />}
+      </div>
+    )
   }
 
   return (

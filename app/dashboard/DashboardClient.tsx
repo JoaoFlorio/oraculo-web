@@ -18,6 +18,9 @@ const MLCalculator = dynamic(()=>import('./MLCalculator'),{ssr:false,loading:()=
 const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando o garimpo…</div>})
 const MLRival = dynamic(()=>import('./MLRival'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando a análise…</div>})
 
+import { useVisualNovo } from './ouro/useVisualNovo'
+import { CabecalhoOuro, BuscaOuro, RecursosOuro, VazioOuro, IcOuro } from './ouro/Ouro'
+
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 const T = {
   bg:      'var(--bg)',
@@ -994,6 +997,7 @@ function Chevron({open}:{open:boolean}){return<svg width="10" height="10" viewBo
 /* ─── Product card ───────────────────────────────────────────────────────── */
 function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:()=>void;locked?:boolean;saved?:boolean;onToggleSave?:()=>void}){
   const [hov,setHov]=useState(false)
+  const novo=useVisualNovo()   // 05/10: visual novo (só admin) — moldura e tipografia; dados iguais
   const bsr=product.bsr||0
   const sales=product.salesEst||bsrSales(bsr)
   // Genérico: prefere o flag do backend (detector forte c/ blocklist de marcas);
@@ -1011,7 +1015,7 @@ function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:(
       role="button" tabIndex={0}
       aria-label={locked?'Produto bloqueado — fazer upgrade para ver a análise':`Ver análise de ${product.title||'produto'}`}
       onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onClick()}}}
-      style={{background:hov?T.cardHov:T.card,border:`1px solid ${hov&&!locked?T.lineG:T.line}`,borderRadius:14,overflow:'hidden',cursor:'pointer',
+      style={{background:novo?'linear-gradient(180deg,rgba(24,23,16,.96),rgba(10,11,14,.96))':(hov?T.cardHov:T.card),border:`1px solid ${novo?(hov&&!locked?'rgba(255,200,61,.55)':'rgba(255,200,61,.13)'):(hov&&!locked?T.lineG:T.line)}`,borderRadius:novo?20:14,overflow:'hidden',cursor:'pointer',
         transition:'background .15s,border-color .15s,transform .15s,box-shadow .15s',
         transform:hov&&!locked?'translateY(-2px)':'none',
         boxShadow:hov&&!locked?'var(--elev2),0 0 0 1px rgba(240,180,41,0.08)':'var(--elev1)',
@@ -1025,7 +1029,7 @@ function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:(
       {onToggleSave&&!locked&&(
         <button onClick={e=>{e.stopPropagation();onToggleSave()}}
           title={saved?'Remover dos salvos':'Salvar este produto'} aria-label={saved?'Remover dos salvos':'Salvar este produto'} aria-pressed={saved}
-          style={{position:'absolute',top:128,left:10,zIndex:3,display:'flex',alignItems:'center',gap:5,
+          style={{position:'absolute',top:novo?146:128,left:novo?18:10,zIndex:3,display:'flex',alignItems:'center',gap:5,
             padding:'5px 11px 5px 9px',borderRadius:99,cursor:'pointer',fontFamily:'inherit',fontSize:11,fontWeight:700,letterSpacing:'0.01em',
             border:`1px solid ${saved?'rgba(240,180,41,0.7)':'rgba(255,255,255,0.14)'}`,
             background:saved?'var(--goldG)':'rgba(3,3,10,0.72)',color:saved?'#1a1305':'#F5F5FC',
@@ -1041,15 +1045,15 @@ function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:(
       {/* Generic badge */}
       {isGeneric&&!locked&&<div style={{position:'absolute',top:10,left:10,zIndex:2,background:'rgba(3,3,10,0.8)',backdropFilter:'blur(4px)',border:`1px solid ${tint(T.pur,21)}`,borderRadius:4,padding:'2px 7px',fontSize:8,fontWeight:700,color:T.pur,letterSpacing:'0.1em'}}>GENÉRICO</div>}
       {/* Image */}
-      <div style={{background:'#F8F8FC',height:162,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
+      <div style={{background:novo?'#F6F4EF':'#F8F8FC',height:novo?172:162,margin:novo?'10px 10px 0':0,borderRadius:novo?14:0,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
         {product.images?.[0]?<img src={product.images[0]} alt="" loading="lazy" decoding="async" style={{maxHeight:138,maxWidth:'88%',objectFit:'contain',transition:'transform .3s cubic-bezier(.34,1.56,.64,1)',transform:hov?'scale(1.08)':'scale(1)'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>:<div style={{width:44,height:44,background:'#e8e8f0',borderRadius:8}}/>}
       </div>
-      <div style={{padding:'14px 14px 16px',flex:1,display:'flex',flexDirection:'column',gap:0}}>
+      <div style={{padding:novo?'16px 16px 16px':'14px 14px 16px',flex:1,display:'flex',flexDirection:'column',gap:0}}>
         {sales>0&&bsr>0&&<div style={{display:'flex',alignItems:'center',gap:7,marginBottom:8,flexWrap:'wrap' as const}}>
-          <div style={{display:'flex',alignItems:'baseline',gap:5}}><span className="ora-num" style={{fontSize:22,fontWeight:700,color:salesColor,letterSpacing:'-0.03em',lineHeight:1}}>~{fmtK(sales)}</span><span style={{fontSize:10,color:T.t3,fontWeight:500}}>est./mês</span></div>
+          <div style={{display:'flex',alignItems:'baseline',gap:5}}><span className="ora-num" style={{fontSize:novo?27:22,fontWeight:novo?800:700,color:salesColor,letterSpacing:'-0.03em',lineHeight:1,...(novo?{fontFamily:'var(--tg-display),Archivo,sans-serif',fontStretch:'106%'}:{})}}>~{fmtK(sales)}</span><span style={{fontSize:10,color:T.t3,fontWeight:500}}>est./mês</span></div>
           <span style={{fontSize:9,fontWeight:700,letterSpacing:'0.04em',textTransform:'uppercase' as const,color:dem.c,background:`${dem.c}1f`,borderRadius:5,padding:'2px 6px'}}>{dem.l}</span>
         </div>}
-        <p style={{fontSize:12,fontWeight:500,color:T.t1,lineHeight:1.58,flex:1,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any,overflow:'hidden',marginBottom:10}}>{product.title}</p>
+        <p style={{fontSize:novo?13.5:12,fontWeight:500,color:T.t1,lineHeight:1.5,flex:1,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical' as any,overflow:'hidden',marginBottom:10}}>{product.title}</p>
         <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
           {bsr>0&&<span style={{fontSize:10,color:T.t3}}>BSR <strong style={{color:T.t2,fontWeight:600}}>#{fmtN(bsr)}</strong></span>}
           {bsr>0&&product.brand&&<span style={{color:T.t3,fontSize:10}}>·</span>}
@@ -1112,6 +1116,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
   const [loading, setLoading] = useState(false)
   const [data,    setData]    = useState<any>(null)
   const [error,   setError]   = useState('')
+  const novo = useVisualNovo()
 
   async function analyze(){
     const a = asin.trim().toUpperCase()
@@ -1132,15 +1137,31 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
   const fmtK=(n:number)=>n>=1000?`${(n/1000).toFixed(1).replace('.0','')}k`:`${n}`
 
   return(
-    <div style={{flex:1,overflowY:'auto',padding:'24px'}}>
+    <div style={{flex:1,overflowY:'auto',padding:novo?'28px 28px 40px':'24px'}}>
+      {novo&&(
+        <div className="ouro-pagina" style={{marginBottom:24}}>
+          <CabecalhoOuro grupo="Mineração · Amazon" titulo="Análise de" destaque="concorrentes"
+            sub={<>Cole o <strong>ASIN</strong> de um produto da Amazon. O Oráculo busca todos os concorrentes e diz se vale a pena entrar nesse mercado.</>}/>
+          <BuscaOuro valor={asin} onValor={v=>setAsin(v.toUpperCase())} onEnviar={analyze} carregando={loading} placeholder="ASIN do produto · ex.: B08N5WRWNW" maxLength={10} mono/>
+          <p className="ouro-nota" style={{marginTop:-10}}>O ASIN está no link da Amazon: amazon.com.br/dp/<strong style={{color:'#FFC83D'}}>XXXXXXXXXX</strong></p>
+          {error&&<div className="ouro-erro">{error}</div>}
+          {!data&&!loading&&(
+            <RecursosOuro itens={[
+              {icone:IcOuro.alvo,titulo:'Nota de oportunidade',texto:'De 0 a 100: vale ou não entrar nesse mercado agora.'},
+              {icone:IcOuro.rival,titulo:'Todos os concorrentes',texto:'Quem vende, a que preço e quanto cada um vende por mês.'},
+              {icone:IcOuro.grafico,titulo:'Demanda e ranking',texto:'BSR, vendas estimadas e força da concorrência.'},
+            ]}/>
+          )}
+        </div>
+      )}
       {/* Header */}
-      <div style={{marginBottom:24}}>
+      {!novo&&<div style={{marginBottom:24}}>
         <h2 style={{fontSize:18,fontWeight:700,color:T.t1,letterSpacing:'-0.03em',marginBottom:6}}>Análise de Concorrentes</h2>
         <p style={{fontSize:12,color:T.t2}}>Cole o ASIN do produto que deseja analisar — o Oráculo vai buscar todos os concorrentes e gerar um relatório completo.</p>
-      </div>
+      </div>}
 
       {/* ASIN Input */}
-      <div style={{background:T.card,border:`1px solid ${T.lineG}`,borderRadius:14,padding:'20px 24px',marginBottom:24}}>
+      {!novo&&<div style={{background:T.card,border:`1px solid ${T.lineG}`,borderRadius:14,padding:'20px 24px',marginBottom:24}}>
         <div style={{display:'flex',gap:12,alignItems:'flex-end'}}>
           <div style={{flex:1}}>
             <label style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',display:'block',marginBottom:8,textTransform:'uppercase' as const}}>ASIN do Produto</label>
@@ -1159,7 +1180,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
           </button>
         </div>
         {error&&<div style={{marginTop:10,fontSize:12,color:T.r,background:`${tint(T.r,6)}`,border:`1px solid ${tint(T.r,15)}`,borderRadius:7,padding:'8px 12px'}}>{error}</div>}
-      </div>
+      </div>}
 
       {/* Loading skeleton */}
       {loading&&(
@@ -1372,7 +1393,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
       })()}
 
       {/* Empty state */}
-      {!data&&!loading&&(
+      {!data&&!loading&&!novo&&(
         <div style={{textAlign:'center' as const,padding:'60px 20px',color:T.t3}}>
           <div style={{marginBottom:16,opacity:.4,display:'flex',justifyContent:'center'}}><Ico n="search" size={44} c={T.t3}/></div>
           <div style={{fontSize:14,fontWeight:600,color:T.t2,marginBottom:8}}>Cole um ASIN acima para começar</div>
@@ -1437,6 +1458,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
   const poolKey = (n:string,c:string,q:string)=> q ? `search__q:${q.toLowerCase()}` : `${n}__${c}`
   // Tema escuro/claro — escolha do cliente, persistida em localStorage
   const [theme, setTheme] = useState<'dark'|'light'>('dark')
+  const novo = useVisualNovo()   // 05/10: visual novo em validação (só admin)
   useEffect(()=>{
     try{ const t=localStorage.getItem('oraculo_theme'); if(t==='light'||t==='dark') setTheme(t) }catch{}
   },[])
@@ -2329,8 +2351,53 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
               <CompetitorPanel user={user} isFree={isFree} onUpgrade={()=>setUpgrade(true)}/>
             )}
 
-            {/* Extension Panel */}
-            {nav==='extension'&&(
+            {/* Extension Panel — visual novo (só admin) */}
+            {nav==='extension'&&novo&&(
+              <div className="ouro-pagina">
+                <CabecalhoOuro grupo="Ferramentas" titulo="Extensão do" destaque="Chrome"
+                  sub={<>Os números do Oráculo direto na página do produto na Amazon: <strong>abra o produto, clique no olho e veja</strong>. Instale e ative com a sua chave.</>}/>
+                <div className="ext-ouro">
+                  <div style={{display:'flex',flexDirection:'column',gap:16,minWidth:0}}>
+                    <div className="ouro-cartao">
+                      <div className="ouro-cartao-cab"><span className="ouro-passo">1</span><h3>Sua chave de licença</h3></div>
+                      {licLoading?(
+                        <div style={{height:56,borderRadius:14,background:'rgba(255,255,255,.04)',animation:'pulse 1.5s infinite'}}/>
+                      ):licKey?(
+                        <>
+                          <div className="ext-ouro-chave">
+                            <span className="ora-num">{licKey}</span>
+                            <button className="ouro-botao" style={{height:42,padding:'0 18px',fontSize:14}} onClick={()=>{navigator.clipboard.writeText(licKey);setKeyCopied(true);setTimeout(()=>setKeyCopied(false),2000)}}>{keyCopied?'✓ Copiado':'Copiar'}</button>
+                          </div>
+                          <div style={{marginTop:10,fontSize:12.5,color:'#B9B3A6'}}>Plano <b style={{color:'#FFC83D'}}>{(licPlan ? PLAN_CFG[licPlan]?.label : undefined) ?? licPlan}</b> · funciona em <b style={{color:'#F3EEE2'}}>1 dispositivo</b> por vez</div>
+                        </>
+                      ):(
+                        <VazioOuro icone={IcOuro.escudo} titulo="Nenhuma licença encontrada" texto="Nenhuma licença encontrada para este e-mail. Se você acabou de comprar, aguarde alguns minutos e atualize a página."/>
+                      )}
+                    </div>
+                    <a className="ouro-botao" style={{height:58,fontSize:16,textDecoration:'none'}} href="https://chromewebstore.google.com/detail/or%C3%A1culo-amazon-intelligen/jggkabmggnkaobhjmhhcikipbhhnoapp" target="_blank" rel="noreferrer">
+                      <Ico n="puzzle" size={18} c="#1a1204"/> Instalar a extensão no Chrome <span aria-hidden="true">→</span>
+                    </a>
+                    <div className="ext-ouro-passos">
+                      {['Clique em "Instalar a extensão no Chrome"','Abra qualquer produto na Amazon.com.br','Clique no ícone do Oráculo na barra do Chrome','Cole sua chave de licença e clique em Ativar'].map((t,i)=>(
+                        <div key={i}><b>{i+1}</b><span>{t}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="ext-ouro-mock" aria-hidden="true">
+                    <div className="ext-ouro-barra"><i/><i/><i/><span>amazon.com.br/dp/…</span><em><svg viewBox="0 0 1000 440"><g fill="none" stroke="#FFC83D" strokeWidth="60"><path d="M70 220Q500-90 930 220Q500 530 70 220Z"/><circle cx="500" cy="220" r="105"/></g></svg></em></div>
+                    <div className="ext-ouro-pag">
+                      <div className="ext-ouro-foto"/>
+                      <div className="ext-ouro-linhas"><i style={{width:'90%'}}/><i style={{width:'70%'}}/><i style={{width:'40%',height:18,marginTop:10}}/></div>
+                      <div className="ext-ouro-pop">
+                        <div className="ext-ouro-pop-cab"><svg viewBox="0 0 1000 440"><g fill="none" stroke="#FFC83D" strokeWidth="60"><path d="M70 220Q500-90 930 220Q500 530 70 220Z"/><circle cx="500" cy="220" r="105"/></g></svg>ORÁCULO</div>
+                        {['Lucro por venda','Margem','Vendas por mês','Concorrentes'].map(l=>(<div key={l} className="ext-ouro-pop-l"><span>{l}</span><i/></div>))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {nav==='extension'&&!novo&&(
               <div style={{maxWidth:560,margin:'0 auto',paddingTop:40}}>
                 <div style={{textAlign:'center' as const,marginBottom:36}}>
                   <div style={{marginBottom:12,display:'flex',justifyContent:'center'}}><Ico n="puzzle" size={40} c={T.gold}/></div>
@@ -2404,7 +2471,26 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
 
             {/* Tutoriais — vídeos de ajuda (Panda Video). Player 16:9 responsivo;
                 a lista vem de TUTORIAIS (topo do arquivo). Visível em todo plano. */}
-            {nav==='tutoriais'&&(
+            {nav==='tutoriais'&&novo&&(
+              <div className="ouro-pagina">
+                <CabecalhoOuro grupo="Ajuda" titulo="Tutoriais em" destaque="vídeo" sub="Vídeos curtos pra você tirar o máximo do Oráculo."/>
+                {TUTORIAIS.filter(t=>t.embed).length===0?(
+                  <div className="ouro-cartao"><VazioOuro icone={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9.5l5 2.5-5 2.5z" fill="currentColor"/></svg>} titulo="Novos tutoriais chegando em breve"/></div>
+                ):(
+                  <div className="tut-ouro">
+                    {TUTORIAIS.filter(t=>t.embed).map((t,i)=>(
+                      <div key={i} className="tut-ouro-item">
+                        <div className="tut-ouro-video">
+                          <iframe src={t.embed} title={t.title} loading="lazy" allow="accelerometer;gyroscope;autoplay;encrypted-media;picture-in-picture;fullscreen" allowFullScreen/>
+                        </div>
+                        <div className="tut-ouro-txt"><span>Vídeo {i+1}</span><b>{t.title}</b>{t.desc&&<p>{t.desc}</p>}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {nav==='tutoriais'&&!novo&&(
               <div style={{maxWidth:860,margin:'0 auto',paddingTop:24,width:'100%'}}>
                 <div style={{textAlign:'center' as const,marginBottom:32}}>
                   <div style={{marginBottom:12,display:'flex',justifyContent:'center'}}><NavIcon id="tutoriais" active/></div>
@@ -2463,6 +2549,104 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                 { id:'annual',   label:'Anual',     price:'R$ 897',   period:'/ 365 dias', best:true },
               ]
               const cardStyle: React.CSSProperties = { background:T.card, border:`1px solid ${T.line}`, borderRadius:14, padding:'22px 24px', boxShadow:'var(--elev1)' }
+              if(novo) return(
+                <div className="ouro-pagina">
+                  <CabecalhoOuro grupo="Conta" titulo="Meu" destaque="perfil" sub="Seus dados, seu plano e a segurança da sua conta."/>
+                  <div className="perfil-ouro">
+                    <div style={{display:'flex',flexDirection:'column',gap:18,minWidth:0}}>
+                      <div className="ouro-cartao perfil-ouro-id">
+                        <button className="ora-avatar perfil-ouro-foto" onClick={()=>fileRef.current?.click()} title="Alterar foto" aria-label="Alterar foto de perfil">
+                          {avatar?<img src={avatar} alt=""/>:<span>{displayName?.[0]?.toUpperCase()||'?'}</span>}
+                          <span className={`cam${avatarBusy?' busy':''}`} style={{position:'absolute',inset:0,background:'rgba(3,3,10,0.55)',display:'flex',alignItems:'center',justifyContent:'center',transition:'opacity .15s',borderRadius:'50%'}}>
+                            {avatarBusy
+                              ?<svg className="ora-spin" width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 3a9 9 0 1 1-9 9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/></svg>
+                              :<svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 8.5A2 2 0 0 1 6 6.5h2l1.2-1.8h5.6L16 6.5h2a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round"/><circle cx="12" cy="12.5" r="3" stroke="#fff" strokeWidth="1.5"/></svg>}
+                          </span>
+                        </button>
+                        <div style={{minWidth:0,flex:1}}>
+                          <div className="perfil-ouro-nome">{displayName}</div>
+                          <div className="perfil-ouro-email">{user.email}</div>
+                          <div style={{display:'flex',alignItems:'center',gap:10,marginTop:12,flexWrap:'wrap' as const}}>
+                            <span className="ouro-pilula" style={{color:cfg.color,background:tint(cfg.color,12),border:`1px solid ${tint(cfg.color,30)}`}}>{cfg.label}</span>
+                            <span style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:12.5,fontWeight:700,color:statusColor}}><span style={{width:7,height:7,borderRadius:'50%',background:statusColor}}/>{status}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="ouro-cartao">
+                        <div className="ouro-cartao-cab"><h3>Seu nome</h3></div>
+                        <div style={{display:'flex',gap:10}}>
+                          <input className="ouro-entrada" value={nameInput} maxLength={60} onChange={e=>{setNameInput(e.target.value);setNameMsg(null)}} onKeyDown={e=>{if(e.key==='Enter')saveName()}} placeholder="Seu nome"/>
+                          <button className="ouro-botao" onClick={saveName} disabled={nameBusy||nameInput.trim()===displayName.trim()}>{nameBusy?'Salvando…':'Salvar'}</button>
+                        </div>
+                        {nameMsg&&<div style={{fontSize:12.5,fontWeight:600,color:nameMsg.ok?'#3FD79B':'#FF7A6E',marginTop:10}}>{nameMsg.text}</div>}
+                        <div style={{marginTop:14,fontSize:12,color:'#7E796E'}}>O e-mail é o do seu acesso e não pode ser trocado aqui.</div>
+                      </div>
+                      <div className="ouro-cartao">
+                        <div className="ouro-cartao-cab"><h3>Seu plano</h3></div>
+                        {isLifetime?(
+                          <div className="perfil-ouro-vit"><b>∞</b><div><strong>Acesso vitalício</strong><span>Seu acesso não expira. Aproveite o Oráculo para sempre.</span></div></div>
+                        ):expiresAt?(
+                          <>
+                            <div style={{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap' as const}}>
+                              <span className="perfil-ouro-dias" style={{color:statusColor}}>{daysLeft!==null&&daysLeft>0?daysLeft:0}</span>
+                              <span style={{fontSize:14,color:'#B9B3A6'}}>{daysLeft===1?'dia restante':'dias restantes'} · válido até <b className="ora-num" style={{color:'#F3EEE2'}}>{expiresAt.toLocaleDateString('pt-BR')}</b></span>
+                            </div>
+                            {cyclePct!==null&&(
+                              <div style={{marginTop:14}}>
+                                <div style={{height:8,background:'rgba(255,255,255,.05)',borderRadius:99,overflow:'hidden'}}><div style={{height:'100%',width:`${cyclePct}%`,background:cyclePct>=85?'#FBBF24':'linear-gradient(90deg,#FFE7A3,#FFC83D)',borderRadius:99,transition:'width .6s ease'}}/></div>
+                                <div style={{display:'flex',justifyContent:'space-between',marginTop:7,fontSize:11.5,color:'#7E796E'}}><span>{cycleStart?.toLocaleDateString('pt-BR')}</span><span className="ora-num">{Math.round(cyclePct)}% do ciclo</span><span>{expiresAt.toLocaleDateString('pt-BR')}</span></div>
+                              </div>
+                            )}
+                          </>
+                        ):(<div style={{fontSize:13,color:'#B9B3A6'}}>Sem data de vencimento registrada.</div>)}
+                      </div>
+                    </div>
+                    <div style={{display:'flex',flexDirection:'column',gap:18,minWidth:0}}>
+                      <div className="ouro-cartao">
+                        <div className="ouro-cartao-cab"><h3>Trocar de plano</h3></div>
+                        {isLifetime?(
+                          <div className="perfil-ouro-vit verde"><b>✓</b><div><strong>Você tem acesso vitalício</strong><span>Nada a renovar, nada a pagar. O Oráculo é seu.</span></div></div>
+                        ):(
+                          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                            {plans.map(p=>{
+                              const isCurrent = user.plan===p.id
+                              return(
+                                <div key={p.id} className="perfil-ouro-plano" data-best={p.best?'1':'0'}>
+                                  <div style={{flex:1,minWidth:0}}>
+                                    <div style={{display:'flex',alignItems:'baseline',gap:8,flexWrap:'wrap' as const}}><b>{p.label}</b><span className="ora-num">{p.price}</span><small>{p.period}</small></div>
+                                    {p.best&&<div className="ora-num" style={{fontSize:11.5,color:'#FFC83D',marginTop:4,fontWeight:600}}>economize R$ {ANNUAL_ECON_FMT}/ano ({ANNUAL_ECON_PCT}%) vs mensal</div>}
+                                  </div>
+                                  {isCurrent?<span className="ouro-pilula" style={{color:'#B9B3A6',border:'1px solid rgba(243,238,226,.14)'}}>Plano atual</span>
+                                    :<a href={GREENN[p.id]} target="_blank" rel="noreferrer" className={p.best?'ouro-botao':'perfil-ouro-sec'} style={p.best?{height:40,padding:'0 18px',fontSize:14,textDecoration:'none'}:undefined}>Assinar</a>}
+                                </div>
+                              )
+                            })}
+                            <div style={{fontSize:11.5,color:'#7E796E',textAlign:'center' as const,marginTop:4}}>Pagamento seguro via Greenn · ativação automática no mesmo e-mail</div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="ouro-cartao">
+                        <div className="ouro-cartao-cab"><h3>Segurança da conta</h3></div>
+                        <p style={{margin:'-6px 0 14px',fontSize:13,lineHeight:1.6,color:'#B9B3A6'}}>Troque a senha gerada automaticamente por uma de sua preferência. Se houver outra sessão aberta, ela será encerrada.</p>
+                        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                          {([
+                            {ph:'Senha atual',        val:pwCur,  set:setPwCur},
+                            {ph:'Nova senha',         val:pwNew,  set:setPwNew},
+                            {ph:'Confirmar nova senha',val:pwConf, set:setPwConf},
+                          ] as const).map((f,i)=>(
+                            <input key={i} className="ouro-entrada" type="password" placeholder={f.ph} value={f.val}
+                              onChange={e=>{f.set(e.target.value);setPwMsg(null)}}
+                              onKeyDown={e=>{if(e.key==='Enter')changePassword()}}
+                              autoComplete={i===0?'current-password':'new-password'}/>
+                          ))}
+                        </div>
+                        {pwMsg&&<div style={{fontSize:12.5,fontWeight:600,color:pwMsg.ok?'#3FD79B':'#FF7A6E',marginTop:10}}>{pwMsg.text}</div>}
+                        <button className="ouro-botao" onClick={changePassword} disabled={pwBusy} style={{width:'100%',marginTop:14}}>{pwBusy?'Salvando…':'Alterar senha'}</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
               return(
                 <div style={{maxWidth:620,margin:'0 auto',width:'100%',display:'flex',flexDirection:'column',gap:16}}>
                   <div style={{marginBottom:4}}>
@@ -2686,7 +2870,29 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
             )}
 
             {/* Produtos Salvos — snapshot do garimpo */}
-            {nav==='saved'&&(
+            {nav==='saved'&&novo&&(
+              <div className="ouro-pagina" style={{maxWidth:'none'}}>
+                <CabecalhoOuro grupo="Mineração · Amazon" titulo="Produtos" destaque="salvos"
+                  sub={<><strong className="ora-num">{saved.length}</strong> {saved.length===1?'produto salvo':'produtos salvos'} · BSR e vendas capturados no momento em que você salvou</>}/>
+                {saved.length===0?(
+                  <div className="ouro-cartao"><VazioOuro icone={IcOuro.salvo} titulo="Nenhum produto salvo ainda"
+                    texto="Toque no ícone de salvar em qualquer card da mineração pra guardar o produto aqui com o retrato do momento."
+                    acao={<button className="ouro-botao" onClick={()=>goNav('bestsellers')}>Garimpar em Mais Vendidos →</button>}/></div>
+                ):(
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(230px,1fr))',gap:16}}>
+                    {saved.map((s,i)=>{
+                      const sp = {...s, images: s.image?[s.image]:[]}
+                      return(
+                        <div key={s.asin} className="ora-card-in" style={{animationDelay:`${(i%12)*40}ms`}}>
+                          <Card product={sp} onClick={()=>handleCardClick(sp,false)} saved onToggleSave={()=>toggleSaved(sp)}/>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+            {nav==='saved'&&!novo&&(
               <>
                 <div style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
                   <div style={{minWidth:0}}>
@@ -2734,7 +2940,35 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
 
             {/* Page header + product content (hidden when competitor tab active) */}
             {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='ads'&&nav!=='ads-ml'&&nav!=='catalogo'&&nav!=='catalogo-ml'&&nav!=='saved'&&nav!=='perfil'&&nav!=='planos'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-minera'&&nav!=='ml-salvos'&&nav!=='ml-rival'&&<>
-            <div className="ora-phead" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
+            {novo&&(
+              <div style={{marginBottom:22}}>
+                <CabecalhoOuro grupo="Mineração · Amazon" titulo={curNav?.label==='Mais Vendidos'?'Mais':(curNav?.label||'')} destaque={curNav?.label==='Mais Vendidos'?'vendidos':undefined}
+                  sub={<>{query?<>Resultados para <strong>“{query}”</strong></>:(isCross?'Os produtos que mais vendem na Amazon, em todas as categorias':curCat?.label)}{done&&<> · <strong className="ora-num">{prods.length}{!isFree&&!poolExhausted?'+':''}</strong> produtos</>}</>}/>
+                <div className="mv-ouro-ferr">
+                  <form className="mv-ouro-busca" onSubmit={e=>{e.preventDefault();buscar()}}>
+                    <span aria-hidden="true">{IcOuro.lupa}</span>
+                    <input className="ora-search" value={searchInput} onChange={e=>setSearchInput(e.target.value)} placeholder="Buscar produto na Amazon…" aria-label="Buscar produto"/>
+                    {query&&<button type="button" onClick={limparBusca} title="Limpar busca" aria-label="Limpar busca" className="mv-ouro-x">×</button>}
+                    <button type="submit" className="ouro-botao" style={{height:40,padding:'0 18px',fontSize:14}}>Buscar</button>
+                  </form>
+                  <select className="ouro-entrada mv-ouro-sel" value={cat} aria-label="Categoria" onChange={e=>escolherCategoria(e.target.value)} data-on={isCross?'0':'1'}>
+                    {CATS.map(c=>(<option key={c.id} value={c.id}>{c.id==='all'?'Todas as categorias':c.label}</option>))}
+                  </select>
+                  {done&&prods.length>0&&(
+                    <select className="ouro-entrada mv-ouro-sel" value={sortBy} aria-label="Ordenar produtos" data-on={sortBy==='default'?'0':'1'}
+                      onChange={e=>{sortBaseRef.current=prods.length;setSortBy(e.target.value as 'default'|'sales'|'score'|'bsr');setPage(1)}}>
+                      <option value="default">Ordenar: padrão</option>
+                      <option value="sales">Mais vendidos</option>
+                      <option value="score">Melhor score</option>
+                      <option value="bsr">Menor BSR</option>
+                    </select>
+                  )}
+                  {cfg.export&&done&&prods.length>0&&(<button className="mv-ouro-sec" onClick={()=>exportCSV(prods,cat)}>Baixar CSV</button>)}
+                  <button className="mv-ouro-sec" onClick={()=>load(nav,cat,queryRef.current,false)} title="Limpa o garimpo atual e redistribui produtos novos">↻ Atualizar</button>
+                </div>
+              </div>
+            )}
+            {!novo&&<div className="ora-phead" style={{display:'flex',alignItems:'flex-end',justifyContent:'space-between',gap:16,marginBottom:24}}>
               <div style={{minWidth:0}}>
                 <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:6}}>
                   <span style={{fontSize:9,fontWeight:700,color:T.t3,letterSpacing:'0.14em',textTransform:'uppercase' as const}}>Mineração</span>
@@ -2804,15 +3038,15 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                   Atualizar
                 </button>
               </div>
-            </div>
+            </div>}
 
             {/* Skeleton */}
-            {loading&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12}}>{Array.from({length:12}).map((_,i)=><SkeletonCard key={i} i={i}/>)}</div>}
+            {loading&&<div style={{display:'grid',gridTemplateColumns:novo?'repeat(auto-fill,minmax(230px,1fr))':'repeat(auto-fill,minmax(200px,1fr))',gap:novo?16:12}}>{Array.from({length:12}).map((_,i)=><SkeletonCard key={i} i={i}/>)}</div>}
 
             {/* Grid */}
             {!loading&&done&&prods.length>0&&(
               <>
-                <div ref={gridRef} style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:12,position:'relative' as const}}>
+                <div ref={gridRef} style={{display:'grid',gridTemplateColumns:novo?'repeat(auto-fill,minmax(230px,1fr))':'repeat(auto-fill,minmax(200px,1fr))',gap:novo?16:12,position:'relative' as const}}>
                   {shown.map((p,i)=>{
                     const isLocked = isFree && i >= cfg.limit
                     return(

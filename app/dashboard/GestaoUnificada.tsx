@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useVisualNovo } from './ouro/useVisualNovo'
 import dynamic from 'next/dynamic'
 import { SeloAmazon, SeloML } from './SelosMarketplace'
 
@@ -34,6 +35,7 @@ export default function GestaoUnificada({ mlEnabled = false, ...props }: {
 }) {
   const [loja, setLoja] = useState<Loja>('amazon')
   const [pronto, setPronto] = useState(false)
+  const novo = useVisualNovo()   // 05/10: visual novo (só admin) — só o estilo do seletor de loja
 
   // Preferência do cliente (só depois da montagem — localStorage não existe no SSR).
   useEffect(() => {
@@ -69,10 +71,11 @@ export default function GestaoUnificada({ mlEnabled = false, ...props }: {
             <button key={o.id} onClick={() => escolher(o.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 7,
-                fontSize: 12.5, fontWeight: 700, padding: '8px 14px', borderRadius: 11, cursor: 'pointer',
-                background: ativa ? 'var(--cardHov)' : 'transparent',
-                border: `1px solid ${ativa ? 'var(--lineG)' : 'var(--line)'}`,
+                fontSize: novo ? 13.5 : 12.5, fontWeight: 700, padding: novo ? '10px 16px' : '8px 14px', borderRadius: novo ? 999 : 11, cursor: 'pointer',
+                background: ativa ? (novo ? 'rgba(255,200,61,.1)' : 'var(--cardHov)') : 'transparent',
+                border: `1px solid ${ativa ? (novo ? 'rgba(255,200,61,.55)' : 'var(--lineG)') : 'var(--line)'}`,
                 color: ativa ? 'var(--t1)' : 'var(--t3)',
+                boxShadow: ativa && novo ? '0 0 24px -8px rgba(255,200,61,.5)' : undefined,
                 transition: 'all .15s',
               }}>
               {o.selo === 'amz' && <SeloAmazon size={13} />}

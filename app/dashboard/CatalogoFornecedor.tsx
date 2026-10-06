@@ -1,5 +1,8 @@
 'use client'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { useVisualNovo } from './ouro/useVisualNovo'
+import { CabecalhoOuro, VazioOuro, RecursosOuro, IcOuro } from './ouro/Ouro'
+import o from './CatalogoFornecedor.ouro.module.css'
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ANÁLISE DE CATÁLOGO — o NEO lê o PDF do fornecedor e devolve os produtos que
@@ -32,6 +35,7 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
   const fileRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const lastPartialRef = useRef(0)
+  const novo = useVisualNovo()
 
   const carregarStatus = useCallback(async () => {
     try {
@@ -94,6 +98,12 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
     .slice().sort((a, b) => (b.margemPct ?? -99) - (a.margemPct ?? -99))
 
   const card = { background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14 }
+
+  if (novo) return (
+    <CatalogoOuro marketplace={marketplace} cat={cat} vr={vr} st={st} resultados={resultados} oportunidades={oportunidades}
+      mostrados={mostrados} filtro={filtro} setFiltro={setFiltro} erro={erro} cobrado={cobrado} enviando={enviando}
+      extraindo={extraindo} pl={pl} pt={pt} pctExtra={pctExtra} pctVarr={pctVarr} fileRef={fileRef} subir={subir} varrer={varrer} />
+  )
 
   return (
     <div style={{ padding: '4px 0 40px' }}>
@@ -246,4 +256,257 @@ function Num({ rot, val, sub, cor }: { rot: string; val: string; sub?: string; c
       {sub && <div style={{ fontSize: 9, color: 'var(--t4)', marginTop: 1 }}>{sub}</div>}
     </div>
   )
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   VISUAL NOVO ("ouro", 05/10/2026 — em validação, só admin). Só apresentação:
+   recebe os MESMOS states/handlers do componente acima, não tem lógica própria.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const COR_VEREDITO_OURO: Record<string, string> = {
+  'oportunidade': '#3FD79B',
+  'margem-apertada': '#FFC83D',
+}
+
+function CatalogoOuro({ marketplace, cat, vr, st, resultados, oportunidades, mostrados, filtro, setFiltro, erro, cobrado, enviando,
+  extraindo, pl, pt, pctExtra, pctVarr, fileRef, subir, varrer }: {
+  marketplace: 'amazon' | 'ml'; cat: Cat | null; vr: any; st: any; resultados: Resultado[]; oportunidades: Resultado[]; mostrados: Resultado[]
+  filtro: 'todos' | 'oportunidade'; setFiltro: (f: 'todos' | 'oportunidade') => void; erro: string | null; cobrado: number | null; enviando: boolean
+  extraindo: boolean; pl: number; pt: number; pctExtra: number | null; pctVarr: number | null
+  fileRef: React.RefObject<HTMLInputElement | null>; subir: (f: File) => void; varrer: () => void
+}) {
+  const ml = marketplace === 'ml'
+  const pracaCurta = ml ? 'ML' : 'Amazon'
+  const temGrade = (vr?.status === 'pronta' || vr?.status === 'rodando') && resultados.length > 0
+  const abrir = () => fileRef.current?.click()
+
+  const recursos = (
+    <RecursosOuro itens={[
+      { icone: IcOuro.pdf, titulo: 'Leitura do PDF', texto: 'O NEO lê o catálogo página por página e separa cada produto com o seu custo.' },
+      { icone: IcOuro.lupa, titulo: `Cruzamento ${ml ? 'no Mercado Livre' : 'na Amazon'}`, texto: `Cada produto é buscado ${ml ? 'no Mercado Livre' : 'na Amazon'} pra achar quem já vende igual.` },
+      { icone: IcOuro.grafico, titulo: 'Demanda e preço', texto: 'Quanto vende por mês e por quanto está sendo vendido hoje.' },
+      { icone: IcOuro.moeda, titulo: 'Margem e veredito', texto: 'Margem e lucro por unidade a partir do seu custo — e o que é oportunidade.' },
+    ]} />
+  )
+
+  return (
+    <div className={`ouro-pagina ${o.pagina}`}>
+      <CabecalhoOuro grupo={ml ? 'Mercado Livre' : 'Mineração · Amazon'} titulo="Analisar" destaque="catálogo"
+        sub={<>Suba o PDF do fornecedor. O NEO lê cada produto, cruza {ml ? 'no Mercado Livre' : 'na Amazon'} e te devolve os que valem a pena: <strong>demanda, preço e margem</strong> já prontos.</>} />
+
+      <input ref={fileRef} type="file" accept="application/pdf,.pdf" hidden onChange={e => e.target.files?.[0] && subir(e.target.files[0])} />
+
+      {/* Aviso de custo — mesmo conteúdo/valor da tela antiga */}
+      <div className={o.custo}>
+        <span className={o.custoIc} aria-hidden="true">{IcOuro.moeda}</span>
+        <div>
+          A leitura do catálogo custa <b>10 créditos</b> da sua franquia (a varredura na Amazon não cobra).
+          {cobrado ? <span className={o.cobrado}>{cobrado} créditos cobrados neste envio.</span> : null}
+        </div>
+      </div>
+
+      {erro && <div className={o.erro}>{erro}</div>}
+
+      {/* SEM catálogo → upload é o protagonista */}
+      {!cat && (
+        <div className={`${o.cartao} ${o.upload}`}>
+          <VazioOuro icone={IcOuro.pdf} titulo="Suba o catálogo do fornecedor"
+            texto={<>Envie o PDF com os produtos e os preços de custo. O NEO lê sozinho e monta a lista pra cruzar {ml ? 'no Mercado Livre' : 'na Amazon'}.</>}
+            acao={
+              <button type="button" className="ouro-botao" onClick={abrir} disabled={extraindo}>
+                {enviando ? <><span className="ouro-gira" aria-hidden="true" />Enviando…</> : <>Enviar PDF <span aria-hidden="true">→</span></>}
+              </button>
+            } />
+        </div>
+      )}
+
+      {/* COM catálogo → cartão-resumo */}
+      {cat && (
+        <section className={`${o.cartao} ${o.resumo}`}>
+          <div className={o.resumoTopo}>
+            <span className={o.resumoIc} aria-hidden="true">{IcOuro.pdf}</span>
+            <div className={o.resumoTxt}>
+              <div className={o.kicker}>Catálogo do fornecedor</div>
+              <div className={o.resumoNome} title={cat.nome_arquivo}>{cat.nome_arquivo || 'catálogo.pdf'}</div>
+              <div className={o.resumoStatus}>
+                {extraindo ? 'Lendo o catálogo…'
+                  : st === 'erro' ? 'Não foi possível ler'
+                  : st === 'pronto' && vr?.status === 'pronta' ? <span className={o.ok}>Análise concluída {ml ? 'no ML' : 'na Amazon'}</span>
+                  : st === 'pronto' && vr?.status === 'rodando' ? `Cruzando ${ml ? 'no ML' : 'na Amazon'}…`
+                  : st === 'pronto' ? <><b>{cat.total}</b> produtos lidos — pronto pra cruzar</>
+                  : null}
+              </div>
+            </div>
+            <button type="button" className={o.secundario} onClick={abrir} disabled={extraindo}>Trocar catálogo</button>
+          </div>
+
+          {/* Progresso da EXTRAÇÃO */}
+          {extraindo && (
+            <div className={o.progresso}>
+              <div className={o.progressoLinha}>
+                <span className={o.gira} aria-hidden="true" />
+                <span><b>{cat.nome_arquivo}</b>: {cat.etapa === 'subindo' ? 'subindo o PDF pro NEO…' : pt > 0 ? `lendo página ${pl}/${pt}…` : 'lendo o catálogo…'}</span>
+                {pctExtra != null && <span className={o.pct}>{pctExtra}%</span>}
+              </div>
+              {pctExtra != null && <BarraOuro pct={pctExtra} />}
+            </div>
+          )}
+          {st === 'erro' && <div className={o.erro}>{cat.erro || 'não consegui ler esse catálogo'}</div>}
+
+          {/* Contadores */}
+          {st === 'pronto' && (
+            <div className={o.kpis}>
+              <div className={o.kpi}>
+                <div className={o.kicker}>Produtos lidos</div>
+                <div className={o.kpiVal}>{Number(cat.total) || 0}</div>
+              </div>
+              {(vr?.status === 'rodando' || vr?.status === 'pronta') && (
+                <div className={o.kpi}>
+                  <div className={o.kicker}>Cruzados {ml ? 'no ML' : 'na Amazon'}</div>
+                  <div className={`${o.kpiVal} ${o.kpiOuro}`}>{Number(vr.progresso) || 0}<small>/{Number(vr.total) || 0}</small></div>
+                </div>
+              )}
+              {(vr?.status === 'rodando' || vr?.status === 'pronta') && (
+                <div className={o.kpi}>
+                  <div className={o.kicker}>Oportunidades</div>
+                  <div className={`${o.kpiVal} ${o.kpiVerde}`}>{vr.status === 'pronta' ? (Number(vr.oportunidades) || 0) : oportunidades.length}</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Progresso da VARREDURA */}
+          {st === 'pronto' && vr?.status === 'rodando' && (
+            <div className={o.progresso}>
+              <div className={o.progressoLinha}>
+                <span>Cruzando {ml ? 'no ML' : 'na Amazon'}: <b>{vr.progresso}/{vr.total}</b> (pode sair, continua sozinho)</span>
+                {pctVarr != null && <span className={o.pct}>{pctVarr}%</span>}
+              </div>
+              {pctVarr != null && <BarraOuro pct={pctVarr} />}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Aviso do NEO durante a varredura */}
+      {vr?.status === 'rodando' && (
+        <div className={o.rodando}>
+          <span className={o.gira} aria-hidden="true" />
+          <div>
+            <b>O NEO está garimpando cada produto {ml ? 'no Mercado Livre' : 'na Amazon'}</b> — isso leva um tempo (catálogo grande passa de uma hora).
+            {oportunidades.length > 0
+              ? <> Já achei <b className={o.verde}>{oportunidades.length} oportunidade{oportunidades.length > 1 ? 's' : ''}</b> em {Number(vr.progresso) || 0}/{Number(vr.total) || 0} cruzados — e vão aparecendo aqui embaixo conforme saem.</>
+              : <> Já cruzei {Number(vr.progresso) || 0}/{Number(vr.total) || 0}; as oportunidades aparecem aqui assim que a primeira sair.</>}
+            {' '}Pode fechar a aba, continua sozinho.
+          </div>
+        </div>
+      )}
+
+      {/* Estados sem grade (catálogo enviado) */}
+      {cat && !temGrade && vr?.status !== 'rodando' && (
+        <div className={o.cartao}>
+          {extraindo ? (
+            <VazioOuro icone={IcOuro.pdf} titulo="Lendo o seu catálogo"
+              texto={<>Assim que a leitura terminar, os produtos ficam prontos pra cruzar {ml ? 'no Mercado Livre' : 'na Amazon'}.</>} />
+          ) : st === 'erro' ? (
+            <VazioOuro icone={IcOuro.pdf} titulo="Não consegui ler esse catálogo" texto="Envie o PDF de novo ou tente outro arquivo do fornecedor."
+              acao={<button type="button" className="ouro-botao" onClick={abrir}>Enviar outro PDF <span aria-hidden="true">→</span></button>} />
+          ) : st === 'pronto' && (!vr || vr.status === 'erro') ? (
+            <VazioOuro icone={IcOuro.lupa} titulo={`${Number(cat.total) || 0} produtos prontos pra cruzar`}
+              texto={<>O NEO busca cada produto {ml ? 'no Mercado Livre' : 'na Amazon'} e calcula demanda, preço e margem.</>}
+              acao={<button type="button" className="ouro-botao" onClick={varrer}>Analisar na {pracaCurta} <span aria-hidden="true">→</span></button>} />
+          ) : st === 'pronto' && vr?.status === 'pronta' ? (
+            <VazioOuro icone={IcOuro.alvo} titulo="Nenhum produto pra mostrar"
+              texto={<>A análise terminou sem produtos cruzados {ml ? 'no Mercado Livre' : 'na Amazon'}. Troque o catálogo pra analisar outro fornecedor.</>} />
+          ) : (
+            <VazioOuro icone={IcOuro.catalogo} titulo="Preparando o catálogo" texto={`O NEO está organizando os dados pra cruzar ${ml ? 'no Mercado Livre' : 'na Amazon'}.`} />
+          )}
+        </div>
+      )}
+
+      {!temGrade && recursos}
+
+      {/* Resultados */}
+      {temGrade && (
+        <>
+          <div className={o.abas} role="tablist">
+            {[{ id: 'oportunidade' as const, lbl: 'Oportunidades', n: oportunidades.length }, { id: 'todos' as const, lbl: 'Todos', n: resultados.length }].map(f => (
+              <button key={f.id} type="button" role="tab" aria-selected={filtro === f.id} onClick={() => setFiltro(f.id)}
+                className={`${o.aba} ${filtro === f.id ? o.abaAtiva : ''}`}>
+                {f.lbl} <span>{f.n}</span>
+              </button>
+            ))}
+            {vr?.status === 'rodando' && <span className={o.parcial}>parcial · atualiza sozinho</span>}
+          </div>
+          <div className={o.grade}>
+            {mostrados.map((r, i) => <CardOuro key={(r.match?.asin || r.cod || i) + ':' + i} r={r} marketplace={marketplace} />)}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function BarraOuro({ pct }: { pct: number }) {
+  return (
+    <div className={o.barra}><div className={o.barraFill} style={{ width: `${pct}%` }} /></div>
+  )
+}
+
+function CardOuro({ r, marketplace }: { r: Resultado; marketplace: 'amazon' | 'ml' }) {
+  const ml = marketplace === 'ml'
+  const pracaCurta = ml ? 'ML' : 'Amazon'
+  const base = VEREDITO[r.veredito] || VEREDITO['sem-match']
+  const rot = r.veredito === 'sem-match' ? `Sem match no ${pracaCurta}` : base.rot
+  const corV = COR_VEREDITO_OURO[r.veredito] || '#8E887B'
+  const m = r.match
+  const dem = r.demanda
+  const corMargem = r.margemPct == null ? '#7E796E' : r.margemPct >= 15 ? '#3FD79B' : r.margemPct >= 0 ? '#FFC83D' : '#FF7A6E'
+  const conteudo = (
+    <>
+      <div className={o.cardTopo}>
+        <div className={`${o.foto} ${m?.foto ? '' : o.fotoVazia}`}>
+          {m?.foto ? <img src={m.foto} alt="" /> : IcOuro.caixa}
+        </div>
+        <div className={o.cardTxt}>
+          <span className={o.veredito} style={{ color: corV, borderColor: tint(corV, 30), background: tint(corV, 10) }}>{rot}</span>
+          <div className={o.titulo}>{m?.titulo || r.nome}</div>
+          <div className={o.origem} title={r.nome}>catálogo: {r.nome}</div>
+        </div>
+      </div>
+
+      <div className={o.margem}>
+        <div>
+          <div className={o.kicker}>Margem</div>
+          <div className={o.margemVal} style={{ color: corMargem }}>{r.margemPct != null ? `${r.margemPct}%` : '—'}</div>
+        </div>
+        {r.lucroUn != null && <div className={o.margemSub}>lucro por unidade<b>{brl(r.lucroUn)}</b></div>}
+      </div>
+
+      <div className={o.nums}>
+        <div>
+          <div className={o.kicker}>Demanda</div>
+          <div className={o.numVal} style={{ color: dem ? '#6EA8E8' : '#7E796E' }}>
+            {dem ? (ml ? `${Number(dem.vendasMes).toLocaleString('pt-BR')} vend.` : `${dem.vendasMes}/mês`) : '—'}
+          </div>
+          {dem && <div className={o.numSub}>{ml ? (dem.bsr ? `#${dem.bsr} no ranking` : 'no ranking') : `BSR ${dem.bsr.toLocaleString('pt-BR')}`}</div>}
+        </div>
+        <div>
+          <div className={o.kicker}>Preço venda</div>
+          <div className={o.numVal}>{r.precoVenda != null ? brl(r.precoVenda) : '—'}</div>
+          <div className={o.numSub}>custo {brl(r.custoUn)}</div>
+        </div>
+      </div>
+
+      {r.nota && <div className={o.nota}>{String(r.nota).slice(0, 160)}</div>}
+
+      <div className={o.rodape}>
+        <span>Avaliação · via {pracaCurta} (em breve)</span>
+        {m?.link && <span className={o.verAnuncio}>{ml ? 'Ver no ML' : 'Ver na Amazon'} →</span>}
+      </div>
+    </>
+  )
+  return m?.link
+    ? <a href={m.link} target="_blank" rel="noreferrer" className={o.card}>{conteudo}</a>
+    : <div className={o.card}>{conteudo}</div>
 }
