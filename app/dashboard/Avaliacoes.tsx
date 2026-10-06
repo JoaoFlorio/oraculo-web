@@ -135,11 +135,11 @@ export default function Avaliacoes({ t }: { t: Tema }) {
                     {pr && pr.outros > 0 && <span>+{pr.outros} {pr.outros === 1 ? 'outro item' : 'outros itens'}</span>}
                   </div>
                 </div>
-                <span className="aval-status" style={{ justifySelf: 'end', maxWidth: 300, textAlign: 'right' as const, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, color: cor, background: `color-mix(in srgb, ${cor} 11%, transparent)`, border: `1px solid color-mix(in srgb, ${cor} 28%, transparent)`, borderRadius: 99, padding: '5px 11px' }}>{r.txt}</span>
+                <span className="aval-status" style={{ justifySelf: 'end', whiteSpace: 'nowrap' as const, textAlign: 'right' as const, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, color: cor, background: `color-mix(in srgb, ${cor} 11%, transparent)`, border: `1px solid color-mix(in srgb, ${cor} 28%, transparent)`, borderRadius: 99, padding: '5px 11px' }}>{r.txt}</span>
               </div>
             )
           })}
-          <style>{`@media (max-width:760px){ .aval-linha{ grid-template-columns:52px minmax(0,1fr) !important; } .aval-linha .aval-status{ grid-column:2; justify-self:start !important; text-align:left !important; } }`}</style>
+          <style>{`@media (max-width:760px){ .aval-linha{ grid-template-columns:52px minmax(0,1fr) !important; } .aval-linha .aval-status{ grid-column:2; justify-self:start !important; text-align:left !important; white-space:normal !important; } }`}</style>
         </div>
       )}
       {e.ligado && e.pedidos.length === 0 && (
