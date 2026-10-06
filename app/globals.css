@@ -605,3 +605,62 @@ body {
 
 @keyframes ora-tagpulse{0%,100%{box-shadow:0 0 0 0 rgba(248,113,113,.35)}60%{box-shadow:0 0 0 8px rgba(248,113,113,0)}}
 @media (prefers-reduced-motion:reduce){[style*='ora-tagpulse']{animation:none!important}}
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   VISUAL NOVO DO PAINEL (05/10/2026) — EM VALIDAÇÃO, SÓ ADMIN VÊ.
+   Liga com <html data-visual="ouro"> (app/dashboard/VisualNovo.tsx, renderizado só pra admin) e vale só no tema
+   escuro. Mesma linguagem do site oraculojf.com, do login e do admin: obsidiana + ouro #FFC83D, Instrument Sans no
+   corpo, Archivo nos títulos, JetBrains Mono nos números. As fontes vêm de .ora-visual (app/dashboard/fontesPainel.ts).
+   Pra liberar pra todos: trocar o seletor por :root (e renderizar as fontes pra todo mundo).
+   ════════════════════════════════════════════════════════════════════════ */
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-visual{
+  --bg:#05060A; --sidebar:#07080B; --card:#0E0F0E; --cardHov:#15160F; --modal:#0D0E0C;
+  --line:rgba(243,238,226,0.08); --line2:rgba(243,238,226,0.16); --lineG:rgba(255,200,61,0.38);
+  --gold:#FFC83D; --goldG:linear-gradient(180deg,#FFE7A3 0%,#FFC83D 50%,#EBA31A 100%); --goldSub:rgba(255,200,61,0.09);
+  --goldTextG:linear-gradient(180deg,#FFE7A3 0%,#FFC83D 50%,#F0A81C 100%);
+  --t1:#F3EEE2; --t2:#B9B3A6; --t3:#7E796E; --t4:#E6DFCF;
+  --pur:#A78BFA; --blue:#6EA8E8;
+  --elevGold:0 0 50px -22px rgba(255,200,61,0.6);
+  --radius:16px; --radius-sm:12px;
+  --font-ui:var(--tg-corpo),'Instrument Sans',system-ui,sans-serif;
+  --font-num:var(--tg-mono),'JetBrains Mono',ui-monospace,monospace;
+  /* fontes da tela de Gestão (GestaoHub usa var(--gh-fh/--gh-fg, fonte antiga)) */
+  --gh-fh:var(--tg-display); --gh-fg:var(--tg-display);
+  font-family:var(--font-ui);
+}
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-visual input,
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-visual button,
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-visual select,
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-visual textarea{ font-family:var(--font-ui); }
+/* atmosfera: aura dourada mais quente + grade de 64px, igual ao site */
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-app{ background:#05060A; }
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-app::before{
+  background:
+    radial-gradient(70% 50% at 70% -12%, rgba(255,200,61,.17), transparent 62%),
+    radial-gradient(50% 45% at 4% 4%, rgba(255,200,61,.07), transparent 60%),
+    radial-gradient(45% 40% at 100% 100%, rgba(255,170,40,.06), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 1px, transparent 1px 64px);
+}
+/* menu lateral e topo: vidro com fio de ouro */
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-app .ora-side{
+  background:linear-gradient(180deg, rgba(14,13,9,.94), rgba(6,7,10,.97)) !important;
+  border-right:1px solid rgba(255,200,61,.14) !important;
+}
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-app .ora-topbar{
+  background:linear-gradient(180deg, rgba(12,12,9,.86), rgba(6,7,10,.72)) !important;
+  border-bottom:1px solid rgba(255,200,61,.16) !important;
+}
+/* títulos com a fonte do site */
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-app h1,
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-app h2{
+  font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:108%; font-weight:800; letter-spacing:-.025em;
+}
+/* cartões: camada com brilho dourado no topo + sombra profunda */
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-app [style*="var(--card)"]{
+  background-image:linear-gradient(180deg, rgba(255,231,163,.045), rgba(255,255,255,0) 50%);
+  box-shadow:0 26px 56px -34px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,231,163,.06);
+}
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-app *::-webkit-scrollbar-thumb{ background:rgba(255,200,61,.28); }
+html[data-visual="ouro"]:not([data-theme="light"]) .ora-visual ::selection{ background:rgba(255,200,61,.3); color:#fff; }

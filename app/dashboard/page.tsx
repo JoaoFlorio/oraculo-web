@@ -9,6 +9,8 @@ import AppInstall from './AppInstall'
 import AppSplash from './AppSplash'
 import VersionGuard from './VersionGuard'
 import AssistenteFab from './AssistenteFab'
+import VisualNovo from './VisualNovo'
+import { classeFontesPainel } from './fontesPainel'
 
 export default async function DashboardPage() {
   // Vencido ENTRA (pra ver o overlay "venceu + pagar") em vez de ir pro /login;
@@ -53,8 +55,12 @@ export default async function DashboardPage() {
     if (meta.teste?.ate && Date.parse(meta.teste.ate) > Date.now()) teste = { ate: String(meta.teste.ate), creditos: Number(meta.teste.creditos) || 10, ...(meta.teste.origem ? { origem: String(meta.teste.origem) } : {}) }
   }
 
+  // 05/10/2026: VISUAL NOVO em validação — só admin vê (e pode alternar no botão do canto). Cliente: nada muda.
+  const visualNovo = user.role === 'admin'
+
   return (
-    <>
+    <div className={visualNovo ? `ora-visual ${classeFontesPainel}` : undefined} style={{ display: 'contents' }}>
+      {visualNovo && <VisualNovo />}
       {/* Abertura animada — só no app instalado, 1x por sessão */}
       <AppSplash />
       {/* Recarrega sozinho quando há build novo (PWA guarda HTML em cache) */}
@@ -65,6 +71,6 @@ export default async function DashboardPage() {
       <AppInstall isAdmin={user.role === 'admin'} />
       {gestaoEnabled && <AssistenteFab />}
       {needsTerms && <TermsGate />}
-    </>
+    </div>
   )
 }

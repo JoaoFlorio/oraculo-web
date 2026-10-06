@@ -48,9 +48,19 @@ const THEMES:Record<string,Theme> = {
     grid:'#EFF1F4', tipBg:'#FFFFFF',
     pillGrn:['#DCFCE7','#15803D'], pillGold:['#FEF3D7','#B5840F'], pillRed:['#FEE2E2','#DC2626'],
   },
+  // 05/10/2026: VISUAL NOVO em validação (só admin, <html data-visual="ouro"> — ver dashboard/VisualNovo.tsx).
+  // Mesma linguagem do site oraculojf.com: obsidiana + ouro #FFC83D. Só entra no lugar do 'dark'.
+  ouro: {
+    key:'ouro', name:'Ouro', dark:true,
+    pageBg:'#05060A', card:'#0E0F0E', card2:'#15160F', line:'rgba(243,238,226,0.10)', line2:'rgba(243,238,226,0.18)',
+    t1:'#F3EEE2', t2:'#CFC8B8', t3:'#8E887B',
+    gold:'#FFC83D', goldText:'#FFE7A3', grn:'#3FD79B', red:'#FF7A6E', vio:'#B9A5FF', blue:'#6EA8E8',
+    grid:'rgba(255,255,255,0.06)', tipBg:'#15160F',
+    pillGrn:['rgba(63,215,155,0.16)','#3FD79B'], pillGold:['rgba(255,200,61,0.16)','#FFE7A3'], pillRed:['rgba(255,122,110,0.16)','#FF9A90'],
+  },
 }
-const FH = "'Space Grotesk','Inter',sans-serif"
-const FG = "'Montserrat','Inter',sans-serif"   // fonte do Gestor Seller (Montserrat nos títulos/valores)
+const FH = "var(--gh-fh,'Space Grotesk'),'Inter',sans-serif"   // --gh-fh só existe no visual novo (globals.css)
+const FG = "var(--gh-fg,'Montserrat'),'Inter',sans-serif"   // fonte do Gestor Seller (Montserrat nos títulos/valores)
 const ThemeCtx = createContext<Theme>(THEMES.dark)
 const useT = ()=>useContext(ThemeCtx)
 
@@ -6155,7 +6165,14 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   useEffect(()=>{
     if(theme && THEMES[theme]) setThemeKey(theme)
   },[theme])
-  const t=THEMES[themeKey]||THEMES.dark
+  // Visual novo (só admin): acompanha o atributo <html data-visual="ouro"> — o botão do canto liga/desliga ao vivo.
+  const [ouro,setOuro]=useState(false)
+  useEffect(()=>{
+    const h=document.documentElement, ler=()=>setOuro(h.getAttribute('data-visual')==='ouro')
+    ler(); const mo=new MutationObserver(ler); mo.observe(h,{attributes:true,attributeFilter:['data-visual']})
+    return ()=>mo.disconnect()
+  },[])
+  const t=(ouro && themeKey==='dark') ? THEMES.ouro : (THEMES[themeKey]||THEMES.dark)
 
   const d=useMemo(()=>getFinanceData(),[])
   const m=useMemo(()=>productMetrics(d),[d])
