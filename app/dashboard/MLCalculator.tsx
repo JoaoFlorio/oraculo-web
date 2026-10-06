@@ -1,5 +1,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useVisualNovo } from './ouro/useVisualNovo'
+import { CabecalhoOuro, CartaoOuro, VazioOuro, IcOuro } from './ouro/Ouro'
 
 /* ─── Tema (mesmos tokens CSS do DashboardClient) ─────────────────────────── */
 const T = {
@@ -126,6 +128,61 @@ function ModalityCard({ nome, cor, m, hint, freteLabel }: { nome: string; cor: s
   )
 }
 
+/* ─── VISUAL NOVO (05/10/2026, em validação — só admin) ──────────────────────
+   Mesmos estados e mesmo cálculo da tela de baixo; muda só a apresentação. */
+function CampoOuro({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  return (
+    <label className="ouro-campo">
+      <span>{label}</span>
+      {children}
+      {hint && <small>{hint}</small>}
+    </label>
+  )
+}
+function NumOuro({ value, onChange, prefix, suffix, placeholder }: { value: string; onChange: (v: string) => void; prefix?: string; suffix?: string; placeholder?: string }) {
+  return (
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+      {prefix && <span style={{ position: 'absolute', left: 14, fontSize: 13.5, fontWeight: 600, color: '#8E887B', pointerEvents: 'none' }}>{prefix}</span>}
+      <input className="ouro-entrada" inputMode="decimal" value={value} placeholder={placeholder || '0'}
+        onChange={e => onChange(e.target.value.replace(/[^\d.,]/g, ''))}
+        style={{ paddingLeft: prefix ? 40 : 14, paddingRight: suffix ? 40 : 14, fontVariantNumeric: 'tabular-nums' }} />
+      {suffix && <span style={{ position: 'absolute', right: 14, fontSize: 13, fontWeight: 600, color: '#8E887B', pointerEvents: 'none' }}>{suffix}</span>}
+    </div>
+  )
+}
+function ModalidadeOuro({ nome, cor, m, hint, freteLabel, destaque }: { nome: string; cor: string; m: Modality; hint: string; freteLabel?: string; destaque?: boolean }) {
+  const lucroCor = m.lucro > 0 ? '#3FD79B' : m.lucro < 0 ? '#FF7A6E' : '#B9B3A6'
+  const linhas: [string, string, string?][] = [['Preço de venda', brl(m.receita)], ['Taxa de venda do ML', `− ${brl(m.comissao)}`]]
+  if (m.imposto > 0) linhas.push(['Imposto', `− ${brl(m.imposto)}`])
+  linhas.push(['Custo do produto', `− ${brl(m.custo)}`])
+  if (m.frete > 0) linhas.push([freteLabel || 'Frete (Mercado Envios)', `− ${brl(m.frete)}`])
+  if (m.ads > 0) linhas.push(['Mercado Ads', `− ${brl(m.ads)}`])
+  if ((m.armazenagem || 0) > 0) linhas.push(['Armazenagem no Full', `− ${brl(m.armazenagem || 0)}`])
+  const comp: string[] = [`comissão ${pct(m.comissaoPct)}`]
+  if (m.parcelamento > 0) comp.push(`parcelamento ${brl(m.parcelamento)}`)
+  if (m.custoFixo > 0) comp.push(`custo fixo ${brl(m.custoFixo)}`)
+  const tot = m.comissao + (freteLabel && !/Flex/.test(freteLabel) ? m.frete : 0) + (m.armazenagem || 0)
+  return (
+    <div className="calc-mod" style={{ ['--cor' as string]: cor } as React.CSSProperties} data-destaque={destaque ? '1' : '0'}>
+      <div className="calc-mod-topo">
+        <span className="calc-mod-nome">{nome}</span>
+        <span className="calc-mod-com">comissão {pct(m.comissaoPct)}</span>
+      </div>
+      <p className="calc-mod-hint">{hint}</p>
+      <div className="calc-mod-lucro">
+        <small>Lucro por venda</small>
+        <b style={{ color: lucroCor }}>{brl(m.lucro)}</b>
+        <span className="calc-mod-margem" style={{ color: lucroCor, background: tint(lucroCor, 12), borderColor: tint(lucroCor, 35) }}>margem {pct(m.margem)}</span>
+      </div>
+      <ul className="calc-mod-linhas">
+        {linhas.map(([l, v], i) => <li key={i}><span>{l}</span><b>{v}</b></li>)}
+      </ul>
+      {(m.custoFixo > 0 || m.parcelamento > 0) && <p className="calc-mod-comp">Taxa = {comp.join(' + ')}</p>}
+      <div className="calc-mod-total"><span>Total que o ML desconta <em>{m.receita > 0 ? pct(tot / m.receita * 100) : '—'} do preço</em></span><b>− {brl(tot)}</b></div>
+    </div>
+  )
+}
+
 /* ─── Tela principal ──────────────────────────────────────────────────────── */
 export default function MLCalculator() {
   const [link, setLink] = useState('')
@@ -194,12 +251,146 @@ export default function MLCalculator() {
 
   // Debounce: recalcula ~450ms depois da última tecla.
   useEffect(() => { const t = setTimeout(calc, 450); return () => clearTimeout(t) }, [calc])
+  const novo = useVisualNovo()
 
   const real = data?.fonte === 'api'
   const item = data?.item
   const freteLabel = data?.envio
     ? `${data.envio.cenario === 'logistica' ? 'Gestão do envio (você paga)' : 'Frete que você paga (grátis pro comprador)'}${data.logistica?.nome ? ` · ${data.logistica.nome}` : ''}`
     : data?.logistica?.tipo === 'self_service' ? 'Sua entrega (Flex)' : undefined
+
+
+  if (novo) {
+    const modOpts = (
+      <select className="ouro-entrada" value={modalidade} onChange={e => setModalidade(e.target.value)}>
+        <option value="auto">Automático (a do anúncio)</option>
+        <option value="fulfillment">Full</option>
+        <option value="drop_off">Coleta</option>
+        <option value="xd_drop_off">Agência</option>
+        <option value="self_service">Flex (você entrega)</option>
+      </select>
+    )
+    return (
+      <div className="calc-ouro">
+        <CabecalhoOuro grupo="Mercado Livre" titulo="Calculadora de" destaque="lucro"
+          sub={<>Clássico e Premium lado a lado, com a comissão, o frete e o lucro de verdade. Cole o <strong>link do anúncio</strong> pra comissão real da categoria, ou digite o preço pra uma estimativa.</>} />
+        <div className="calc-ouro-grade">
+          <div className="calc-ouro-entradas">
+            <CartaoOuro titulo="O anúncio" passo={1}>
+              <div className="calc-ouro-campos">
+                <CampoOuro label="Link do anúncio (opcional)" hint="Com o link, a comissão e o frete vêm reais do Mercado Livre.">
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <span style={{ position: 'absolute', left: 14, width: 18, height: 18, color: '#8E887B', pointerEvents: 'none' }}>{IcOuro.link}</span>
+                    <input className="ouro-entrada" value={link} onChange={e => setLink(e.target.value)} placeholder="mercadolivre.com.br/... ou MLB1234567890" style={{ paddingLeft: 42 }} />
+                  </div>
+                </CampoOuro>
+                <div className="calc-ouro-duas">
+                  <CampoOuro label="Preço de venda" hint={item ? 'Veio do anúncio — ajuste pra simular.' : undefined}><NumOuro value={price} onChange={setPrice} prefix="R$" placeholder="0,00" /></CampoOuro>
+                  <CampoOuro label="Custo do produto"><NumOuro value={cost} onChange={setCost} prefix="R$" placeholder="0,00" /></CampoOuro>
+                </div>
+              </div>
+            </CartaoOuro>
+            <CartaoOuro titulo="Impostos e anúncios" passo={2}>
+              <div className="calc-ouro-duas">
+                <CampoOuro label="Imposto"><NumOuro value={taxPct} onChange={setTaxPct} suffix="%" /></CampoOuro>
+                <CampoOuro label="Mercado Ads"><NumOuro value={adsPct} onChange={setAdsPct} suffix="%" /></CampoOuro>
+              </div>
+            </CartaoOuro>
+            <CartaoOuro titulo="Envio" passo={3}>
+              <div className="calc-ouro-campos">
+                {!extractItemId(link) && (
+                  <CampoOuro label="Medidas do pacote (pro frete real)" hint="Altura × largura × comprimento (cm) e peso (g). Com o link, o frete vem sozinho.">
+                    <div className="calc-ouro-quatro">
+                      <NumOuro value={alt} onChange={setAlt} suffix="A" placeholder="alt" />
+                      <NumOuro value={larg} onChange={setLarg} suffix="L" placeholder="larg" />
+                      <NumOuro value={comp} onChange={setComp} suffix="C" placeholder="comp" />
+                      <NumOuro value={peso} onChange={setPeso} suffix="g" placeholder="peso" />
+                    </div>
+                  </CampoOuro>
+                )}
+                <div className="calc-ouro-duas">
+                  <CampoOuro label="Sua reputação no ML">
+                    <select className="ouro-entrada" value={reputacao} onChange={e => setReputacao(e.target.value)}>
+                      <option value="green">Verde / MercadoLíder</option>
+                      <option value="yellow">Amarela</option>
+                      <option value="red">Vermelha / conta nova</option>
+                    </select>
+                  </CampoOuro>
+                  <CampoOuro label="Modalidade de envio">{modOpts}</CampoOuro>
+                </div>
+                <small className="calc-ouro-nota">Reputação muda o subsídio do frete grátis (verde: o ML cobre 50% · amarela 40% · vermelha/nova 0%). {data?.logistica ? `Na conta: ${data.logistica.nome}${data.logistica.origem === 'anuncio' ? ' (a do anúncio)' : data.logistica.origem === 'padrao' ? ' (padrão sem link)' : ''}. ` : ''}Full, Coleta e Agência pagam o mesmo frete; o Full soma a armazenagem.</small>
+                {data?.full && (
+                  <CampoOuro label="Full — tamanho e dias até vender" hint={data.full.tamanho
+                    ? `Tamanho ${data.full.tamanho}${data.full.fonteTamanho === 'embalagem' ? ' pelas medidas da embalagem' : data.full.fonteTamanho === 'produto' ? ' pelas medidas do produto (a caixa pode ser maior — confira)' : ' escolhido por você'} · R$ ${String(data.full.diaria).replace('.', ',')}/dia × ${data.full.dias} dias = ${brl(data.full.custoUn)} por unidade${data.full.estoqueAntigo > 0 ? ` (inclui ${brl(data.full.estoqueAntigo)} de estoque antigo)` : ''}.`
+                    : 'Sem as medidas do produto — escolha o tamanho pra entrar a armazenagem.'}>
+                    <div className="calc-ouro-duas" style={{ gridTemplateColumns: '1fr 120px' }}>
+                      <select className="ouro-entrada" value={tamanhoFull} onChange={e => setTamanhoFull(e.target.value)}>
+                        <option value="auto">Automático{data.full.fonteTamanho !== 'voce' && data.full.tamanho ? ` (${data.full.tamanho})` : ''}</option>
+                        <option value="P">P · até 12×15×25 cm</option>
+                        <option value="M">M · até 28×36×51 cm</option>
+                        <option value="G">G · até 60×60×70 cm</option>
+                        <option value="XG">XG · maior ou &gt; 18 kg</option>
+                      </select>
+                      <NumOuro value={diasFull} onChange={setDiasFull} suffix="dias" />
+                    </div>
+                  </CampoOuro>
+                )}
+                {data && !data.envio && (
+                  <CampoOuro label={data.logistica?.tipo === 'self_service' ? 'Custo da sua entrega (Flex)' : 'Frete que você paga (não consegui calcular)'}
+                    hint={data.logistica?.tipo === 'self_service' ? 'No Flex você entrega e o ML paga um bônus pela entrega — informe o seu custo líquido por envio.' : (data.freteObrigatorio ? 'A partir de R$79 o frete grátis é obrigatório. Cole o link ou informe as medidas pra eu calcular o valor real.' : 'Cole o link ou informe as medidas pra eu calcular o custo de envio real.')}>
+                    <NumOuro value={frete} onChange={setFrete} prefix="R$" placeholder="0,00" />
+                  </CampoOuro>
+                )}
+              </div>
+            </CartaoOuro>
+          </div>
+
+          <div className="calc-ouro-result">
+            {data && (
+              <div className="calc-ouro-fonte" data-real={real ? '1' : '0'}>
+                <span className="calc-ouro-fonte-tag">{real ? 'Comissão real · API do Mercado Livre' : 'Comissão estimada'}</span>
+                {data.envio && (
+                  <span>{data.envio.cenario === 'logistica' ? 'Logística ML' : 'Frete real'} <b>{brl(data.envio.custoVendedor)}</b>
+                    {data.envio.pesoFaturavel ? ` · ${(data.envio.pesoFaturavel / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} kg faturável` : ''}
+                    {data.envio.subsidioPct != null && data.envio.custoCheio != null && data.envio.subsidioPct > 0 ? ` · reputação ${data.envio.reputacao === 'green' ? 'verde' : data.envio.reputacao}: o ML cobre ${data.envio.subsidioPct}% de ${brl(data.envio.custoCheio)}` : ''}
+                    {data.envio.cenario === 'logistica' ? ' · o comprador paga o frete; você paga a gestão do envio' : ''}</span>
+                )}
+                {!real && <span>Cole o link do anúncio pra comissão exata.</span>}
+              </div>
+            )}
+            {item && (
+              <div className="calc-ouro-item">
+                {item.thumbnail && <img src={item.thumbnail} alt="" />}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <b>{item.titulo}</b>
+                  <span>{item.vendidos != null ? <em>{item.vendidos.toLocaleString('pt-BR')} vendidos</em> : 'vendas não informadas'} · {item.id}</span>
+                </div>
+              </div>
+            )}
+            {loading && !data && <div className="calc-ouro-calculando"><i />Calculando…</div>}
+            {erro && <div className="calc-ouro-erro">{erro}</div>}
+            {data && (
+              <div className="calc-ouro-mods" style={{ opacity: loading ? 0.55 : 1 }}>
+                <ModalidadeOuro nome="Clássico" cor="#B9A5FF" m={data.modalities.classico} hint="Mais barato, sem destaque nas buscas." freteLabel={freteLabel} />
+                <ModalidadeOuro nome="Premium" cor="#FFC83D" m={data.modalities.premium} hint="Comissão maior, mais exposição + parcelamento sem juros." freteLabel={freteLabel} destaque />
+              </div>
+            )}
+            {!data && !loading && !erro && (
+              <div className="ouro-cartao calc-ouro-vazio">
+                <VazioOuro icone={IcOuro.calc} titulo="Seu lucro aparece aqui"
+                  texto="Cole o link de um anúncio do Mercado Livre ou digite o preço de venda. Mostramos Clássico e Premium lado a lado, com comissão, frete e lucro de verdade." />
+                <div className="calc-ouro-fantasmas" aria-hidden="true">
+                  {['Clássico', 'Premium'].map(n => (
+                    <div key={n} className="calc-ouro-fantasma"><b>{n}</b><i style={{ width: '62%' }} /><i style={{ width: '40%', height: 22 }} /><i /><i /><i style={{ width: '80%' }} /></div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ maxWidth: 980, margin: '0 auto', width: '100%', paddingTop: 20 }}>

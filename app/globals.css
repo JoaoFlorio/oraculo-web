@@ -664,3 +664,105 @@ html[data-visual="ouro"]:not([data-theme="light"]) .ora-app [style*="var(--card)
 }
 html[data-visual="ouro"]:not([data-theme="light"]) .ora-app *::-webkit-scrollbar-thumb{ background:rgba(255,200,61,.28); }
 html[data-visual="ouro"]:not([data-theme="light"]) .ora-visual ::selection{ background:rgba(255,200,61,.3); color:#fff; }
+
+/* ── Peças do visual novo (app/dashboard/ouro/Ouro.tsx) — só são renderizadas com o visual novo ligado ── */
+.ouro-cab{ display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap; margin:6px 0 26px; }
+.ouro-cab-txt{ min-width:0; max-width:760px; }
+.ouro-cab-grupo{ display:inline-flex; align-items:center; gap:10px; font-family:var(--tg-mono),'JetBrains Mono',monospace; font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:#FFE7A3; }
+.ouro-cab-grupo::before{ content:""; width:26px; height:1px; background:linear-gradient(90deg,transparent,#FFC83D); }
+.ouro-cab-titulo{ margin:12px 0 0; font-family:var(--tg-display),'Archivo',sans-serif !important; font-stretch:110%; font-weight:800; font-size:clamp(30px,3.2vw,44px); line-height:1.02; letter-spacing:-.035em; color:#F3EEE2; }
+.ouro-cab-titulo em{ font-style:normal; background:linear-gradient(180deg,#FFE7A3,#FFC83D 50%,#F0A81C); -webkit-background-clip:text; background-clip:text; color:transparent; }
+.ouro-cab-sub{ margin:12px 0 0; font-size:14.5px; line-height:1.6; color:#B9B3A6; }
+.ouro-cab-sub strong{ color:#F3EEE2; font-weight:600; }
+.ouro-cab-acoes{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+.ouro-cartao{ position:relative; border-radius:20px; padding:22px; border:1px solid rgba(255,200,61,.14);
+  background:linear-gradient(180deg,rgba(22,21,15,.92),rgba(10,11,14,.92)); box-shadow:0 30px 60px -36px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,231,163,.05); }
+.ouro-cartao-cab{ display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+.ouro-cartao-cab h3{ margin:0; font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:106%; font-weight:700; font-size:15.5px; letter-spacing:-.01em; color:#F3EEE2; }
+.ouro-cartao-extra{ margin-left:auto; }
+.ouro-passo{ display:grid; place-items:center; width:24px; height:24px; border-radius:50%; font-family:var(--tg-mono),monospace; font-size:11px; font-weight:700; color:#1a1204; background:linear-gradient(180deg,#FFE7A3,#FFC83D); box-shadow:0 0 14px rgba(255,200,61,.45); flex:none; }
+
+.ouro-vazio{ display:flex; flex-direction:column; align-items:center; text-align:center; padding:48px 24px; }
+.ouro-vazio-medalha{ position:relative; width:84px; height:84px; border-radius:50%; display:grid; place-items:center; color:#FFC83D;
+  background:radial-gradient(circle at 35% 30%,rgba(255,231,163,.28),rgba(255,200,61,.07)); border:1px solid rgba(255,200,61,.4); box-shadow:0 0 50px -10px rgba(255,200,61,.45); }
+.ouro-vazio-medalha svg{ width:36px; height:36px; }
+.ouro-vazio-medalha i{ position:absolute; inset:-9px; border-radius:50%; border:1px dashed rgba(255,200,61,.35); animation:ouroGira 26s linear infinite; }
+@keyframes ouroGira{ to{ transform:rotate(360deg); } }
+.ouro-vazio h3{ margin:20px 0 0; font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:108%; font-weight:800; font-size:21px; letter-spacing:-.02em; color:#F3EEE2; }
+.ouro-vazio p{ margin:8px 0 0; max-width:420px; font-size:14px; line-height:1.6; color:#B9B3A6; }
+.ouro-vazio-acao{ margin-top:18px; }
+
+.ouro-campo{ display:flex; flex-direction:column; gap:7px; }
+.ouro-campo > span:first-child{ font-size:12.5px; font-weight:600; color:#B9B3A6; letter-spacing:0; text-transform:none; }
+.ouro-campo small{ font-size:11.5px; line-height:1.45; color:#7E796E; }
+.ouro-entrada{ width:100%; box-sizing:border-box; height:48px; padding:0 14px; border-radius:13px; outline:none; border:1px solid rgba(255,255,255,.1);
+  background:rgba(255,255,255,.035); color:#F3EEE2; font-family:inherit; font-size:15px; transition:border-color .2s, box-shadow .2s, background .2s; }
+.ouro-entrada::placeholder{ color:#5d5950; }
+.ouro-entrada:focus{ border-color:rgba(255,200,61,.6); background:rgba(255,200,61,.04); box-shadow:0 0 0 4px rgba(255,200,61,.12); }
+select.ouro-entrada{ cursor:pointer; }
+.ouro-botao{ display:inline-flex; align-items:center; justify-content:center; gap:10px; height:48px; padding:0 22px; border:0; border-radius:999px; cursor:pointer;
+  font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:106%; font-weight:700; font-size:15px; color:#1a1204;
+  background:linear-gradient(180deg,#FFE7A3 0%,#FFC83D 50%,#EBA31A 100%); box-shadow:0 0 0 1px rgba(255,240,200,.55) inset, 0 14px 34px -14px rgba(255,200,61,.8); transition:transform .2s, box-shadow .3s; }
+.ouro-botao:hover:not(:disabled){ transform:translateY(-2px); }
+.ouro-botao:disabled{ opacity:.6; cursor:default; }
+.ouro-pilula{ display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:700; }
+@media (max-width:760px){
+  .ouro-cab{ margin-bottom:18px; }
+  .ouro-cartao{ padding:18px; border-radius:18px; }
+}
+@media (prefers-reduced-motion:reduce){ .ouro-vazio-medalha i{ animation:none; } }
+
+
+/* ── Calculadora ML · visual novo ── */
+.calc-ouro{ max-width:1280px; margin:0 auto; width:100%; padding-top:8px; }
+.calc-ouro-grade{ display:grid; grid-template-columns:minmax(340px,430px) minmax(0,1fr); gap:22px; align-items:start; }
+.calc-ouro-entradas{ display:flex; flex-direction:column; gap:16px; position:sticky; top:12px; }
+.calc-ouro-campos{ display:flex; flex-direction:column; gap:14px; }
+.calc-ouro-duas{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.calc-ouro-quatro{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.calc-ouro-nota{ font-size:11.5px; line-height:1.5; color:#7E796E; }
+.calc-ouro-result{ display:flex; flex-direction:column; gap:14px; min-width:0; }
+.calc-ouro-fonte{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; padding:12px 16px; border-radius:16px; font-size:13px; color:#B9B3A6;
+  border:1px solid rgba(63,215,155,.3); background:rgba(63,215,155,.06); }
+.calc-ouro-fonte[data-real="0"]{ border-color:rgba(255,200,61,.3); background:rgba(255,200,61,.06); }
+.calc-ouro-fonte b{ color:#F3EEE2; }
+.calc-ouro-fonte-tag{ font-family:var(--tg-mono),monospace; font-size:11px; letter-spacing:.12em; text-transform:uppercase; font-weight:700; color:#3FD79B; }
+.calc-ouro-fonte[data-real="0"] .calc-ouro-fonte-tag{ color:#FFC83D; }
+.calc-ouro-item{ display:flex; gap:14px; align-items:center; padding:12px; border-radius:16px; border:1px solid rgba(255,200,61,.14); background:rgba(255,255,255,.025); }
+.calc-ouro-item img{ width:56px; height:56px; border-radius:12px; object-fit:cover; background:#fff; flex:none; }
+.calc-ouro-item b{ display:block; font-size:14px; color:#F3EEE2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.calc-ouro-item span{ display:block; margin-top:4px; font-size:12px; color:#8E887B; }
+.calc-ouro-item em{ font-style:normal; font-weight:700; color:#3FD79B; }
+.calc-ouro-calculando{ display:flex; align-items:center; justify-content:center; gap:10px; padding:44px; color:#B9B3A6; font-size:14px; }
+.calc-ouro-calculando i{ width:18px; height:18px; border-radius:50%; border:2.5px solid rgba(255,200,61,.25); border-top-color:#FFC83D; animation:ouroGira .8s linear infinite; }
+.calc-ouro-erro{ padding:14px 16px; border-radius:14px; font-size:13.5px; color:#FCA5A5; background:rgba(255,122,110,.08); border:1px solid rgba(255,122,110,.3); }
+.calc-ouro-mods{ display:grid; grid-template-columns:1fr 1fr; gap:16px; transition:opacity .15s; }
+.calc-mod{ position:relative; border-radius:22px; padding:22px; border:1px solid color-mix(in srgb, var(--cor) 35%, transparent);
+  background:radial-gradient(120% 70% at 100% 0%, color-mix(in srgb, var(--cor) 12%, transparent), transparent 60%), linear-gradient(180deg,rgba(22,21,15,.94),rgba(10,11,14,.94));
+  box-shadow:0 30px 60px -36px rgba(0,0,0,.9); }
+.calc-mod[data-destaque="1"]{ box-shadow:0 30px 60px -36px rgba(0,0,0,.9), 0 0 60px -30px var(--cor); }
+.calc-mod-topo{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.calc-mod-nome{ font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:108%; font-weight:800; font-size:20px; letter-spacing:-.02em; color:var(--cor); }
+.calc-mod-com{ font-size:11.5px; font-weight:700; color:#CFC8B8; padding:4px 10px; border-radius:999px; background:color-mix(in srgb, var(--cor) 12%, transparent); border:1px solid color-mix(in srgb, var(--cor) 30%, transparent); }
+.calc-mod-hint{ margin:6px 0 0; font-size:12px; color:#8E887B; }
+.calc-mod-lucro{ margin:18px 0 6px; padding:16px; border-radius:16px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.06); }
+.calc-mod-lucro small{ display:block; font-family:var(--tg-mono),monospace; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:#8E887B; }
+.calc-mod-lucro b{ display:block; margin-top:6px; font-family:var(--tg-display),'Archivo',sans-serif; font-stretch:106%; font-weight:800; font-size:clamp(30px,2.6vw,40px); letter-spacing:-.03em; line-height:1; font-variant-numeric:tabular-nums; }
+.calc-mod-margem{ display:inline-block; margin-top:10px; padding:4px 11px; border-radius:999px; border:1px solid; font-size:12.5px; font-weight:700; }
+.calc-mod-linhas{ list-style:none; margin:10px 0 0; padding:0; }
+.calc-mod-linhas li{ display:flex; justify-content:space-between; gap:12px; padding:9px 2px; border-bottom:1px solid rgba(255,255,255,.05); font-size:13px; }
+.calc-mod-linhas span{ color:#B9B3A6; }
+.calc-mod-linhas b{ color:#E6DFCF; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.calc-mod-comp{ margin:6px 0 0; font-size:11px; color:#7E796E; }
+.calc-mod-total{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:12px; padding:12px 14px; border-radius:14px; background:rgba(255,122,110,.07); border:1px solid rgba(255,122,110,.22); font-size:13px; color:#E6DFCF; }
+.calc-mod-total em{ font-style:normal; color:#8E887B; font-size:12px; margin-left:4px; }
+.calc-mod-total b{ color:#FF9A90; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.calc-ouro-vazio{ padding:10px 22px 26px; }
+.calc-ouro-fantasmas{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:4px; opacity:.55; }
+.calc-ouro-fantasma{ display:flex; flex-direction:column; gap:10px; padding:18px; border-radius:18px; border:1px dashed rgba(255,200,61,.22); }
+.calc-ouro-fantasma b{ font-family:var(--tg-display),'Archivo',sans-serif; font-size:15px; color:#8E887B; }
+.calc-ouro-fantasma i{ display:block; height:10px; width:100%; border-radius:6px; background:linear-gradient(90deg,rgba(255,255,255,.05),rgba(255,231,163,.1),rgba(255,255,255,.05)); background-size:200% 100%; animation:ouroBrilho 2.2s ease-in-out infinite; }
+@keyframes ouroBrilho{ 0%{ background-position:100% 0 } 100%{ background-position:-100% 0 } }
+@media (max-width:1100px){ .calc-ouro-grade{ grid-template-columns:1fr; } .calc-ouro-entradas{ position:static; } }
+@media (max-width:640px){ .calc-ouro-mods, .calc-ouro-fantasmas{ grid-template-columns:1fr; } .calc-ouro-quatro{ grid-template-columns:1fr 1fr; } }
