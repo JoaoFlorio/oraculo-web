@@ -1,0 +1,257 @@
+/* TESTE GRÁTIS — visual (05/10/2026). Mesma linguagem do site oraculojf.com: obsidiana + ouro, Archivo pesada,
+   Instrument Sans no corpo, JetBrains Mono nos rótulos. Só aparência: a lógica do cadastro fica no page.tsx. */
+
+.pagina {
+  --obs: #05060A;
+  --ouro: #FFC83D;
+  --ouro-claro: #FFE7A3;
+  --ouro-esc: #B9801A;
+  --t1: #F3EEE2;
+  --t2: #B9B3A6;
+  --t3: #7E796E;
+  --linha: rgba(243, 238, 226, .09);
+  --verde: #34D399;
+  --verm: #F87171;
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  overflow: clip;            /* clip não vira área de rolagem: foco num campo não empurra a página pro lado */
+  background: var(--obs);
+  color: var(--t1);
+  font-family: var(--tg-corpo), 'Instrument Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- fundo ---------- */
+.fundo { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: hidden }
+.fundoFoto {
+  position: absolute; inset: -4% -4% auto auto; width: min(1100px, 80vw); aspect-ratio: 16/9;
+  background: url(/teste/fundo-olho.webp) right center / cover no-repeat;
+  opacity: .42; filter: saturate(1.1);
+  -webkit-mask: radial-gradient(70% 70% at 70% 40%, #000 30%, transparent 75%);
+  mask: radial-gradient(70% 70% at 70% 40%, #000 30%, transparent 75%);
+}
+.aurora1, .aurora2 { position: absolute; border-radius: 50%; filter: blur(90px); animation: deriva 22s ease-in-out infinite alternate }
+.aurora1 { width: 60vmax; height: 60vmax; left: -20vmax; top: -25vmax; background: radial-gradient(circle, rgba(255, 200, 61, .22), transparent 65%) }
+.aurora2 { width: 50vmax; height: 50vmax; right: -18vmax; bottom: -25vmax; background: radial-gradient(circle, rgba(255, 170, 40, .14), transparent 65%); animation-delay: -9s }
+@keyframes deriva { from { transform: translate(0, 0) scale(1) } to { transform: translate(5vmax, 4vmax) scale(1.12) } }
+.grade {
+  position: absolute; inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, .025) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .025) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask: radial-gradient(80% 60% at 50% 30%, #000, transparent 80%);
+  mask: radial-gradient(80% 60% at 50% 30%, #000, transparent 80%);
+}
+.po { position: absolute; inset: 0; width: 100%; height: 100% }
+
+/* ---------- topo ---------- */
+.topo { position: relative; z-index: 2; max-width: 1220px; margin: 0 auto; padding: 22px 24px; display: flex; justify-content: space-between; align-items: center }
+.marca { display: inline-flex; align-items: center; gap: 12px; color: var(--t1); text-decoration: none }
+.marca svg { width: 40px; filter: drop-shadow(0 0 10px rgba(255, 200, 61, .45)) }
+.marca span { font-family: var(--tg-display), sans-serif; font-weight: 600; font-stretch: 125%; letter-spacing: .32em; font-size: 14px }
+.topoLink { font-size: 14px; color: var(--t2); text-decoration: none }
+.topoLink b { color: var(--ouro); font-weight: 700 }
+.topoLink:hover b { text-decoration: underline; text-underline-offset: 3px }
+
+/* ---------- grade principal ---------- */
+.conteudo {
+  position: relative; z-index: 2; max-width: 1220px; margin: 0 auto; padding: 18px 24px 64px;
+  display: grid; grid-template-columns: minmax(0, 1.08fr) minmax(0, .92fr); grid-template-areas: "cabeca form" "extras form";
+  column-gap: clamp(32px, 5vw, 80px); row-gap: 34px; align-items: start;
+}
+.cabeca { grid-area: cabeca; padding-top: clamp(8px, 3vh, 36px) }
+.formLado { grid-area: form; position: sticky; top: 24px }
+.extras { grid-area: extras }
+
+/* ---------- cabeça ---------- */
+.selo {
+  display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid rgba(255, 200, 61, .32); background: rgba(255, 200, 61, .07);
+  font-family: var(--tg-mono), monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--ouro-claro);
+}
+.selo i { width: 7px; height: 7px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 0 0 rgba(52, 211, 153, .7); animation: pulso 1.8s infinite }
+@keyframes pulso { 70% { box-shadow: 0 0 0 9px rgba(52, 211, 153, 0) } 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0) } }
+.titulo {
+  margin: 20px 0 0; font-family: var(--tg-display), sans-serif; font-weight: 800; font-stretch: 112%;
+  font-size: clamp(2.5rem, 4.4vw, 4rem); line-height: .98; letter-spacing: -.035em;
+}
+.titulo em {
+  font-style: normal; display: inline-block;
+  background: linear-gradient(180deg, var(--ouro-claro), var(--ouro) 50%, #F0A81C); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 24px rgba(255, 200, 61, .25));
+}
+.sub { margin: 20px 0 0; max-width: 540px; font-size: clamp(1rem, 1.25vw, 1.15rem); line-height: 1.6; color: var(--t2) }
+.sub strong { color: var(--t1); font-weight: 600 }
+.pilulas { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 10px }
+.pilula {
+  display: inline-flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 999px;
+  background: rgba(255, 255, 255, .04); border: 1px solid var(--linha); font-size: 13.5px; font-weight: 600; color: var(--t1);
+}
+.pilula svg { width: 16px; height: 16px; color: var(--ouro) }
+
+/* ---------- vitrine (ampulheta + anel de 7 dias) ---------- */
+.vitrine { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: clamp(20px, 3vw, 40px); align-items: center;
+  padding: clamp(20px, 2.6vw, 30px); border-radius: 28px; border: 1px solid var(--linha);
+  background: radial-gradient(80% 120% at 0% 50%, rgba(255, 200, 61, .1), transparent 60%), linear-gradient(160deg, rgba(20, 17, 9, .85), rgba(8, 9, 13, .85));
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px) }
+.relogio { position: relative; width: clamp(190px, 19vw, 250px); aspect-ratio: 1 }
+.relogio svg { position: absolute; inset: 0; width: 100%; height: 100%; filter: drop-shadow(0 0 16px rgba(255, 200, 61, .35)) }
+.seg { stroke: var(--ouro); opacity: .14; animation: acende 7s cubic-bezier(.2, .8, .2, 1) infinite; animation-delay: calc(var(--i) * .42s) }
+@keyframes acende { 0% { opacity: .14 } 6%, 72% { opacity: 1 } 86%, 100% { opacity: .14 } }
+.ampulheta { position: absolute; left: 50%; top: 50%; width: 52%; transform: translate(-50%, -50%); animation: flutua 6s ease-in-out infinite;
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, .55)) drop-shadow(0 0 22px rgba(255, 200, 61, .25)) }
+@keyframes flutua { 0%, 100% { transform: translate(-50%, -50%) rotate(-3deg) } 50% { transform: translate(-50%, -56%) rotate(3deg) } }
+.vitrineTxt small { display: block; font-family: var(--tg-mono), monospace; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ouro-claro) }
+.vitrineNum { display: flex; align-items: baseline; gap: 12px; margin-top: 8px }
+.vitrineNum b { font-family: var(--tg-display), sans-serif; font-weight: 800; font-stretch: 112%; font-size: clamp(56px, 6vw, 84px); line-height: .85; letter-spacing: -.04em;
+  background: linear-gradient(180deg, #FFF6DA, var(--ouro) 55%, #C98A16); -webkit-background-clip: text; background-clip: text; color: transparent }
+.vitrineNum span { font-family: var(--tg-display), sans-serif; font-weight: 700; font-size: clamp(18px, 1.8vw, 24px); color: var(--t1) }
+.vitrineTxt p { margin: 12px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--t2) }
+.vitrineTxt p strong { color: var(--ouro-claro); font-weight: 600 }
+
+/* ---------- o que libera ---------- */
+.recursos { margin-top: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+.recurso { position: relative; overflow: hidden; display: flex; gap: 14px; align-items: flex-start; padding: 18px; border-radius: 20px; border: 1px solid var(--linha);
+  background: linear-gradient(160deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01)); transition: border-color .3s, transform .3s }
+.recurso:hover { border-color: rgba(255, 200, 61, .35); transform: translateY(-2px) }
+.recursoIc { flex: none; width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 231, 163, .3), rgba(255, 200, 61, .08)); border: 1px solid rgba(255, 200, 61, .3) }
+.recursoIc svg { width: 21px; height: 21px; color: var(--ouro) }
+.recurso h3 { margin: 0; font-family: var(--tg-display), sans-serif; font-weight: 700; font-stretch: 106%; font-size: 15.5px; letter-spacing: -.01em }
+.recurso p { margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: var(--t2) }
+
+/* ---------- NEO: o que os créditos criam ---------- */
+.neo { margin-top: 18px; padding: 18px; border-radius: 22px; border: 1px solid var(--linha); background: rgba(255, 255, 255, .02) }
+.neoCab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap }
+.neoCab b { font-family: var(--tg-display), sans-serif; font-weight: 700; font-size: 15px }
+.neoCab span { font-family: var(--tg-mono), monospace; font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--t3) }
+.neoFotos { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px }
+.neoFoto { position: relative; border-radius: 14px; overflow: hidden; aspect-ratio: 1; border: 1px solid var(--linha) }
+.neoFoto img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .8s cubic-bezier(.2, .8, .2, 1) }
+.neoFoto:hover img { transform: scale(1.07) }
+.neoFoto figcaption { position: absolute; left: 8px; bottom: 8px; padding: 4px 8px; border-radius: 999px; font-size: 10.5px; font-weight: 700;
+  background: rgba(5, 6, 10, .72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: var(--t1) }
+.neoNota { margin: 12px 0 0; font-size: 12px; line-height: 1.5; color: var(--t3) }
+
+/* ---------- cartão do formulário ---------- */
+.cartaoBorda { position: relative; border-radius: 28px; padding: 1.5px; overflow: hidden;
+  background: linear-gradient(140deg, rgba(255, 231, 163, .75), rgba(255, 200, 61, .14) 30%, rgba(255, 255, 255, .06) 55%, rgba(255, 200, 61, .5));
+  box-shadow: 0 50px 120px -40px rgba(0, 0, 0, .9), 0 0 90px -40px rgba(255, 200, 61, .55) }
+.cartao { position: relative; border-radius: 26.5px; padding: clamp(22px, 2.6vw, 34px);
+  background: radial-gradient(120% 60% at 50% 0%, rgba(255, 200, 61, .08), transparent 60%), linear-gradient(180deg, #11120F, #0A0B0F) }
+.passos { display: flex; align-items: center; gap: 8px; margin-bottom: 22px }
+.passo { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: var(--t3); white-space: nowrap }
+.passo i { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-family: var(--tg-mono), monospace; font-size: 11px;
+  border: 1px solid var(--linha); background: rgba(255, 255, 255, .03); color: var(--t2) }
+.passoAtivo { color: var(--t1) }
+.passoAtivo i { border-color: transparent; color: #1a1204; background: linear-gradient(180deg, var(--ouro-claro), var(--ouro)); box-shadow: 0 0 16px rgba(255, 200, 61, .55) }
+.passoFeito i { border-color: rgba(52, 211, 153, .5); color: var(--verde); background: rgba(52, 211, 153, .1) }
+.passoTraco { flex: 1; min-width: 12px; height: 1px; background: var(--linha) }
+.cartaoTitulo { margin: 0; font-family: var(--tg-display), sans-serif; font-weight: 800; font-stretch: 108%; font-size: clamp(22px, 2vw, 27px); letter-spacing: -.02em }
+.cartaoSub { margin: 6px 0 20px; font-size: 13.5px; line-height: 1.55; color: var(--t2) }
+.cartaoSub b { color: var(--t1) }
+.form { display: grid; gap: 14px }
+.duas { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+
+.campo { display: block }
+.rotulo { display: block; margin-bottom: 7px; font-size: 12.5px; font-weight: 600; color: var(--t2) }
+.caixa { position: relative; display: flex; align-items: center }
+.caixaIc { position: absolute; left: 14px; width: 18px; height: 18px; color: var(--t3); pointer-events: none; transition: color .2s }
+.entrada { width: 100%; box-sizing: border-box; height: 50px; padding: 0 14px 0 44px; border-radius: 14px; outline: none;
+  border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .035); color: var(--t1);
+  font-family: inherit; font-size: 15px; transition: border-color .2s, box-shadow .2s, background .2s }
+.entrada::placeholder { color: #5d5950 }
+.entrada:focus { border-color: rgba(255, 200, 61, .65); background: rgba(255, 200, 61, .04); box-shadow: 0 0 0 4px rgba(255, 200, 61, .12) }
+.caixa:focus-within .caixaIc { color: var(--ouro) }
+.olho { position: absolute; right: 8px; width: 36px; height: 36px; border: 0; border-radius: 10px; background: none; color: var(--t3); cursor: pointer; display: grid; place-items: center }
+.olho:hover { color: var(--t1); background: rgba(255, 255, 255, .05) }
+.olho svg { width: 18px; height: 18px }
+.dica { display: block; margin-top: 6px; font-size: 11.5px; line-height: 1.45; color: var(--t3) }
+.dicaOk { color: var(--verde) }
+.dicaErro { color: var(--verm) }
+
+.codigo { height: 62px; padding: 0 14px 0 44px; text-align: center; font-family: var(--tg-mono), monospace; font-size: 26px; font-weight: 700; letter-spacing: .5em }
+
+.aceite { display: flex; gap: 11px; align-items: flex-start; font-size: 12.5px; line-height: 1.55; color: var(--t2); cursor: pointer }
+.aceite input { position: absolute; opacity: 0; width: 1px; height: 1px }
+.marcador { flex: none; margin-top: 1px; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid rgba(255, 255, 255, .22); display: grid; place-items: center; transition: background .2s, border-color .2s }
+.marcador svg { width: 13px; height: 13px; color: #1a1204; opacity: 0; transform: scale(.6); transition: opacity .2s, transform .2s }
+.aceite input:checked + .marcador { background: linear-gradient(180deg, var(--ouro-claro), var(--ouro)); border-color: transparent }
+.aceite input:checked + .marcador svg { opacity: 1; transform: none }
+.aceite input:focus-visible + .marcador { box-shadow: 0 0 0 4px rgba(255, 200, 61, .25) }
+.aceite a { color: var(--ouro); text-underline-offset: 2px }
+
+.erro { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.5; color: #FCA5A5; background: rgba(248, 113, 113, .08); border: 1px solid rgba(248, 113, 113, .3); border-radius: 12px; padding: 11px 13px }
+.erro svg { flex: none; width: 17px; height: 17px; margin-top: 1px }
+
+.botao { position: relative; overflow: hidden; width: 100%; height: 58px; border: 0; border-radius: 999px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  font-family: var(--tg-display), sans-serif; font-weight: 700; font-stretch: 108%; font-size: 16.5px; color: #1a1204;
+  background: linear-gradient(180deg, var(--ouro-claro) 0%, var(--ouro) 50%, #EBA31A 100%);
+  box-shadow: 0 0 0 1px rgba(255, 240, 200, .6) inset, 0 -6px 14px rgba(185, 128, 26, .4) inset, 0 18px 44px -12px rgba(255, 200, 61, .75);
+  transition: transform .2s, box-shadow .3s, opacity .2s }
+.botao:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(255, 240, 200, .75) inset, 0 -6px 14px rgba(185, 128, 26, .45) inset, 0 22px 54px -10px rgba(255, 200, 61, .9) }
+.botao:disabled { cursor: default; opacity: .55 }
+.botao::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .55) 50%, transparent 65%); transform: translateX(-120%); animation: brilho 4.5s ease-in-out infinite }
+@keyframes brilho { 0%, 60% { transform: translateX(-120%) } 85%, 100% { transform: translateX(120%) } }
+.seta { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #1a1204; color: var(--ouro); font-size: 15px }
+.gira { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid rgba(26, 18, 4, .25); border-top-color: #1a1204; animation: rodar .8s linear infinite }
+@keyframes rodar { to { transform: rotate(360deg) } }
+
+.linhaAcoes { display: flex; justify-content: space-between; gap: 12px; font-size: 13px }
+.linkBotao { background: none; border: 0; padding: 0; font-family: inherit; font-size: inherit; color: var(--t3); cursor: pointer }
+.linkBotao:hover:not(:disabled) { color: var(--t1) }
+.linkOuro { color: var(--ouro); font-weight: 700 }
+.linkBotao:disabled { cursor: default; color: var(--t3); font-weight: 500 }
+
+.zap { display: inline-flex; align-items: center; gap: 7px; margin-top: 7px; font-size: 12px; color: var(--t3) }
+.zap i { width: 7px; height: 7px; border-radius: 50%; background: var(--ouro); animation: pisca 1s ease-in-out infinite }
+.zapOk { color: var(--verde) }
+.zapOk i { background: var(--verde); animation: none }
+.zapErro { color: var(--verm) }
+.zapErro i { background: var(--verm); animation: none }
+@keyframes pisca { 50% { opacity: .25 } }
+
+.confianca { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--linha); display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: center }
+.confianca span { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--t3) }
+.confianca svg { width: 14px; height: 14px; color: var(--ouro) }
+.depois { margin: 14px 0 0; text-align: center; font-size: 12px; line-height: 1.5; color: var(--t3) }
+.depois a { color: var(--t2) }
+
+.isca { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden }
+.turnstile { min-height: 65px }
+
+/* ---------- entrada animada ---------- */
+.surge { opacity: 0; transform: translateY(18px); animation: surge .9s cubic-bezier(.2, .8, .2, 1) forwards }
+.s1 { animation-delay: .05s } .s2 { animation-delay: .15s } .s3 { animation-delay: .25s } .s4 { animation-delay: .35s } .s5 { animation-delay: .45s }
+@keyframes surge { to { opacity: 1; transform: none } }
+
+/* ---------- celular ---------- */
+@media (max-width: 960px) {
+  .conteudo { grid-template-columns: minmax(0, 1fr); grid-template-areas: "cabeca" "form" "extras"; padding: 6px 16px 48px; row-gap: 26px }
+  .cabeca { padding-top: 6px; text-align: center }
+  .sub { margin-left: auto; margin-right: auto }
+  .pilulas { justify-content: center }
+  .formLado { position: static }
+  .fundoFoto { width: 140vw; inset: 0 -50% auto auto; opacity: .3 }
+}
+@media (max-width: 560px) {
+  .topo { padding: 16px }
+  .marca svg { width: 34px }
+  .marca span { font-size: 12px; letter-spacing: .28em }
+  .topoLink { font-size: 13px }
+  .titulo { font-size: clamp(2.3rem, 11vw, 3rem) }
+  .vitrine { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center }
+  .vitrineNum { justify-content: center }
+  .recursos { grid-template-columns: minmax(0, 1fr) }
+  .duas { grid-template-columns: minmax(0, 1fr) }
+  .passo span { display: none }
+  .passoAtivo span { display: inline }
+  .cartaoBorda { border-radius: 24px }
+  .cartao { border-radius: 22.5px; padding: 22px 18px }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora1, .aurora2, .seg, .ampulheta, .botao::after, .selo i, .surge { animation: none !important }
+  .surge { opacity: 1; transform: none }
+  .seg { opacity: 1 }
+}
