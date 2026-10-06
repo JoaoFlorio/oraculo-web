@@ -1,7 +1,11 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import Carteira from './Carteira'
 import { salvarGeradas, carregarGeradas, limparGeradas } from './idbGeradas'
+import { useVisualNovo } from '../ouro/useVisualNovo'
+import { VazioOuro, IcOuro } from '../ouro/Ouro'
+import o from './NeoChat.ouro.module.css'
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * AGENTE NEO — ambiente premium
@@ -237,7 +241,151 @@ function NeoMark({ size = 46, on = false }: { size?: number; on?: boolean }) {
   )
 }
 
+/* ═══ VISUAL NOVO ("ouro", 05/10/2026 — em validação, só admin vê) ═══════════
+ * Só APRESENTAÇÃO: as peças abaixo são usadas apenas quando useVisualNovo() é
+ * true. Nenhuma lógica nova — mesmos estados e funções do NeoChat. */
+
+// Cores de severidade na paleta do visual novo (mesmos rótulos do SEV).
+const SEV_OURO = { critico: '#FF7A6E', atencao: '#FFC83D', ok: '#3FD79B' } as const
+
+// Íris do NEO (mesma linguagem do olho da Gestão; anéis giram via .ora-iris-ring/.ora-iris-fib).
+const IRIS_ANEL = Array.from({ length: 40 }, (_, i) => {
+  const a = (i / 40) * Math.PI * 2 - Math.PI / 2, on = i % 4 === 0, r2 = on ? 52 : 48
+  return { on, x1: 60 + Math.cos(a) * 44, y1: 60 + Math.sin(a) * 44, x2: 60 + Math.cos(a) * r2, y2: 60 + Math.sin(a) * r2 }
+})
+const IRIS_FIB = Array.from({ length: 56 }, (_, i) => {
+  const a = (i / 56) * Math.PI * 2, r1 = 20 + (i % 3) * 2.2, r2 = 36 - (i % 4)
+  return { forte: i % 5 === 0, x1: 60 + Math.cos(a) * r1, y1: 60 + Math.sin(a) * r1, x2: 60 + Math.cos(a) * r2, y2: 60 + Math.sin(a) * r2 }
+})
+function IrisOuro({ tam = 44, ativo = false }: { tam?: number; ativo?: boolean }) {
+  const rp = 17
+  return (
+    <svg className={`${o.iris}${ativo ? ` ${o.irisAtiva}` : ''}`} width={tam} height={tam} viewBox="0 0 120 120" aria-hidden="true">
+      <g className="ora-iris-ring">
+        {IRIS_ANEL.map((l, i) => (
+          <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke={l.on ? '#FFC83D' : 'rgba(255,231,163,.4)'}
+            strokeWidth={l.on ? 2.4 : 1.2} strokeLinecap="round" opacity={l.on ? 0.95 : 0.6} />
+        ))}
+      </g>
+      <circle cx={60} cy={60} r={38} fill="#FFC83D" opacity={0.1} />
+      <circle cx={60} cy={60} r={38} fill="none" stroke="#FFC83D" strokeWidth={1.4} opacity={0.55} />
+      <g className="ora-iris-fib">
+        {IRIS_FIB.map((l, i) => (
+          <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke="#FFC83D" strokeWidth={0.9} opacity={l.forte ? 0.5 : 0.24} />
+        ))}
+      </g>
+      <circle cx={60} cy={60} r={26} fill="none" stroke="#FFE7A3" strokeWidth={1.1} opacity={0.45} />
+      <circle cx={60} cy={60} r={rp} fill="#07070E" />
+      <circle cx={60} cy={60} r={rp} fill="none" stroke="#FFC83D" strokeWidth={1.6} opacity={0.9} />
+      <circle cx={60 + rp * 0.42} cy={60 - rp * 0.46} r={rp * 0.2} fill="#FFE7A3" opacity={0.85} />
+    </svg>
+  )
+}
+
+// Markdown de leitura (só no visual novo): títulos, listas, tabelas, citação,
+// linha, **negrito** e `código`. Tudo vira texto do React — nada de HTML cru.
+function inlineOuro(t: string): ReactNode[] {
+  const out: ReactNode[] = []
+  const re = /\*\*(.+?)\*\*|`([^`\n]+)`/g
+  let ult = 0, k = 0, m: RegExpExecArray | null
+  while ((m = re.exec(t))) {
+    if (m.index > ult) out.push(t.slice(ult, m.index))
+    out.push(m[1] != null ? <strong key={k++}>{m[1]}</strong> : <code key={k++}>{m[2]}</code>)
+    ult = re.lastIndex
+  }
+  if (ult < t.length) out.push(t.slice(ult))
+  return out
+}
+const RX_TITULO = /^(#{1,6})\s+(.+?)\s*#*$/
+const RX_ITEM = /^(\s*)[-*•]\s+(.*)$/
+const RX_NUM = /^(\s*)(\d+)[.)]\s+(.*)$/
+const RX_LINHA = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/
+const RX_TABELA = /^\s*\|.*\|\s*$/
+const RX_SEP = /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/
+const RX_CITA = /^\s*>\s?(.*)$/
+function MdOuro({ texto }: { texto: string }) {
+  const L = texto.replace(/\r\n?/g, '\n').split('\n')
+  const especial = (s: string) => RX_TITULO.test(s.trim()) || RX_LINHA.test(s) || RX_ITEM.test(s) || RX_NUM.test(s) || RX_TABELA.test(s) || RX_CITA.test(s)
+  const out: ReactNode[] = []
+  let i = 0, k = 0
+  while (i < L.length) {
+    const l = L[i]
+    if (!l.trim()) { i++; continue }
+    const t = RX_TITULO.exec(l.trim())
+    if (t) {
+      const n = t[1].length, txt = inlineOuro(t[2])
+      out.push(n <= 2 ? <h3 key={k++}>{txt}</h3> : n === 3 ? <h4 key={k++}>{txt}</h4> : <h5 key={k++}>{txt}</h5>)
+      i++; continue
+    }
+    if (RX_LINHA.test(l)) { out.push(<hr key={k++} />); i++; continue }
+    if (RX_TABELA.test(l)) {
+      const linhas: string[][] = []
+      while (i < L.length && RX_TABELA.test(L[i])) {
+        if (!RX_SEP.test(L[i])) linhas.push(L[i].trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim()))
+        i++
+      }
+      if (!linhas.length) continue
+      const [cab, ...corpo] = linhas
+      out.push(
+        <div key={k++} className={o.mdTabela}>
+          <table>
+            <thead><tr>{cab.map((c, j) => <th key={j}>{inlineOuro(c)}</th>)}</tr></thead>
+            {corpo.length > 0 && <tbody>{corpo.map((r, ri) => <tr key={ri}>{r.map((c, j) => <td key={j}>{inlineOuro(c)}</td>)}</tr>)}</tbody>}
+          </table>
+        </div>,
+      )
+      continue
+    }
+    if (RX_CITA.test(l)) {
+      const q: string[] = []
+      let c: RegExpExecArray | null
+      while (i < L.length && (c = RX_CITA.exec(L[i]))) { q.push(c[1]); i++ }
+      out.push(<blockquote key={k++}>{q.map((x, j) => <span key={j}>{j > 0 && <br />}{inlineOuro(x)}</span>)}</blockquote>)
+      continue
+    }
+    if (RX_ITEM.test(l) || RX_NUM.test(l)) {
+      const itens: { sub: boolean; num: string | null; txt: string }[] = []
+      while (i < L.length) {
+        const s = L[i]
+        const a = RX_LINHA.test(s) ? null : RX_ITEM.exec(s)
+        const b = a ? null : RX_NUM.exec(s)
+        if (a) itens.push({ sub: a[1].length >= 2, num: null, txt: a[2] })
+        else if (b) itens.push({ sub: b[1].length >= 2, num: b[2], txt: b[3] })
+        else if (itens.length && /^\s{2,}\S/.test(s) && !especial(s)) itens[itens.length - 1].txt += '\n' + s.trim()
+        else break
+        i++
+      }
+      out.push(
+        <ul key={k++} className={o.mdLista}>
+          {itens.map((it, j) => (
+            <li key={j} className={[it.sub ? o.mdSub : '', it.num ? o.mdNumerado : ''].filter(Boolean).join(' ') || undefined}>
+              {it.num && <span className={o.mdNum}>{it.num}.</span>}
+              {it.txt.split('\n').map((x, jj) => <span key={jj}>{jj > 0 && <br />}{inlineOuro(x)}</span>)}
+            </li>
+          ))}
+        </ul>,
+      )
+      continue
+    }
+    const par: string[] = []
+    while (i < L.length && L[i].trim() && !(par.length && especial(L[i]))) { par.push(L[i]); i++ }
+    out.push(<p key={k++}>{par.map((x, j) => <span key={j}>{j > 0 && <br />}{inlineOuro(x)}</span>)}</p>)
+  }
+  return <div className={o.md}>{out}</div>
+}
+
+// Ícones de traço pequenos usados só no visual novo do NEO.
+const IcNeo = {
+  menu: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M4 7h16M4 12h16M4 17h10" /></svg>,
+  seta: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>,
+  lapis: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></svg>,
+  lixo: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13" /></svg>,
+}
+const FONTE_MONO = { fontFamily: "var(--tg-mono),'JetBrains Mono',monospace" }
+
 export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?: boolean; userEmail?: string }) {
+  // Visual novo (só admin, em validação). Só troca a apresentação no fim do componente.
+  const novo = useVisualNovo()
   // Comparação de motores: SÓ admin. O cliente sempre recebe o motor padrão do
   // servidor — ninguém deve cair num motor ainda em avaliação.
   // null = deixa o servidor decidir (AGENT_PROVIDER). Só vira 'claude'/'gemini'
@@ -770,6 +918,389 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
 
   const sev = ins ? SEV[ins.severidade] : null
   const vazio = msgs.length === 0
+
+  // ═══ VISUAL NOVO ("ouro") — mesma lógica, só a apresentação muda ═══
+  if (novo) {
+    const corSev = ins ? SEV_OURO[ins.severidade] : 'rgba(255,200,61,.6)'
+    return (
+      <div className={o.raiz}>
+        {/* Gaveta de chats (multi-chat) */}
+        {chatsAberto && (
+          <div className={o.gaveta}>
+            <div className={o.gavetaFundo} onClick={() => setChatsAberto(false)} />
+            <aside className={o.gavetaPainel}>
+              <div className={o.gavetaCab}>
+                <span className={o.gavetaTit}>Seus chats</span>
+                <button className={o.gavetaX} onClick={() => setChatsAberto(false)} aria-label="Fechar">×</button>
+              </div>
+              <button className={`ouro-botao ${o.gavetaNovo}`} onClick={novoChat}>+ Novo chat</button>
+              <div className={o.gavetaLista}>
+                {conversas.length === 0 && <div className={o.gavetaVazia}>Nenhuma conversa ainda.<br />Comece a falar com o NEO — cada chat vira um tópico aqui.</div>}
+                {conversas.map((c) => (
+                  <div key={c.id} className={`${o.conv}${c.id === conversaId ? ` ${o.convOn}` : ''}`} onClick={() => abrirConversa(c.id)}>
+                    <span className={o.convT}>{c.titulo || 'Conversa'}</span>
+                    <span className={o.convAcoes}>
+                      <button title="Renomear" aria-label="Renomear" onClick={(e) => { e.stopPropagation(); renomearChat(c.id, c.titulo) }}>{IcNeo.lapis}</button>
+                      <button title="Apagar" aria-label="Apagar" onClick={(e) => { e.stopPropagation(); apagarChat(c.id) }}>{IcNeo.lixo}</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {/* Topo: chats · identidade do NEO · motor/voz/créditos */}
+        <header className={o.topo}>
+          <div className={o.topoIn}>
+            <div className={o.topoEsq}>
+              {!chatsAberto && (
+                <button className={o.botaoSec} onClick={() => { void carregarConversas(); setChatsAberto(true) }} title="Seus chats por tópico">
+                  {IcNeo.menu}<span className={o.someMobile}>Chats</span>
+                </button>
+              )}
+            </div>
+
+            <div className={o.marca}>
+              <IrisOuro tam={46} ativo={loading || falando} />
+              <div className={o.marcaTxt}>
+                <div className={o.marcaNome}>Agente <em>NEO</em></div>
+                <div className={o.marcaSub}>
+                  <span className={`${o.ponto}${loading ? ` ${o.pontoAtivo}` : ''}`} aria-hidden="true" />
+                  {loading ? 'Analisando sua operação' : 'Inteligência do Oráculo'}
+                </div>
+              </div>
+            </div>
+
+            <div className={o.topoAcoes}>
+              {isAdmin && (
+                <div className={o.motor} title={motor
+                  ? 'Motor escolhido por você para as próximas perguntas (só você vê)'
+                  : 'Usando o motor padrão do servidor. Clique para forçar um específico e comparar.'}>
+                  {(['claude', 'gemini'] as const).map((m) => (
+                    <button key={m} className={(motor ?? motorAtivo) === m ? o.motorOn : ''} style={FONTE_MONO}
+                      onClick={() => setMotor(motor === m ? null : m)} disabled={loading}>
+                      {m === 'claude' ? 'Claude' : 'Gemini'}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {VOZ_SAIDA && 'speechSynthesis' in (typeof window !== 'undefined' ? window : {} as any) && (
+                <button
+                  className={`${o.botaoSec}${vozAtiva ? ` ${o.vozOn}` : ''}`}
+                  onClick={() => {
+                    if (vozAtiva) { try { window.speechSynthesis.cancel() } catch {} ; setFalando(false) }
+                    setVozAtiva((v) => !v)
+                  }}
+                  title={vozAtiva ? 'NEO responde em voz alta — clique para silenciar' : 'Fazer o NEO responder em voz alta'}
+                >
+                  <span aria-hidden="true">{vozAtiva ? '◉' : '○'}</span> <span className={o.someMobile}>{vozAtiva ? 'Voz ativa' : 'Voz'}</span>
+                </button>
+              )}
+              {VOZ_SAIDA && vozAtiva && vozes.length > 1 && (
+                <select className={o.vozSel} value={vozNome} title="Trocar a voz do NEO"
+                  onChange={(e) => {
+                    const nome = e.target.value
+                    setVozNome(nome)
+                    try { localStorage.setItem('neo_voz', nome) } catch {}
+                    const v = vozes.find((x) => x.name === nome)
+                    if (v) {
+                      const u = new SpeechSynthesisUtterance('Bora. Sem rodeio, olha o número.')
+                      u.voice = v; u.lang = 'pt-BR'; u.rate = 1.06; u.pitch = 0.92
+                      window.speechSynthesis.cancel(); window.speechSynthesis.speak(u)
+                    }
+                  }}>
+                  {vozes.map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
+                </select>
+              )}
+
+              {/* Saldo de créditos — some sozinho enquanto a carteira está desligada */}
+              <Carteira />
+            </div>
+          </div>
+        </header>
+
+        {/* Sem NENHUMA loja conectada */}
+        {semConexao && (
+          <div className={o.rolagem}>
+            <div className={`${o.coluna} ${o.fio}`}>
+              <div className={`ouro-cartao ${o.semLoja}`}>
+                <VazioOuro icone={IcOuro.link} titulo="Conecte sua loja primeiro" texto={<>
+                  O NEO trabalha em cima dos seus números reais — faturamento, margem, estoque, anúncios. Sem uma loja conectada ele estaria chutando, e chute não ajuda ninguém.
+                  <br /><br />
+                  Vá em <b>Gestão</b> no menu e conecte sua conta da <b>Amazon</b> ou do <b>Mercado Livre</b>. Leva um minuto. Dúvida sobre o Oráculo? Use o botão <b>Suporte</b> no canto da tela.
+                </>} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!semConexao && (
+          <>
+            {/* Alerta do dia — recolhido por padrão; clicou, abre. */}
+            {(carregandoIns || (ins && !insOculto)) && (
+              <div className={o.faixa}>
+                <div className={o.coluna}>
+                  <div className={`${o.alerta}${insAberto ? ` ${o.alertaAberto}` : ''}`} style={{ ['--sev' as any]: corSev }}>
+                    {carregandoIns ? (
+                      <div className={o.alertaBarra} style={{ cursor: 'default' }}>
+                        <span className={o.alertaPonto} />
+                        <span className={o.alertaRot}>Lendo sua operação…</span>
+                      </div>
+                    ) : ins && sev ? (
+                      <>
+                        <button className={o.alertaBarra} onClick={() => setInsAberto((v) => !v)}
+                          aria-expanded={insAberto} title={insAberto ? 'Recolher' : 'Ver o diagnóstico'}>
+                          <span className={o.alertaIc} aria-hidden="true">{ins.severidade === 'ok' ? IcOuro.escudo : IcOuro.alvo}</span>
+                          <span className={o.alertaTxts}>
+                            <span className={o.alertaRot}>{sev.rotulo}</span>
+                            {!insAberto && <span className={o.alertaPrev}>{primeiraFrase(ins.texto)}</span>}
+                          </span>
+                          <span className={o.alertaSeta} aria-hidden="true">{IcNeo.seta}</span>
+                        </button>
+                        {insAberto && (
+                          <div className={o.alertaCorpo}>
+                            <MdOuro texto={ins.texto} />
+                            <div className={o.alertaAcoes}>
+                              <button className="ouro-botao" onClick={resolverInsight} disabled={loading}>Bora resolver <span aria-hidden="true">→</span></button>
+                              <button className={o.botaoSec} style={{ height: 42 }} onClick={dispensarInsight}>Depois</button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Conversa */}
+            <div ref={scrollRef} className={o.rolagem}>
+              <div className={`${o.coluna} ${o.fio}`}>
+                {vazio && !loading && (
+                  <div className={o.vazio}>
+                    <VazioOuro icone={IcOuro.brilho} titulo="Sem rodeio. Olha o número."
+                      texto="Eu leio a sua operação de verdade — DRE, estoque, anúncios, histórico — e te aponto a decisão. Pergunta."
+                      acao={
+                        <div className={o.sugestoes}>
+                          {SUGESTOES.map((s) => <button key={s} className={o.sugestao} onClick={() => enviar(s)}>{s}</button>)}
+                        </div>
+                      } />
+                  </div>
+                )}
+
+                {msgs.map((m, i) =>
+                  m.role === 'user' ? (
+                    <div key={i} className={o.msgVc}>
+                      {m.images?.map((im, k) => (
+                        /jpe?g|png|webp|gif/i.test(im.mediaType)
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img key={k} className={o.msgImg} src={`data:${im.mediaType};base64,${im.data}`} alt="anexo" />
+                          : <span key={k} className={o.msgImgSelo}>🖼 foto</span>
+                      ))}
+                      {m.text}
+                    </div>
+                  ) : (
+                    <div key={i} className={o.msgNeo}>
+                      <div className={o.msgNeoCab}><i aria-hidden="true" />NEO</div>
+                      {m.geradas?.length ? (
+                        <div className={o.gerGrade}>
+                          {m.geradas.map((g, k) => (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <a key={k} className={o.gerCard} href={`data:${g.mediaType};base64,${g.data}`} download={`anuncio-${k + 1}.png`} title={`${g.rotulo} — baixar`}>
+                              <img src={`data:${g.mediaType};base64,${g.data}`} alt={g.rotulo} />
+                              <span>{g.rotulo} ⬇</span>
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                      {m.videos?.length ? (
+                        <div className={o.gerGrade}>
+                          {m.videos.map((v) => (
+                            <div key={v.id} className={o.gerCard} title={v.rotulo}>
+                              <video className={o.gerVideo} controls playsInline preload="metadata" src={`data:${v.mediaType};base64,${v.data}`} />
+                              <a className={o.gerBaixar} href={`data:${v.mediaType};base64,${v.data}`} download={`video-${v.id}.mp4`}>🎬 {v.rotulo} ⬇ baixar mp4</a>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+                      {(m.videoJobs?.length || 0) > (m.videos?.length || 0) ? (
+                        <div className={o.producao}>
+                          <span className={o.giro} aria-hidden="true" />
+                          🎬 Vídeo em produção — chega aqui sozinho em ~1-3 min…
+                        </div>
+                      ) : null}
+                      <MdOuro texto={m.text} />
+                      {isAdmin && m.ficha?.provider && (
+                        <div className={o.ficha}>
+                          {m.ficha.provider === 'gemini' ? 'Gemini' : 'Claude'} · {m.ficha.model}
+                          {m.ficha.ms ? ` · ${(m.ficha.ms / 1000).toFixed(1)}s` : ''}
+                          {m.ficha.tokensEntrada ? ` · ${milhar(m.ficha.tokensEntrada)} entrada${
+                            m.ficha.tokensCache ? ` (${Math.round(m.ficha.tokensCache / m.ficha.tokensEntrada * 100)}% cache)` : ''
+                          }` : ''}
+                          {m.ficha.tokensSaida ? ` · ${milhar(m.ficha.tokensSaida)} saída` : ''}
+                          {typeof m.ficha.custoBrl === 'number'
+                            ? ` · R$ ${m.ficha.custoBrl.toFixed(m.ficha.custoBrl < 0.1 ? 3 : 2).replace('.', ',')}`
+                            : ''}
+                        </div>
+                      )}
+                    </div>
+                  )
+                )}
+
+                {loading && (
+                  <div className={o.digitando}>
+                    <IrisOuro tam={26} ativo />
+                    <span className={o.digitandoTxt}>{seg > 25 ? 'Cruzando os dados' : 'Lendo seus números'}</span>
+                    <span className={o.scan} />
+                    {seg > 6 && <span className={o.digitandoSeg}>{seg}s</span>}
+                  </div>
+                )}
+                {erro && (
+                  <div className={o.erro}>
+                    {erro}
+                    {ultimoEnvioRef.current && (
+                      <button className={o.botaoSec} onClick={tentarNovamente} disabled={loading}>Tentar de novo</button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Rodapé: anexos · catálogo · atalhos · entrada */}
+            <div className={o.rodape}>
+              <div className={o.coluna}>
+                {pend.length > 0 && (
+                  <div className={o.anexos}>
+                    {pend.map((im, k) => (
+                      <div key={k} className={o.anexo}>
+                        {/jpe?g|png|webp|gif/i.test(im.mediaType)
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={`data:${im.mediaType};base64,${im.data}`} alt="anexo" />
+                          : <span className={o.anexoSelo}>🖼<br />foto</span>}
+                        <button className={o.anexoX} onClick={() => setPend((p) => p.filter((_, j) => j !== k))} aria-label="remover">×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Catálogo de fornecedor: upload/extração, amostra e varredura */}
+                {catalogo && (
+                  <div className={o.catalogo}>
+                    <button className={o.catalogoX} onClick={() => setCatalogo(null)} aria-label="fechar">×</button>
+                    {catalogo.status === 'enviando' && (
+                      <div className={o.catalogoLinha}>
+                        <span className={o.catalogoIc} aria-hidden="true">{IcOuro.pdf}</span>
+                        <span>Enviando <b>{catalogo.nome_arquivo}</b>… <span className={o.catalogoDim}>(catálogo grande leva um minuto)</span> <span className={o.catalogoOuro}>· a leitura custa 10 créditos</span></span>
+                      </div>
+                    )}
+                    {catalogo.status === 'extraindo' && (() => {
+                      const pt = Number(catalogo.paginas_total) || 0, pl = Number(catalogo.paginas_lidas) || 0
+                      const pct = pt > 0 ? Math.min(100, Math.round((pl / pt) * 100)) : null
+                      const txt = catalogo.etapa === 'subindo'
+                        ? 'subindo o PDF pro NEO…'
+                        : pt > 0 ? `lendo página ${pl}/${pt}…` : 'lendo o catálogo…'
+                      return (
+                        <>
+                          <div className={o.catalogoLinha}>
+                            <span className={o.giro} aria-hidden="true" />
+                            <span><b>{catalogo.nome_arquivo}</b>: {txt} <span className={o.catalogoDim}>(pode continuar usando o chat)</span>{catalogo.creditos ? <span className={o.catalogoOuro}> · 💳 {catalogo.creditos} créditos cobrados</span> : null}</span>
+                          </div>
+                          {pct != null && <div className={o.catalogoBarra}><div style={{ width: `${pct}%` }} /></div>}
+                        </>
+                      )
+                    })()}
+                    {catalogo.status === 'erro' && (
+                      <div className={o.catalogoLinha}>
+                        <span className={o.catalogoIc} aria-hidden="true">{IcOuro.pdf}</span>
+                        <span><b>{catalogo.nome_arquivo}</b>: <span className={o.catalogoErro}>❌ {catalogo.erro || 'não consegui extrair'}</span></span>
+                      </div>
+                    )}
+                    {catalogo.status === 'pronto' && (
+                      <>
+                        <div className={o.catalogoLinha}>
+                          <span className={o.catalogoIc} aria-hidden="true">{IcOuro.pdf}</span>
+                          <span><b>{catalogo.nome_arquivo}</b>: <span className={o.catalogoOk}>✅ {catalogo.total} produtos</span> extraídos.</span>
+                        </div>
+                        {Array.isArray(catalogo.amostra) && catalogo.amostra.length > 0 && (
+                          <div className={o.catalogoAmostra}>
+                            Confere a leitura: {catalogo.amostra.slice(0, 3).map((p: any) => `${p.nome} — R$ ${Number(p.custoUn).toFixed(2).replace('.', ',')}/un${p.pcx ? ` (${p.pcx}/cx)` : ''}`).join(' · ')}
+                          </div>
+                        )}
+                        <div className={o.catalogoAcoes}>
+                          <button className={o.catalogoBtn} onClick={() => enviar('Minera meu fornecedor: pega os melhores produtos do catálogo que eu subi e aplica os 3 pilares na Amazon.')}>
+                            ⛏️ Minerar este catálogo
+                          </button>
+                          {!catalogo.varredura || catalogo.varredura.status === 'erro' ? (
+                            <button className={`${o.botaoSec} ${o.catalogoBtnSec}`} onClick={dispararVarredura}>
+                              🔍 Varrer o catálogo INTEIRO (~30 min)
+                            </button>
+                          ) : catalogo.varredura.status === 'rodando' ? (
+                            <span className={o.catalogoDim} style={{ fontSize: 12.5 }}>
+                              🔍 Varrendo na Amazon: <b>{catalogo.varredura.progresso}/{catalogo.varredura.total}</b>… (pode fechar, continua sozinho)
+                            </span>
+                          ) : (
+                            <button className={o.catalogoBtnOk} onClick={() => enviar('Me mostra o resultado da varredura completa do meu catálogo de fornecedor.')}>
+                              ✅ Varredura pronta: {Number(catalogo.varredura.oportunidades) || 0} oportunidades — ver resultado
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                    {catalogo.status === 'erro' && catalogo.varredura?.status === 'erro' && (
+                      <div className={o.catalogoAmostra}>{catalogo.varredura.erro}</div>
+                    )}
+                  </div>
+                )}
+
+                <div className={o.atalhos}>
+                  <button className={o.atalho} onClick={() => {
+                    // Mesmo atalho do visual antigo: escreve a frase pronta e foca o campo.
+                    setInput('Cria o anúncio completo desse produto: ')
+                    setTimeout(() => { const el = inputRef.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length) } }, 30)
+                  }}>{IcOuro.brilho} Criar anúncio completo</button>
+                  <a className={o.atalhoLink} href={GPT_AGENT_URL} target="_blank" rel="noreferrer">ou usar o Agente GPT ↗</a>
+                </div>
+
+                {/* Barra de entrada (pílula) */}
+                <div className={`${o.barra}${gravando ? ` ${o.barraGravando}` : ''}`}>
+                  {msgs.length > 0 && (
+                    <button className={o.icone} onClick={limparConversa} disabled={loading}
+                      title="Nova conversa (apaga o histórico salvo)" aria-label="Nova conversa">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7m0 5h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    </button>
+                  )}
+                  <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={(e) => anexar(e.target.files)} />
+                  <button className={o.icone} onClick={() => fileRef.current?.click()} disabled={loading || pend.length >= MAX_IMGS} title="Anexar imagem ou catálogo do fornecedor (PDF)" aria-label="Anexar imagem">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20 11.5 12.6 19a5.1 5.1 0 0 1-7.2-7.2l8-8a3.4 3.4 0 0 1 4.8 4.8l-7.8 7.8a1.7 1.7 0 0 1-2.4-2.4l7-7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
+                  </button>
+                  {suportaMic && (
+                    <button className={`${o.icone}${gravando ? ` ${o.iconeGravando}` : ''}`} onClick={toggleMic} disabled={loading}
+                      title={gravando ? 'Gravando — clique para parar' : 'Falar com o NEO'} aria-label="Falar">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="9" y="3" width="6" height="11" rx="3" stroke="currentColor" strokeWidth="1.7"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/></svg>
+                    </button>
+                  )}
+                  <input
+                    ref={inputRef}
+                    className={o.campo}
+                    value={input}
+                    placeholder={gravando ? 'Ouvindo você…' : 'Pergunte sobre sua operação…'}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') enviar(input) }}
+                    disabled={loading}
+                  />
+                  <button className={`ouro-botao ${o.enviar}`} onClick={() => enviar(input)} disabled={loading} aria-label="Enviar">
+                    {loading ? <span className="ouro-gira" aria-hidden="true" /> : <><span className={o.someMobile}>Enviar</span><span aria-hidden="true">→</span></>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="neoRoot">

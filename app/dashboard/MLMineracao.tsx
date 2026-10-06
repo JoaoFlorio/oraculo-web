@@ -1,5 +1,8 @@
 'use client'
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useVisualNovo } from './ouro/useVisualNovo'
+import { CabecalhoOuro, BuscaOuro, VazioOuro, IcOuro } from './ouro/Ouro'
+import o from './MLMineracao.ouro.module.css'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mineração MERCADO LIVRE — o MESMO design da mineração da Amazon ("Mais
@@ -63,9 +66,93 @@ const mInfo = (m: number | null) => m == null ? null : m >= 70 ? { l: 'Margem Al
 
 export function CardProduto({ p, onOpen, saved, onToggleSave }: { p: Produto; onOpen: () => void; saved?: boolean; onToggleSave?: () => void }) {
   const [hov, setHov] = useState(false)
+  const novo = useVisualNovo()
   const score = mlScore(p)
   const dem = mInfo(p.margemPct)
   const mCor = p.margemPct == null ? T.t3 : p.margemPct >= 70 ? T.g : p.margemPct >= 55 ? T.gold : T.a
+  if (novo) {
+    return (
+      <div onClick={onOpen} className={o.card}
+        role="button" tabIndex={0} title={p.sinais[0] || undefined}
+        aria-label={`Ver análise de ${p.nome || 'produto'}`}
+        onKeyDown={e => { if (e.key === 'Enter') onOpen() }}>
+        <div className={o.foto}>
+          {p.foto
+            ? <img src={p.foto} alt="" loading="lazy" decoding="async" onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            : <span className={o.fotoVazia} aria-hidden="true">{IcOuro.caixa}</span>}
+          {p.revendavel && <span className={o.generico}>Genérico</span>}
+          <span className={o.score} title={`Score ${score}/100`}><ScoreRing score={score} /></span>
+          {onToggleSave && (
+            <button type="button" onClick={e => { e.stopPropagation(); onToggleSave() }}
+              className={`${o.salvar}${saved ? ` ${o.salvarOn}` : ''}`}
+              title={saved ? 'Remover dos salvos' : 'Salvar este produto'} aria-label={saved ? 'Remover dos salvos' : 'Salvar este produto'} aria-pressed={saved}>
+              <svg viewBox="0 0 24 24" fill={saved ? 'currentColor' : 'none'} aria-hidden="true">
+                <path d="M6.5 4.5h11a1 1 0 0 1 1 1V20l-6.5-3.8L5.5 20V5.5a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" />
+              </svg>
+              {saved ? 'Salvo' : 'Salvar'}
+            </button>
+          )}
+        </div>
+        <div className={o.corpo}>
+          {p.margemPct != null ? (
+            <>
+              <span className={o.kicker}>Líquido após taxas</span>
+              <div className={o.hero}>
+                <span className={o.heroNum} style={{ color: mCor }}>{p.margemPct}%</span>
+                {dem && <span className={o.heroPilula} style={{ color: dem.c, background: tint(dem.c, 13), border: `1px solid ${tint(dem.c, 30)}` }}>{dem.l}</span>}
+              </div>
+              <div className={o.recebe}>Você recebe <b>{p.voceRecebe != null ? brl(p.voceRecebe) : '—'}</b></div>
+            </>
+          ) : (
+            <>
+              <span className={o.kicker}>Líquido após taxas</span>
+              <div className={o.semMedida}>líquido não medido</div>
+            </>
+          )}
+          <p className={o.nome}>{p.nome || '—'}</p>
+          <dl className={o.dados}>
+            <div className={o.dado}>
+              <dt className={o.kicker}>Preço</dt>
+              <dd>{p.preco > 0 ? brl(p.preco) : '—'}</dd>
+            </div>
+            {p.pos > 0 && (
+              <div className={o.dado}>
+                <dt className={o.kicker}>Ranking</dt>
+                <dd title={p.fonteNome || undefined}>{p.pos}º <small>{p.fonteNome || 'no ranking'}</small></dd>
+              </div>
+            )}
+            {p.marca && (
+              <div className={`${o.dado}${p.pos > 0 ? ` ${o.dadoLargo}` : ''}`}>
+                <dt className={o.kicker}>Marca</dt>
+                <dd title={p.marca}>{p.marca}</dd>
+              </div>
+            )}
+          </dl>
+          {p.custoAlvo && p.custoAlvo.m30 > 0 && (
+            <div className={o.compre}>
+              <span className={o.kicker}>Compre até</span>
+              <div className={o.compreGrade}>
+                {([['20%', p.custoAlvo.m20], ['30%', p.custoAlvo.m30], ['40%', p.custoAlvo.m40]] as Array<[string, number]>).map(([m, v]) => (
+                  <div key={m} className={o.compreCel}>
+                    <span>{m}</span>
+                    <b style={{ color: v > 0 ? undefined : '#7E796E' }}>{v > 0 ? brl(v) : '—'}</b>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className={o.rodape}>
+            <div className={o.ver}>
+              <span>Ver análise</span>
+              <span className={o.verSeta} aria-hidden="true">
+                <svg width="11" height="11" viewBox="0 0 10 10" fill="none"><path d="M2 5h6M5.5 2.5L8 5l-2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div onClick={onOpen} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       role="button" tabIndex={0} title={p.sinais[0] || undefined}
@@ -156,6 +243,17 @@ function SkeletonCard({ i }: { i: number }) {
   </div>
 }
 
+function SkeletonOuro({ i }: { i: number }) {
+  return (
+    <div className={o.esqueleto} style={{ animationDelay: `${i * .05}s` }} aria-hidden="true">
+      <div className={o.esqueletoFoto} />
+      <div className={o.esqueletoLinha} style={{ width: '45%' }} />
+      <div className={o.esqueletoLinha} style={{ width: '85%', opacity: .7 }} />
+      <div className={o.esqueletoLinha} style={{ width: '65%', opacity: .5, marginBottom: 10 }} />
+    </div>
+  )
+}
+
 // CSV do garimpo (espelha o exportCSV da Amazon).
 function exportCSV(produtos: Produto[], catNome: string) {
   const linhas = [
@@ -180,7 +278,10 @@ const ferramenta: React.CSSProperties = { display: 'flex', alignItems: 'center',
 
 /* ── Modal de análise do produto — espelho do DetailModal da mineração Amazon ── */
 function Chip({ text, c }: { text: string; c: string }) { return <span style={{ background: tint(c, 9), color: c, border: `1px solid ${tint(c, 16)}`, borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 600, letterSpacing: '0.03em' }}>{text}</span> }
-function Lbl({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) { return <div style={{ fontSize: 9, fontWeight: 700, color: T.t3, letterSpacing: '0.14em', textTransform: 'uppercase' as const, ...style }}>{children}</div> }
+function Lbl({ children, style, ouro }: { children: React.ReactNode; style?: React.CSSProperties; ouro?: boolean }) { return <div style={{ fontSize: 9, fontWeight: 700, color: T.t3, letterSpacing: '0.14em', textTransform: 'uppercase' as const, ...(ouro ? LBL_OURO : {}), ...style }}>{children}</div> }
+// Visual novo: rótulos em mono, kicker dourado claro (só aplicado quando `ouro`/`novo` é true).
+const LBL_OURO: React.CSSProperties = { fontFamily: 'var(--tg-mono), "JetBrains Mono", monospace', fontSize: 10.5, letterSpacing: '0.16em', color: '#FFE7A3' }
+const NUM_OURO: React.CSSProperties = { fontFamily: 'var(--tg-display), "Archivo", sans-serif', fontStretch: '108%', fontWeight: 800, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }
 const fmtN = (n: number) => Math.round(n).toLocaleString('pt-BR')
 const fmtR = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
@@ -234,6 +335,7 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
   const [det, setDet] = useState<Detalhe | null>(null)
   const [price, setPrice] = useState(p.preco || 0)
   const [cost, setCost] = useState(0)
+  const novo = useVisualNovo()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -354,14 +456,15 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
   return (
     <div onClick={e => e.target === e.currentTarget && onClose()}
       style={{ position: 'fixed', inset: 0, background: 'rgba(1,1,8,0.92)', backdropFilter: 'blur(12px)', zIndex: 900, overflowY: 'auto', padding: '32px 16px', display: 'flex', alignItems: 'flex-start', justifyContent: 'center' }}>
-      <div style={{ width: '100%', maxWidth: 860, background: T.modal, border: `1px solid ${T.line}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 40px 80px rgba(0,0,0,0.8)' }}>
+      <div className={novo ? o.modal : undefined} style={{ width: '100%', maxWidth: 860, background: T.modal, border: `1px solid ${T.line}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 40px 80px rgba(0,0,0,0.8)' }}>
         {/* Header */}
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', padding: '24px 28px', borderBottom: `1px solid ${T.line}`, background: 'linear-gradient(180deg,rgba(240,180,41,0.04) 0%,transparent 100%)' }}>
-          <div style={{ width: 84, height: 84, background: '#F8F8F8', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            {imagens[0] ? <img src={imagens[0]} alt="" loading="lazy" style={{ maxWidth: 70, maxHeight: 70, objectFit: 'contain' }} /> : <div style={{ width: 32, height: 32, background: '#e0e0e0', borderRadius: 6 }} />}
+        <div className={novo ? o.mCab : undefined} style={{ display: 'flex', gap: 20, alignItems: 'flex-start', padding: '24px 28px', borderBottom: `1px solid ${T.line}`, background: 'linear-gradient(180deg,rgba(240,180,41,0.04) 0%,transparent 100%)' }}>
+          <div className={novo ? o.mFoto : undefined} style={{ width: 84, height: 84, background: '#F8F8F8', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {imagens[0] ? <img src={imagens[0]} alt="" loading="lazy" style={{ maxWidth: novo ? '82%' : 70, maxHeight: novo ? '82%' : 70, objectFit: 'contain' }} /> : <div style={{ width: 32, height: 32, background: '#e0e0e0', borderRadius: 6 }} />}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ fontSize: 15, fontWeight: 600, color: T.t1, lineHeight: 1.55, marginBottom: 12, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>{det?.titulo || p.nome}</p>
+            {novo && <span className={o.mKicker}>Análise do produto · Mercado Livre</span>}
+            <p className={novo ? o.mTitulo : undefined} style={{ fontSize: 15, fontWeight: 600, color: T.t1, lineHeight: 1.55, marginBottom: 12, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>{det?.titulo || p.nome}</p>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
               {p.itemId && <Chip text={p.itemId} c={T.t3} />}
               {p.fonteNome && <Chip text={p.fonteNome} c={T.gold} />}
@@ -369,10 +472,10 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
               {p.listingType && <Chip text={p.listingType === 'gold_pro' ? 'Premium' : 'Clássico'} c={T.t3} />}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: `1px solid ${T.line}`, color: T.t2, width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 12, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>✕</button>
+          <button onClick={onClose} aria-label={novo ? 'Fechar' : undefined} className={novo ? o.mFechar : undefined} style={{ background: 'none', border: `1px solid ${T.line}`, color: T.t2, width: 32, height: 32, borderRadius: 8, cursor: 'pointer', fontSize: 12, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'inherit' }}>✕</button>
         </div>
         {/* KPIs */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderBottom: `1px solid ${T.line}` }}>
+        <div className={novo ? o.mKpis : undefined} style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', borderBottom: `1px solid ${T.line}` }}>
           {[
             { v: p.pos > 0 ? `#${p.pos}` : '—', l: 'Ranking do ML', c: T.t1, num: true },
             { v: estMensal != null ? `~${fmtN(estMensal)}/mês` : (vendidos != null ? `${fmtN(vendidos)}` : '—'), l: estMensal != null ? 'Média real de vendas' : (vendidos != null ? 'Vendidos (total)' : 'Vendas'), c: dem.c, num: true },
@@ -380,14 +483,14 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
             { v: det ? `${score}/100` : '…', l: 'Score do Anúncio', c: sc, num: true },
           ].map((k, i) => (
             <div key={i} style={{ padding: '18px 20px', borderRight: i < 3 ? `1px solid ${T.line}` : 'none', textAlign: 'center' as const }}>
-              <div className={k.num ? 'ora-num' : undefined} style={{ fontSize: 20, fontWeight: 700, color: k.c, letterSpacing: '-0.02em', marginBottom: 4, lineHeight: 1 }}>{k.v}</div>
-              <div style={{ fontSize: 9, color: T.t3, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const }}>{k.l}</div>
+              <div className={novo ? o.mKpiNum : k.num ? 'ora-num' : undefined} style={{ fontSize: 20, fontWeight: 700, color: k.c, letterSpacing: '-0.02em', marginBottom: 4, lineHeight: 1 }}>{k.v}</div>
+              <div className={novo ? o.mKpiLbl : undefined} style={{ fontSize: 9, color: T.t3, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const }}>{k.l}</div>
             </div>
           ))}
         </div>
         {/* Score breakdown */}
         <div style={{ padding: '16px 28px', borderBottom: `1px solid ${T.line}`, background: tint(T.card, 50) }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: T.t3, letterSpacing: '0.14em', textTransform: 'uppercase' as const, marginBottom: 12 }}>Score do Anúncio — Critérios Reais</div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: T.t3, letterSpacing: '0.14em', textTransform: 'uppercase' as const, marginBottom: 12, ...(novo ? LBL_OURO : {}) }}>Score do Anúncio — Critérios Reais</div>
           <div className="ora-mlbr" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8 }}>
             {breakdown.map(b => {
               const pctB = Math.round((b.score / b.max) * 100)
@@ -396,7 +499,7 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
                 <div key={b.key} style={{ background: T.bg, borderRadius: 10, padding: '10px 12px', border: `1px solid ${T.line}` }}>
                   <div style={{ marginBottom: 4 }}><i className={`ti ${b.icon}`} style={{ fontSize: 15, color: c }} aria-hidden="true" /></div>
                   <div style={{ fontSize: 9, color: T.t3, fontWeight: 600, letterSpacing: '0.08em', marginBottom: 6 }}>{b.label}</div>
-                  <div className="ora-num" style={{ fontSize: 14, fontWeight: 700, color: c, marginBottom: 4 }}>{b.score}<span style={{ fontSize: 9, color: T.t3, fontWeight: 400 }}>/{b.max}</span></div>
+                  <div className={novo ? o.mNum : 'ora-num'} style={{ fontSize: novo ? 18 : 14, fontWeight: 700, color: c, marginBottom: 4 }}>{b.score}<span style={{ fontSize: 9, color: T.t3, fontWeight: 400 }}>/{b.max}</span></div>
                   <div style={{ height: 3, background: T.card, borderRadius: 99, overflow: 'hidden' }}>
                     <div style={{ height: '100%', width: `${pctB}%`, background: c, borderRadius: 99, transition: 'width 0.6s ease' }} />
                   </div>
@@ -407,15 +510,15 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
           </div>
         </div>
         {/* Idade + faturamento */}
-        <div style={{ padding: '14px 28px', borderBottom: `1px solid ${T.line}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className={novo ? o.mDuas : undefined} style={{ padding: '14px 28px', borderBottom: `1px solid ${T.line}`, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: 10, padding: '12px 16px' }}>
             <div style={{ fontSize: 9, color: T.t3, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}><i className="ti ti-clock" style={{ fontSize: 12 }} aria-hidden="true" /> Idade do Anúncio</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: T.t1, letterSpacing: '-0.02em' }}>{idade || (det ? '—' : '…')}</div>
+            <div className={novo ? o.mNum : undefined} style={{ fontSize: novo ? 22 : 18, fontWeight: 700, color: T.t1, letterSpacing: '-0.02em' }}>{idade || (det ? '—' : '…')}</div>
             <div style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{det?.dateCreated ? `Data real da API do ML (${new Date(det.dateCreated).toLocaleDateString('pt-BR')})` : det ? 'o ML não expõe a data deste anúncio de catálogo' : 'carregando o anúncio…'}</div>
           </div>
           <div style={{ background: T.bg, border: `1px solid ${T.line}`, borderRadius: 10, padding: '12px 16px' }}>
             <div style={{ fontSize: 9, color: T.t3, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}><i className="ti ti-cash" style={{ fontSize: 12, color: T.gold }} aria-hidden="true" /> Faturamento Anual Est.</div>
-            <div className="ora-num" style={{ fontSize: 18, fontWeight: 700, color: T.gold, letterSpacing: '-0.02em' }}>{estMensal != null ? `R$ ${fmtN(estMensal * p.preco * 12)}` : '—'}</div>
+            <div className={novo ? o.mNum : 'ora-num'} style={{ fontSize: novo ? 22 : 18, fontWeight: 700, color: T.gold, letterSpacing: '-0.02em' }}>{estMensal != null ? `R$ ${fmtN(estMensal * p.preco * 12)}` : '—'}</div>
             <div style={{ fontSize: 10, color: T.t3, marginTop: 2 }}>{estMensal != null ? `~${fmtN(estMensal)} un/mês × R$ ${fmtR(p.preco)} × 12` : 'o ML não publica o giro deste anúncio'}</div>
           </div>
         </div>
@@ -424,7 +527,7 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
           {p.pos > 0 && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Lbl>Ranking no Mercado Livre</Lbl>
+                <Lbl ouro={novo}>Ranking no Mercado Livre</Lbl>
                 <span style={{ fontSize: 10, color: T.t3 }}>posição menor = produto mais vendido</span>
               </div>
               <div style={{ height: 6, background: T.card, borderRadius: 99, position: 'relative', overflow: 'hidden' }}>
@@ -435,14 +538,14 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
           )}
           {/* Simulador */}
           <div>
-            <Lbl style={{ marginBottom: 14 }}>Simulador de Lucratividade</Lbl>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+            <Lbl ouro={novo} style={{ marginBottom: 14 }}>Simulador de Lucratividade</Lbl>
+            <div className={novo ? o.mDuas : undefined} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
               {[{ l: 'Preço de Venda (R$)', v: price, s: setPrice, isPrice: true }, { l: 'Custo do Produto (R$)', v: cost, s: setCost, isPrice: false }].map(f => (
                 <div key={f.l} style={{ background: T.bg, border: `1px solid ${T.lineG}`, borderRadius: 10, padding: '12px 16px' }}>
                   <div style={{ fontSize: 9, color: T.t3, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 8 }}>{f.l}</div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                     <span style={{ fontSize: 13, color: T.t3, fontWeight: 500 }}>R$</span>
-                    <input type="number" min={0} value={f.v} onChange={e => f.s(+e.target.value || 0)} style={{ background: 'none', border: 'none', color: T.gold, fontSize: 22, fontWeight: 700, width: '100%', outline: 'none', fontFamily: 'inherit' }} />
+                    <input type="number" min={0} value={f.v} onChange={e => f.s(+e.target.value || 0)} style={{ background: 'none', border: 'none', color: T.gold, fontSize: 22, fontWeight: 700, width: '100%', outline: 'none', fontFamily: 'inherit', ...(novo ? NUM_OURO : {}) }} />
                   </div>
                   {f.isPrice && <div style={{ fontSize: 9, color: T.g, marginTop: 4 }}>📍 Preço real do Mercado Livre</div>}
                   {!f.isPrice && p.custoAlvo && p.custoAlvo.m30 > 0 && <div style={{ fontSize: 9, color: T.t3, marginTop: 4 }}>compre até {brl(p.custoAlvo.m30)} p/ 30% de margem</div>}
@@ -463,11 +566,11 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
                   </div>
                 ))}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: T.card }}>
+              <div className={novo ? o.mDuas : undefined} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: T.card }}>
                 {[{ l: 'Lucro / unidade', v: `R$ ${fmtR(profit)}`, s: `Margem ${margin.toFixed(1).replace('.', ',')}%`, c: profit >= 0 ? T.gold : T.r }, { l: 'ROI sobre custo', v: cost > 0 ? `${roi.toFixed(0)}%` : '—', s: 'Retorno do capital', c: roi >= 0 ? T.g : T.r }].map((b, i) => (
                   <div key={i} style={{ padding: '14px 16px', borderRight: i === 0 ? `1px solid ${T.line}` : 'none' }}>
                     <div style={{ fontSize: 9, color: T.t3, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const, marginBottom: 6 }}>{b.l}</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: b.c, letterSpacing: '-0.02em', marginBottom: 2 }}>{b.v}</div>
+                    <div style={{ fontSize: novo ? 26 : 20, fontWeight: 700, color: b.c, letterSpacing: '-0.02em', marginBottom: 2, ...(novo ? NUM_OURO : {}) }}>{b.v}</div>
                     <div style={{ fontSize: 10, color: T.t3 }}>{b.s}</div>
                   </div>
                 ))}
@@ -477,9 +580,9 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
           </div>
           {/* Previsão mensal */}
           <div>
-            <Lbl style={{ marginBottom: 14 }}>Previsão Mensal</Lbl>
+            <Lbl ouro={novo} style={{ marginBottom: 14 }}>Previsão Mensal</Lbl>
             {estMensal != null ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+              <div className={novo ? o.mTres : undefined} style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
                 {[{ l: 'Conservador', m: .3, c: T.t2 }, { l: 'Realista', m: .6, c: T.a }, { l: 'Otimista', m: 1, c: T.g }].map(sce => {
                   const u = Math.max(1, Math.round(estMensal * sce.m)); const luc = +(u * profit).toFixed(0)
                   return (
@@ -490,7 +593,7 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
                       <div style={{ fontSize: 11, color: T.t3, marginBottom: 14 }}>Receita R$ {fmtN(Math.round(u * price))}</div>
                       <div style={{ borderTop: `1px solid ${T.line}`, paddingTop: 12 }}>
                         <div style={{ fontSize: 9, color: T.t3, fontWeight: 600, letterSpacing: '0.1em', marginBottom: 4 }}>{luc < 0 ? 'PREJUÍZO' : 'LUCRO LÍQUIDO'}</div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: luc >= 0 ? sce.c : T.r, letterSpacing: '-0.02em' }}>{luc < 0 ? '− ' : ''}R$ {fmtN(Math.abs(luc))}</div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: luc >= 0 ? sce.c : T.r, letterSpacing: '-0.02em', ...(novo ? NUM_OURO : {}) }}>{luc < 0 ? '− ' : ''}R$ {fmtN(Math.abs(luc))}</div>
                       </div>
                     </div>
                   )
@@ -507,7 +610,7 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
           {/* Como melhorar */}
           {recs.length > 0 && (
             <div>
-              <Lbl style={{ marginBottom: 12 }}>Como Melhorar Este Anúncio</Lbl>
+              <Lbl ouro={novo} style={{ marginBottom: 12 }}>Como Melhorar Este Anúncio</Lbl>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {recs.map((r, i) => {
                   const hc = r.priority === 'Alta' ? T.r : r.priority === 'Média' ? T.a : T.t3
@@ -531,21 +634,26 @@ export function MLDetalheModal({ p, onClose }: { p: Produto; onClose: () => void
           <div style={{ background: tint(verdict.c, 3), border: `1px solid ${tint(verdict.c, 9)}`, borderRadius: 12, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
             <ScoreRing score={score} />
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: verdict.c, marginBottom: 4 }}>{verdict.l}</div>
+              <div style={{ fontSize: novo ? 16 : 13, fontWeight: 600, color: verdict.c, marginBottom: 4, ...(novo ? { fontFamily: 'var(--tg-display), "Archivo", sans-serif', fontStretch: '106%', fontWeight: 700 } : {}) }}>{verdict.l}</div>
               <div style={{ fontSize: 12, color: T.t4, lineHeight: 1.6 }}>{verdictDetails}</div>
             </div>
           </div>
           {/* Imagens */}
           {imagens.length > 0 && <MLImageDownloader images={imagens} itemId={p.itemId || p.id} titulo={det?.titulo || p.nome} />}
           {/* CTAs */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            {linkML && (
+          <div className={novo ? o.mCtas : undefined} style={{ display: 'flex', gap: 10 }}>
+            {linkML && novo && (
+              <a href={linkML} target="_blank" rel="noreferrer" className="ouro-botao" style={{ textDecoration: 'none' }}>
+                Ver no Mercado Livre <span aria-hidden="true">→</span>
+              </a>
+            )}
+            {linkML && !novo && (
               <a href={linkML} target="_blank" rel="noreferrer"
                 style={{ flex: 1, display: 'block', textAlign: 'center' as const, background: T.goldG, color: '#03030A', fontWeight: 700, fontSize: 11, padding: '13px', borderRadius: 9, letterSpacing: '0.1em', textDecoration: 'none', textTransform: 'uppercase' as const, boxShadow: '0 4px 20px rgba(240,180,41,0.25)' }}>
                 Ver no Mercado Livre
               </a>
             )}
-            <button onClick={onClose} style={{ flex: 1, background: 'none', border: `1px solid ${T.line}`, color: T.t2, fontWeight: 500, fontSize: 11, padding: '13px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>
+            <button onClick={onClose} className={novo ? o.mSec : undefined} style={{ flex: 1, background: 'none', border: `1px solid ${T.line}`, color: T.t2, fontWeight: 500, fontSize: 11, padding: '13px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', letterSpacing: '0.08em', textTransform: 'uppercase' as const }}>
               Fechar
             </button>
           </div>
@@ -573,6 +681,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
   const [ordem, setOrdem] = useState('giro')
   const [soOportunidades, setSoOportunidades] = useState(false)
   const [detail, setDetail] = useState<Produto | null>(null)
+  const novo = useVisualNovo()
 
   // ── Salvos ML (snapshot do garimpo, persistido em metadata — igual à Amazon) ──
   const [salvos, setSalvos] = useState<Array<Produto & { savedAt?: string }>>([])
@@ -681,6 +790,29 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
 
   // ── SALVOS ML — a mesma página de Salvos da Amazon, com os cards do ML ──────
   if (view === 'salvos') {
+    if (novo) {
+      return (
+        <div className={o.pagina}>
+          <CabecalhoOuro grupo="Mercado Livre" titulo="Seus produtos" destaque="salvos"
+            sub={<><strong>{salvos.length} produto{salvos.length === 1 ? '' : 's'}</strong> guardado{salvos.length === 1 ? '' : 's'} da Mineração ML. Preço e ranking ficam como estavam no momento em que você salvou.</>} />
+          {salvos.length > 0 ? (
+            <div className={o.grade}>
+              {salvos.map((p, i) => (
+                <div key={p.id} className="ora-card-in" style={{ animationDelay: `${(i % 12) * 40}ms` }}>
+                  <CardProduto p={p} onOpen={() => setDetail(p)} saved onToggleSave={() => toggleSalvo(p)} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="ouro-cartao">
+              <VazioOuro icone={IcOuro.salvo} titulo="Nada salvo ainda"
+                texto={<>Na <strong style={{ color: '#F3EEE2' }}>Mineração ML</strong>, clique em <strong style={{ color: '#FFC83D' }}>Salvar</strong> no produto que te interessar. Ele aparece aqui.</>} />
+            </div>
+          )}
+          {detail && <MLDetalheModal p={detail} onClose={() => setDetail(null)} />}
+        </div>
+      )
+    }
     return (
       <div style={{ width: '100%' }}>
         <div className="ora-phead" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, marginBottom: 24 }}>
@@ -710,6 +842,159 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
             Nada salvo ainda — na <strong style={{ color: T.t2 }}>Mineração ML</strong>, passe o mouse num produto e clique em <strong style={{ color: T.gold }}>Salvar</strong>.
           </div>
         )}
+        {detail && <MLDetalheModal p={detail} onClose={() => setDetail(null)} />}
+      </div>
+    )
+  }
+
+  if (novo) {
+    const temFiltroCat = !!sub
+    return (
+      <div className={o.pagina}>
+        <CabecalhoOuro grupo="Mercado Livre" titulo="Mineração de" destaque="produtos"
+          sub={<>Os mais vendidos de cada categoria do Mercado Livre, com <strong>quanto sobra de verdade</strong> depois da comissão e do frete, e até quanto pagar no fornecedor.</>}
+          acoes={<>
+            {produtos.length > 0 && (
+              <button type="button" className={o.pilula} onClick={() => exportCSV(visiveis, subNome || catNome)} title="Baixar a lista em CSV">
+                <svg viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M6 1v7M3 5.5l3 3 3-3M1 9v1a1 1 0 001 1h8a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                Baixar CSV
+              </button>
+            )}
+            <button type="button" className={o.pilula} onClick={recarregar} title="Refaz o garimpo desta categoria (fura o cache)">
+              <svg viewBox="0 0 11 11" fill="none" aria-hidden="true"><path d="M9.5 2A5 5 0 1 0 10 5.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" /><path d="M9.5 2V5H6.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              Atualizar
+            </button>
+          </>} />
+
+        {/* Ferramentas: busca grande + filtros */}
+        <div className={o.ferramentas}>
+          <div className={o.busca}>
+            <BuscaOuro valor={buscaInput} onValor={setBuscaInput} onEnviar={buscar} botao="Buscar"
+              placeholder="Buscar produto ou marca nesta lista…" />
+          </div>
+          <div className={o.filtros}>
+            <label className={o.filtro}>
+              <span className={o.filtroLbl}>Categoria</span>
+              <select className={`ouro-entrada ${o.filtroAtivo}`} value={catRaiz} aria-label="Categoria" title="Escolher categoria"
+                onChange={e => { setCatRaiz(e.target.value); setSub('') }}>
+                {categorias.length === 0 && <option value={catRaiz}>Categoria…</option>}
+                {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </label>
+            {subcats.length > 0 && (
+              <label className={o.filtro}>
+                <span className={o.filtroLbl}>Subcategoria</span>
+                <select className={`ouro-entrada${temFiltroCat ? ` ${o.filtroAtivo}` : ''}`} value={sub} aria-label="Subcategoria" title="Afinar a subcategoria"
+                  onChange={e => setSub(e.target.value)}>
+                  <option value="">Todas</option>
+                  {subcats.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+                </select>
+              </label>
+            )}
+            <label className={o.filtro}>
+              <span className={o.filtroLbl}>Ordenar por</span>
+              <select className={`ouro-entrada${ordem !== 'giro' ? ` ${o.filtroAtivo}` : ''}`} value={ordem} aria-label="Ordenar produtos" title="Ordenar produtos"
+                onChange={e => setOrdem(e.target.value)}>
+                <option value="giro">Giro (ranking)</option>
+                <option value="score">Melhor score</option>
+                <option value="margem">Melhor margem</option>
+                <option value="recebe">Maior recebe</option>
+                <option value="preco">Menor preço</option>
+                <option value="concorrencia">Menos concorrência</option>
+              </select>
+            </label>
+            <div className={o.filtro}>
+              <span className={o.filtroLbl}>Filtro</span>
+              <button type="button" onClick={() => setSoOportunidades(v => !v)} aria-pressed={soOportunidades}
+                title="Esconde marca de supermercado/marca grande — só o que dá pra revender genérico"
+                className={`${o.pilula}${soOportunidades ? ` ${o.pilulaOn}` : ''}`}>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 3.6 10.8c-.5.4-.6 1-.6 1.7v.5h-6v-.5c0-.7-.1-1.3-.6-1.7A6 6 0 0 1 12 3z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                Só oportunidades (genéricos)
+              </button>
+            </div>
+          </div>
+          <div className={o.status}>
+            {busca
+              ? <span className={`${o.tag} ${o.tagOuro}`}>Resultados para “{busca}”
+                  <button type="button" className={o.tagX} onClick={limparBusca} title="Limpar busca" aria-label="Limpar busca">×</button></span>
+              : <span className={o.tag}><b>{catNome}</b>{subNome ? <> › {subNome}</> : null}</span>}
+            {produtos.length > 0 && <span className={o.tag}><b>{visiveis.length}{fim ? '' : '+'}</b> produtos</span>}
+            {produtos.length > 0 && !soOportunidades && <span className={`${o.tag} ${o.tagVerde}`}><b>{nOportunidades}</b> genéricos</span>}
+          </div>
+        </div>
+
+        {erro && <div className="ouro-erro" style={{ maxWidth: 'none' }}>{erro}</div>}
+
+        {/* Carregando (1ª página) */}
+        {!erro && produtos.length === 0 && (loading || !fim) && (
+          <div className="ouro-cartao">
+            <VazioOuro icone={IcOuro.lupa} titulo="Garimpando os mais vendidos…"
+              texto={<>Buscando o ranking de <strong style={{ color: '#F3EEE2' }}>{subNome || catNome}</strong> e calculando comissão e frete reais de cada produto.</>} />
+          </div>
+        )}
+        {!erro && !loading && produtos.length === 0 && fim && (
+          <div className="ouro-cartao">
+            <VazioOuro icone={IcOuro.caixa} titulo="Nada nesta categoria"
+              texto="O ranking não trouxe produtos aqui. Troque a categoria ou a subcategoria." />
+          </div>
+        )}
+
+        {/* Grade */}
+        {!loading && visiveis.length + (carregandoMais ? 1 : 0) > 0 && (
+          <div className={o.grade}>
+            {visiveis.map((p, i) => (
+              <div key={p.id} className="ora-card-in" style={{ animationDelay: `${(i % 12) * 40}ms` }}>
+                <CardProduto p={p} onOpen={() => setDetail(p)} saved={isSalvo(p.id)} onToggleSave={() => toggleSalvo(p)} />
+              </div>
+            ))}
+            {carregandoMais && Array.from({ length: 4 }).map((_, i) => <SkeletonOuro key={`m${i}`} i={i} />)}
+          </div>
+        )}
+
+        {!loading && !erro && produtos.length > 0 && visiveis.length === 0 && (
+          <div className="ouro-cartao">
+            <VazioOuro icone={IcOuro.lupa} titulo={soOportunidades ? 'Nenhum genérico neste recorte' : 'Nada bateu com a busca'}
+              texto={soOportunidades ? 'Carregue mais produtos ou desligue o filtro de oportunidades.' : 'Tente outra palavra ou limpe a busca pra ver a lista inteira.'}
+              acao={busca ? <button type="button" className={o.pilula} onClick={limparBusca}>Limpar busca</button> : undefined} />
+          </div>
+        )}
+
+        {/* Sentinela + botão (o observer não dispara em aba de 2º plano) */}
+        <div ref={sentinelRef} style={{ height: 1 }} />
+        {!fim && !loading && produtos.length > 0 && (
+          <div className={o.mais}>
+            <button type="button" className={o.pilula} onClick={() => buscarPagina(catAtiva, pageRef.current)} disabled={carregandoMais}>
+              {carregandoMais ? <><span className="ouro-gira" style={{ borderColor: 'rgba(255,200,61,.25)', borderTopColor: '#FFC83D' }} aria-hidden="true" />Garimpando…</> : 'Carregar mais produtos'}
+            </button>
+          </div>
+        )}
+        {fim && produtos.length > 0 && (
+          <p className={o.fim}>Fim do garimpo desta categoria — troque a categoria pra continuar.</p>
+        )}
+
+        {/* Buscas em alta (conteúdo do ML) */}
+        {trends.length > 0 && (
+          <div className={o.secao}>
+            <div className={o.secaoTit}>{IcOuro.grafico}<span className={o.filtroLbl} style={{ color: '#FFE7A3' }}>Buscas em alta no Mercado Livre</span></div>
+            <div className="ouro-chips">
+              {trends.map(t => (
+                <a key={t.keyword} href={t.url} target="_blank" rel="noreferrer" className={o.alta}>{t.keyword}</a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Como ler o card (mesmo conteúdo da legenda antiga) */}
+        <div className={o.secao}>
+          <div className={o.secaoTit}>{IcOuro.brilho}<span className={o.filtroLbl} style={{ color: '#FFE7A3' }}>Como ler o card</span></div>
+          <div className={o.glossario}>
+            <div className={o.termo}><b>Genérico</b><p>Sem marca dominando — dá pra comprar genérico e revender. Marca de supermercado e marca grande aparecem no card, sem o selo.</p></div>
+            <div className={o.termo}><b>Você recebe</b><p>Preço − comissão real − envio real ({premissas ? `${REP_NOME[premissas.reputacao]} — a da sua conta` : 'reputação verde'}), antes de imposto, custo e Ads.</p></div>
+            <div className={o.termo}><b>Compre até</b><p>O máximo a pagar no fornecedor pra fechar naquela margem (imposto {premissas ? `${String(premissas.impostoPct).replace('.', ',')}% — o cadastrado na sua Gestão ML` : '4%'} embutido).</p></div>
+            <div className={o.termo}><b>Score</b><p>Resume margem + posição no ranking + genérico.</p></div>
+          </div>
+        </div>
+
         {detail && <MLDetalheModal p={detail} onClose={() => setDetail(null)} />}
       </div>
     )

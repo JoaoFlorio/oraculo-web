@@ -1045,7 +1045,7 @@ function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:(
       {/* Generic badge */}
       {isGeneric&&!locked&&<div style={{position:'absolute',top:10,left:10,zIndex:2,background:'rgba(3,3,10,0.8)',backdropFilter:'blur(4px)',border:`1px solid ${tint(T.pur,21)}`,borderRadius:4,padding:'2px 7px',fontSize:8,fontWeight:700,color:T.pur,letterSpacing:'0.1em'}}>GENÉRICO</div>}
       {/* Image */}
-      <div style={{background:novo?'#F6F4EF':'#F8F8FC',height:novo?172:162,margin:novo?'10px 10px 0':0,borderRadius:novo?14:0,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
+      <div style={{background:novo?'#FFFFFF':'#F8F8FC',height:novo?172:162,margin:novo?'10px 10px 0':0,borderRadius:novo?14:0,display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden',flexShrink:0}}>
         {product.images?.[0]?<img src={product.images[0]} alt="" loading="lazy" decoding="async" style={{maxHeight:138,maxWidth:'88%',objectFit:'contain',transition:'transform .3s cubic-bezier(.34,1.56,.64,1)',transform:hov?'scale(1.08)':'scale(1)'}} onError={e=>{(e.target as HTMLImageElement).style.display='none'}}/>:<div style={{width:44,height:44,background:'#e8e8f0',borderRadius:8}}/>}
       </div>
       <div style={{padding:novo?'16px 16px 16px':'14px 14px 16px',flex:1,display:'flex',flexDirection:'column',gap:0}}>

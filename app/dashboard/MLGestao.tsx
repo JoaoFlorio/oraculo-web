@@ -1,6 +1,43 @@
 'use client'
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext } from 'react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer } from 'recharts'
+import { useVisualNovo } from './ouro/useVisualNovo'
+import { CabecalhoOuro, CartaoOuro, VazioOuro, IcOuro } from './ouro/Ouro'
+import o from './MLGestao.ouro.module.css'
+const oc = o   // alias: dentro dos .map(o => …) dos pedidos, `o` é o pedido
+
+// Visual novo (ouro, 05/10 — só admin em validação): as peças auxiliares (Kpi, TableH, Chip, Estoque, Repasses,
+// Reputação, modal) leem o flag por contexto. Com novo=false o Provider não gera DOM e tudo renderiza como antes.
+const NovoCtx = createContext(false)
+
+// Aviso no visual novo: ícone num quadradinho com a cor do tom + texto. `tom` é uma cor CSS (var ou hex).
+function AvisoOuro({ ic, tom, children, style }: { ic: string; tom: string; children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div className={o.aviso} style={{ ['--tom' as string]: tom, ...style } as React.CSSProperties}>
+      <span className={o.avisoIc} aria-hidden="true"><i className={`ti ${ic}`} /></span>
+      <div style={{ minWidth: 0, flex: 1 }}>{children}</div>
+    </div>
+  )
+}
+
+// Título de seção no visual novo (kicker mono + título Archivo + extra à direita).
+function SecaoOuro({ kicker, titulo, extra }: { kicker?: string; titulo: React.ReactNode; extra?: React.ReactNode }) {
+  return (
+    <div className={o.secao}>
+      <div>{kicker && <span className={o.secKicker}>{kicker}</span>}<h3 className={o.secTitulo}>{titulo}</h3></div>
+      {extra && <div className={o.secExtra}>{extra}</div>}
+    </div>
+  )
+}
+
+// Pílula secundária (filtro/ação) no visual novo — ativa em ouro.
+const pilulaOuro = (on: boolean): React.CSSProperties => ({
+  display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
+  fontSize: 12.5, fontWeight: on ? 700 : 600, whiteSpace: 'nowrap',
+  color: on ? '#1a1204' : '#CFC8B8',
+  background: on ? 'linear-gradient(180deg,#FFE7A3,#FFC83D 50%,#EBA31A)' : 'rgba(255,255,255,.03)',
+  border: `1px solid ${on ? 'transparent' : 'rgba(243,238,226,.12)'}`,
+})
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Gestão MERCADO LIVRE — PARIDADE com a Gestão Amazon (GestaoHub): o MESMO grid de
@@ -76,6 +113,13 @@ const pillKind = (m: number): 'grn' | 'gold' | 'red' => m > 15 ? 'grn' : m > 0 ?
 
 // Mini-KPI do período (chips do Analítico da Amazon). `money` marca .ml-money (borra no "ocultar valores").
 function Chip({ label, valor, cor, money }: { label: string; valor: string; cor?: string; money?: boolean }) {
+  const novo = useContext(NovoCtx)
+  if (novo) return (
+    <div className={o.chip}>
+      <span>{label}</span>
+      <span className={money ? `ml-money ${o.chipValor}` : o.chipValor} style={{ color: cor || '#F3EEE2' }}>{valor}</span>
+    </div>
+  )
   return (
     <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 2, background: T.card, border: `1px solid ${T.line}`, borderRadius: 11, padding: '9px 13px', minWidth: 118 }}>
       <span style={{ fontSize: 10, color: T.t3, fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.05em' }}>{label}</span>
@@ -96,6 +140,21 @@ function ZoomBtn({ onClick }: { onClick: () => void }) {
 
 // Tabela com cabeçalho declarativo (mesmo componente estético da Amazon).
 function TableH({ head, minWidth, children }: { head: { label: string; right?: boolean; w?: string }[]; minWidth?: number; children: React.ReactNode }) {
+  const novo = useContext(NovoCtx)
+  // Visual novo: cabeçalho mono maiúsculo, linhas com respiro e hover dourado (as células são as MESMAS — o CSS
+  // do módulo só ajusta padding/borda/hover por cima do estilo inline delas).
+  if (novo) return (
+    <div className={o.tabelaCaixa}>
+      <div style={{ overflowX: 'auto' as const }}>
+        <table className={o.tabela} style={{ width: '100%', borderCollapse: 'collapse' as const, tableLayout: 'fixed' as const, minWidth }}>
+          <thead><tr>
+            {head.map((h, i) => <th key={i} style={{ width: h.w, textAlign: h.right ? 'right' : 'left' }}>{h.label}</th>)}
+          </tr></thead>
+          <tbody>{children}</tbody>
+        </table>
+      </div>
+    </div>
+  )
   return (
     <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, overflow: 'hidden', boxShadow: 'var(--elev1)' }}>
       <div style={{ overflowX: 'auto' as const }}>
@@ -112,7 +171,8 @@ function TableH({ head, minWidth, children }: { head: { label: string; right?: b
 const cellNum: React.CSSProperties = { padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right', fontWeight: 500, fontSize: 13, color: T.t1, fontVariantNumeric: 'tabular-nums' as const }
 
 // KPI no formato da Amazon: borda de acento 1.5px, valor grande, ⓘ que abre popover.
-function Kpi({ label, valor, cor, ajuda }: { label: string; valor: string; cor: string; ajuda: string }) {
+function Kpi({ label, valor, cor, ajuda, legenda }: { label: string; valor: string; cor: string; ajuda: string; legenda?: React.ReactNode }) {
+  const novo = useContext(NovoCtx)
   const [aberto, setAberto] = useState(false)
   useEffect(() => {
     if (!aberto) return
@@ -120,6 +180,22 @@ function Kpi({ label, valor, cor, ajuda }: { label: string; valor: string; cor: 
     document.addEventListener('click', fechar)
     return () => document.removeEventListener('click', fechar)
   }, [aberto])
+  // Visual novo: faixa de acento no topo, rótulo mono, número grande Archivo tabular, legenda embaixo.
+  // `legenda` só aparece no visual novo (o antigo ignora a prop).
+  if (novo) return (
+    <div className={o.kpi}>
+      <i aria-hidden className={o.kpiFaixa} style={{ background: cor, boxShadow: `0 0 14px ${cor}` }} />
+      <div className={o.kpiTopo}>
+        <span className={o.kpiRotulo}>{label}</span>
+        <button aria-label={`O que é ${label}`} className={o.kpiInfo} data-on={aberto ? '1' : undefined} onClick={e => { e.stopPropagation(); setAberto(v => !v) }}>
+          <i className="ti ti-info-circle" style={{ fontSize: 15 }} aria-hidden="true" />
+        </button>
+      </div>
+      {aberto && <div className={o.kpiPop} onClick={e => e.stopPropagation()}>{ajuda}</div>}
+      <div className={`ml-money ${o.kpiValor}`} data-vazio={valor === '—' ? '1' : undefined}>{valor}</div>
+      {legenda && <div className={o.kpiLegenda}>{legenda}</div>}
+    </div>
+  )
   return (
     <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, padding: '18px 14px 18px', textAlign: 'center' as const, position: 'relative' as const, minHeight: 96, display: 'flex', flexDirection: 'column' as const, justifyContent: 'center', boxShadow: 'var(--elev1)' }}>
       {/* Faixa de acento no topo — IGUAL à Amazon (GestaoHub). Antes a cor ia na
@@ -269,6 +345,7 @@ function LinhaWF({ label, val, sign, cor, strong, nota }: { label: string; val: 
 }
 
 function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { produto: Produto; pedidos: Pedido[]; aliquota: number; custoUn: number | null; onClose: () => void }) {
+  const novo = useContext(NovoCtx)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -283,19 +360,19 @@ function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { prod
 
   return (
     <div onClick={onClose} style={{ position: 'fixed' as const, inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 16px', overflowY: 'auto' as const }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 'min(760px, 96vw)', background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+      <div onClick={e => e.stopPropagation()} className={novo ? o.modal : undefined} style={{ width: 'min(760px, 96vw)', background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
         {/* Cabeçalho */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '14px 16px', borderBottom: `1px solid ${T.line}` }}>
           <Thumb foto={p.foto} id={p.itemId} size={42} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.titulo}</div>
-            <div style={{ fontSize: 10.5, color: T.t4 }}>{p.itemId} · {p.qty} un. · {p.pedidos} pedido{p.pedidos === 1 ? '' : 's'}</div>
+            <div style={novo ? { fontFamily: 'var(--tg-display)', fontStretch: '106%', fontSize: 16, fontWeight: 800, letterSpacing: '-0.01em', color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const } : { fontSize: 14, fontWeight: 700, color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.titulo}</div>
+            <div style={novo ? { fontFamily: 'var(--tg-mono)', fontSize: 10.5, letterSpacing: '0.08em', color: T.t3, marginTop: 3 } : { fontSize: 10.5, color: T.t4 }}>{p.itemId} · {p.qty} un. · {p.pedidos} pedido{p.pedidos === 1 ? '' : 's'}</div>
           </div>
           <button onClick={onClose} aria-label="Fechar" style={{ background: 'none', border: 'none', cursor: 'pointer', color: T.t3, fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
         </div>
 
         {/* Waterfall */}
-        <div style={{ margin: '14px 16px', background: T.modal, border: `1px solid ${T.line}`, borderRadius: 12, padding: '6px 14px' }}>
+        <div style={novo ? { margin: '16px 18px', background: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,200,61,.12)', borderRadius: 16, padding: '8px 16px' } : { margin: '14px 16px', background: T.modal, border: `1px solid ${T.line}`, borderRadius: 12, padding: '6px 14px' }}>
           <LinhaWF label={`Faturado (${p.qty} un.)`} val={brl(p.receita)} strong nota="valor do anúncio (preço × unidades) no período — o frete que o comprador paga é repasse ao transportador e não entra aqui" />
           <LinhaWF label="Tarifa do Mercado Livre" val={brl(p.tarifa)} sign="-" cor={T.r} nota="sale_fee real cobrada em cada pedido" />
           <LinhaWF label="Envio" val={p.envio != null ? brl(p.envio) : 'medindo…'} sign={p.envio != null ? '-' : undefined} cor={p.envio != null ? T.r : T.t4} nota="custo real do frete que ficou com você (só de pedido mono-item; multi-item não rateamos)" />
@@ -308,7 +385,7 @@ function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { prod
             <span style={{ fontSize: 13, fontWeight: 800, color: T.t1 }}>{!p.temCusto ? 'Lucro (falta o custo)' : adsCon ? 'Lucro pós Ads' : 'Lucro do produto'}</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
               {margemExibe != null && <Pill kind={pillKind(margemExibe)}>{pc(margemExibe)}</Pill>}
-              <strong style={{ fontSize: 15, fontWeight: 800, color: (p.temCusto && lucroExibe != null) ? (lucroExibe >= 0 ? T.g : T.r) : T.t4, fontVariantNumeric: 'tabular-nums' as const }}>
+              <strong style={{ fontSize: novo ? 20 : 15, fontWeight: 800, color: (p.temCusto && lucroExibe != null) ? (lucroExibe >= 0 ? T.g : T.r) : T.t4, fontVariantNumeric: 'tabular-nums' as const, ...(novo ? { fontFamily: 'var(--tg-display)', fontStretch: '108%', letterSpacing: '-0.02em' } : {}) }}>
                 {p.temCusto && lucroExibe != null ? brl(lucroExibe) : '—'}
               </strong>
             </span>
@@ -317,7 +394,7 @@ function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { prod
 
         {/* Pedidos deste produto */}
         <div style={{ margin: '0 16px 16px' }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: T.t2, margin: '4px 0 8px' }}>Pedidos deste produto no período</div>
+          <div style={novo ? { fontFamily: 'var(--tg-mono)', fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase' as const, color: '#FFE7A3', margin: '6px 2px 10px' } : { fontSize: 12, fontWeight: 700, color: T.t2, margin: '4px 0 8px' }}>Pedidos deste produto no período</div>
           <TableH head={[{ label: 'Data' }, { label: 'Un.', right: true }, { label: 'Faturado', right: true }, { label: 'Tarifa', right: true }]} minWidth={420}>
             {meus.slice(0, 30).map((o, i) => {
               const it = o.itens.find(x => x.itemId === p.itemId)!
@@ -358,6 +435,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
   const [detail, setDetail] = useState<Produto | null>(null)
   const [loading, setLoading] = useState(true)
   const [conectando, setConectando] = useState(false)
+  const novo = useVisualNovo()   // visual novo (ouro) — só muda a apresentação
 
   // Custo por ANÚNCIO (itemId) e alíquota de imposto — guardados no metadata do User.
   const [custos, setCustos] = useState<Record<string, string>>({})
@@ -509,6 +587,22 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
 
   // ── Não conectado: o convite ────────────────────────────────────────────────
   if (!loading && !status?.connected) {
+    if (novo) return (
+      <div className="ouro-pagina">
+        <CabecalhoOuro grupo={soAds ? 'Ads' : 'Mercado Livre'} titulo={soAds ? 'Mercado' : 'Gestão'} destaque={soAds ? 'Ads' : 'ML'}
+          sub={<>Conecte sua conta do Mercado Livre e veja <strong>quanto você recebe de verdade</strong> em cada venda.</>} />
+        <div className="ouro-cartao">
+          <VazioOuro icone={soAds ? IcOuro.alvo : IcOuro.grafico} titulo="Conecte sua conta do Mercado Livre"
+            texto={<>Veja a tarifa que o ML cobrou, o custo real de cada envio e o líquido — os mesmos números do painel do ML, sem planilha.</>}
+            acao={<>
+              <button className="ouro-botao" onClick={conectar} disabled={conectando}>
+                {conectando ? <><span className="ouro-gira" aria-hidden="true" />Abrindo o Mercado Livre…</> : <>Conectar minha conta do Mercado Livre <span aria-hidden="true">→</span></>}
+              </button>
+              <p className="ouro-nota" style={{ marginTop: 14 }}>Acesso somente-leitura de vendas e envios. Você pode desconectar quando quiser.</p>
+            </>} />
+        </div>
+      </div>
+    )
     return (
       <div style={{ maxWidth: 560, margin: '0 auto', paddingTop: 60, textAlign: 'center' as const }}>
         <span style={{ fontSize: 10, fontWeight: 800, color: '#fff159', background: '#2d3277', borderRadius: 6, padding: '3px 8px' }}>Mercado Livre</span>
@@ -549,8 +643,47 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
 
   const ADS_TIP = 'Vem do Mercado Ads da sua conta. Como não há gasto de anúncio medido no período, aparece como "—" — nunca é inventado nem zerado.'
 
+  // Visual novo: ações do cabeçalho (MESMOS handlers do antigo: olhinho, período, datas do personalizado).
+  const acoesOuro = novo ? (
+    <>
+      <button onClick={() => setHide(v => !v)} aria-label={hide ? 'Mostrar valores' : 'Ocultar valores'} title={hide ? 'Mostrar valores' : 'Ocultar valores'}
+        className={o.olho} data-on={hide ? '1' : undefined}>
+        <i className={`ti ${hide ? 'ti-eye-off' : 'ti-eye'}`} style={{ fontSize: 18 }} aria-hidden="true" />
+      </button>
+      <select value={periodo} onChange={e => setPeriodo(e.target.value)} className={`ouro-entrada ${o.periodo}`} aria-label="Período">
+        {PERIODOS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+      </select>
+      {periodo === 'custom' && (
+        <span className={o.datas}>
+          <input type="date" value={customRange.from} max={customRange.to || undefined}
+            onChange={e => setCustomRange(r => ({ ...r, from: e.target.value }))} aria-label="Data inicial" />
+          <span>até</span>
+          <input type="date" value={customRange.to} min={customRange.from || undefined}
+            onChange={e => setCustomRange(r => ({ ...r, to: e.target.value }))} aria-label="Data final" />
+        </span>
+      )}
+    </>
+  ) : null
+
   return (
-    <div className={hide ? 'ml-oculto' : undefined} style={{ width: '100%', paddingTop: 4 }}>
+    <NovoCtx.Provider value={novo}>
+    <div className={novo ? `${o.raiz}${hide ? ' ml-oculto' : ''}` : (hide ? 'ml-oculto' : undefined)} style={novo ? undefined : { width: '100%', paddingTop: 4 }}>
+      {novo ? (
+        <>
+          <CabecalhoOuro grupo={soAds ? 'Ads' : 'Mercado Livre'} titulo={soAds ? 'Mercado' : 'Gestão'} destaque={soAds ? 'Ads' : 'ML'}
+            sub={soAds
+              ? <>O gasto real do Mercado Ads no seu resultado — <strong>dados reais do ML</strong>, nunca estimados.</>
+              : <>Visão financeira da sua operação no Mercado Livre — <strong>dados reais do ML</strong>.</>}
+            acoes={acoesOuro} />
+          <div className={o.conexao}>
+            <span className={o.conexaoSelo}><i aria-hidden="true" />Conta Mercado Livre conectada</span>
+            {status?.nickname && <span className={o.conexaoConta}>conta {status.nickname}</span>}
+            <button className={o.linkSutil} onClick={async () => { if (confirm('Desconectar a conta do Mercado Livre? Os pedidos guardados serão apagados.')) { await fetch('/api/ml/gestao/disconnect', { method: 'POST' }); location.reload() } }}>
+              desconectar
+            </button>
+          </div>
+        </>
+      ) : (<>
       {/* Cabeçalho + seletor de período */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 14 }}>
         <div>
@@ -596,9 +729,44 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
           desconectar
         </button>
       </div>
+      </>)}
+
+      {/* Visual novo: grupos e telas em pílulas (mesmos handlers irGrupo/setTab) */}
+      {novo && !soAds && (
+        <nav className={o.nav}>
+          <div className={o.grupos}>
+            {GRUPOS_ML.map(gr => {
+              const on = grupo === gr.id
+              return (
+                <button key={gr.id} onClick={() => irGrupo(gr.id)} aria-current={on ? 'page' : undefined} title={gr.pergunta}
+                  className={o.grupo} data-on={on ? '1' : undefined}>
+                  <i className={`ti ${gr.icon}`} style={{ fontSize: 16 }} aria-hidden="true" />{gr.label}
+                  {gr.id === 'ajuste' && (dre?.produtosSemCusto || 0) > 0 && (
+                    <span className={o.badge} title={`${dre?.produtosSemCusto} produto(s) sem custo cadastrado`}>{dre?.produtosSemCusto}</span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+          <p className={o.pergunta}>{g.pergunta}</p>
+          {g.tabs.length > 1 && (
+            <div className={o.abas}>
+              {g.tabs.map(id => {
+                const tb = TABS_ML.find(x => x.id === id)!
+                const on = tab === id
+                return (
+                  <button key={id} onClick={() => setTab(id)} aria-current={on ? 'page' : undefined} className={o.aba} data-on={on ? '1' : undefined}>
+                    <i className={`ti ${tb.icon}`} style={{ fontSize: 15 }} aria-hidden="true" />{tb.label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </nav>
+      )}
 
       {/* Barra de grupos + telas — escondida no modo Ads (hub próprio) */}
-      {!soAds && <>
+      {!novo && !soAds && <>
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' as const, marginBottom: 11 }}>
         {GRUPOS_ML.map(gr => {
           const on = grupo === gr.id
@@ -642,13 +810,21 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
       <div style={{ borderBottom: `1px solid ${T.line}`, marginBottom: 18, paddingTop: 9 }} />
       </>}
 
-      {loading && <div style={{ padding: 40, textAlign: 'center' as const, color: T.t3, fontSize: 13 }}>Carregando suas vendas do ML…</div>}
+      {loading && (novo
+        ? <div className="ouro-cartao"><VazioOuro icone={soAds ? IcOuro.alvo : IcOuro.grafico} titulo="Carregando suas vendas do ML…" texto="Lendo pedidos, tarifas e envios direto do Mercado Livre." /></div>
+        : <div style={{ padding: 40, textAlign: 'center' as const, color: T.t3, fontSize: 13 }}>Carregando suas vendas do ML…</div>)}
 
       {!loading && dre?.connected && (
         <>
           {/* Aviso GLOBAL (todas as abas menos Gerenciamento, igual à Amazon): de
               quanto é o buraco quando há produto sem custo cadastrado. */}
-          {dre.produtosSemCusto > 0 && tab !== 'gerenc' && (
+          {dre.produtosSemCusto > 0 && tab !== 'gerenc' && novo && (
+            <AvisoOuro ic="ti-alert-triangle" tom="var(--a)">
+              <strong>{dre.produtosSemCusto} produto{dre.produtosSemCusto === 1 ? '' : 's'} sem custo cadastrado</strong> — <span className="ml-money">{brl(dre.receitaSemCusto)}</span> de faturamento entram no lucro como se o custo fosse zero.
+              Cadastre o custo desses anúncios na aba <button onClick={() => irGrupo('ajuste')} className={o.linkOuro}>Gerenciamento</button>.
+            </AvisoOuro>
+          )}
+          {dre.produtosSemCusto > 0 && tab !== 'gerenc' && !novo && (
             <div style={{ fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 16, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
               <i className="ti ti-alert-triangle" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
               <div>
@@ -659,7 +835,12 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
           )}
 
           {/* 01/10: frete de venda ainda não medido pelo ML → o líquido está otimista; dizer isso em vez de somar 0 calado. */}
-          {dre.enviosPendentes > 0 && tab !== 'gerenc' && (
+          {dre.enviosPendentes > 0 && tab !== 'gerenc' && novo && (
+            <AvisoOuro ic="ti-truck" tom="var(--a)">
+              <strong>{dre.enviosPendentes} venda{dre.enviosPendentes === 1 ? '' : 's'} ainda sem o custo de envio medido</strong> — o Mercado Livre ainda não fechou o frete {dre.enviosPendentes === 1 ? 'dela' : 'delas'}, então o Líquido e o Lucro aparecem um pouco <b>maiores</b> do que vão ficar. Atualiza sozinho em minutos.
+            </AvisoOuro>
+          )}
+          {dre.enviosPendentes > 0 && tab !== 'gerenc' && !novo && (
             <div style={{ fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 16, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
               <i className="ti ti-truck" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
               <div>
@@ -672,34 +853,41 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
           {tab === 'resumo' && (
             <>
               <ReputacaoMl />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 13, marginBottom: 16 }}>
-                <Kpi label="Faturamento" valor={brl(fat)} cor={T.blue}
+              {novo && <SecaoOuro kicker={perLabel} titulo="Resultado do período" />}
+              <div className={novo ? o.kpis : undefined} style={novo ? undefined : { display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 13, marginBottom: 16 }}>
+                <Kpi label="Faturamento" valor={brl(fat)} cor={T.blue} legenda="valor dos anúncios, sem frete"
                   ajuda="O valor dos anúncios (preço × unidades) nos pedidos válidos do período. O frete pago pelo comprador é repasse ao transportador — não entra. Pedido cancelado também não (o painel do ML soma cancelado em 'vendas brutas')." />
-                <Kpi label="Líq. do Marketplace" valor={brl(liq)} cor={T.blue}
+                <Kpi label="Líq. do Marketplace" valor={brl(liq)} cor={T.blue} legenda="depois da tarifa e do envio"
                   ajuda="O que sobra DA VENDA depois da parte do ML: tarifa de venda real e custo real de cada envio. Antes de imposto, CMV e Ads." />
-                <Kpi label="Lucro Bruto" valor={cm ? brl(lucroBruto) : '—'} cor={T.g}
+                <Kpi label="Lucro Bruto" valor={cm ? brl(lucroBruto) : '—'} cor={T.g} legenda={cm ? 'antes do Mercado Ads' : 'cadastre o custo pra ver'}
                   ajuda="Líq. do Marketplace − imposto − CMV (custo dos produtos). É o lucro da VENDA, antes do anúncio. Fica '—' até você cadastrar algum custo." />
-                <Kpi label="Margem" valor={cm ? pc(margem) : '—'} cor={T.g}
+                <Kpi label="Margem" valor={cm ? pc(margem) : '—'} cor={T.g} legenda="lucro bruto ÷ faturamento"
                   ajuda="Lucro Bruto ÷ faturamento. A mesma régua do card de cada produto." />
-                <Kpi label="Número de Vendas" valor={String(vendas)} cor={T.blue}
+                <Kpi label="Número de Vendas" valor={String(vendas)} cor={T.blue} legenda="cancelados fora"
                   ajuda="Pedidos que caíram no período (cancelados fora)." />
-                <Kpi label="Número de Unidades Vendidas" valor={String(dre.unidades)} cor={T.blue}
+                <Kpi label="Número de Unidades Vendidas" valor={String(dre.unidades)} cor={T.blue} legenda="a mesma contagem do CMV"
                   ajuda="Total de unidades vendidas no período — a mesma contagem que o CMV usa." />
-                <Kpi label="Ticket Médio" valor={brl(ticket)} cor={T.g}
+                <Kpi label="Ticket Médio" valor={brl(ticket)} cor={T.g} legenda="faturamento ÷ vendas"
                   ajuda="Faturamento ÷ número de vendas." />
-                <Kpi label="Retorno Sobre Investimento" valor={cm ? pc(roi) : '—'} cor={T.g}
+                <Kpi label="Retorno Sobre Investimento" valor={cm ? pc(roi) : '—'} cor={T.g} legenda="lucro bruto ÷ CMV"
                   ajuda="Lucro Bruto ÷ CMV. Quanto cada real investido em mercadoria devolveu." />
-                <Kpi label="Valor em Ads" valor={dre.ads == null ? '—' : brl(dre.ads)} cor={T.g}
+                <Kpi label="Valor em Ads" valor={dre.ads == null ? '—' : brl(dre.ads)} cor={T.g} legenda={dre.adsConnected ? 'gasto real medido' : 'Mercado Ads sem gasto medido'}
                   ajuda={dre.adsConnected ? 'Gasto REAL de Mercado Ads no período (não estimativa) — somado dos anúncios da sua conta.' : ADS_TIP} />
-                <Kpi label="TACOS" valor={dre.tacos == null ? '—' : pc(dre.tacos)} cor={T.g}
+                <Kpi label="TACOS" valor={dre.tacos == null ? '—' : pc(dre.tacos)} cor={T.g} legenda="Ads ÷ faturamento"
                   ajuda={dre.adsConnected ? 'Ads ÷ faturamento. Quanto do que você vendeu foi pro anúncio.' : ADS_TIP} />
-                <Kpi label="Lucro bruto pós ADS" valor={(dre.lucroPosAds == null || !cm) ? '—' : brl(dre.lucroPosAds)} cor={dre.lucroPosAds != null && dre.lucroPosAds < 0 ? T.r : T.g}
+                <Kpi label="Lucro bruto pós ADS" valor={(dre.lucroPosAds == null || !cm) ? '—' : brl(dre.lucroPosAds)} cor={dre.lucroPosAds != null && dre.lucroPosAds < 0 ? T.r : T.g} legenda="lucro bruto − Ads"
                   ajuda={dre.adsConnected ? 'Lucro Bruto − gasto de Mercado Ads. É o que de fato sobrou depois do anúncio.' : ADS_TIP} />
-                <Kpi label="MPA" valor={(dre.mpa == null || !cm) ? '—' : pc(dre.mpa)} cor={T.g}
+                <Kpi label="MPA" valor={(dre.mpa == null || !cm) ? '—' : pc(dre.mpa)} cor={T.g} legenda="margem pós-anúncio"
                   ajuda={dre.adsConnected ? 'Margem Pós-Anúncio: lucro pós ads ÷ faturamento. A margem final da operação.' : ADS_TIP} />
               </div>
               {/* 01/10: devoluções (paridade com a Amazon) — entregue e depois reembolsado; o frete pago não volta. */}
-              {(dre.devolucoes?.pedidos ?? 0) > 0 && (
+              {(dre.devolucoes?.pedidos ?? 0) > 0 && novo && (
+                <AvisoOuro ic="ti-arrow-back-up" tom="var(--r)">
+                  <strong>Devoluções:</strong> {dre.devolucoes!.pedidos} pedido{dre.devolucoes!.pedidos === 1 ? '' : 's'} · <strong className="ml-money" style={{ color: T.r }}>{brl(dre.devolucoes!.valor)}</strong> devolvido{dre.devolucoes!.envioPerdido > 0 ? <> · frete perdido <strong className="ml-money" style={{ color: T.r }}>{brl(dre.devolucoes!.envioPerdido)}</strong></> : null}
+                  <div style={{ fontSize: 12, color: '#7E796E', marginTop: 3 }}>Venda entregue e depois reembolsada. Já fora do faturamento; o frete que você pagou nelas já saiu do Líquido.</div>
+                </AvisoOuro>
+              )}
+              {(dre.devolucoes?.pedidos ?? 0) > 0 && !novo && (
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '11px 14px', marginBottom: 16, fontSize: 12.5, color: T.t2 }}>
                   <i className="ti ti-arrow-back-up" style={{ fontSize: 16, color: T.r }} aria-hidden="true" />
                   <span><strong style={{ color: T.t1 }}>Devoluções:</strong> {dre.devolucoes!.pedidos} pedido{dre.devolucoes!.pedidos === 1 ? '' : 's'} · <strong style={{ color: T.r }}>{brl(dre.devolucoes!.valor)}</strong> devolvido{dre.devolucoes!.envioPerdido > 0 ? <> · frete perdido <strong style={{ color: T.r }}>{brl(dre.devolucoes!.envioPerdido)}</strong></> : null}</span>
@@ -708,19 +896,23 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
               )}
 
               {/* Gráfico "Resumo de Receitas" */}
-              <div style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, padding: '16px 16px 10px', marginBottom: 16, boxShadow: 'var(--elev1)' }}>
+              <div className={novo ? 'ouro-cartao' : undefined} style={novo ? { marginBottom: 22, paddingBottom: 14 } : { background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, padding: '16px 16px 10px', marginBottom: 16, boxShadow: 'var(--elev1)' }}>
+                {novo ? (
+                  <SecaoOuro kicker="últimos 30 dias" titulo="Resumo de receitas" extra={chart30?.netRatio != null ? 'líquido proporcional ao período' : undefined} />
+                ) : (
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 15, fontWeight: 700, color: T.t1 }}>Resumo de Receitas</span>
                   <span style={{ fontSize: 11, color: T.t3 }}>últimos 30 dias{chart30?.netRatio != null ? ' · líquido proporcional ao período' : ''}</span>
                 </div>
+                )}
                 <div className="ml-money" style={{ height: 300 }}>
                   {chart30 ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
                         <defs>
                           <linearGradient id="mlgReceita" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={T.pur} stopOpacity={0.34} />
-                            <stop offset="100%" stopColor={T.pur} stopOpacity={0.02} />
+                            <stop offset="0%" stopColor={novo ? '#FFC83D' : T.pur} stopOpacity={0.34} />
+                            <stop offset="100%" stopColor={novo ? '#FFC83D' : T.pur} stopOpacity={0.02} />
                           </linearGradient>
                           <linearGradient id="mlgLiq" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor={T.g} stopOpacity={0.3} />
@@ -731,18 +923,20 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                         <XAxis dataKey="label" tick={{ fill: T.t3, fontSize: 11 }} interval="preserveStartEnd" minTickGap={28} tickMargin={8} />
                         <YAxis tick={{ fill: T.t3, fontSize: 10.5 }} width={82} tickFormatter={(v: number) => 'R$ ' + Math.round(v).toLocaleString('pt-BR')} />
                         <RTooltip contentStyle={{ background: T.modal, border: `1px solid ${T.line}`, borderRadius: 10, fontSize: 12 }} formatter={(v, n) => [brl(Number(v)), n === 'liq' ? 'Líq. do Marketplace' : 'Receita']} labelStyle={{ color: T.t2 }} />
-                        <Area type="monotone" dataKey="receita" name="Receita" stroke={T.pur} strokeWidth={2.4} fill="url(#mlgReceita)" dot={false} activeDot={{ r: 4 }} />
+                        <Area type="monotone" dataKey="receita" name="Receita" stroke={novo ? '#FFC83D' : T.pur} strokeWidth={2.4} fill="url(#mlgReceita)" dot={false} activeDot={{ r: 4 }} />
                         {chart30.netRatio != null && <Area type="monotone" dataKey="liq" name="Líq. do Marketplace" stroke={T.g} strokeWidth={2.4} fill="url(#mlgLiq)" dot={false} activeDot={{ r: 4 }} />}
                       </AreaChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.t4, fontSize: 12.5 }}>Carregando o gráfico…</div>
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: novo ? T.t3 : T.t4, fontSize: 12.5 }}>Carregando o gráfico…</div>
                   )}
                 </div>
               </div>
 
               {/* Top 15 produtos vendidos */}
-              <div style={{ fontSize: 15, fontWeight: 700, color: T.t1, margin: '2px 0 10px' }}>Top 15 produtos vendidos</div>
+              {novo
+                ? <SecaoOuro kicker="por faturamento" titulo="Top 15 produtos vendidos" />
+                : <div style={{ fontSize: 15, fontWeight: 700, color: T.t1, margin: '2px 0 10px' }}>Top 15 produtos vendidos</div>}
               {dre.produtos.length > 0 ? (
                 <TableH minWidth={1000} head={[
                   { label: 'Produto', w: '22%' }, { label: 'Preço méd.', right: true }, { label: 'Custo un.', right: true },
@@ -787,16 +981,24 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                     )
                   })}
                 </TableH>
+              ) : novo ? (
+                <div className="ouro-cartao"><VazioOuro icone={IcOuro.caixa} titulo={`Nenhuma venda em ${perLabel.toLowerCase()}`} texto="Troque o período no canto superior direito." /></div>
               ) : (
                 <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                   Nenhuma venda em {perLabel.toLowerCase()}. Troque o período no canto superior direito.
                 </div>
               )}
-              <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
+              <div className={novo ? o.nota : undefined} style={novo ? undefined : { fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
                 Lucro e Margem aparecem só nos produtos com custo cadastrado. As colunas de <strong>Ads</strong> (Custo Ads, Lucro pós ADS, MPA) vêm do <strong>Mercado Ads</strong> real da sua conta — item sem anúncio no período aparece como <strong>R$ 0,00</strong> medido (não como valor desconhecido). Clique no <i className="ti ti-eye" style={{ fontSize: 13, color: T.gold }} /> pra ver a conta completa do produto.
               </div>
               {/* Sangria de Ads também no Resumo (igual à Amazon): gasto em item que não vendeu. */}
-              {(dre.adsSangria?.total || 0) > 0 && (
+              {(dre.adsSangria?.total || 0) > 0 && novo && (
+                <AvisoOuro ic="ti-droplet-off" tom="var(--a)" style={{ marginTop: 16 }}>
+                  <strong className="ml-money" style={{ color: T.a }}>{brl(dre.adsSangria?.total || 0)}</strong> em Mercado Ads foram para produtos que <strong>não venderam</strong> no período — gasto que não virou receita.
+                  Veja quais na aba <button onClick={() => irGrupo('anuncio')} className={o.linkOuro}>Ads</button>.
+                </AvisoOuro>
+              )}
+              {(dre.adsSangria?.total || 0) > 0 && !novo && (
                 <div style={{ marginTop: 14, fontSize: 12, color: T.t2, background: tint(T.a, 7), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 12, padding: '11px 14px', display: 'flex', gap: 9, alignItems: 'flex-start' }}>
                   <i className="ti ti-droplet-off" style={{ fontSize: 16, color: T.a, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
                   <div>
@@ -814,13 +1016,14 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
 
           {tab === 'pedidos' && (
             dre.pedidos.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+              <div style={{ display: 'flex', flexDirection: 'column' as const, gap: novo ? 12 : 10 }}>
+                {novo && <SecaoOuro kicker={perLabel} titulo="Pedidos, um a um" extra={`${dre.pedidos.length} pedido${dre.pedidos.length === 1 ? '' : 's'}`} />}
                 {dre.vendas > dre.pedidos.length && (
-                  <div style={{ fontSize: 11.5, color: T.t3 }}>Mostrando os {dre.pedidos.length} pedidos mais recentes de {dre.vendas} no período — os números do Resumo somam todos.</div>
+                  <div className={novo ? o.nota : undefined} style={novo ? { marginTop: -6 } : { fontSize: 11.5, color: T.t3 }}>Mostrando os {dre.pedidos.length} pedidos mais recentes de {dre.vendas} no período — os números do Resumo somam todos.</div>
                 )}
                 {dre.pedidos.map(o => (
-                  <div key={o.orderId} style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: 'var(--elev1)', overflow: 'hidden' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: `1px solid ${tint(T.line, 70)}`, flexWrap: 'wrap' }}>
+                  <div key={o.orderId} className={novo ? oc.pedido : undefined} style={novo ? undefined : { background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, boxShadow: 'var(--elev1)', overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: novo ? '13px 18px' : '10px 14px', borderBottom: `1px solid ${tint(T.line, 70)}`, flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 9.5, fontWeight: 700, color: T.g, background: tint(T.g, 12), border: `1px solid ${tint(T.g, 30)}`, borderRadius: 5, padding: '2px 7px' }}>
                         {o.status === 'delivered' ? 'entregue' : o.status === 'shipped' ? 'enviado' : 'pago'}
                       </span>
@@ -828,8 +1031,8 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                         {new Date(o.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })}
                         <span style={{ color: T.t4, fontWeight: 400 }}> · {new Date(o.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                       </span>
-                      <span style={{ fontSize: 10, color: T.t4 }}>#{o.orderId}</span>
-                      <span className="ml-money" style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 800, color: (o.liquido ?? 0) >= 0 ? T.g : T.r }}>
+                      <span style={novo ? { fontFamily: 'var(--tg-mono)', fontSize: 10.5, letterSpacing: '0.06em', color: T.t3 } : { fontSize: 10, color: T.t4 }}>#{o.orderId}</span>
+                      <span className="ml-money" style={novo ? { marginLeft: 'auto', fontFamily: 'var(--tg-display)', fontStretch: '106%', fontSize: 15, fontWeight: 800, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' as const, color: (o.liquido ?? 0) >= 0 ? T.g : T.r } : { marginLeft: 'auto', fontSize: 12.5, fontWeight: 800, color: (o.liquido ?? 0) >= 0 ? T.g : T.r }}>
                         {o.liquido != null ? `você recebe ${brl(o.liquido)}` : brl(o.receita)}
                       </span>
                     </div>
@@ -837,8 +1040,8 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                       const prod = dre.produtos.find(p => p.itemId === it.itemId)   // clicar abre a conta completa do produto (igual à Amazon)
                       return (
                       <div key={`${it.itemId}-${i}`} onClick={prod ? () => setDetail(prod) : undefined}
-                        title={prod ? 'Ver a conta completa deste produto' : undefined}
-                        style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', borderTop: i > 0 ? `1px solid ${tint(T.line, 50)}` : 'none', cursor: prod ? 'pointer' : 'default' }}>
+                        title={prod ? 'Ver a conta completa deste produto' : undefined} className={novo ? oc.pedidoItem : undefined}
+                        style={{ display: 'flex', alignItems: 'center', gap: 11, padding: novo ? '12px 18px' : '10px 14px', borderTop: i > 0 ? `1px solid ${tint(T.line, 50)}` : 'none', cursor: prod ? 'pointer' : 'default' }}>
                         <Thumb foto={it.foto} id={it.itemId} size={44} />
                         <div style={{ minWidth: 0, flex: 1 }}>
                           <div style={{ fontSize: 12.5, color: T.t1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{it.titulo}</div>
@@ -851,7 +1054,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                         {prod && <i className="ti ti-eye" style={{ fontSize: 15, color: T.gold, opacity: 0.7, flexShrink: 0 }} aria-hidden="true" />}
                       </div>
                     )})}
-                    <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end', flexWrap: 'wrap', padding: '8px 14px', borderTop: `1px solid ${tint(T.line, 70)}`, background: T.modal, fontSize: 11.5 }}>
+                    <div style={{ display: 'flex', gap: 16, justifyContent: 'flex-end', flexWrap: 'wrap', padding: novo ? '10px 18px' : '8px 14px', borderTop: `1px solid ${tint(T.line, 70)}`, background: novo ? 'rgba(255,200,61,.03)' : T.modal, fontSize: novo ? 12 : 11.5 }}>
                       <span style={{ color: T.t3 }}>Valor do anúncio <strong style={{ color: T.t1 }}>{brl(o.receita)}</strong></span>
                       {(o.freteComprador ?? 0) > 0 && (
                         <span style={{ color: T.t4 }} title="O comprador pagou este frete direto ao transportador. Não é sua receita — por isso não soma no faturamento nem no imposto.">Frete do comprador <strong style={{ color: T.t4 }}>{brl(o.freteComprador as number)}</strong> · repasse</span>
@@ -862,6 +1065,8 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                   </div>
                 ))}
               </div>
+            ) : novo ? (
+              <div className="ouro-cartao"><VazioOuro icone={IcOuro.caixa} titulo={`Nenhum pedido em ${perLabel.toLowerCase()}`} texto="Troque o período no canto superior direito." /></div>
             ) : (
               <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                 Nenhum pedido em {perLabel.toLowerCase()}.
@@ -873,6 +1078,28 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
           {tab === 'gerenc' && (
             dre.produtos.length > 0 ? (
               <>
+                {novo ? (<>
+                <AvisoOuro ic="ti-adjustments" tom="var(--gold)">
+                  É aqui que o lucro fecha: informe o <strong>custo unitário</strong> de cada anúncio e a <strong>alíquota de imposto</strong>. O Oráculo já mede tarifa, envio e Ads — o custo do produto só você tem. Cada valor salva sozinho e recalcula o lucro na hora.
+                </AvisoOuro>
+                <CartaoOuro titulo="Imposto sobre a venda" style={{ marginBottom: 22 }}
+                  extra={salvando ? <span style={{ fontFamily: 'var(--tg-mono)', fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: T.t3, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span className="ouro-gira" style={{ borderColor: 'rgba(255,200,61,.25)', borderTopColor: '#FFC83D', width: 12, height: 12 }} aria-hidden="true" />salvando…</span> : undefined}>
+                  <div className={oc.imposto}>
+                    <label htmlFor="ml-imposto" className={oc.impostoCampo}>
+                      <input id="ml-imposto" className="ouro-entrada" value={imposto} onChange={e => salvarImposto(e.target.value)}
+                        onFocus={e => e.currentTarget.select()}
+                        inputMode="decimal" placeholder={String(dre.aliquota || 0)} />
+                      <span style={{ fontFamily: 'var(--tg-display)', fontSize: 18, fontWeight: 800, color: T.t2 }}>%</span>
+                    </label>
+                    <span style={{ fontSize: 13, color: T.t3, lineHeight: 1.5, flex: '1 1 260px' }}>
+                      {imposto.trim() === '' && dre.aliquota > 0
+                        ? `herdado da Amazon (${dre.aliquota}%) — mude aqui pra usar outra alíquota só no ML`
+                        : 'aplicado no lucro de todos os produtos. Vazio = herda o imposto da Amazon.'}
+                    </span>
+                  </div>
+                </CartaoOuro>
+                <SecaoOuro kicker={perLabel} titulo="Custo de cada anúncio" extra={`${dre.produtos.length} produto${dre.produtos.length === 1 ? '' : 's'}`} />
+                </>) : (<>
                 <div style={{ fontSize: 12, color: T.t2, background: tint(T.gold, 7), border: `1px solid ${tint(T.gold, 30)}`, borderRadius: 12, padding: '11px 14px', marginBottom: 12, display: 'flex', gap: 9, alignItems: 'flex-start' }}>
                   <i className="ti ti-adjustments" style={{ fontSize: 16, color: T.gold, marginTop: 1, flexShrink: 0 }} aria-hidden="true" />
                   <div>É aqui que o lucro fecha: informe o <strong>custo unitário</strong> de cada anúncio e a <strong>alíquota de imposto</strong>. O Oráculo já mede tarifa, envio e Ads — o custo do produto só você tem. Cada valor salva sozinho e recalcula o lucro na hora.</div>
@@ -894,6 +1121,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                   </span>
                   {salvando && <span style={{ marginLeft: 'auto', fontSize: 11, color: T.t4, display: 'flex', alignItems: 'center', gap: 5 }}><i className="ti ti-loader-2" style={{ fontSize: 13 }} aria-hidden="true" /> salvando…</span>}
                 </div>
+                </>)}
 
                 <TableH minWidth={920} head={[
                   { label: 'Produto', w: '26%' }, { label: 'Un.', right: true }, { label: 'Receita', right: true },
@@ -917,7 +1145,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                       <td style={{ ...cellNum, color: p.envio != null ? T.a : T.t3 }}>{p.envio != null ? `− ${brl(p.envio)}` : '—'}{p.envioParcial && p.envio != null ? ' *' : ''}</td>
                       <td style={{ ...cellNum, fontWeight: 700, color: p.liquido != null ? (p.liquido >= 0 ? T.g : T.r) : T.t3 }}>{p.liquido != null ? brl(p.liquido) : '—'}</td>
                       <td style={{ padding: '6px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: `1px solid ${p.temCusto ? T.line : tint(T.a, 40)}`, borderRadius: 8, padding: '3px 6px', background: T.modal }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: `1px solid ${p.temCusto ? (novo ? 'rgba(255,200,61,.22)' : T.line) : tint(T.a, 40)}`, borderRadius: novo ? 10 : 8, padding: novo ? '6px 9px' : '3px 6px', background: novo ? 'rgba(255,255,255,.03)' : T.modal }}>
                           <span style={{ fontSize: 10.5, color: T.t4 }}>R$</span>
                           <input value={custos[p.itemId] ?? ''} onChange={e => salvarCusto(p.itemId, e.target.value)}
                             onFocus={e => e.currentTarget.select()}
@@ -932,7 +1160,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                     </tr>
                   ))}
                 </TableH>
-                <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
+                <div className={novo ? o.nota : undefined} style={novo ? undefined : { fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
                   {dre.produtos.some(p => p.envioParcial) && (
                     <div>* produto com pedido de vários itens ou envio ainda sem custo — o líquido só aparece quando TODO o custo foi medido. Não rateamos envio entre produtos.</div>
                   )}
@@ -941,6 +1169,8 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                   )}
                 </div>
               </>
+            ) : novo ? (
+              <div className="ouro-cartao"><VazioOuro icone={IcOuro.calc} titulo={`Nenhum produto vendido em ${perLabel.toLowerCase()}`} texto="Os produtos aparecem aqui assim que venderem no período — aí é só informar o custo." /></div>
             ) : (
               <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                 Nenhum produto vendido em {perLabel.toLowerCase()}.
@@ -953,17 +1183,17 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
             dre.produtos.length > 0 ? (
               <>
                 {/* Mini-KPIs do período (chips do Analítico da Amazon) */}
-                <div style={{ display: 'flex', gap: 11, flexWrap: 'wrap' as const, marginBottom: 16 }}>
+                <div className={novo ? oc.chips : undefined} style={novo ? undefined : { display: 'flex', gap: 11, flexWrap: 'wrap' as const, marginBottom: 16 }}>
                   <Chip label="Faturamento do período" valor={brl(fat)} money />
                   <Chip label="Unidades" valor={String(dre.unidades)} />
                   <Chip label="Produtos vendidos" valor={String(dre.produtos.length)} />
                   <Chip label="Ticket médio" valor={brl(ticket)} money />
                   <Chip label="Margem média" valor={cm ? pc(margem) : '—'} cor={cm ? (margem >= 0 ? T.g : T.r) : T.t3} money />
                 </div>
-                {!cm && <div style={{ fontSize: 10.5, color: T.t3, marginBottom: 14 }}>A margem média aparece quando você informa os custos (CMV) em Gerenciamento.</div>}
+                {!cm && <div className={novo ? o.nota : undefined} style={novo ? { margin: '-4px 0 16px' } : { fontSize: 10.5, color: T.t3, marginBottom: 14 }}>A margem média aparece quando você informa os custos (CMV) em Gerenciamento.</div>}
                 {(() => {
                   const eixo = cm ? eixoAbc : 'receita'
-                  const btn = (on: boolean) => ({ fontSize: 11.5, fontWeight: on ? 700 : 500, padding: '5px 12px', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit', background: on ? tint(T.gold, 15) : T.card, color: on ? T.gold : T.t2, border: `1px solid ${on ? tint(T.gold, 45) : T.line}` })
+                  const btn = (on: boolean): React.CSSProperties => novo ? pilulaOuro(on) : ({ fontSize: 11.5, fontWeight: on ? 700 : 500, padding: '5px 12px', borderRadius: 20, cursor: 'pointer', fontFamily: 'inherit', background: on ? tint(T.gold, 15) : T.card, color: on ? T.gold : T.t2, border: `1px solid ${on ? tint(T.gold, 45) : T.line}` })
                   const pr = (n: number | null | undefined) => n == null ? null : Math.round(n * 100) / 100
                   const abc = classeAbcMl(dre.produtos, eixo)
                   const sufixo = perLabel.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\W+/g, '-').toLowerCase()
@@ -989,14 +1219,14 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                     ['Lucro antes do Ads', cm ? pr(dre.lucroFinal) : null], ['Mercado Ads', dre.ads == null ? null : pr(-dre.ads)], ['Lucro pós Ads', cm ? pr(dre.lucroPosAds) : null],
                   ]))
                   return (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' as const, marginBottom: 12 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
-                        <span style={{ fontSize: 11.5, color: T.t3, marginRight: 2 }}>Curva ABC por</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' as const, marginBottom: novo ? 16 : 12 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: novo ? 8 : 6, flexWrap: 'wrap' as const }}>
+                        <span className={novo ? oc.pilulasRot : undefined} style={novo ? undefined : { fontSize: 11.5, color: T.t3, marginRight: 2 }}>Curva ABC por</span>
                         <button style={btn(eixo === 'receita')} onClick={() => setEixoAbc('receita')}>Faturamento</button>
                         <button style={{ ...btn(eixo === 'lucro'), opacity: cm ? 1 : 0.45, cursor: cm ? 'pointer' : 'not-allowed' }} disabled={!cm} title={cm ? '' : 'Cadastre o custo em Gerenciamento'} onClick={() => setEixoAbc('lucro')}>Lucro</button>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' as const }}>
-                        <span style={{ fontSize: 11.5, color: T.t3, marginRight: 2 }}><i className="ti ti-download" /> Exportar CSV</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: novo ? 8 : 6, flexWrap: 'wrap' as const }}>
+                        <span className={novo ? oc.pilulasRot : undefined} style={novo ? undefined : { fontSize: 11.5, color: T.t3, marginRight: 2 }}><i className="ti ti-download" /> Exportar CSV</span>
                         <button style={btn(false)} onClick={csvProdutos}>Produtos</button>
                         <button style={btn(false)} onClick={csvPedidos}>Pedidos</button>
                         <button style={btn(false)} onClick={csvDre}>DRE</button>
@@ -1045,10 +1275,12 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                     )
                   }) })()}
                 </TableH>
-                <div style={{ fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
+                <div className={novo ? o.nota : undefined} style={novo ? undefined : { fontSize: 10.5, color: T.t4, marginTop: 9, lineHeight: 1.6 }}>
                   <strong>ABC</strong>: A = os produtos que somam 80% do {cm && eixoAbc === 'lucro' ? 'lucro' : 'faturamento'}, B = até 95%, C = o resto. O diagnóstico cruza a classe com a margem média dos produtos com custo ({margemComCusto != null ? pc(margemComCusto) : 'precisa de custo'}): <strong>Armadilha</strong> = vende muito e ganha pouco. Lucro, Margem e MPA aparecem nos produtos com custo cadastrado (informe em <button onClick={() => irGrupo('ajuste')} style={{ background: 'none', border: 'none', padding: 0, color: T.gold, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 10.5, textDecoration: 'underline' }}>Gerenciamento</button>). Clique no <i className="ti ti-eye" style={{ fontSize: 13, color: T.gold }} /> pra ver a conta completa.
                 </div>
               </>
+            ) : novo ? (
+              <div className="ouro-cartao"><VazioOuro icone={IcOuro.grafico} titulo={`Nenhum produto vendido em ${perLabel.toLowerCase()}`} texto="Troque o período no canto superior direito." /></div>
             ) : (
               <div style={{ padding: '40px 24px', textAlign: 'center' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13 }}>
                 Nenhum produto vendido em {perLabel.toLowerCase()}.
@@ -1056,8 +1288,176 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
             )
           )}
 
+          {/* ── ADS no VISUAL NOVO ── mesmos dados/handlers do bloco antigo abaixo, só a apresentação muda ── */}
+          {tab === 'ads' && novo && (
+            dre.adsConnected ? (
+              <>
+                <SecaoOuro kicker={perLabel} titulo="Seus anúncios no período" />
+                <div className={oc.kpisAds}>
+                  <Kpi label="Valor em Ads" valor={dre.ads == null ? '—' : brl(dre.ads)} cor="#FFC83D" legenda="gasto real, não estimativa"
+                    ajuda="Gasto REAL de Mercado Ads no período, somado dos seus anúncios. Não é estimativa." />
+                  <Kpi label="Faturamento" valor={brl(fat)} cor="#6EA8E8" legenda="total do período, com e sem anúncio"
+                    ajuda="O valor dos anúncios (preço × unidades) nos pedidos válidos do período. O frete pago pelo comprador é repasse ao transportador — não entra. Pedido cancelado também não (o painel do ML soma cancelado em 'vendas brutas')." />
+                  <Kpi label="TACOS" valor={dre.tacos == null ? '—' : pc(dre.tacos)} cor="#B9A5FF" legenda="Ads ÷ faturamento"
+                    ajuda="Ads ÷ faturamento. Quanto do que você vendeu foi pro anúncio." />
+                  <Kpi label="Lucro bruto pós ADS" valor={(dre.lucroPosAds == null || !cm) ? '—' : brl(dre.lucroPosAds)} cor={dre.lucroPosAds != null && dre.lucroPosAds < 0 ? T.r : T.g}
+                    legenda={cm ? 'lucro bruto − Ads' : 'cadastre o custo pra ver'}
+                    ajuda="Lucro Bruto − gasto de Mercado Ads. O que de fato sobrou depois do anúncio." />
+                  <Kpi label="MPA" valor={(dre.mpa == null || !cm) ? '—' : pc(dre.mpa)} cor={T.g} legenda={cm ? 'margem pós-anúncio' : 'cadastre o custo pra ver'}
+                    ajuda="Margem Pós-Anúncio: lucro pós ads ÷ faturamento." />
+                </div>
+
+                {/* Piloto NEO — mesmas campanhas, mesma ação (aplicarMl), mesmos textos */}
+                {pilotoMl?.campanhas?.length > 0 && (() => {
+                  const ACAO: Record<string, { lbl: string; cor: string; ic: string }> = {
+                    'pausar': { lbl: 'pausar', cor: T.r, ic: 'ti-player-pause' },
+                    'baixar-meta': { lbl: 'baixar meta', cor: T.a, ic: 'ti-arrow-down-right' },
+                    'subir-orcamento': { lbl: 'escalar', cor: T.g, ic: 'ti-trending-up' },
+                    'cadastrar-custo': { lbl: 'cadastrar custo', cor: T.gold, ic: 'ti-alert-triangle' },
+                    'manter': { lbl: 'saudável', cor: T.t3, ic: 'ti-check' },
+                  }
+                  const corMpa = (m: number | null) => m == null ? T.t3 : m < 0 ? T.r : T.g
+                  return (
+                    <section className={oc.neo}>
+                      <div className={oc.neoTopo}>
+                        <span className={oc.neoIc} aria-hidden="true"><i className="ti ti-wand" /></span>
+                        <div style={{ minWidth: 0 }}>
+                          <span className={oc.secKicker} style={{ marginBottom: 0 }}>Piloto NEO · Mercado Ads</span>
+                          <h3 className={oc.neoTitulo}>O NEO de olho nas suas <em>campanhas</em></h3>
+                        </div>
+                        <span className={oc.neoSelo}>recomenda · nada aplicado</span>
+                      </div>
+                      <p className={oc.neoTexto}>
+                        No ML o NEO mira <b>ROI</b>, não faixa de ACOS. A régua é a sua margem: <b>MPA = margem − ACOS</b>. Acima da margem = prejuízo (baixa a meta ou pausa); com folga = escala. Janela: últimos 30 dias.
+                        {pilotoMl.totais?.precisamAcao > 0 && <> <b style={{ color: T.r }}>{pilotoMl.totais.precisamAcao} precisam de ação.</b></>}
+                      </p>
+                      <div className={oc.camps}>
+                        {pilotoMl.campanhas.map((c: any) => {
+                          const a = ACAO[c.acao] || ACAO['manter']
+                          const aplicavel = ['pausar', 'baixar-meta', 'subir-orcamento'].includes(c.acao)
+                          return (
+                            <div key={c.id} className={oc.camp}>
+                              <div className={oc.campNome}>
+                                <b>{c.nome}</b>
+                                <span>{c.status === 'active' ? 'ativa' : c.status} · gasto <span className="ml-money" style={{ display: 'inline', margin: 0 }}>{brl(c.gasto)}</span> · vendas <span className="ml-money" style={{ display: 'inline', margin: 0 }}>{brl(c.vendas)}</span></span>
+                              </div>
+                              <div className={oc.campMetr}>
+                                <div>
+                                  <div className={oc.campRot}>ACOS real</div>
+                                  <div className={oc.campVal} style={{ color: T.t2 }}>{c.acos == null ? (c.gasto > 0 ? 's/ venda' : '—') : pc(c.acos)}</div>
+                                </div>
+                                <div>
+                                  <div className={oc.campRot}>Margem</div>
+                                  <div className={oc.campVal} style={{ color: c.margem == null ? T.gold : T.t2 }}>{c.margem == null ? 's/ custo' : pc(c.margem)}</div>
+                                </div>
+                                <div>
+                                  <div className={oc.campRot}>MPA</div>
+                                  <div className={oc.campVal} style={{ color: corMpa(c.mpa) }}>{c.mpa == null ? '—' : (c.mpa > 0 ? '+' : '') + pc(c.mpa)}</div>
+                                </div>
+                              </div>
+                              <div className={oc.acao} style={{ ['--tom' as string]: a.cor } as React.CSSProperties}>
+                                <i className={`ti ${a.ic}`} aria-hidden="true" />
+                                <div>
+                                  <b>{a.lbl}</b>
+                                  {(c.sugestao?.acosAlvoNovo != null || c.sugestao?.orcamentoNovo != null) && (
+                                    <small>
+                                      {c.sugestao.acosAlvoNovo != null && <>meta {c.acosAlvo != null ? pc(c.acosAlvo) : '—'} → <b>{pc(c.sugestao.acosAlvoNovo)}</b></>}
+                                      {c.sugestao.orcamentoNovo != null && <>orç {c.orcamentoDiario != null ? brl(c.orcamentoDiario) : '—'} → <b>{brl(c.sugestao.orcamentoNovo)}</b></>}
+                                    </small>
+                                  )}
+                                </div>
+                              </div>
+                              <div className={oc.campLado}>
+                                {!pilotoMl.podeAplicar && aplicavel && (
+                                  <span style={{ fontSize: 11.5, color: T.t3, textAlign: 'right' as const }}>ajuste no painel do Mercado Ads</span>
+                                )}
+                                {pilotoMl.podeAplicar && aplicavel && (
+                                  <>
+                                    <button onClick={() => aplicarMl(c)} disabled={aplicandoMl === c.id} className={oc.aplicar} style={{ ['--tom' as string]: a.cor } as React.CSSProperties}>
+                                      {aplicandoMl === c.id ? 'aplicando…' : 'aplicar'}
+                                    </button>
+                                    {feedbackMl && feedbackMl.id === c.id && (
+                                      <span style={{ fontSize: 11.5, fontWeight: 600, color: feedbackMl.ok ? T.g : T.r, maxWidth: 150 }}>{feedbackMl.msg}</span>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <div className={oc.neoRodape}>
+                        <b>Admin</b> · o NEO recomenda e você aplica em 1 clique — cada ação confirma o de/para, respeita os limites de segurança, relê a campanha pra conferir e vai pra auditoria. Só na sua conta enquanto o ML está em teste.
+                      </div>
+                    </section>
+                  )
+                })()}
+
+                {/* Sangria: gasto em item que NÃO vendeu no período */}
+                {(dre.adsSangria?.total || 0) > 0 && (
+                  <AvisoOuro ic="ti-droplet-off" tom="var(--a)" style={{ marginBottom: 22 }}>
+                    <strong className="ml-money" style={{ color: T.a }}>{brl(dre.adsSangria?.total || 0)}</strong> em anúncios foram para produtos que <strong>não venderam</strong> no período. É gasto real que não virou receita nenhuma — vale revisar ou pausar essas campanhas.
+                    {(dre.adsSangria?.itens || []).length > 0 && (
+                      <div className={oc.sangriaLista}>
+                        {(dre.adsSangria?.itens || []).map(it => (
+                          <div key={it.itemId} className={oc.sangriaItem}>
+                            <Thumb foto={it.foto} id={it.itemId} size={34} />
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ fontSize: 13, color: T.t1, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{it.titulo}</div>
+                              <div style={{ fontFamily: 'var(--tg-mono)', fontSize: 10, letterSpacing: '0.06em', color: T.t3 }}>{it.itemId}</div>
+                            </div>
+                            <span className="ml-money" style={{ fontFamily: 'var(--tg-display)', fontStretch: '106%', fontSize: 15, fontWeight: 800, color: T.a, fontVariantNumeric: 'tabular-nums' as const }}>− {brl(it.gasto)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </AvisoOuro>
+                )}
+
+                {/* Gasto por produto anunciado (o que vendeu, com retorno) */}
+                {dre.produtos.some(p => (p.custoAds || 0) > 0) ? (
+                  <>
+                    <SecaoOuro kicker="gasto × retorno" titulo="Produtos anunciados que venderam" />
+                    <TableH minWidth={720} head={[
+                      { label: 'Produto', w: '34%' }, { label: 'Faturado', right: true }, { label: 'Gasto Ads', right: true },
+                      { label: 'Lucro pós ADS', right: true }, { label: 'MPA', right: true },
+                    ]}>
+                      {dre.produtos.filter(p => (p.custoAds || 0) > 0).sort((a, b) => (b.custoAds || 0) - (a.custoAds || 0)).map(p => (
+                        <tr key={p.itemId}>
+                          <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}` }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                              <Thumb foto={p.foto} id={p.itemId} size={34} />
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 12.5, fontWeight: 500, color: T.t1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{p.titulo}</div>
+                                <div style={{ fontSize: 10, color: T.t3 }}>{p.itemId}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="ml-money" style={{ ...cellNum, fontWeight: 600 }}>{brl(p.receita)}</td>
+                          <td className="ml-money" style={{ ...cellNum, color: T.a }}>− {brl(p.custoAds as number)}</td>
+                          <td className="ml-money" style={{ ...cellNum, color: (p.temCusto && p.lucroPosAds != null) ? ((p.lucroPosAds as number) >= 0 ? T.g : T.r) : T.t3 }}>{(p.temCusto && p.lucroPosAds != null) ? brl(p.lucroPosAds as number) : '—'}</td>
+                          <td style={{ padding: '9px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>{(p.temCusto && p.mpa != null) ? <Pill kind={pillKind(p.mpa as number)}>{pc(p.mpa as number)}</Pill> : '—'}</td>
+                        </tr>
+                      ))}
+                    </TableH>
+                    <div className={oc.nota}>Lucro pós ADS e MPA aparecem nos produtos com custo cadastrado.</div>
+                  </>
+                ) : (
+                  (dre.adsSangria?.total || 0) === 0 && (
+                    <div className="ouro-cartao"><VazioOuro icone={IcOuro.alvo} titulo={`Nenhum gasto de Mercado Ads medido em ${perLabel.toLowerCase()}`} texto="Quando houver gasto de anúncio no período, ele aparece aqui por produto — com dado real, nunca estimado." /></div>
+                  )
+                )}
+              </>
+            ) : (
+              <div className="ouro-cartao">
+                <VazioOuro icone={IcOuro.alvo} titulo="Sem Mercado Ads no período"
+                  texto={<>Sua conta não tem <strong>Mercado Ads</strong> ativo (ou sem gasto no período). Quando houver anúncio, o gasto por produto, o TACOS e o lucro pós-anúncio aparecem aqui — com dado real, nunca estimado.</>} />
+              </div>
+            )
+          )}
+
           {/* ── ADS (Mercado Ads) ── quanto o anúncio custou e o que trouxe ── */}
-          {tab === 'ads' && (
+          {tab === 'ads' && !novo && (
             dre.adsConnected ? (
               <>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 13, marginBottom: 16 }}>
@@ -1229,6 +1629,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
           onClose={() => setDetail(null)} />
       )}
     </div>
+    </NovoCtx.Provider>
   )
 }
 
@@ -1239,6 +1640,7 @@ type ItemEst = { itemId: string; titulo: string; foto: string | null; status: st
   vendidos30: number; vendaDia: number; coberturaDias: number | null; alerta: 'ruptura' | 'acabando' | 'parado' | null }
 // ── REPASSES (01/10) — o que o Mercado Pago já liberou + a agenda do que vai cair ─────────────────
 function RepassesMl({ periodo, customRange, perLabel }: { periodo: string; customRange: { from: string; to: string }; perLabel: string }) {
+  const novo = useContext(NovoCtx)
   const [d, setD] = useState<any>(null)
   const [erro, setErro] = useState<string | null>(null)
   // A janela é calculada NA HORA da busca (revisão 02/10: memorizada no pai, o "até agora" congelava na hora em que o
@@ -1255,6 +1657,9 @@ function RepassesMl({ periodo, customRange, perLabel }: { periodo: string; custo
       .catch(() => { if (vivo) setErro('Não consegui ler os repasses no Mercado Pago agora.') })
     return () => { vivo = false }
   }, [periodo, customRange.from, customRange.to]) // eslint-disable-line
+  if (novo && customIncompleto) return <div className="ouro-cartao"><VazioOuro icone={IcOuro.moeda} titulo="Escolha as duas datas" texto="Escolha as duas datas do período personalizado." /></div>
+  if (novo && erro) return <div className="ouro-cartao"><VazioOuro icone={IcOuro.moeda} titulo="Repasses indisponíveis agora" texto={erro} /></div>
+  if (novo && !d) return <div className="ouro-cartao"><VazioOuro icone={IcOuro.moeda} titulo="Lendo seus repasses…" texto="Lendo seus repasses no Mercado Pago…" /></div>
   if (customIncompleto) return <div style={{ fontSize: 13, color: T.t3, padding: 16 }}>Escolha as duas datas do período personalizado.</div>
   if (erro) return <div style={{ fontSize: 13, color: T.t2, padding: 16 }}>{erro}</div>
   if (!d) return <div style={{ fontSize: 13, color: T.t3, padding: 16 }}>Lendo seus repasses no Mercado Pago…</div>
@@ -1268,6 +1673,52 @@ function RepassesMl({ periodo, customRange, perLabel }: { periodo: string; custo
   ]
   const proximos = (d.agenda || []).filter((a: any) => a.dia !== 'sem data').slice(0, 14)
   const maxAg = Math.max(1, ...proximos.map((a: any) => a.valor))
+  if (novo) return (
+    <div>
+      <SecaoOuro kicker="Mercado Pago" titulo="Quanto já caiu e quanto vai cair" />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 14, marginBottom: 22 }}>
+        {cards.map(([l, v, n, c, h]) => (
+          <div key={l} className={oc.kpi}>
+            <i aria-hidden className={oc.kpiFaixa} style={{ background: c, boxShadow: `0 0 14px ${c}` }} />
+            <span className={oc.kpiRotulo}>{l}</span>
+            <div className={`ml-money ${oc.kpiValor}`} style={{ color: c }}>{brl(v)}</div>
+            <div className={oc.kpiLegenda}>{n} pagamento{n === 1 ? '' : 's'} · {h}</div>
+          </div>
+        ))}
+      </div>
+      {proximos.length > 0 && (
+        <CartaoOuro titulo="Agenda — quando cai" style={{ marginBottom: 22 }}>
+          {proximos.map((a: any) => (
+            <div key={a.dia} className={oc.agendaLinha}>
+              <span className={oc.agendaDia}>{a.dia.slice(8, 10)}/{a.dia.slice(5, 7)}</span>
+              <div className={oc.agendaBarra}><i style={{ width: `${Math.max(3, a.valor / maxAg * 100)}%` }} /></div>
+              <span className={`ml-money ${oc.agendaValor}`}>{brl(a.valor)}</span>
+              <span className={oc.agendaN}>{a.pagamentos}×</span>
+            </div>
+          ))}
+        </CartaoOuro>
+      )}
+      {d.itens?.length > 0 && (
+        <TableH minWidth={720} head={[{ label: 'Pedido' }, { label: 'Aprovado' }, { label: 'Libera em' }, { label: 'Situação' }, { label: 'Venda', right: true }, { label: 'Líquido', right: true }]}>
+          {d.itens.slice(0, 150).map((r: any) => (
+            <tr key={r.pagamentoId}>
+              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2, fontFamily: 'var(--tg-mono)' }}>{r.pedidoId}</td>
+              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2 }}>{dia(r.aprovadoEm)}</td>
+              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}`, fontSize: 12, color: T.t2 }}>{dia(r.liberaEm)}</td>
+              <td style={{ padding: '8px', borderTop: `1px solid ${T.line}` }}>{r.situacao === 'recebido' ? <Pill kind="grn">caiu</Pill> : r.situacao === 'mediacao' ? <Pill kind="red">mediação</Pill> : r.situacao === 'atrasado' ? <Pill kind="red">atrasado</Pill> : <Pill kind="gold">a liberar</Pill>}</td>
+              <td className="ml-money" style={{ ...cellNum }}>{brl(r.bruto)}</td>
+              <td className="ml-money" style={{ ...cellNum, fontWeight: 600, color: r.liquido != null ? T.t1 : T.t3 }}>{r.liquido != null ? brl(r.liquido) : '—'}</td>
+            </tr>
+          ))}
+        </TableH>
+      )}
+      <div className={oc.nota}>
+        Lido direto do <strong>Mercado Pago</strong>: o líquido já vem sem tarifa e frete do ML. Só entram pagamentos ligados a pedidos do Mercado Livre (Pix, transferências e assinaturas ficam de fora). “Caiu na conta” = liberado no saldo do Mercado Pago (o saque pro banco é com você).
+        {d.parcial && <> <strong style={{ color: T.a }}>Período muito grande: mostrando os primeiros 1.000 pagamentos.</strong></>}
+        {d.semLiquido > 0 && <> {d.semLiquido} pagamento(s) sem líquido informado pelo Mercado Pago (aparecem com “—” e não somam).</>}
+      </div>
+    </div>
+  )
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 12, marginBottom: 16 }}>
@@ -1316,6 +1767,7 @@ function RepassesMl({ periodo, customRange, perLabel }: { periodo: string; custo
 }
 
 function EstoqueMl() {
+  const novo = useContext(NovoCtx)
   const [d, setD] = useState<{ itens: ItemEst[]; resumo: any; atualizadoEm?: string; demo?: boolean; parcial?: boolean } | null>(null)
   const [erro, setErro] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<'todos' | 'full' | 'alerta'>('todos')
@@ -1327,12 +1779,61 @@ function EstoqueMl() {
       .catch(() => { if (vivo) setErro('Não consegui ler o estoque no Mercado Livre agora.') })
     return () => { vivo = false }
   }, [])
+  if (novo && erro) return <div className="ouro-cartao"><VazioOuro icone={IcOuro.caixa} titulo="Estoque indisponível agora" texto={erro} /></div>
+  if (novo && !d) return <div className="ouro-cartao"><VazioOuro icone={IcOuro.caixa} titulo="Lendo seu estoque…" texto="Lendo seu estoque no Mercado Livre…" /></div>
   if (erro) return <div style={{ fontSize: 13, color: T.t2, padding: 16 }}>{erro}</div>
   if (!d) return <div style={{ fontSize: 13, color: T.t3, padding: 16 }}>Lendo seu estoque no Mercado Livre…</div>
   const r = d.resumo || {}
   const lista = d.itens.filter(i => filtro === 'todos' ? true : filtro === 'full' ? i.full : !!i.alerta)
   const selo = (a: ItemEst['alerta']) => a === 'ruptura' ? { t: 'SEM ESTOQUE', c: T.r } : a === 'acabando' ? { t: 'ACABANDO', c: T.a } : a === 'parado' ? { t: 'PARADO', c: T.t3 } : null
   const motivo: Record<string, string> = { transfer: 'em transferência', damaged: 'danificado', lost: 'perdido', withdrawal: 'em retirada', internal_process: 'processo interno', not_supported: 'não suportado' }
+  if (novo) {
+    const corResumo = ['#6EA8E8', '#FFC83D', '#3FD79B', T.r, T.a, T.t3]
+    return (
+      <div>
+        {d.parcial && <AvisoOuro ic="ti-alert-triangle" tom="var(--a)">
+          Lista <strong>PARCIAL</strong>: o Mercado Livre não devolveu todos os anúncios agora (ou você tem mais de 500 por status). Os números abaixo não incluem os que faltaram.
+        </AvisoOuro>}
+        <SecaoOuro kicker="Mercado Livre Full" titulo="Seu estoque agora" extra={d.atualizadoEm ? `lido às ${new Date(d.atualizadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : undefined} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 14, marginBottom: 18 }}>
+          {[['Anúncios', r.anuncios], ['No Full', r.noFull], ['Unidades no Full', r.unidadesFull], ['Sem estoque (vendendo)', r.ruptura], ['Acabando (< 15 dias)', r.acabando], ['Parados (sem venda 30d)', r.parados]].map(([l, v], idx) => (
+            <div key={String(l)} className={oc.kpi} style={{ minHeight: 104 }}>
+              <i aria-hidden className={oc.kpiFaixa} style={{ background: corResumo[idx] }} />
+              <span className={oc.kpiRotulo}>{l}</span>
+              <div className={oc.kpiValor}>{Number(v || 0).toLocaleString('pt-BR')}</div>
+            </div>
+          ))}
+        </div>
+        <div className={oc.pilulas} style={{ marginBottom: 14 }}>
+          {(['todos', 'full', 'alerta'] as const).map(f => (
+            <button key={f} onClick={() => setFiltro(f)} style={pilulaOuro(filtro === f)}>
+              {f === 'todos' ? 'Todos' : f === 'full' ? 'Só Full' : 'Com alerta'}
+            </button>
+          ))}
+        </div>
+        {lista.length === 0 && <div className="ouro-cartao"><VazioOuro icone={IcOuro.caixa} titulo={d.demo ? 'Conta de demonstração' : 'Nada neste filtro'} texto={d.demo ? 'Conta de demonstração — sem estoque real.' : 'Nenhum anúncio neste filtro.'} /></div>}
+        <div style={{ display: 'flex', flexDirection: 'column' as const, gap: 10 }}>
+          {lista.map(i => { const sl = selo(i.alerta); return (
+            <div key={i.itemId} className={oc.linha}>
+              {i.foto ? <img src={i.foto} alt="" width={48} height={48} style={{ borderRadius: 12, objectFit: 'cover' as const, background: '#fff', flexShrink: 0 }} /> : <div style={{ width: 48, height: 48, flexShrink: 0 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, color: T.t1, fontWeight: 600, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.titulo}</div>
+                <div style={{ fontSize: 12, color: T.t3, marginTop: 3 }}>
+                  {i.full ? 'Full' : i.logistica === 'self_service' ? 'Flex' : 'Envio próprio/Coleta'} · {i.vendidos30} vendido{i.vendidos30 === 1 ? '' : 's'} em 30 dias{i.status === 'paused' ? ' · anúncio pausado' : ''}
+                  {(i.naoDisponivel || 0) > 0 && <> · {i.motivosNaoDisponivel.map(m => `${m.quantidade} ${motivo[m.status] || m.status}`).join(', ')}</>}
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' as const, minWidth: 120 }}>
+                <div style={{ fontFamily: 'var(--tg-display)', fontStretch: '108%', fontSize: 20, fontWeight: 800, letterSpacing: '-0.02em', color: T.t1, fontVariantNumeric: 'tabular-nums' as const }}>{i.disponivel == null ? '—' : `${i.disponivel} un.`}</div>
+                <div style={{ fontSize: 11.5, color: T.t3 }}>{i.coberturaDias != null ? `dura ~${i.coberturaDias} dias` : i.vendaDia > 0 ? '' : 'sem venda no período'}</div>
+                {sl && <span className={oc.selo} style={{ color: sl.c }}>{sl.t}</span>}
+              </div>
+            </div>
+          ) })}
+        </div>
+      </div>
+    )
+  }
   return (
     <div>
       {d.parcial && <div style={{ fontSize: 12, color: T.a, background: tint(T.a, 10), border: `1px solid ${tint(T.a, 30)}`, borderRadius: 10, padding: '8px 12px', marginBottom: 12 }}>
@@ -1381,6 +1882,7 @@ function EstoqueMl() {
 
 // ── 01/10 — REPUTAÇÃO do vendedor no ML (nível, MercadoLíder e as 3 métricas que derrubam a cor) ─────────────────
 function ReputacaoMl() {
+  const novo = useContext(NovoCtx)
   const [r, setR] = useState<any>(null)
   useEffect(() => {
     let vivo = true
@@ -1392,6 +1894,23 @@ function ReputacaoMl() {
   const met = (nome: string, m: { pct: number; qtd: number } | null, limite: number) => m && (
     <span style={{ fontSize: 11.5, color: m.pct > limite ? T.r : T.t2 }}>{nome} <strong style={{ color: m.pct > limite ? T.r : T.t1 }}>{m.pct.toLocaleString('pt-BR')}%</strong></span>
   )
+  if (novo) {
+    const metN = (nome: string, m: { pct: number; qtd: number } | null, limite: number) => m && (
+      <span className={oc.reputMetr}><span>{nome}</span><strong style={{ color: m.pct > limite ? T.r : T.t1 }}>{m.pct.toLocaleString('pt-BR')}%</strong></span>
+    )
+    return (
+      <div className={oc.reput}>
+        <span className={oc.reputNome}>
+          <span style={{ width: 12, height: 12, borderRadius: 4, background: cor[r.cor] || T.t4, boxShadow: `0 0 12px ${cor[r.cor] || 'transparent'}` }} />
+          Reputação {r.nome}{r.mercadoLider ? ` · MercadoLíder ${r.mercadoLider}` : ''}
+        </span>
+        <span className={oc.reputMetr}><strong style={{ color: T.t1 }}>{Number(r.vendas365 || 0).toLocaleString('pt-BR')}</strong><span>vendas no ano</span></span>
+        {metN('Reclamações', r.reclamacoes, 1)}
+        {metN('Atrasos no envio', r.atrasos, 6)}
+        {metN('Cancelamentos', r.cancelamentos, 0.5)}
+      </div>
+    )
+  }
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' as const, background: T.card, border: `1px solid ${T.line}`, borderRadius: 12, padding: '10px 14px', marginBottom: 14 }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12.5, fontWeight: 700, color: T.t1 }}>

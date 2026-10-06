@@ -1,5 +1,7 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useVisualNovo } from '../ouro/useVisualNovo'
+import o from './NeoChat.ouro.module.css'
 
 // CARTEIRA DE CRÉDITOS DO NEO — saldo no topo da aba + recarga por PIX.
 //
@@ -35,6 +37,8 @@ const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', curren
 export default function Carteira() {
   const [st, setSt] = useState<Status | null>(null)
   const [aberto, setAberto] = useState(false)
+  // Visual novo (só admin, em validação): troca só a apresentação do chip.
+  const novo = useVisualNovo()
 
   const carregar = useCallback(async () => {
     try {
@@ -62,6 +66,34 @@ export default function Carteira() {
   const disponivel = (st.franquia?.restante ?? 0) + st.saldo
   // Chama atenção (dourado) só quando não dá mais pra um anúncio — quando de fato importa.
   const acabando = disponivel < st.custos.anuncio
+
+  if (novo) {
+    return (
+      <>
+        <div className={o.carteira}>
+          <div className={o.carteiraLinha}>
+            <span className={`${o.carteiraPilula}${acabando ? ` ${o.carteiraBaixa}` : ''}`}>
+              <span className={o.carteiraIc} aria-hidden="true">◈</span>
+              <b>{disponivel.toLocaleString('pt-BR')}</b>
+              <span>crédito{disponivel === 1 ? '' : 's'}</span>
+            </span>
+            <button className={o.botaoSec} onClick={() => setAberto(true)}>Recarregar</button>
+          </div>
+          {st.franquia && st.franquia.limite > 0 && (
+            <div className={o.carteiraRenova}>{st.franquia.limite.toLocaleString('pt-BR')} créditos renovados todo mês</div>
+          )}
+        </div>
+
+        {aberto && (
+          <ModalRecarga
+            status={st}
+            onFechar={() => { setAberto(false); carregar() }}
+            onCreditou={carregar}
+          />
+        )}
+      </>
+    )
+  }
 
   return (
     <>
