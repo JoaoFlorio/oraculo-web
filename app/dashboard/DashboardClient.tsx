@@ -1015,7 +1015,7 @@ function Card({product,onClick,locked,saved,onToggleSave}:{product:any;onClick:(
       role="button" tabIndex={0}
       aria-label={locked?'Produto bloqueado — fazer upgrade para ver a análise':`Ver análise de ${product.title||'produto'}`}
       onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();onClick()}}}
-      style={{background:novo?'linear-gradient(180deg,rgba(24,23,16,.96),rgba(10,11,14,.96))':(hov?T.cardHov:T.card),border:`1px solid ${novo?(hov&&!locked?'rgba(255,200,61,.55)':'rgba(255,200,61,.13)'):(hov&&!locked?T.lineG:T.line)}`,borderRadius:novo?20:14,overflow:'hidden',cursor:'pointer',
+      style={{background:novo?'var(--ou-card)':(hov?T.cardHov:T.card),border:`1px solid ${novo?(hov&&!locked?'rgba(255,200,61,.55)':'rgba(255,200,61,.13)'):(hov&&!locked?T.lineG:T.line)}`,borderRadius:novo?20:14,overflow:'hidden',cursor:'pointer',
         transition:'background .15s,border-color .15s,transform .15s,box-shadow .15s',
         transform:hov&&!locked?'translateY(-2px)':'none',
         boxShadow:hov&&!locked?'var(--elev2),0 0 0 1px rgba(240,180,41,0.08)':'var(--elev1)',
@@ -1143,7 +1143,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
           <CabecalhoOuro grupo="Mineração · Amazon" titulo="Análise de" destaque="concorrentes"
             sub={<>Cole o <strong>ASIN</strong> de um produto da Amazon. O Oráculo busca todos os concorrentes e diz se vale a pena entrar nesse mercado.</>}/>
           <BuscaOuro valor={asin} onValor={v=>setAsin(v.toUpperCase())} onEnviar={analyze} carregando={loading} placeholder="ASIN do produto · ex.: B08N5WRWNW" maxLength={10} mono/>
-          <p className="ouro-nota" style={{marginTop:-10}}>O ASIN está no link da Amazon: amazon.com.br/dp/<strong style={{color:'#FFC83D'}}>XXXXXXXXXX</strong></p>
+          <p className="ouro-nota" style={{marginTop:-10}}>O ASIN está no link da Amazon: amazon.com.br/dp/<strong style={{color:'var(--ou-ouro)'}}>XXXXXXXXXX</strong></p>
           {error&&<div className="ouro-erro">{error}</div>}
           {!data&&!loading&&(
             <RecursosOuro itens={[
@@ -2361,14 +2361,14 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                     <div className="ouro-cartao">
                       <div className="ouro-cartao-cab"><span className="ouro-passo">1</span><h3>Sua chave de licença</h3></div>
                       {licLoading?(
-                        <div style={{height:56,borderRadius:14,background:'rgba(255,255,255,.04)',animation:'pulse 1.5s infinite'}}/>
+                        <div style={{height:56,borderRadius:14,background:'var(--ou-sup2)',animation:'pulse 1.5s infinite'}}/>
                       ):licKey?(
                         <>
                           <div className="ext-ouro-chave">
                             <span className="ora-num">{licKey}</span>
                             <button className="ouro-botao" style={{height:42,padding:'0 18px',fontSize:14}} onClick={()=>{navigator.clipboard.writeText(licKey);setKeyCopied(true);setTimeout(()=>setKeyCopied(false),2000)}}>{keyCopied?'✓ Copiado':'Copiar'}</button>
                           </div>
-                          <div style={{marginTop:10,fontSize:12.5,color:'#B9B3A6'}}>Plano <b style={{color:'#FFC83D'}}>{(licPlan ? PLAN_CFG[licPlan]?.label : undefined) ?? licPlan}</b> · funciona em <b style={{color:'#F3EEE2'}}>1 dispositivo</b> por vez</div>
+                          <div style={{marginTop:10,fontSize:12.5,color:'var(--ou-t2)'}}>Plano <b style={{color:'var(--ou-ouro)'}}>{(licPlan ? PLAN_CFG[licPlan]?.label : undefined) ?? licPlan}</b> · funciona em <b style={{color:'var(--ou-t1)'}}>1 dispositivo</b> por vez</div>
                         </>
                       ):(
                         <VazioOuro icone={IcOuro.escudo} titulo="Nenhuma licença encontrada" texto="Nenhuma licença encontrada para este e-mail. Se você acabou de comprar, aguarde alguns minutos e atualize a página."/>
@@ -2578,8 +2578,8 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                           <input className="ouro-entrada" value={nameInput} maxLength={60} onChange={e=>{setNameInput(e.target.value);setNameMsg(null)}} onKeyDown={e=>{if(e.key==='Enter')saveName()}} placeholder="Seu nome"/>
                           <button className="ouro-botao" onClick={saveName} disabled={nameBusy||nameInput.trim()===displayName.trim()}>{nameBusy?'Salvando…':'Salvar'}</button>
                         </div>
-                        {nameMsg&&<div style={{fontSize:12.5,fontWeight:600,color:nameMsg.ok?'#3FD79B':'#FF7A6E',marginTop:10}}>{nameMsg.text}</div>}
-                        <div style={{marginTop:14,fontSize:12,color:'#7E796E'}}>O e-mail é o do seu acesso e não pode ser trocado aqui.</div>
+                        {nameMsg&&<div style={{fontSize:12.5,fontWeight:600,color:nameMsg.ok?'var(--ou-verde)':'var(--ou-verm)',marginTop:10}}>{nameMsg.text}</div>}
+                        <div style={{marginTop:14,fontSize:12,color:'var(--ou-t3)'}}>O e-mail é o do seu acesso e não pode ser trocado aqui.</div>
                       </div>
                       <div className="ouro-cartao">
                         <div className="ouro-cartao-cab"><h3>Seu plano</h3></div>
@@ -2589,16 +2589,16 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                           <>
                             <div style={{display:'flex',alignItems:'baseline',gap:10,flexWrap:'wrap' as const}}>
                               <span className="perfil-ouro-dias" style={{color:statusColor}}>{daysLeft!==null&&daysLeft>0?daysLeft:0}</span>
-                              <span style={{fontSize:14,color:'#B9B3A6'}}>{daysLeft===1?'dia restante':'dias restantes'} · válido até <b className="ora-num" style={{color:'#F3EEE2'}}>{expiresAt.toLocaleDateString('pt-BR')}</b></span>
+                              <span style={{fontSize:14,color:'var(--ou-t2)'}}>{daysLeft===1?'dia restante':'dias restantes'} · válido até <b className="ora-num" style={{color:'var(--ou-t1)'}}>{expiresAt.toLocaleDateString('pt-BR')}</b></span>
                             </div>
                             {cyclePct!==null&&(
                               <div style={{marginTop:14}}>
-                                <div style={{height:8,background:'rgba(255,255,255,.05)',borderRadius:99,overflow:'hidden'}}><div style={{height:'100%',width:`${cyclePct}%`,background:cyclePct>=85?'#FBBF24':'linear-gradient(90deg,#FFE7A3,#FFC83D)',borderRadius:99,transition:'width .6s ease'}}/></div>
-                                <div style={{display:'flex',justifyContent:'space-between',marginTop:7,fontSize:11.5,color:'#7E796E'}}><span>{cycleStart?.toLocaleDateString('pt-BR')}</span><span className="ora-num">{Math.round(cyclePct)}% do ciclo</span><span>{expiresAt.toLocaleDateString('pt-BR')}</span></div>
+                                <div style={{height:8,background:'var(--ou-sup2)',borderRadius:99,overflow:'hidden'}}><div style={{height:'100%',width:`${cyclePct}%`,background:cyclePct>=85?'#FBBF24':'var(--ou-grad-txt)',borderRadius:99,transition:'width .6s ease'}}/></div>
+                                <div style={{display:'flex',justifyContent:'space-between',marginTop:7,fontSize:11.5,color:'var(--ou-t3)'}}><span>{cycleStart?.toLocaleDateString('pt-BR')}</span><span className="ora-num">{Math.round(cyclePct)}% do ciclo</span><span>{expiresAt.toLocaleDateString('pt-BR')}</span></div>
                               </div>
                             )}
                           </>
-                        ):(<div style={{fontSize:13,color:'#B9B3A6'}}>Sem data de vencimento registrada.</div>)}
+                        ):(<div style={{fontSize:13,color:'var(--ou-t2)'}}>Sem data de vencimento registrada.</div>)}
                       </div>
                     </div>
                     <div style={{display:'flex',flexDirection:'column',gap:18,minWidth:0}}>
@@ -2614,20 +2614,20 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                                 <div key={p.id} className="perfil-ouro-plano" data-best={p.best?'1':'0'}>
                                   <div style={{flex:1,minWidth:0}}>
                                     <div style={{display:'flex',alignItems:'baseline',gap:8,flexWrap:'wrap' as const}}><b>{p.label}</b><span className="ora-num">{p.price}</span><small>{p.period}</small></div>
-                                    {p.best&&<div className="ora-num" style={{fontSize:11.5,color:'#FFC83D',marginTop:4,fontWeight:600}}>economize R$ {ANNUAL_ECON_FMT}/ano ({ANNUAL_ECON_PCT}%) vs mensal</div>}
+                                    {p.best&&<div className="ora-num" style={{fontSize:11.5,color:'var(--ou-ouro)',marginTop:4,fontWeight:600}}>economize R$ {ANNUAL_ECON_FMT}/ano ({ANNUAL_ECON_PCT}%) vs mensal</div>}
                                   </div>
-                                  {isCurrent?<span className="ouro-pilula" style={{color:'#B9B3A6',border:'1px solid rgba(243,238,226,.14)'}}>Plano atual</span>
+                                  {isCurrent?<span className="ouro-pilula" style={{color:'var(--ou-t2)',border:'1px solid var(--ou-linha2)'}}>Plano atual</span>
                                     :<a href={GREENN[p.id]} target="_blank" rel="noreferrer" className={p.best?'ouro-botao':'perfil-ouro-sec'} style={p.best?{height:40,padding:'0 18px',fontSize:14,textDecoration:'none'}:undefined}>Assinar</a>}
                                 </div>
                               )
                             })}
-                            <div style={{fontSize:11.5,color:'#7E796E',textAlign:'center' as const,marginTop:4}}>Pagamento seguro via Greenn · ativação automática no mesmo e-mail</div>
+                            <div style={{fontSize:11.5,color:'var(--ou-t3)',textAlign:'center' as const,marginTop:4}}>Pagamento seguro via Greenn · ativação automática no mesmo e-mail</div>
                           </div>
                         )}
                       </div>
                       <div className="ouro-cartao">
                         <div className="ouro-cartao-cab"><h3>Segurança da conta</h3></div>
-                        <p style={{margin:'-6px 0 14px',fontSize:13,lineHeight:1.6,color:'#B9B3A6'}}>Troque a senha gerada automaticamente por uma de sua preferência. Se houver outra sessão aberta, ela será encerrada.</p>
+                        <p style={{margin:'-6px 0 14px',fontSize:13,lineHeight:1.6,color:'var(--ou-t2)'}}>Troque a senha gerada automaticamente por uma de sua preferência. Se houver outra sessão aberta, ela será encerrada.</p>
                         <div style={{display:'flex',flexDirection:'column',gap:10}}>
                           {([
                             {ph:'Senha atual',        val:pwCur,  set:setPwCur},
@@ -2640,7 +2640,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                               autoComplete={i===0?'current-password':'new-password'}/>
                           ))}
                         </div>
-                        {pwMsg&&<div style={{fontSize:12.5,fontWeight:600,color:pwMsg.ok?'#3FD79B':'#FF7A6E',marginTop:10}}>{pwMsg.text}</div>}
+                        {pwMsg&&<div style={{fontSize:12.5,fontWeight:600,color:pwMsg.ok?'var(--ou-verde)':'var(--ou-verm)',marginTop:10}}>{pwMsg.text}</div>}
                         <button className="ouro-botao" onClick={changePassword} disabled={pwBusy} style={{width:'100%',marginTop:14}}>{pwBusy?'Salvando…':'Alterar senha'}</button>
                       </div>
                     </div>

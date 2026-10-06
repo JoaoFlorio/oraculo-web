@@ -34,9 +34,9 @@ function SecaoOuro({ kicker, titulo, extra }: { kicker?: string; titulo: React.R
 const pilulaOuro = (on: boolean): React.CSSProperties => ({
   display: 'inline-flex', alignItems: 'center', gap: 6, height: 34, padding: '0 14px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
   fontSize: 12.5, fontWeight: on ? 700 : 600, whiteSpace: 'nowrap',
-  color: on ? '#1a1204' : '#CFC8B8',
-  background: on ? 'linear-gradient(180deg,#FFE7A3,#FFC83D 50%,#EBA31A)' : 'rgba(255,255,255,.03)',
-  border: `1px solid ${on ? 'transparent' : 'rgba(243,238,226,.12)'}`,
+  color: on ? '#1a1204' : 'var(--ou-t2b)',
+  background: on ? 'linear-gradient(180deg,var(--ou-ouro-claro),var(--ou-ouro) 50%,#EBA31A)' : 'var(--ou-sup1)',
+  border: `1px solid ${on ? 'transparent' : 'var(--ou-linha2)'}`,
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ function Chip({ label, valor, cor, money }: { label: string; valor: string; cor?
   if (novo) return (
     <div className={o.chip}>
       <span>{label}</span>
-      <span className={money ? `ml-money ${o.chipValor}` : o.chipValor} style={{ color: cor || '#F3EEE2' }}>{valor}</span>
+      <span className={money ? `ml-money ${o.chipValor}` : o.chipValor} style={{ color: cor || 'var(--ou-t1)' }}>{valor}</span>
     </div>
   )
   return (
@@ -372,7 +372,7 @@ function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { prod
         </div>
 
         {/* Waterfall */}
-        <div style={novo ? { margin: '16px 18px', background: 'rgba(255,255,255,.025)', border: '1px solid rgba(255,200,61,.12)', borderRadius: 16, padding: '8px 16px' } : { margin: '14px 16px', background: T.modal, border: `1px solid ${T.line}`, borderRadius: 12, padding: '6px 14px' }}>
+        <div style={novo ? { margin: '16px 18px', background: 'var(--ou-sup1)', border: '1px solid rgba(255,200,61,.12)', borderRadius: 16, padding: '8px 16px' } : { margin: '14px 16px', background: T.modal, border: `1px solid ${T.line}`, borderRadius: 12, padding: '6px 14px' }}>
           <LinhaWF label={`Faturado (${p.qty} un.)`} val={brl(p.receita)} strong nota="valor do anúncio (preço × unidades) no período — o frete que o comprador paga é repasse ao transportador e não entra aqui" />
           <LinhaWF label="Tarifa do Mercado Livre" val={brl(p.tarifa)} sign="-" cor={T.r} nota="sale_fee real cobrada em cada pedido" />
           <LinhaWF label="Envio" val={p.envio != null ? brl(p.envio) : 'medindo…'} sign={p.envio != null ? '-' : undefined} cor={p.envio != null ? T.r : T.t4} nota="custo real do frete que ficou com você (só de pedido mono-item; multi-item não rateamos)" />
@@ -394,7 +394,7 @@ function ProdutoDetalhe({ produto, pedidos, aliquota, custoUn, onClose }: { prod
 
         {/* Pedidos deste produto */}
         <div style={{ margin: '0 16px 16px' }}>
-          <div style={novo ? { fontFamily: 'var(--tg-mono)', fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase' as const, color: '#FFE7A3', margin: '6px 2px 10px' } : { fontSize: 12, fontWeight: 700, color: T.t2, margin: '4px 0 8px' }}>Pedidos deste produto no período</div>
+          <div style={novo ? { fontFamily: 'var(--tg-mono)', fontSize: 10.5, letterSpacing: '0.16em', textTransform: 'uppercase' as const, color: 'var(--ou-ouro-claro)', margin: '6px 2px 10px' } : { fontSize: 12, fontWeight: 700, color: T.t2, margin: '4px 0 8px' }}>Pedidos deste produto no período</div>
           <TableH head={[{ label: 'Data' }, { label: 'Un.', right: true }, { label: 'Faturado', right: true }, { label: 'Tarifa', right: true }]} minWidth={420}>
             {meus.slice(0, 30).map((o, i) => {
               const it = o.itens.find(x => x.itemId === p.itemId)!
@@ -884,7 +884,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
               {(dre.devolucoes?.pedidos ?? 0) > 0 && novo && (
                 <AvisoOuro ic="ti-arrow-back-up" tom="var(--r)">
                   <strong>Devoluções:</strong> {dre.devolucoes!.pedidos} pedido{dre.devolucoes!.pedidos === 1 ? '' : 's'} · <strong className="ml-money" style={{ color: T.r }}>{brl(dre.devolucoes!.valor)}</strong> devolvido{dre.devolucoes!.envioPerdido > 0 ? <> · frete perdido <strong className="ml-money" style={{ color: T.r }}>{brl(dre.devolucoes!.envioPerdido)}</strong></> : null}
-                  <div style={{ fontSize: 12, color: '#7E796E', marginTop: 3 }}>Venda entregue e depois reembolsada. Já fora do faturamento; o frete que você pagou nelas já saiu do Líquido.</div>
+                  <div style={{ fontSize: 12, color: 'var(--ou-t3)', marginTop: 3 }}>Venda entregue e depois reembolsada. Já fora do faturamento; o frete que você pagou nelas já saiu do Líquido.</div>
                 </AvisoOuro>
               )}
               {(dre.devolucoes?.pedidos ?? 0) > 0 && !novo && (
@@ -911,8 +911,8 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                       <AreaChart data={chartData} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
                         <defs>
                           <linearGradient id="mlgReceita" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={novo ? '#FFC83D' : T.pur} stopOpacity={0.34} />
-                            <stop offset="100%" stopColor={novo ? '#FFC83D' : T.pur} stopOpacity={0.02} />
+                            <stop offset="0%" stopColor={novo ? 'var(--ou-ouro)' : T.pur} stopOpacity={0.34} />
+                            <stop offset="100%" stopColor={novo ? 'var(--ou-ouro)' : T.pur} stopOpacity={0.02} />
                           </linearGradient>
                           <linearGradient id="mlgLiq" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor={T.g} stopOpacity={0.3} />
@@ -923,7 +923,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                         <XAxis dataKey="label" tick={{ fill: T.t3, fontSize: 11 }} interval="preserveStartEnd" minTickGap={28} tickMargin={8} />
                         <YAxis tick={{ fill: T.t3, fontSize: 10.5 }} width={82} tickFormatter={(v: number) => 'R$ ' + Math.round(v).toLocaleString('pt-BR')} />
                         <RTooltip contentStyle={{ background: T.modal, border: `1px solid ${T.line}`, borderRadius: 10, fontSize: 12 }} formatter={(v, n) => [brl(Number(v)), n === 'liq' ? 'Líq. do Marketplace' : 'Receita']} labelStyle={{ color: T.t2 }} />
-                        <Area type="monotone" dataKey="receita" name="Receita" stroke={novo ? '#FFC83D' : T.pur} strokeWidth={2.4} fill="url(#mlgReceita)" dot={false} activeDot={{ r: 4 }} />
+                        <Area type="monotone" dataKey="receita" name="Receita" stroke={novo ? 'var(--ou-ouro)' : T.pur} strokeWidth={2.4} fill="url(#mlgReceita)" dot={false} activeDot={{ r: 4 }} />
                         {chart30.netRatio != null && <Area type="monotone" dataKey="liq" name="Líq. do Marketplace" stroke={T.g} strokeWidth={2.4} fill="url(#mlgLiq)" dot={false} activeDot={{ r: 4 }} />}
                       </AreaChart>
                     </ResponsiveContainer>
@@ -1083,7 +1083,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                   É aqui que o lucro fecha: informe o <strong>custo unitário</strong> de cada anúncio e a <strong>alíquota de imposto</strong>. O Oráculo já mede tarifa, envio e Ads — o custo do produto só você tem. Cada valor salva sozinho e recalcula o lucro na hora.
                 </AvisoOuro>
                 <CartaoOuro titulo="Imposto sobre a venda" style={{ marginBottom: 22 }}
-                  extra={salvando ? <span style={{ fontFamily: 'var(--tg-mono)', fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: T.t3, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span className="ouro-gira" style={{ borderColor: 'rgba(255,200,61,.25)', borderTopColor: '#FFC83D', width: 12, height: 12 }} aria-hidden="true" />salvando…</span> : undefined}>
+                  extra={salvando ? <span style={{ fontFamily: 'var(--tg-mono)', fontSize: 10.5, letterSpacing: '0.12em', textTransform: 'uppercase' as const, color: T.t3, display: 'inline-flex', alignItems: 'center', gap: 6 }}><span className="ouro-gira" style={{ borderColor: 'rgba(255,200,61,.25)', borderTopColor: 'var(--ou-ouro)', width: 12, height: 12 }} aria-hidden="true" />salvando…</span> : undefined}>
                   <div className={oc.imposto}>
                     <label htmlFor="ml-imposto" className={oc.impostoCampo}>
                       <input id="ml-imposto" className="ouro-entrada" value={imposto} onChange={e => salvarImposto(e.target.value)}
@@ -1145,7 +1145,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                       <td style={{ ...cellNum, color: p.envio != null ? T.a : T.t3 }}>{p.envio != null ? `− ${brl(p.envio)}` : '—'}{p.envioParcial && p.envio != null ? ' *' : ''}</td>
                       <td style={{ ...cellNum, fontWeight: 700, color: p.liquido != null ? (p.liquido >= 0 ? T.g : T.r) : T.t3 }}>{p.liquido != null ? brl(p.liquido) : '—'}</td>
                       <td style={{ padding: '6px 8px', borderTop: `1px solid ${T.line}`, textAlign: 'right' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: `1px solid ${p.temCusto ? (novo ? 'rgba(255,200,61,.22)' : T.line) : tint(T.a, 40)}`, borderRadius: novo ? 10 : 8, padding: novo ? '6px 9px' : '3px 6px', background: novo ? 'rgba(255,255,255,.03)' : T.modal }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, border: `1px solid ${p.temCusto ? (novo ? 'rgba(255,200,61,.22)' : T.line) : tint(T.a, 40)}`, borderRadius: novo ? 10 : 8, padding: novo ? '6px 9px' : '3px 6px', background: novo ? 'var(--ou-sup1)' : T.modal }}>
                           <span style={{ fontSize: 10.5, color: T.t4 }}>R$</span>
                           <input value={custos[p.itemId] ?? ''} onChange={e => salvarCusto(p.itemId, e.target.value)}
                             onFocus={e => e.currentTarget.select()}
@@ -1294,11 +1294,11 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
               <>
                 <SecaoOuro kicker={perLabel} titulo="Seus anúncios no período" />
                 <div className={oc.kpisAds}>
-                  <Kpi label="Valor em Ads" valor={dre.ads == null ? '—' : brl(dre.ads)} cor="#FFC83D" legenda="gasto real, não estimativa"
+                  <Kpi label="Valor em Ads" valor={dre.ads == null ? '—' : brl(dre.ads)} cor="var(--ou-ouro)" legenda="gasto real, não estimativa"
                     ajuda="Gasto REAL de Mercado Ads no período, somado dos seus anúncios. Não é estimativa." />
-                  <Kpi label="Faturamento" valor={brl(fat)} cor="#6EA8E8" legenda="total do período, com e sem anúncio"
+                  <Kpi label="Faturamento" valor={brl(fat)} cor="var(--ou-azul)" legenda="total do período, com e sem anúncio"
                     ajuda="O valor dos anúncios (preço × unidades) nos pedidos válidos do período. O frete pago pelo comprador é repasse ao transportador — não entra. Pedido cancelado também não (o painel do ML soma cancelado em 'vendas brutas')." />
-                  <Kpi label="TACOS" valor={dre.tacos == null ? '—' : pc(dre.tacos)} cor="#B9A5FF" legenda="Ads ÷ faturamento"
+                  <Kpi label="TACOS" valor={dre.tacos == null ? '—' : pc(dre.tacos)} cor="var(--ou-vio)" legenda="Ads ÷ faturamento"
                     ajuda="Ads ÷ faturamento. Quanto do que você vendeu foi pro anúncio." />
                   <Kpi label="Lucro bruto pós ADS" valor={(dre.lucroPosAds == null || !cm) ? '—' : brl(dre.lucroPosAds)} cor={dre.lucroPosAds != null && dre.lucroPosAds < 0 ? T.r : T.g}
                     legenda={cm ? 'lucro bruto − Ads' : 'cadastre o custo pra ver'}
@@ -1788,7 +1788,7 @@ function EstoqueMl() {
   const selo = (a: ItemEst['alerta']) => a === 'ruptura' ? { t: 'SEM ESTOQUE', c: T.r } : a === 'acabando' ? { t: 'ACABANDO', c: T.a } : a === 'parado' ? { t: 'PARADO', c: T.t3 } : null
   const motivo: Record<string, string> = { transfer: 'em transferência', damaged: 'danificado', lost: 'perdido', withdrawal: 'em retirada', internal_process: 'processo interno', not_supported: 'não suportado' }
   if (novo) {
-    const corResumo = ['#6EA8E8', '#FFC83D', '#3FD79B', T.r, T.a, T.t3]
+    const corResumo = ['var(--ou-azul)', 'var(--ou-ouro)', 'var(--ou-verde)', T.r, T.a, T.t3]
     return (
       <div>
         {d.parcial && <AvisoOuro ic="ti-alert-triangle" tom="var(--a)">

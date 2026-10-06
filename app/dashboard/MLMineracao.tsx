@@ -135,7 +135,7 @@ export function CardProduto({ p, onOpen, saved, onToggleSave }: { p: Produto; on
                 {([['20%', p.custoAlvo.m20], ['30%', p.custoAlvo.m30], ['40%', p.custoAlvo.m40]] as Array<[string, number]>).map(([m, v]) => (
                   <div key={m} className={o.compreCel}>
                     <span>{m}</span>
-                    <b style={{ color: v > 0 ? undefined : '#7E796E' }}>{v > 0 ? brl(v) : '—'}</b>
+                    <b style={{ color: v > 0 ? undefined : 'var(--ou-t3)' }}>{v > 0 ? brl(v) : '—'}</b>
                   </div>
                 ))}
               </div>
@@ -280,7 +280,7 @@ const ferramenta: React.CSSProperties = { display: 'flex', alignItems: 'center',
 function Chip({ text, c }: { text: string; c: string }) { return <span style={{ background: tint(c, 9), color: c, border: `1px solid ${tint(c, 16)}`, borderRadius: 4, padding: '2px 8px', fontSize: 10, fontWeight: 600, letterSpacing: '0.03em' }}>{text}</span> }
 function Lbl({ children, style, ouro }: { children: React.ReactNode; style?: React.CSSProperties; ouro?: boolean }) { return <div style={{ fontSize: 9, fontWeight: 700, color: T.t3, letterSpacing: '0.14em', textTransform: 'uppercase' as const, ...(ouro ? LBL_OURO : {}), ...style }}>{children}</div> }
 // Visual novo: rótulos em mono, kicker dourado claro (só aplicado quando `ouro`/`novo` é true).
-const LBL_OURO: React.CSSProperties = { fontFamily: 'var(--tg-mono), "JetBrains Mono", monospace', fontSize: 10.5, letterSpacing: '0.16em', color: '#FFE7A3' }
+const LBL_OURO: React.CSSProperties = { fontFamily: 'var(--tg-mono), "JetBrains Mono", monospace', fontSize: 10.5, letterSpacing: '0.16em', color: 'var(--ou-ouro-claro)' }
 const NUM_OURO: React.CSSProperties = { fontFamily: 'var(--tg-display), "Archivo", sans-serif', fontStretch: '108%', fontWeight: 800, letterSpacing: '-0.03em', fontVariantNumeric: 'tabular-nums' }
 const fmtN = (n: number) => Math.round(n).toLocaleString('pt-BR')
 const fmtR = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -806,7 +806,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
           ) : (
             <div className="ouro-cartao">
               <VazioOuro icone={IcOuro.salvo} titulo="Nada salvo ainda"
-                texto={<>Na <strong style={{ color: '#F3EEE2' }}>Mineração ML</strong>, clique em <strong style={{ color: '#FFC83D' }}>Salvar</strong> no produto que te interessar. Ele aparece aqui.</>} />
+                texto={<>Na <strong style={{ color: 'var(--ou-t1)' }}>Mineração ML</strong>, clique em <strong style={{ color: 'var(--ou-ouro)' }}>Salvar</strong> no produto que te interessar. Ele aparece aqui.</>} />
             </div>
           )}
           {detail && <MLDetalheModal p={detail} onClose={() => setDetail(null)} />}
@@ -929,7 +929,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
         {!erro && produtos.length === 0 && (loading || !fim) && (
           <div className="ouro-cartao">
             <VazioOuro icone={IcOuro.lupa} titulo="Garimpando os mais vendidos…"
-              texto={<>Buscando o ranking de <strong style={{ color: '#F3EEE2' }}>{subNome || catNome}</strong> e calculando comissão e frete reais de cada produto.</>} />
+              texto={<>Buscando o ranking de <strong style={{ color: 'var(--ou-t1)' }}>{subNome || catNome}</strong> e calculando comissão e frete reais de cada produto.</>} />
           </div>
         )}
         {!erro && !loading && produtos.length === 0 && fim && (
@@ -964,7 +964,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
         {!fim && !loading && produtos.length > 0 && (
           <div className={o.mais}>
             <button type="button" className={o.pilula} onClick={() => buscarPagina(catAtiva, pageRef.current)} disabled={carregandoMais}>
-              {carregandoMais ? <><span className="ouro-gira" style={{ borderColor: 'rgba(255,200,61,.25)', borderTopColor: '#FFC83D' }} aria-hidden="true" />Garimpando…</> : 'Carregar mais produtos'}
+              {carregandoMais ? <><span className="ouro-gira" style={{ borderColor: 'rgba(255,200,61,.25)', borderTopColor: 'var(--ou-ouro)' }} aria-hidden="true" />Garimpando…</> : 'Carregar mais produtos'}
             </button>
           </div>
         )}
@@ -975,7 +975,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
         {/* Buscas em alta (conteúdo do ML) */}
         {trends.length > 0 && (
           <div className={o.secao}>
-            <div className={o.secaoTit}>{IcOuro.grafico}<span className={o.filtroLbl} style={{ color: '#FFE7A3' }}>Buscas em alta no Mercado Livre</span></div>
+            <div className={o.secaoTit}>{IcOuro.grafico}<span className={o.filtroLbl} style={{ color: 'var(--ou-ouro-claro)' }}>Buscas em alta no Mercado Livre</span></div>
             <div className="ouro-chips">
               {trends.map(t => (
                 <a key={t.keyword} href={t.url} target="_blank" rel="noreferrer" className={o.alta}>{t.keyword}</a>
@@ -986,7 +986,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
 
         {/* Como ler o card (mesmo conteúdo da legenda antiga) */}
         <div className={o.secao}>
-          <div className={o.secaoTit}>{IcOuro.brilho}<span className={o.filtroLbl} style={{ color: '#FFE7A3' }}>Como ler o card</span></div>
+          <div className={o.secaoTit}>{IcOuro.brilho}<span className={o.filtroLbl} style={{ color: 'var(--ou-ouro-claro)' }}>Como ler o card</span></div>
           <div className={o.glossario}>
             <div className={o.termo}><b>Genérico</b><p>Sem marca dominando — dá pra comprar genérico e revender. Marca de supermercado e marca grande aparecem no card, sem o selo.</p></div>
             <div className={o.termo}><b>Você recebe</b><p>Preço − comissão real − envio real ({premissas ? `${REP_NOME[premissas.reputacao]} — a da sua conta` : 'reputação verde'}), antes de imposto, custo e Ads.</p></div>

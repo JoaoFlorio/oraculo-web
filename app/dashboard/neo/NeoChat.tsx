@@ -246,7 +246,7 @@ function NeoMark({ size = 46, on = false }: { size?: number; on?: boolean }) {
  * true. Nenhuma lógica nova — mesmos estados e funções do NeoChat. */
 
 // Cores de severidade na paleta do visual novo (mesmos rótulos do SEV).
-const SEV_OURO = { critico: '#FF7A6E', atencao: '#FFC83D', ok: '#3FD79B' } as const
+const SEV_OURO = { critico: 'var(--ou-verm)', atencao: 'var(--ou-ouro)', ok: 'var(--ou-verde)' } as const
 
 // Íris do NEO (mesma linguagem do olho da Gestão; anéis giram via .ora-iris-ring/.ora-iris-fib).
 const IRIS_ANEL = Array.from({ length: 40 }, (_, i) => {
@@ -263,7 +263,7 @@ function IrisOuro({ tam = 44, ativo = false }: { tam?: number; ativo?: boolean }
     <svg className={`${o.iris}${ativo ? ` ${o.irisAtiva}` : ''}`} width={tam} height={tam} viewBox="0 0 120 120" aria-hidden="true">
       <g className="ora-iris-ring">
         {IRIS_ANEL.map((l, i) => (
-          <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke={l.on ? '#FFC83D' : 'rgba(255,231,163,.4)'}
+          <line key={i} x1={l.x1} y1={l.y1} x2={l.x2} y2={l.y2} stroke={l.on ? 'var(--ou-ouro)' : 'rgba(255,231,163,.4)'}
             strokeWidth={l.on ? 2.4 : 1.2} strokeLinecap="round" opacity={l.on ? 0.95 : 0.6} />
         ))}
       </g>

@@ -142,16 +142,16 @@ function CampoOuro({ label, children, hint }: { label: string; children: React.R
 function NumOuro({ value, onChange, prefix, suffix, placeholder }: { value: string; onChange: (v: string) => void; prefix?: string; suffix?: string; placeholder?: string }) {
   return (
     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-      {prefix && <span style={{ position: 'absolute', left: 14, fontSize: 13.5, fontWeight: 600, color: '#8E887B', pointerEvents: 'none' }}>{prefix}</span>}
+      {prefix && <span style={{ position: 'absolute', left: 14, fontSize: 13.5, fontWeight: 600, color: 'var(--ou-t3b)', pointerEvents: 'none' }}>{prefix}</span>}
       <input className="ouro-entrada" inputMode="decimal" value={value} placeholder={placeholder || '0'}
         onChange={e => onChange(e.target.value.replace(/[^\d.,]/g, ''))}
         style={{ paddingLeft: prefix ? 40 : 14, paddingRight: suffix ? 40 : 14, fontVariantNumeric: 'tabular-nums' }} />
-      {suffix && <span style={{ position: 'absolute', right: 14, fontSize: 13, fontWeight: 600, color: '#8E887B', pointerEvents: 'none' }}>{suffix}</span>}
+      {suffix && <span style={{ position: 'absolute', right: 14, fontSize: 13, fontWeight: 600, color: 'var(--ou-t3b)', pointerEvents: 'none' }}>{suffix}</span>}
     </div>
   )
 }
 function ModalidadeOuro({ nome, cor, m, hint, freteLabel, destaque }: { nome: string; cor: string; m: Modality; hint: string; freteLabel?: string; destaque?: boolean }) {
-  const lucroCor = m.lucro > 0 ? '#3FD79B' : m.lucro < 0 ? '#FF7A6E' : '#B9B3A6'
+  const lucroCor = m.lucro > 0 ? 'var(--ou-verde)' : m.lucro < 0 ? 'var(--ou-verm)' : 'var(--ou-t2)'
   const linhas: [string, string, string?][] = [['Preço de venda', brl(m.receita)], ['Taxa de venda do ML', `− ${brl(m.comissao)}`]]
   if (m.imposto > 0) linhas.push(['Imposto', `− ${brl(m.imposto)}`])
   linhas.push(['Custo do produto', `− ${brl(m.custo)}`])
@@ -280,7 +280,7 @@ export default function MLCalculator() {
               <div className="calc-ouro-campos">
                 <CampoOuro label="Link do anúncio (opcional)" hint="Com o link, a comissão e o frete vêm reais do Mercado Livre.">
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <span style={{ position: 'absolute', left: 14, width: 18, height: 18, color: '#8E887B', pointerEvents: 'none' }}>{IcOuro.link}</span>
+                    <span style={{ position: 'absolute', left: 14, width: 18, height: 18, color: 'var(--ou-t3b)', pointerEvents: 'none' }}>{IcOuro.link}</span>
                     <input className="ouro-entrada" value={link} onChange={e => setLink(e.target.value)} placeholder="mercadolivre.com.br/... ou MLB1234567890" style={{ paddingLeft: 42 }} />
                   </div>
                 </CampoOuro>
@@ -371,8 +371,8 @@ export default function MLCalculator() {
             {erro && <div className="calc-ouro-erro">{erro}</div>}
             {data && (
               <div className="calc-ouro-mods" style={{ opacity: loading ? 0.55 : 1 }}>
-                <ModalidadeOuro nome="Clássico" cor="#B9A5FF" m={data.modalities.classico} hint="Mais barato, sem destaque nas buscas." freteLabel={freteLabel} />
-                <ModalidadeOuro nome="Premium" cor="#FFC83D" m={data.modalities.premium} hint="Comissão maior, mais exposição + parcelamento sem juros." freteLabel={freteLabel} destaque />
+                <ModalidadeOuro nome="Clássico" cor="var(--ou-vio)" m={data.modalities.classico} hint="Mais barato, sem destaque nas buscas." freteLabel={freteLabel} />
+                <ModalidadeOuro nome="Premium" cor="var(--ou-ouro)" m={data.modalities.premium} hint="Comissão maior, mais exposição + parcelamento sem juros." freteLabel={freteLabel} destaque />
               </div>
             )}
             {!data && !loading && !erro && (

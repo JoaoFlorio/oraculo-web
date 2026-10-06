@@ -58,8 +58,17 @@ const THEMES:Record<string,Theme> = {
     gold:'#FFC83D', goldText:'#FFE7A3', grn:'#3FD79B', red:'#FF7A6E', vio:'#B9A5FF', blue:'#6EA8E8',
     grid:'rgba(255,255,255,0.06)', tipBg:'#15160F',
     pillGrn:['rgba(63,215,155,0.16)','#3FD79B'], pillGold:['rgba(255,200,61,0.16)','#FFE7A3'], pillRed:['rgba(255,122,110,0.16)','#FF9A90'],
+  },  // 06/10/2026: o mesmo visual novo no tema claro (papel creme + ouro firme) — entra no lugar do 'light'.
+  ouroClaro: {
+    key:'ouroClaro', name:'Ouro claro', dark:false,
+    pageBg:'#F6F2EA', card:'#FFFFFF', card2:'#FFFCF5', line:'rgba(40,32,15,0.10)', line2:'rgba(40,32,15,0.17)',
+    t1:'#1C1912', t2:'#4A4438', t3:'#766E60',
+    gold:'#C98A00', goldText:'#9E6B00', grn:'#13895F', red:'#CF3F2E', vio:'#6B4ED2', blue:'#2C69B3',
+    grid:'rgba(40,32,15,0.07)', tipBg:'#FFFFFF',
+    pillGrn:['rgba(19,137,95,0.12)','#13895F'], pillGold:['rgba(201,138,0,0.13)','#9E6B00'], pillRed:['rgba(207,63,46,0.12)','#B93526'],
   },
 }
+const ehOuro=(t:Theme)=>t.key==='ouro'||t.key==='ouroClaro'
 const FH = "var(--gh-fh,'Space Grotesk'),'Inter',sans-serif"   // --gh-fh só existe no visual novo (globals.css)
 const FG = "var(--gh-fg,'Montserrat'),'Inter',sans-serif"   // fonte do Gestor Seller (Montserrat nos títulos/valores)
 const ThemeCtx = createContext<Theme>(THEMES.dark)
@@ -573,13 +582,13 @@ function KPI({label,value,color,hide,tip}:{label:string;value:string;delta?:stri
     return ()=>document.removeEventListener('click',fechar)
   },[aberto])
   return(
-    <div style={t.key==='ouro'
-      ? {background:`radial-gradient(90% 90% at 100% 0%, color-mix(in srgb, ${color} 13%, transparent), transparent 60%), linear-gradient(180deg,rgba(22,21,15,.94),rgba(10,11,14,.94))`,border:'1px solid rgba(255,200,61,.13)',borderRadius:18,padding:'18px 18px 20px',textAlign:'left' as const,position:'relative' as const,minHeight:108,display:'flex',flexDirection:'column' as const,justifyContent:'flex-end',boxShadow:'0 26px 50px -34px rgba(0,0,0,.9)',overflow:'visible'}
+    <div style={ehOuro(t)
+      ? {background:`radial-gradient(90% 90% at 100% 0%, color-mix(in srgb, ${color} 13%, transparent), transparent 60%), var(--ou-card)`,border:'1px solid rgba(255,200,61,.13)',borderRadius:18,padding:'18px 18px 20px',textAlign:'left' as const,position:'relative' as const,minHeight:108,display:'flex',flexDirection:'column' as const,justifyContent:'flex-end',boxShadow:'0 26px 50px -34px rgba(0,0,0,.9)',overflow:'visible'}
       : {background:t.card,border:`1px solid ${t.line}`,borderRadius:14,padding:'18px 14px 18px',textAlign:'center' as const,position:'relative' as const,minHeight:96,display:'flex',flexDirection:'column' as const,justifyContent:'center',boxShadow:'var(--elev1)'}}>
       {/* Faixa de acento no topo — a MESMA em todo card (só a cor muda por métrica);
           antes a cor ia na borda inteira e o azul/violeta sumiam no escuro enquanto
           o verde brilhava, dando cara de layout quebrado. Agora o grid fica uniforme. */}
-      <div aria-hidden style={{position:'absolute' as const,top:0,left:t.key==='ouro'?18:0,right:t.key==='ouro'?18:0,height:t.key==='ouro'?2:3,background:t.key==='ouro'?`linear-gradient(90deg,${color},transparent)`:color,borderTopLeftRadius:13,borderTopRightRadius:13}}/>
+      <div aria-hidden style={{position:'absolute' as const,top:0,left:ehOuro(t)?18:0,right:ehOuro(t)?18:0,height:ehOuro(t)?2:3,background:ehOuro(t)?`linear-gradient(90deg,${color},transparent)`:color,borderTopLeftRadius:13,borderTopRightRadius:13}}/>
       {tip
         ? <button aria-label={`O que é ${label}`} onClick={e=>{e.stopPropagation();setAberto(v=>!v)}}
             style={{position:'absolute' as const,top:5,right:6,background:'transparent',border:'none',cursor:'pointer',padding:4,lineHeight:1}}>
@@ -592,10 +601,10 @@ function KPI({label,value,color,hide,tip}:{label:string;value:string;delta?:stri
           {tip}
         </div>
       )}
-      <div style={t.key==='ouro'
+      <div style={ehOuro(t)
         ? {fontFamily:'var(--tg-mono),monospace',fontSize:10.5,letterSpacing:'.14em',textTransform:'uppercase' as const,color:t.t3,fontWeight:600,marginBottom:10,lineHeight:1.3,paddingRight:18}
         : {fontFamily:FG,fontSize:12.5,color:t.t2,fontWeight:500,marginBottom:9,lineHeight:1.25}}>{label}</div>
-      <div style={t.key==='ouro'
+      <div style={ehOuro(t)
         ? {fontFamily:'var(--tg-display),Archivo,sans-serif',fontStretch:'106%',fontWeight:800,fontSize:30,lineHeight:1,letterSpacing:'-0.03em',color:t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}
         : {fontFamily:FG,fontWeight:700,fontSize:25,letterSpacing:'-0.01em',color:t.t1,fontVariantNumeric:'tabular-nums',filter:hide?'blur(7px)':'none'}}>{value}</div>
     </div>
@@ -5813,11 +5822,11 @@ export function BarraGestao({grupo,tab,semCusto,onGrupo,onTab}:{
           <button key={gr.id} onClick={()=>onGrupo(gr.id)} aria-current={on?'page':undefined}
             title={gr.pergunta}
             style={{display:'flex',alignItems:'center',gap:7,
-              padding:t.key==='ouro'?'11px 18px':'9px 15px',borderRadius:t.key==='ouro'?999:11,cursor:'pointer',fontFamily:'inherit',flexShrink:0,
-              fontSize:t.key==='ouro'?14:13,fontWeight:on?700:600,whiteSpace:'nowrap' as const,
-              border:`1px solid ${on?(t.key==='ouro'?'transparent':t.gold):(t.key==='ouro'?'rgba(243,238,226,.12)':t.line)}`,
-              background:on?(t.key==='ouro'?'linear-gradient(180deg,#FFE7A3,#FFC83D 50%,#EBA31A)':t.gold):(t.key==='ouro'?'rgba(255,255,255,.03)':t.card),
-              boxShadow:on&&t.key==='ouro'?'0 10px 26px -12px rgba(255,200,61,.75)':undefined,
+              padding:ehOuro(t)?'11px 18px':'9px 15px',borderRadius:ehOuro(t)?999:11,cursor:'pointer',fontFamily:'inherit',flexShrink:0,
+              fontSize:ehOuro(t)?14:13,fontWeight:on?700:600,whiteSpace:'nowrap' as const,
+              border:`1px solid ${on?(ehOuro(t)?'transparent':t.gold):(ehOuro(t)?'var(--ou-linha2)':t.line)}`,
+              background:on?(ehOuro(t)?'linear-gradient(180deg,#FFE7A3,#FFC83D 50%,#EBA31A)':t.gold):(ehOuro(t)?'var(--ou-sup1)':t.card),
+              boxShadow:on&&ehOuro(t)?'0 10px 26px -12px rgba(255,200,61,.75)':undefined,
               color:on?(t.dark?'#1c1606':'#3a2a05'):t.t2}}>
             <i className={`ti ${gr.icon}`} style={{fontSize:15}} aria-hidden="true"/>{gr.label}
             {badge!==null && (
@@ -5841,8 +5850,8 @@ export function BarraGestao({grupo,tab,semCusto,onGrupo,onTab}:{
           const on=tab===id
           return(
             <button key={id} onClick={()=>onTab(id)} aria-current={on?'page':undefined}
-              style={{display:'flex',alignItems:'center',gap:6,fontSize:t.key==='ouro'?13.5:12.5,whiteSpace:'nowrap' as const,
-                padding:t.key==='ouro'?'8px 14px':'7px 11px',borderRadius:t.key==='ouro'?999:8,cursor:'pointer',fontFamily:'inherit',border:`1px solid ${t.key==='ouro'&&on?'rgba(255,200,61,.35)':'transparent'}`,
+              style={{display:'flex',alignItems:'center',gap:6,fontSize:ehOuro(t)?13.5:12.5,whiteSpace:'nowrap' as const,
+                padding:ehOuro(t)?'8px 14px':'7px 11px',borderRadius:ehOuro(t)?999:8,cursor:'pointer',fontFamily:'inherit',border:`1px solid ${ehOuro(t)&&on?'rgba(255,200,61,.35)':'transparent'}`,
                 background:on?(t.dark?'rgba(240,180,41,0.13)':'rgba(240,180,41,0.16)'):'transparent',
                 color:on?t.goldText:t.t2,fontWeight:on?700:500,flexShrink:0}}>
               <i className={`ti ${tb.icon}`} style={{fontSize:14}} aria-hidden="true"/>{tb.label}
@@ -6181,7 +6190,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
     ler(); const mo=new MutationObserver(ler); mo.observe(h,{attributes:true,attributeFilter:['data-visual']})
     return ()=>mo.disconnect()
   },[])
-  const t=(ouro && themeKey==='dark') ? THEMES.ouro : (THEMES[themeKey]||THEMES.dark)
+  const t=ouro ? (themeKey==='light' ? THEMES.ouroClaro : THEMES.ouro) : (THEMES[themeKey]||THEMES.dark)
 
   const d=useMemo(()=>getFinanceData(),[])
   const m=useMemo(()=>productMetrics(d),[d])
@@ -6198,7 +6207,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
         <link rel="stylesheet" precedence="default" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.24.0/dist/tabler-icons.min.css"/>
 
         {/* Header — visual novo (só admin) */}
-        {t.key==='ouro' && (
+        {ehOuro(t) && (
           <CabecalhoOuro grupo={soAds?'Ads · Amazon':'Gestão · Amazon'} titulo={soAds?'NEO no comando dos':'O lucro real da'} destaque={soAds?'anúncios':'sua operação'}
             sub={<><span style={{display:'inline-flex',alignItems:'center',gap:7}}><span style={{width:7,height:7,borderRadius:'50%',background:realDre&&!realDre.stale?t.grn:t.gold,boxShadow:`0 0 10px ${realDre&&!realDre.stale?t.grn:t.gold}`}}/>{realDre?(realDre.stale?'atualizando os números…':'dados reais da Amazon'):amazonConnected?'carregando dados reais…':(soAds?'conecte sua conta para começar':'conecte sua conta para ver seus dados')}</span></>}
             acoes={<>
@@ -6208,7 +6217,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
               <PeriodPicker value={period} custom={customRange} onChange={(k,r)=>{ setPeriod(k); setCustomRange(r) }}/>
             </>}/>
         )}
-        {t.key!=='ouro' && <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
+        {!ehOuro(t) && <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,flexWrap:'wrap' as const,marginBottom:14}}>
           <div>
             <h2 style={{fontFamily:FG,fontSize:21,fontWeight:600,color:t.t1,letterSpacing:'-0.02em'}}>{soAds?'Ads · Amazon':'Gestão'}</h2>
             <p style={{fontSize:12,color:t.t2,marginTop:1}}>{soAds

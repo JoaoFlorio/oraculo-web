@@ -264,8 +264,8 @@ function Num({ rot, val, sub, cor }: { rot: string; val: string; sub?: string; c
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const COR_VEREDITO_OURO: Record<string, string> = {
-  'oportunidade': '#3FD79B',
-  'margem-apertada': '#FFC83D',
+  'oportunidade': 'var(--ou-verde)',
+  'margem-apertada': 'var(--ou-ouro)',
 }
 
 function CatalogoOuro({ marketplace, cat, vr, st, resultados, oportunidades, mostrados, filtro, setFiltro, erro, cobrado, enviando,
@@ -458,10 +458,10 @@ function CardOuro({ r, marketplace }: { r: Resultado; marketplace: 'amazon' | 'm
   const pracaCurta = ml ? 'ML' : 'Amazon'
   const base = VEREDITO[r.veredito] || VEREDITO['sem-match']
   const rot = r.veredito === 'sem-match' ? `Sem match no ${pracaCurta}` : base.rot
-  const corV = COR_VEREDITO_OURO[r.veredito] || '#8E887B'
+  const corV = COR_VEREDITO_OURO[r.veredito] || 'var(--ou-t3b)'
   const m = r.match
   const dem = r.demanda
-  const corMargem = r.margemPct == null ? '#7E796E' : r.margemPct >= 15 ? '#3FD79B' : r.margemPct >= 0 ? '#FFC83D' : '#FF7A6E'
+  const corMargem = r.margemPct == null ? 'var(--ou-t3)' : r.margemPct >= 15 ? 'var(--ou-verde)' : r.margemPct >= 0 ? 'var(--ou-ouro)' : 'var(--ou-verm)'
   const conteudo = (
     <>
       <div className={o.cardTopo}>
@@ -486,7 +486,7 @@ function CardOuro({ r, marketplace }: { r: Resultado; marketplace: 'amazon' | 'm
       <div className={o.nums}>
         <div>
           <div className={o.kicker}>Demanda</div>
-          <div className={o.numVal} style={{ color: dem ? '#6EA8E8' : '#7E796E' }}>
+          <div className={o.numVal} style={{ color: dem ? 'var(--ou-azul)' : 'var(--ou-t3)' }}>
             {dem ? (ml ? `${Number(dem.vendasMes).toLocaleString('pt-BR')} vend.` : `${dem.vendasMes}/mês`) : '—'}
           </div>
           {dem && <div className={o.numSub}>{ml ? (dem.bsr ? `#${dem.bsr} no ranking` : 'no ranking') : `BSR ${dem.bsr.toLocaleString('pt-BR')}`}</div>}
