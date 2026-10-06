@@ -20,10 +20,13 @@ const DISPLAY = "var(--tg-display),'Archivo',sans-serif"
 const PLAN_LABEL: Record<string, string> = { free: 'Gratuito', monthly: 'Mensal', biannual: 'Semestral', annual: 'Anual', lifetime: 'Vitalício' }
 const SITE = 'https://app.oraculojf.com.br'
 
-interface Cli { id: string; name: string; email: string; phone?: string | null; plan: string; active: boolean; expiresAt?: string | null; createdAt?: string }
+interface Cli { id: string; name: string; email: string; phone?: string | null; plan: string; active: boolean; expiresAt?: string | null; createdAt?: string; teste?: 'ativo' | 'encerrado' | null }
 
 function statusOf(c: Cli): { label: string; color: string } {
   if (!c.active) return { label: 'Inativo', color: C.red }
+  // 06/10: teste grátis não é pagante — status próprio
+  if (c.teste === 'ativo') return { label: 'Em teste grátis', color: C.amber }
+  if (c.teste === 'encerrado') return { label: 'Teste encerrado', color: C.red }
   if (c.plan === 'lifetime') return { label: 'Ativo', color: C.green }
   if (c.expiresAt && new Date(c.expiresAt).getTime() < Date.now()) return { label: 'Expirado', color: C.amber }
   return { label: 'Ativo', color: C.green }
@@ -202,7 +205,7 @@ export default function SupportClient({ name }: { name: string }) {
                         <div style={{ color: C.t2, fontSize: 11.5 }}>{c.email}</div>
                         <div style={{ color: C.t3, fontSize: 11, marginTop: 2 }}>{c.phone || 'sem telefone'}</div>
                       </td>
-                      <td style={td}><span style={{ color: C.t2 }}>{PLAN_LABEL[c.plan] || c.plan}</span></td>
+                      <td style={td}><span style={{ color: C.t2 }}>{c.teste ? 'Teste grátis' : PLAN_LABEL[c.plan] || c.plan}</span></td>
                       <td style={td}><span style={{ color: st.color, fontWeight: 700 }}>● {st.label}</span></td>
                       <td style={td}>
                         <button onClick={() => reenviar(c)} disabled={enviando === c.email}

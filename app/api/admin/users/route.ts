@@ -45,13 +45,40 @@ async function clientsLevel(req: NextRequest): Promise<'internal' | 'admin' | 's
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
+/** Soma meses de CALENDÁRIO em UTC, travando no último dia do mês (31/08 + 6 = 28/02). MESMA regra do backend
+ *  (src/lib/duracaoPlano.ts) — licença e conta web precisam bater no dia. */
+function somaMesesUTC(base: Date, n: number): Date {
+  const d = new Date(base.getTime()); const dia = d.getUTCDate()
+  d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() + n)
+  const ultimo = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate()
+  d.setUTCDate(Math.min(dia, ultimo))
+  return d
+}
 function calcExpiry(plan: string, base?: Date | null): Date | null {
   if (plan === 'lifetime') return null
   // 24/09: renovação/upgrade parte do vencimento atual (se ainda vale) — o cliente não perde os dias que faltavam.
   const d    = base && base.getTime() > Date.now() ? new Date(base.getTime()) : new Date()
-  const days: Record<string, number> = { monthly: 30, biannual: 180, annual: 365 }
-  d.setTime(d.getTime() + (days[plan] ?? 30) * DAY_MS)
+  // 06/10 (João: "semestral bateu 6 meses, anual bateu 1 ano"): semestral/anual por mês de calendário (antes 180/365 dias).
+  if (plan === 'biannual') return somaMesesUTC(d, 6)
+  if (plan === 'annual') return somaMesesUTC(d, 12)
+  d.setTime(d.getTime() + 30 * DAY_MS)
   return d
+}
+/** 06/10: espelha na LICENÇA da extensão o que o admin mudou na conta (plano/validade/ativo) — antes o PATCH só mexia
+ *  na conta web e a extensão seguia com a validade antiga (ou funcionando depois do bloqueio). Best-effort. */
+async function sincronizarLicenca(email: string, plan: string, expiresAt: Date | null, active: boolean, converter = false): Promise<boolean> {
+  return (await sincronizarLicencaComChave(email, plan, expiresAt, active, converter)).ok
+}
+async function sincronizarLicencaComChave(email: string, plan: string, expiresAt: Date | null, active: boolean, converter = false): Promise<{ ok: boolean; key: string | null }> {
+  try {
+    const r = await fetch(`${BACKEND_URL}/api/license/admin-sync`, {
+      method: 'POST', signal: AbortSignal.timeout(15_000),
+      headers: { 'Content-Type': 'application/json', 'x-internal-key': process.env.INTERNAL_KEY || '' },
+      body: JSON.stringify({ email: email.toLowerCase(), plan, expiresAt: plan === 'lifetime' ? null : expiresAt ? expiresAt.toISOString() : null, active, converter }),
+    })
+    const d = r.ok ? await r.json().catch(() => ({})) : {}
+    return { ok: r.ok, key: typeof d?.key === 'string' ? d.key : null }
+  } catch { return { ok: false, key: null } }
 }
 
 const PLAN_LABEL: Record<string, string> = {
@@ -118,7 +145,7 @@ async function createBackendLicense(email: string, plan: string): Promise<string
   try {
     const backendPlan = plan === 'free' ? 'monthly' : plan  // free não existe no backend
     const url = `${BACKEND_URL}/api/license/generate`
-    console.log(`[admin/users] createBackendLicense → POST ${url} | plan=${backendPlan} | secret=${ADMIN_SECRET ? ADMIN_SECRET.slice(0,4)+'…' : '(vazio!)'}`)
+    console.log(`[admin/users] createBackendLicense → POST ${url} | plan=${backendPlan} | secret=${ADMIN_SECRET ? 'ok' : '(vazio!)'}`)
     const res = await fetch(url, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
@@ -144,10 +171,15 @@ export async function GET(req: NextRequest) {
   if (!level) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const users = await prisma.user.findMany({
     where: level === 'support' ? { role: 'client' } : undefined,   // support não vê admin/staff
-    select: { id: true, name: true, email: true, phone: true, role: true, plan: true, active: true, expiresAt: true, createdAt: true },
+    select: { id: true, name: true, email: true, phone: true, role: true, plan: true, active: true, expiresAt: true, createdAt: true, metadata: true },
     orderBy: { createdAt: 'desc' },
   })
-  return NextResponse.json({ users })
+  // 06/10: teste grátis ≠ pagante — a lista mostra "Teste grátis"/"Teste encerrado" (só a marca; o resto do metadata não sai).
+  const agora = Date.now()
+  return NextResponse.json({ users: users.map(({ metadata, ...u }) => {
+    const t = (metadata as Record<string, any> | null)?.teste
+    return { ...u, teste: t?.ate ? (Date.parse(t.ate) > agora ? 'ativo' : 'encerrado') : null }
+  }) })
 }
 
 // POST /api/admin/users → cria ou atualiza usuário + gera licença
@@ -256,38 +288,30 @@ export async function PATCH(req: NextRequest) {
   if (active === false && target.role === 'admin')
     return NextResponse.json({ error: 'Conta admin não pode ser desativada por aqui' }, { status: 400 })
 
-  const data: { plan?: string; expiresAt?: Date | null; active?: boolean } = {}
-  if (plan) { data.plan = plan; data.expiresAt = calcExpiry(plan) }
+  if (plan && !['monthly', 'biannual', 'annual', 'lifetime'].includes(String(plan)))
+    return NextResponse.json({ error: 'plano inválido' }, { status: 400 })
+  const data: { plan?: string; expiresAt?: Date | null; active?: boolean; metadata?: object } = {}
+  if (plan) {
+    data.plan = plan
+    // 06/10: conta bloqueada/reembolsada ou no teste grátis conta a partir de HOJE (não devolve os dias cortados nem soma o teste)
+    const meta = (target.metadata && typeof target.metadata === 'object' ? target.metadata : {}) as Record<string, unknown>
+    const emTeste = !!(meta.teste as any)?.ate
+    data.expiresAt = calcExpiry(plan, target.active && !emTeste && target.plan !== 'lifetime' ? target.expiresAt : null)
+    // Admin deu um plano a quem estava no teste: deixa de ser teste (a marca sai; o backend marca a conversão no admin-sync)
+    if (emTeste) { const m = { ...meta }; delete m.teste; data.metadata = m }
+  }
   if (typeof active === 'boolean') data.active = active
 
   const user = await prisma.user.update({ where: { email: target.email }, data })
+  // converter=true só quando o admin DEU um plano (tira do teste grátis); bloquear/desbloquear não converte
+  const licencaSincronizada = await sincronizarLicenca(user.email, user.plan || 'monthly', user.expiresAt ?? null, user.active, !!plan)
 
-  // Bloquear só a conta deixaria a EXTENSÃO funcionando (licença é outra chave).
-  // Derruba as duas juntas. Best-effort: falha aqui não desfaz o bloqueio.
-  let licencaDesativada: boolean | null = null
-  if (active === false) {
-    licencaDesativada = false
-    try {
-      const r = await fetch(`${BACKEND_URL}/api/license/by-email?email=${encodeURIComponent(user.email)}`, {
-        headers: { 'x-admin-secret': ADMIN_SECRET },
-      })
-      if (r.ok) {
-        const d = await r.json()
-        const key = d.key || d.license?.key
-        if (key) {
-          const dr = await fetch(`${BACKEND_URL}/api/license/deactivate`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
-            body: JSON.stringify({ key }),
-          })
-          licencaDesativada = dr.ok
-        }
-      }
-    } catch { /* conta já bloqueada; licença fica pro operador ver na lista */ }
-  }
+  // Bloquear só a conta deixaria a EXTENSÃO funcionando (licença é outra chave) — o admin-sync acima derruba as duas
+  // juntas. 06/10: antes isto chamava /by-email com o header errado (x-admin-secret) e NUNCA derrubava a licença.
+  const licencaDesativada: boolean | null = active === false ? licencaSincronizada : null
 
   return NextResponse.json({
-    ok: true, licencaDesativada,
+    ok: true, licencaDesativada, licencaSincronizada,
     user: { email: user.email, plan: user.plan, active: user.active },
   })
 }
@@ -323,21 +347,27 @@ export async function PUT(req: NextRequest) {
   })
 
   // Busca chave de licença no backend — se não existir, cria uma nova
+  // 06/10: o header era x-admin-secret e o backend só aceita x-internal-key → a busca SEMPRE falhava e cada
+  // "Reenviar" criava uma licença NOVA de 30 dias (no teste grátis = extensão de graça por 30 dias). Agora só cria
+  // quando o backend responde "não existe" (404), e NUNCA pra quem está no teste grátis.
   let licKey = '—'
+  let licencaInexistente = false
   try {
     const r = await fetch(`${BACKEND_URL}/api/license/by-email?email=${encodeURIComponent(user.email)}`, {
-      headers: { 'x-admin-secret': ADMIN_SECRET },
+      headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' }, signal: AbortSignal.timeout(15_000),
     })
     if (r.ok) {
       const d = await r.json()
       licKey = d.key || d.license?.key || '—'
-    }
+    } else if (r.status === 404) licencaInexistente = true
   } catch { /* segue */ }
+  const noTeste = !!((user.metadata as Record<string, any> | null)?.teste?.ate)
 
   // Se não tem chave, gera uma nova
-  if (!licKey || licKey === '—') {
-    const newKey = await createBackendLicense(user.email, user.plan)
-    if (newKey) licKey = newKey
+  if ((!licKey || licKey === '—') && licencaInexistente && !noTeste && user.plan && user.plan !== 'free') {
+    // nasce com a MESMA validade da conta (antes: 30 dias fixos do /generate, mesmo pra anual/vencido)
+    const nova = await sincronizarLicencaComChave(user.email, user.plan, user.expiresAt ?? null, user.active)
+    if (nova.key) licKey = nova.key
   }
 
   // Envia email com novos dados

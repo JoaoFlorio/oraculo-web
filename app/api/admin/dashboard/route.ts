@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db'
 import { getAdminSession } from '@/lib/auth'
+import { planoDe } from '@/lib/planos'
 
 // KPIs + faturamento + MRR + listas operacionais — TUDO real (User + Sale).
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-// Valor mensal recorrente por plano ativo (lifetime não recorre).
+// Valor mensal recorrente por plano ativo (lifetime não recorre). 06/10: preços REAIS da fonte única (lib/planos.ts) —
+// antes 79,90/397/597, preços antigos.
 const MRR_BY_PLAN: Record<string, number> = {
-  monthly:  79.9,
-  biannual: 397 / 6,
-  annual:   597 / 12,
+  monthly:  planoDe('monthly')!.preco,
+  biannual: planoDe('biannual')!.preco / 6,
+  annual:   planoDe('annual')!.preco / 12,
   lifetime: 0,
 }
 
@@ -27,7 +29,7 @@ export async function GET(req: NextRequest) {
   const [users, sales, recentSalesRaw] = await Promise.all([
     prisma.user.findMany({
       where: { role: 'client' },
-      select: { id: true, name: true, email: true, phone: true, plan: true, active: true, expiresAt: true, createdAt: true },
+      select: { id: true, name: true, email: true, phone: true, plan: true, active: true, expiresAt: true, createdAt: true, metadata: true },
       orderBy: { createdAt: 'desc' },
     }),
     prisma.sale.findMany({ select: { plan: true, amount: true, status: true, paidAt: true } }),
@@ -39,20 +41,27 @@ export async function GET(req: NextRequest) {
   ])
 
   // ── Status por cliente (vitalício conta como ativo) ──────────────────────
-  const statusOf = (u: typeof users[number]): 'active' | 'overdue' | 'canceled' | 'none' => {
+  // 06/10 (João: "cliente grátis e pagante são dois tipos de pessoa"): o TESTE GRÁTIS nasce com plan='monthly' só pra
+  // liberar as ferramentas — sem esta marca ele entrava como assinante no MRR, em "renovações" e, ao acabar, como
+  // inadimplente. metadata.teste existe até a pessoa pagar (a 1ª compra limpa a marca).
+  const statusOf = (u: typeof users[number]): 'active' | 'overdue' | 'canceled' | 'none' | 'teste' | 'teste-encerrado' => {
     if (!u.active) return 'canceled'
+    const teste = (u.metadata as Record<string, any> | null)?.teste
+    if (teste?.ate) return Date.parse(teste.ate) > now.getTime() ? 'teste' : 'teste-encerrado'
     if (u.plan === 'free' || !u.plan) return 'none'
     if (u.plan === 'lifetime') return 'active'
     if (u.expiresAt && new Date(u.expiresAt) < now) return 'overdue'
     return 'active'
   }
-  const clients = users.map(u => ({ ...u, status: statusOf(u) }))
+  const clients = users.map(({ metadata: _m, ...u }) => ({ ...u, status: statusOf({ ...u, metadata: _m }) }))
 
   const activeClients = clients.filter(c => c.status === 'active')
   const activeSubs = activeClients.length
   const overdue    = clients.filter(c => c.status === 'overdue').length
   const canceled   = clients.filter(c => c.status === 'canceled').length
   const lifetime   = activeClients.filter(c => c.plan === 'lifetime').length
+  const emTeste    = clients.filter(c => c.status === 'teste').length
+  const testesEncerrados = clients.filter(c => c.status === 'teste-encerrado').length
 
   // ── Faturamento (Sale, status paid) ──────────────────────────────────────
   const paid = sales.filter(s => s.status === 'paid')
@@ -115,7 +124,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     kpis: {
-      activeSubs, overdue, canceled, lifetime, totalClients: clients.length,
+      activeSubs, overdue, canceled, lifetime, emTeste, testesEncerrados, totalClients: clients.length,
       revenueTotal, revenueMonth, revenuePrevMonth, growthPct, mrr, avgTicket,
     },
     byPlan,

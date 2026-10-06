@@ -66,7 +66,10 @@ export function accessDenied(user: AccessUser | null): 'notfound' | 'inactive' |
   if (user.role === 'admin' || user.role === 'staff' || user.role === 'support' || user.role === 'demo') return null // equipe/demo entram independente de plano
   if (user.plan === 'free' || !user.plan) return 'free'           // sem plano pago = bloqueado
   if (user.plan === 'lifetime') return null                       // vitalício nunca expira
-  if (user.expiresAt && new Date(user.expiresAt).getTime() + GRACE_MS < Date.now()) return 'expired'
+  // 06/10 (auditoria): plano pago NÃO vitalício sem data de vencimento = negado (antes NULL = liberado pra sempre).
+  // Medido no banco: 0 contas assim — é trava de defesa, gêmea do backend (lib/acesso.ts).
+  if (!user.expiresAt) return 'expired'
+  if (new Date(user.expiresAt).getTime() + GRACE_MS < Date.now()) return 'expired'
   return null
 }
 

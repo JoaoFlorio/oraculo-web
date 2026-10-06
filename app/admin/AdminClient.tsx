@@ -206,7 +206,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   const [days, setDays] = useState(90)
   const [licenses, setLicenses] = useState<any[]>([])
   const [search, setSearch] = useState('')
-  const [fStatus, setFStatus] = useState<'all' | 'active' | 'overdue' | 'canceled'>('all')
+  const [fStatus, setFStatus] = useState<'all' | 'active' | 'overdue' | 'canceled' | 'teste'>('all')
   // Diagnóstico do push por cliente ("não recebo notificação") — ver painel abaixo.
   const [diag, setDiag] = useState<{ email: string; loading: boolean; data: any } | null>(null)
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null)
@@ -340,7 +340,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   const k = data?.kpis
   const clients: any[] = data?.clients || []
   const filtered = clients.filter(c =>
-    (fStatus === 'all' || c.status === fStatus) &&
+    (fStatus === 'all' || c.status === fStatus || (fStatus === 'teste' && c.status === 'teste-encerrado')) &&
     (!search || [c.name, c.email, c.phone].some(v => String(v || '').toLowerCase().includes(search.toLowerCase())))
   )
   const licByEmail = (email: string) => licenses.find(l => l.email?.toLowerCase() === email?.toLowerCase())
@@ -571,6 +571,9 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                 { label: 'Atrasados', value: k ? String(k.overdue) : '—', col: C.amber },
                 { label: 'Cancelamentos', value: k ? String(k.canceled) : '—', col: C.red },
                 { label: 'Vitalícios', value: k ? String(k.lifetime) : '—', col: C.violet },
+                // 06/10: teste grátis NÃO é assinante — fica fora do MRR, dos ativos e dos atrasados
+                { label: 'Em teste grátis', value: k ? String(k.emTeste ?? 0) : '—', col: C.blue },
+                { label: 'Testes encerrados (sem assinar)', value: k ? String(k.testesEncerrados ?? 0) : '—', col: C.t3 },
               ].map((kpi: any) => (
                 <div key={kpi.label} style={{ ...card, padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
                   <div style={{ position: 'absolute', top: 0, left: 0, height: 2, width: '100%', background: `linear-gradient(90deg,${kpi.col},transparent)` }} /><div style={{ position: 'absolute', top: -40, right: -40, width: 110, height: 110, borderRadius: '50%', background: `radial-gradient(circle,${kpi.col}22,transparent 70%)`, pointerEvents: 'none' }} />
@@ -693,7 +696,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
           <div style={{ ...card, padding: '16px 18px' }}>
             <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
               <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nome, e-mail ou telefone…" className="orc-in" style={{ ...inputSt, flex: '1 1 240px', width: 'auto', padding: '9px 14px' }} />
-              {([['all', 'Todos'], ['active', 'Ativos'], ['overdue', 'Atrasados'], ['canceled', 'Cancelados']] as const).map(([id, l]) => (
+              {([['all', 'Todos'], ['active', 'Ativos'], ['overdue', 'Atrasados'], ['canceled', 'Cancelados'], ['teste', 'Teste grátis']] as const).map(([id, l]) => (
                 <button key={id} onClick={() => setFStatus(id)} style={chip(fStatus === id)}>{l}</button>
               ))}
             </div>
@@ -703,8 +706,9 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                 <tbody>
                   {filtered.length === 0 && <tr><td colSpan={7} style={{ textAlign: 'center', padding: 40, color: C.t3 }}>Nenhum cliente encontrado.</td></tr>}
                   {filtered.map(c => {
-                    const stCol = c.status === 'active' ? C.green : c.status === 'overdue' ? C.amber : c.status === 'canceled' ? C.red : C.t3
-                    const stLbl = c.status === 'active' ? 'Ativo' : c.status === 'overdue' ? 'Atrasado' : c.status === 'canceled' ? 'Cancelado' : '—'
+                    const stCol = c.status === 'active' ? C.green : c.status === 'overdue' ? C.amber : c.status === 'canceled' ? C.red : c.status === 'teste' ? C.blue : C.t3
+                    const stLbl = c.status === 'active' ? 'Ativo' : c.status === 'overdue' ? 'Atrasado' : c.status === 'canceled' ? 'Cancelado' : c.status === 'teste' ? 'Em teste' : c.status === 'teste-encerrado' ? 'Teste encerrado' : '—'
+                    const ehTeste = c.status === 'teste' || c.status === 'teste-encerrado'
                     const lic = licByEmail(c.email)
                     return (
                       <tr key={c.id} className="orc-row">
@@ -720,7 +724,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                               </div>
                             : <div style={{ color: C.t3, fontSize: 11, marginTop: 3 }}>sem telefone</div>}
                         </td>
-                        <td style={{ padding: '10px 12px', ...cellB }}><PlanBadge plan={c.plan} /></td>
+                        <td style={{ padding: '10px 12px', ...cellB }}>{ehTeste ? <span style={{ background: `${C.blue}1A`, color: C.blue, border: `1px solid ${C.blue}40`, borderRadius: 6, padding: '2px 8px', fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap' }}>Teste grátis</span> : <PlanBadge plan={c.plan} />}</td>
                         <td style={{ padding: '10px 12px', ...cellB }}><span style={{ color: stCol, fontWeight: 700 }}>● {stLbl}</span></td>
                         <td style={{ ...num, padding: '10px 12px', ...cellB, color: C.t3, fontSize: 11 }}>{c.plan === 'lifetime' ? '∞' : c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('pt-BR') : '—'}</td>
                         <td style={{ ...num, padding: '10px 12px', ...cellB, color: C.t3, fontSize: 11 }}>{c.createdAt ? fmtDMY(c.createdAt) : '—'}</td>

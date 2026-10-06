@@ -1917,7 +1917,8 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
               </div>
               <h2 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Sua assinatura venceu</h2>
               <p style={{fontSize:12.5,color:T.t2,lineHeight:1.65,maxWidth:400,margin:'0 auto'}}>
-                O plano <strong style={{color:T.t1}}>{cfg.label}</strong> venceu em <strong style={{color:T.a}}>{expiresAt?.toLocaleDateString('pt-BR')}</strong> e a renovação não foi paga.
+                {teste?<>Seu <strong style={{color:T.t1}}>teste grátis de 7 dias</strong> terminou em <strong style={{color:T.a}}>{expiresAt?.toLocaleDateString('pt-BR')}</strong>. Escolha um plano pra continuar.</>
+                :<>O plano <strong style={{color:T.t1}}>{cfg.label}</strong> venceu em <strong style={{color:T.a}}>{expiresAt?.toLocaleDateString('pt-BR')}</strong> e a renovação não foi paga.</>}
                 O acesso está <strong style={{color:T.a}}>bloqueado</strong> — <strong style={{color:T.t1}}>assine um plano abaixo para voltar a usar</strong> (seus produtos salvos continuam guardados). A liberação é automática assim que o pagamento cai.
               </p>
             </div>
@@ -2267,7 +2268,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
             )}
             {/* 🔴 TAG DE RENOVAÇÃO (pedido do João, 24/09): ≤7 dias pro vencimento, em qualquer aba; clicar leva
                 pra aba Planos, que já induz o degrau de cima ("em vez de pagar por mês, que tal por ano?"). */}
-            {nav!=='agente'&&!isLifetime&&daysLeft!=null&&daysLeft>=0&&daysLeft<=7&&(
+            {nav!=='agente'&&!isLifetime&&!emTeste&&daysLeft!=null&&daysLeft>=0&&daysLeft<=7&&(
               <button onClick={()=>goNav('planos')} title="Ver planos" aria-label={`Faltam ${daysLeft} dias para sua renovação — ver planos`}
                 style={{display:'inline-flex',alignItems:'center',gap:7,padding:'6px 11px',borderRadius:999,border:'1px solid rgba(248,113,113,.55)',background:'rgba(248,113,113,.12)',color:'#F87171',fontWeight:800,fontSize:11.5,cursor:'pointer',whiteSpace:'nowrap' as const,flexShrink:0,animation:'ora-tagpulse 2.6s ease-out infinite'}}>
                 <span style={{width:7,height:7,borderRadius:'50%',background:'#F87171',boxShadow:'0 0 0 3px rgba(248,113,113,.25)'}}/>
@@ -2509,7 +2510,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
             )}
             {nav==='perfil'&&(()=>{
               const PLAN_DAYS: Record<string,number> = { monthly:30, biannual:180, annual:365 }
-              const cycleDays  = PLAN_DAYS[user.plan]
+              const cycleDays  = emTeste ? 7 : PLAN_DAYS[user.plan]   // 06/10: no teste o "ciclo" são os 7 dias
               const cycleStart = expiresAt&&cycleDays ? new Date(expiresAt.getTime()-cycleDays*86400000) : null
               const cyclePct   = expiresAt&&cycleStart ? Math.min(100,Math.max(0,((Date.now()-cycleStart.getTime())/(cycleDays*86400000))*100)) : null
               const status = isLifetime ? 'Vitalício ∞'
@@ -2586,7 +2587,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                         ):(
                           <div style={{display:'flex',flexDirection:'column',gap:10}}>
                             {plans.map(p=>{
-                              const isCurrent = user.plan===p.id
+                              const isCurrent = !emTeste && user.plan===p.id   /* 06/10: no teste nenhum plano é o "atual" */
                               return(
                                 <div key={p.id} className="perfil-ouro-plano" data-best={p.best?'1':'0'}>
                                   <div style={{flex:1,minWidth:0}}>
@@ -2734,7 +2735,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                     ):(
                       <div style={{display:'flex',flexDirection:'column',gap:10}}>
                         {plans.map(p=>{
-                          const isCurrent = user.plan===p.id
+                          const isCurrent = !emTeste && user.plan===p.id   /* 06/10: no teste nenhum plano é o "atual" */
                           return(
                             <div key={p.id} style={{position:'relative' as const,display:'flex',alignItems:'center',gap:14,borderRadius:12,padding:'14px 16px',
                               background:p.best?tint(T.gold,4):T.bg,
