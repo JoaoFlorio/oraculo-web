@@ -21,6 +21,24 @@ const mascaraDoc = (v: string) => {
   return d.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2')
 }
 
+// 05/10 — anti-robô (lib/desafioTeste.ts): acha o número que, com o sal, dá um SHA-256 com N bits zerados no começo.
+function bitsZerados(h: Uint8Array): number {
+  let n = 0
+  for (const b of h) { if (b === 0) { n += 8; continue } return n + Math.clz32(b) - 24 }
+  return n
+}
+async function resolverDesafio(desafio: string): Promise<string> {
+  const [sal, , bits] = desafio.split('.')
+  const alvo = Number(bits), enc = new TextEncoder()
+  for (let i = 0; i < 50_000_000; i++) {
+    const h = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(`${sal}:${i}`)))
+    if (bitsZerados(h) >= alvo) return String(i)
+  }
+  throw new Error('desafio')
+}
+const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || ''
+declare global { interface Window { turnstile?: { render: (el: HTMLElement, o: Record<string, unknown>) => string; reset: (id?: string) => void } } }
+
 function Campo({ label, children, dica }: { label: string; children: React.ReactNode; dica?: string }) {
   return (
     <label style={{ display: 'block' }}>
@@ -41,6 +59,8 @@ export default function TesteGratis() {
   const [zap, setZap] = useState<string>('pendente')
   const [erro, setErro] = useState<string | null>(null), [enviando, setEnviando] = useState(false)
   const [espera, setEspera] = useState(0)
+  const [verificando, setVerificando] = useState(false), [isca, setIsca] = useState('')
+  const [tsToken, setTsToken] = useState(''), tsBox = useRef<HTMLDivElement | null>(null), tsId = useRef<string | null>(null)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Situação do WhatsApp enquanto espera o código (a Central envia em segundos).
@@ -57,6 +77,16 @@ export default function TesteGratis() {
     return () => { vivo = false; clearInterval(t) }
   }, [passo, pedido])
   useEffect(() => () => { if (timer.current) clearInterval(timer.current) }, [])
+  // Turnstile (opcional — só com a chave pública configurada no Railway).
+  useEffect(() => {
+    if (!TURNSTILE_SITE_KEY || passo !== 1) return
+    const montar = () => { if (window.turnstile && tsBox.current && !tsId.current) tsId.current = window.turnstile.render(tsBox.current, { sitekey: TURNSTILE_SITE_KEY, theme: 'dark', callback: (t: string) => setTsToken(t), 'expired-callback': () => setTsToken('') }) }
+    if (window.turnstile) { montar(); return () => { tsId.current = null; setTsToken('') } }
+    const sc = document.createElement('script')
+    sc.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; sc.async = true; sc.onload = montar
+    document.head.appendChild(sc)
+    return () => { tsId.current = null; setTsToken('') }   // "Corrigir dados" volta ao passo 1 com a caixinha nova
+  }, [passo])
   const contarEspera = () => {
     setEspera(60)
     if (timer.current) clearInterval(timer.current)
@@ -67,13 +97,22 @@ export default function TesteGratis() {
     e.preventDefault(); setErro(null)
     if (senha.length < 8) { setErro('A senha precisa ter pelo menos 8 caracteres.'); return }
     if (!aceite) { setErro('Aceite os termos para continuar.'); return }
+    if (TURNSTILE_SITE_KEY && !tsToken) { setErro('Confirme que você não é um robô (caixinha acima do botão).'); return }
     setEnviando(true)
     try {
-      const r = await fetch('/api/teste/iniciar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nome, email, telefone: tel, documento: doc }) })
+      setVerificando(true)
+      const { desafio } = await fetch('/api/teste/desafio', { cache: 'no-store' }).then(r => r.json())
+      const nonce = await resolverDesafio(String(desafio || ''))
+      setVerificando(false)
+      const r = await fetch('/api/teste/iniciar', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ nome, email, telefone: tel, documento: doc, desafio, nonce, site: isca, turnstile: tsToken }) })
       const d = await r.json().catch(() => ({}))
-      if (!r.ok || !d.pedidoId) { setErro(d.error || 'Não consegui iniciar o cadastro. Tente de novo.'); return }
+      if (!r.ok || !d.pedidoId) {
+        setErro(d.error || 'Não consegui iniciar o cadastro. Tente de novo.')
+        if (TURNSTILE_SITE_KEY && window.turnstile) { window.turnstile.reset(tsId.current || undefined); setTsToken('') }   // token vale 1 vez
+        return
+      }
       setPedido({ id: d.pedidoId, tel: d.telefoneMascarado, email: d.emailMascarado }); setZap('pendente'); setPasso(2); contarEspera()
-    } catch { setErro('Falha de conexão. Tente de novo.') } finally { setEnviando(false) }
+    } catch { setErro('Falha de conexão. Tente de novo.') } finally { setEnviando(false); setVerificando(false) }
   }
 
   async function confirmar(e: React.FormEvent) {
@@ -122,8 +161,11 @@ export default function TesteGratis() {
                 <input type="checkbox" checked={aceite} onChange={e => setAceite(e.target.checked)} style={{ marginTop: 2, accentColor: gold }} />
                 <span>Li e aceito os <a href={`${LEGAL_BASE}/terms`} target="_blank" rel="noopener noreferrer" style={{ color: gold }}>Termos de Uso</a> e a <a href={`${LEGAL_BASE}/privacy`} target="_blank" rel="noopener noreferrer" style={{ color: gold }}>Política de Privacidade</a>, e entendo que o teste dura 7 dias com 30 créditos.</span>
               </label>
+              {/* campo-isca: invisível pra gente, robô de formulário preenche */}
+              <input aria-hidden="true" tabIndex={-1} autoComplete="off" name="site" value={isca} onChange={e => setIsca(e.target.value)} style={{ position: 'absolute', left: -9999, width: 1, height: 1, opacity: 0 }} />
+              {TURNSTILE_SITE_KEY && <div ref={tsBox} style={{ minHeight: 65 }} />}
               {erro && <div role="alert" style={{ fontSize: 13, color: red, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: 10, padding: '10px 12px' }}>{erro}</div>}
-              <button type="submit" disabled={enviando} style={btn}>{enviando ? 'Enviando os códigos…' : 'Começar meu teste grátis'}</button>
+              <button type="submit" disabled={enviando} style={btn}>{verificando ? 'Verificando que você não é um robô…' : enviando ? 'Enviando os códigos…' : 'Começar meu teste grátis'}</button>
             </form>
           ) : (
             <form onSubmit={confirmar} style={{ display: 'grid', gap: 14 }}>
