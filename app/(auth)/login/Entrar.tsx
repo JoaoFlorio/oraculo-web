@@ -196,7 +196,7 @@ export default function Entrar() {
               <span><b>Teste grátis 7 dias</b><small>Sem cartão e sem pagar nada</small></span>
               <span className={s.novoSeta} aria-hidden="true">→</span>
             </Link>
-            <Link href="/planos" className={s.planos}>ou <b>conheça os planos</b></Link>
+            <a href="https://oraculojf.com/#planos" className={s.planos}>ou <b>conheça os planos</b></a>
           </div>
         </div>
 

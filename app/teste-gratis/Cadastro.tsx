@@ -283,7 +283,7 @@ export default function Cadastro() {
                 <span>{Ic.cartao}Sem cartão</span>
                 <span>{Ic.relogio}7 dias completos</span>
               </div>
-              <p className={s.depois}>Quando os 7 dias acabarem, o acesso trava até você escolher um plano. Nada é cobrado. <Link href="/planos">Ver os planos</Link></p>
+              <p className={s.depois}>Quando os 7 dias acabarem, o acesso trava até você escolher um plano. Nada é cobrado. <a href="https://oraculojf.com/#planos">Ver os planos</a></p>
             </div>
           </div>
         </aside>
