@@ -10,7 +10,11 @@ import AppSplash from './AppSplash'
 import VersionGuard from './VersionGuard'
 import AssistenteFab from './AssistenteFab'
 import VisualNovo from './VisualNovo'
+import CaraNova from './CaraNova'
 import { classeFontesPainel } from './fontesPainel'
+
+// 06/10/2026 ~meio-dia (BRT): visual novo liberado pra todos. Conta criada depois disso já nasce nele.
+const LIBERACAO_VISUAL_NOVO = Date.parse('2026-10-06T12:00:00-03:00')
 
 export default async function DashboardPage() {
   // Vencido ENTRA (pra ver o overlay "venceu + pagar") em vez de ir pro /login;
@@ -47,20 +51,24 @@ export default async function DashboardPage() {
   // em metadata.terms via /api/user/accept-terms). Admin/staff/demo são isentos (equipe
   // e conta de apresentação — não são consumidores do contrato de adesão).
   let needsTerms = false
+  let jaNasceuNoNovo = false   // conta criada depois da troca de visual: não precisa do aviso "cara nova"
   let teste: { ate: string; creditos: number; origem?: string } | null = null   // teste grátis de 7 dias (05/10: origem 'oraculo' = sem cartão)
   if (!user.role || user.role === 'client') {
-    const u = await prisma.user.findUnique({ where: { id: user.id }, select: { metadata: true } })
+    const u = await prisma.user.findUnique({ where: { id: user.id }, select: { metadata: true, createdAt: true } })
+    if (u?.createdAt && u.createdAt.getTime() >= LIBERACAO_VISUAL_NOVO) jaNasceuNoNovo = true
     const meta = (u?.metadata ?? {}) as Record<string, any>
     needsTerms = meta.terms?.version !== TERMS_VERSION
     if (meta.teste?.ate && Date.parse(meta.teste.ate) > Date.now()) teste = { ate: String(meta.teste.ate), creditos: Number(meta.teste.creditos) || 10, ...(meta.teste.origem ? { origem: String(meta.teste.origem) } : {}) }
   }
 
-  // 05/10/2026: VISUAL NOVO em validação — só admin vê (e pode alternar no botão do canto). Cliente: nada muda.
-  const visualNovo = user.role === 'admin'
+  // 06/10/2026: VISUAL NOVO liberado pra todos (validado pelo João como admin em 05–06/10).
+  const visualNovo = true
 
   return (
     <div className={visualNovo ? `ora-visual ${classeFontesPainel}` : undefined} style={{ display: 'contents' }}>
       {visualNovo && <VisualNovo />}
+      {/* Aviso único "estamos de cara nova" — só pra quem já usava o painel antigo */}
+      {visualNovo && !needsTerms && !jaNasceuNoNovo && <CaraNova />}
       {/* Abertura animada — só no app instalado, 1x por sessão */}
       <AppSplash />
       {/* Recarrega sozinho quando há build novo (PWA guarda HTML em cache) */}

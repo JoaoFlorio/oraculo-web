@@ -39,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('oraculo_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}" }} />
+        <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('oraculo_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}if(location.pathname.indexOf('/dashboard')===0)document.documentElement.setAttribute('data-visual','ouro');" }} />
         {/* PWA: instalável no celular (ícone + tela cheia) — ver public/manifest.json e sw.js */}
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#0A0A0F" />

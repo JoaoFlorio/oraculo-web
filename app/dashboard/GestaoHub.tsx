@@ -6183,13 +6183,8 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
   useEffect(()=>{
     if(theme && THEMES[theme]) setThemeKey(theme)
   },[theme])
-  // Visual novo (só admin): acompanha o atributo <html data-visual="ouro"> — o botão do canto liga/desliga ao vivo.
-  const [ouro,setOuro]=useState(false)
-  useEffect(()=>{
-    const h=document.documentElement, ler=()=>setOuro(h.getAttribute('data-visual')==='ouro')
-    ler(); const mo=new MutationObserver(ler); mo.observe(h,{attributes:true,attributeFilter:['data-visual']})
-    return ()=>mo.disconnect()
-  },[])
+  // Visual novo: liberado pra todos em 06/10/2026 (paleta ouro no escuro, ouroClaro no claro).
+  const ouro=true
   const t=ouro ? (themeKey==='light' ? THEMES.ouroClaro : THEMES.ouro) : (THEMES[themeKey]||THEMES.dark)
 
   const d=useMemo(()=>getFinanceData(),[])
