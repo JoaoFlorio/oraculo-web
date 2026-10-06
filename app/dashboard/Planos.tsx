@@ -102,7 +102,8 @@ function Trilha({ atual }: { atual: number }) {
   )
 }
 
-export default function Planos({ user }: { user: { email: string; name?: string; plan: string; expiresAt?: string | Date | null } }) {
+// 06/10: `teste` = está no TESTE GRÁTIS (o painel manda plan 'free' — sem plano pago — e a data do fim do teste).
+export default function Planos({ user, teste = null }: { user: { email: string; name?: string; plan: string; expiresAt?: string | Date | null }; teste?: { ate: string } | null }) {
   const [agora] = useState(() => Date.now())
   const novo = useVisualNovo()
   const atual = planoDe(user.plan)
@@ -139,7 +140,7 @@ export default function Planos({ user }: { user: { email: string; name?: string;
         <div className={cx(o.borda, top && o.bordaGira, vencendo && o.bordaUrgente, o.entra)}>
           <section className={o.hero}>
             <div className={o.heroTxt}>
-              <span className={cx(o.tag, vencendo && o.tagAlerta)}><i aria-hidden="true" />{top ? 'Membro fundador' : 'Seu plano'}</span>
+              <span className={cx(o.tag, vencendo && o.tagAlerta)}><i aria-hidden="true" />{top ? 'Membro fundador' : teste ? 'Teste grátis' : 'Seu plano'}</span>
               <h2 className={o.heroTitulo}>
                 {top ? <><em>Fundador Vitalício</em></> : atual ? <>{atual.nome} <em>Oráculo</em></> : <>Sem plano <em>ativo</em></>}
               </h2>
@@ -148,7 +149,9 @@ export default function Planos({ user }: { user: { email: string; name?: string;
                   ? <>Acesso a tudo, para sempre, com todas as atualizações incluídas. Não existe degrau acima deste, {primeiroNome}.</>
                   : atual && expiresAt
                     ? <>{fmt(atual.preco)}{atual.ciclo}. {daysLeft != null && daysLeft >= 0 ? <>{user.plan === 'monthly' ? 'Renova' : 'Vence'} em <b>{expiresAt.toLocaleDateString('pt-BR')}</b>.</> : <>Venceu em {expiresAt.toLocaleDateString('pt-BR')}.</>} Abaixo, até onde dá pra subir.</>
-                    : <>Escolha um plano abaixo pra liberar o Oráculo completo.</>}
+                    : teste
+                      ? <>Você está no <b>teste grátis</b> até <b>{new Date(teste.ate).toLocaleDateString('pt-BR')}</b> — não é um plano pago. Quando o teste acabar, tudo trava até você escolher um plano abaixo.</>
+                      : <>Escolha um plano abaixo pra liberar o Oráculo completo.</>}
               </p>
               {(top || (daysLeft != null && daysLeft >= 0)) && (
                 <div className={o.selos}>

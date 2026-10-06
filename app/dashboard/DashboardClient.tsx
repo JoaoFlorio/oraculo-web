@@ -19,6 +19,7 @@ const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><
 const MLRival = dynamic(()=>import('./MLRival'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando a análise…</div>})
 
 import { useVisualNovo } from './ouro/useVisualNovo'
+import { NAV, NAV_GROUPS } from './navItens'
 import { CabecalhoOuro, BuscaOuro, RecursosOuro, VazioOuro, IcOuro } from './ouro/Ouro'
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
@@ -84,25 +85,7 @@ const CATS = [
   { id:'health',          label:'Saúde'          },
   { id:'office-products', label:'Escritório'     },
 ]
-const NAV = [
-  { id:'financeiro',  label:'Gestão'            },
-  { id:'ads',         label:'Ads Amazon'        },
-  { id:'ads-ml',      label:'Ads Mercado Livre' },
-  { id:'bestsellers', label:'Mais Vendidos'     },
-  { id:'catalogo',    label:'Analisar Catálogo' },
-  { id:'saved',       label:'Salvos'            },
-  { id:'competitor',  label:'Análise Rival'     },
-  { id:'ml-minera',   label:'Mineração ML'      },
-  { id:'catalogo-ml', label:'Analisar Catálogo ML' },
-  { id:'ml-salvos',   label:'Salvos ML'         },
-  { id:'ml-rival',    label:'Análise Rival ML'  },
-  { id:'ml-calc',     label:'Calculadora ML'    },
-  { id:'agente',      label:'Agente NEO'        },
-  { id:'extension',   label:'Extensão'          },
-  { id:'tutoriais',   label:'Tutoriais'         },
-  { id:'planos',      label:'Planos'            },
-  { id:'perfil',      label:'Meu Perfil'        },
-]
+// NAV e NAV_GROUPS: app/dashboard/navItens.ts (a tela de bloqueio mostra o mesmo menu, com cadeado)
 // Tutoriais em vídeo (Panda Video). Para adicionar/editar um vídeo: pegue a URL
 // de EMBED no Panda (Compartilhar → Incorporar → o `src` do iframe, começa com
 // https://player-vz-….tv.pandavideo.com.br/embed/?v=…) e cole em `embed`.
@@ -115,15 +98,6 @@ const TUTORIAIS: {title:string; desc:string; embed:string}[] = [
 // Amazon, e o custo não se pagava. A mineração ficou em Mais Vendidos + o
 // seletor de categoria, que cobre o mesmo trabalho com uma chamada só.
 // (As rotas do backend seguem existindo — só não há mais UI chamando.)
-const NAV_GROUPS = [
-  { group:'Gestão',      ids:['financeiro'] },
-  { group:'Ads',         ids:['ads','ads-ml'] },
-  { group:'Mineração',   ids:['bestsellers','catalogo','saved','competitor'] },
-  { group:'Mercado Livre', ids:['ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc'] },
-  { group:'Ferramentas', ids:['agente','extension'] },
-  { group:'Ajuda',       ids:['tutoriais'] },
-  { group:'Conta',       ids:['planos','perfil'] },
-]
 // ⭐ A comissão vem do BACKEND, junto de cada produto (`referralRate` e
 // `referralMin`, calculados por lib/comissoes.ts). Aqui ficava uma tabela de 10
 // categorias com os 10 valores ERRADOS — Eletrônicos a 8% quando é 13%. Duas
@@ -1632,7 +1606,11 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
 
   // Plano não reconhecido (id novo da Greenn, legado etc.) NUNCA cai em free —
   // free foi descontinuado; fallback é o plano pago mais restrito (mensal).
-  const cfg = PLAN_CFG[user.plan] ?? PLAN_CFG.monthly
+  const cfgPlano = PLAN_CFG[user.plan] ?? PLAN_CFG.monthly
+  // 06/10 (João): quem está no TESTE GRÁTIS não é pagante — o card do menu, o Perfil e a Extensão mostram "Teste grátis",
+  // nunca "Mensal" (a conta do teste nasce com plan='monthly' só pra liberar as ferramentas durante os 7 dias).
+  const emTeste      = !!teste && Date.parse(teste.ate) > Date.now()
+  const cfg = emTeste ? { ...cfgPlano, label:'Teste grátis', color:T.gold, glow:'rgba(240,180,41,0.3)' } : cfgPlano
   const isFree = user.plan === 'free'
 
   // Cobrança coerente: aviso aos 5 dias + bloqueio total quando vencido
@@ -1654,7 +1632,6 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
   useEffect(()=>{ if(!expired) return; const prev=document.body.style.overflow; document.body.style.overflow='hidden'; return ()=>{document.body.style.overflow=prev} },[expired])
   const renewGrace   = false   // não há mais janela de folga — venceu já é `expired`
   // 01/10: no TESTE GRÁTIS não existe "renove" — a 1ª mensalidade cai sozinha no cartão cadastrado na Greenn.
-  const emTeste      = !!teste && Date.parse(teste.ate) > Date.now()
   const expiringSoon = !emTeste && !expired && !isStaff && !isLifetime && !isFree && daysLeft !== null && daysLeft <= 5 && daysLeft > 0
 
   // ASINs já mostrados, por aba+categoria → garante novidade a cada "Atualizar"
@@ -2368,7 +2345,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                             <span className="ora-num">{licKey}</span>
                             <button className="ouro-botao" style={{height:42,padding:'0 18px',fontSize:14}} onClick={()=>{navigator.clipboard.writeText(licKey);setKeyCopied(true);setTimeout(()=>setKeyCopied(false),2000)}}>{keyCopied?'✓ Copiado':'Copiar'}</button>
                           </div>
-                          <div style={{marginTop:10,fontSize:12.5,color:'var(--ou-t2)'}}>Plano <b style={{color:'var(--ou-ouro)'}}>{(licPlan ? PLAN_CFG[licPlan]?.label : undefined) ?? licPlan}</b> · funciona em <b style={{color:'var(--ou-t1)'}}>1 dispositivo</b> por vez</div>
+                          <div style={{marginTop:10,fontSize:12.5,color:'var(--ou-t2)'}}>Plano <b style={{color:'var(--ou-ouro)'}}>{emTeste ? 'Teste grátis' : (licPlan ? PLAN_CFG[licPlan]?.label : undefined) ?? licPlan}</b> · funciona em <b style={{color:'var(--ou-t1)'}}>1 dispositivo</b> por vez</div>
                         </>
                       ):(
                         <VazioOuro icone={IcOuro.escudo} titulo="Nenhuma licença encontrada" texto="Nenhuma licença encontrada para este e-mail. Se você acabou de comprar, aguarde alguns minutos e atualize a página."/>
@@ -2420,7 +2397,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                         </button>
                       </div>
                       <div style={{fontSize:11,color:T.t3}}>
-                        Plano: <span style={{color:T.gold,fontWeight:600}}>{(licPlan ? PLAN_CFG[licPlan]?.label : undefined) ?? licPlan}</span>
+                        Plano: <span style={{color:T.gold,fontWeight:600}}>{emTeste ? 'Teste grátis' : (licPlan ? PLAN_CFG[licPlan]?.label : undefined) ?? licPlan}</span>
                         {' · '}Funciona em <span style={{color:T.t4,fontWeight:600}}>1 dispositivo</span> por vez
                       </div>
                     </>
@@ -2527,7 +2504,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
             {/* Planos — onde a pessoa está e o próximo degrau (upsell inteligente; checkout na Greenn) */}
             {nav==='planos'&&(
               <div style={{padding:'0 4px'}}>
-                <Planos user={{ email:user.email, name:user.name, plan:user.plan, expiresAt:user.expiresAt }}/>
+                <Planos user={{ email:user.email, name:user.name, plan:emTeste ? 'free' : user.plan, expiresAt:emTeste ? null : user.expiresAt }} teste={emTeste && teste ? { ate: teste.ate } : null}/>
               </div>
             )}
             {nav==='perfil'&&(()=>{

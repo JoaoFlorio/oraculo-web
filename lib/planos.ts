@@ -39,6 +39,12 @@ export const PLANOS: Plano[] = [
     destaques: ['Tudo do Oráculo, para sempre', 'Atualizações futuras sem pagar a mais', 'Sem mensalidade. Nunca mais.', 'Suporte prioritário direto no WhatsApp', 'Condição de lançamento — não volta depois'] },
 ]
 
+/** 06/10 (João): o Plano FUNDADOR (vitalício) é condição de lançamento — "pouquíssimas vagas, vai até o fim deste mês".
+ *  Até esta data a tela de bloqueio (fim do teste / plano vencido) mostra o Fundador em destaque com o prazo; depois
+ *  dela, some de lá. Prorrogou? Muda AQUI. */
+export const FUNDADOR_ATE = '2026-10-31T23:59:59-03:00'
+export const fundadorAberto = (agora = Date.now()) => agora <= Date.parse(FUNDADOR_ATE)
+
 export const RANK: Record<PlanoId, number> = { free: 0, monthly: 1, biannual: 2, annual: 3, lifetime: 4 }
 export const planoDe = (id: string): Plano | null => PLANOS.find(p => p.id === id) || null
 export const fmt = (v: number) => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 })
