@@ -4,7 +4,8 @@
 import { useEffect, useState } from 'react'
 
 type Tema = { card: string; line: string; t1: string; t2: string; t3: string; gold: string; grn: string; red: string; dark: boolean }
-type Pedido = { pedido: string; status: string; compra: string | null; liberadoEm: string | null; solicitadaEm: string | null; verificadoEm: string | null }
+type Produto = { nome: string; asin: string; sku: string; foto: string; qtd: number; outros: number }
+type Pedido = { pedido: string; status: string; compra: string | null; liberadoEm: string | null; solicitadaEm: string | null; verificadoEm: string | null; produto?: Produto | null }
 type Estado = {
   demo?: boolean; conectado: boolean; ligado: boolean; dias: number; ligadoEm?: string | null
   contagem: { hoje: number; seteDias: number; trintaDias: number; total: number; aguardando: number; jaSolicitadas: number; perdidos: number } | null
@@ -106,17 +107,39 @@ export default function Avaliacoes({ t }: { t: Tema }) {
       </div>
 
       {e.pedidos.length > 0 && (
-        <div style={caixa}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: t.t1, marginBottom: 8 }}>Últimos pedidos</div>
+        <div style={{ ...caixa, padding: '16px 18px 8px' }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: t.t1, marginBottom: 6 }}>Últimos pedidos</div>
           {e.pedidos.map(p => {
             const r = rotulo(p, e.dias)
+            const pr = p.produto
+            const cor = corDe(r.cor)
             return (
-              <div key={p.pedido} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 0', borderTop: `1px solid ${t.line}`, fontSize: 12.5, flexWrap: 'wrap' as const }}>
-                <span style={{ color: t.t1, fontVariantNumeric: 'tabular-nums' }}>{p.pedido} <span style={{ color: t.t3 }}>· compra {dia(p.compra)}</span></span>
-                <span style={{ color: corDe(r.cor) }}>{r.txt}</span>
+              <div key={p.pedido} className="aval-linha" style={{ display: 'grid', gridTemplateColumns: '52px minmax(0,1fr) auto', alignItems: 'center', gap: 14, padding: '11px 0', borderTop: `1px solid ${t.line}` }}>
+                {/* foto do produto em moldura branca (foto da Amazon tem fundo branco) */}
+                <div style={{ width: 52, height: 52, borderRadius: 11, background: pr?.foto ? '#FFFFFF' : 'transparent', border: `1px solid ${t.line}`, display: 'grid', placeItems: 'center', overflow: 'hidden', flex: 'none' }}>
+                  {pr?.foto
+                    ? <img src={pr.foto} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 4 }} />
+                    : <i className="ti ti-package" style={{ fontSize: 22, color: t.t3 }} aria-hidden="true" />}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  {pr ? (
+                    pr.asin
+                      ? <a href={`https://www.amazon.com.br/dp/${pr.asin}`} target="_blank" rel="noopener noreferrer" title={pr.nome}
+                          style={{ display: 'block', color: t.t1, fontSize: 13.5, fontWeight: 600, lineHeight: 1.35, textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pr.nome}</a>
+                      : <div title={pr.nome} style={{ color: t.t1, fontSize: 13.5, fontWeight: 600, lineHeight: 1.35, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pr.nome}</div>
+                  ) : <div style={{ color: t.t1, fontSize: 13.5, fontWeight: 600 }}>Pedido da Amazon</div>}
+                  <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '3px 12px', marginTop: 4, fontSize: 11.5, color: t.t3, fontVariantNumeric: 'tabular-nums' }}>
+                    <span>Pedido <span style={{ color: t.t2 }}>{p.pedido}</span></span>
+                    <span>Compra <span style={{ color: t.t2 }}>{dia(p.compra)}</span></span>
+                    {pr && pr.qtd > 1 && <span>{pr.qtd} unidades</span>}
+                    {pr && pr.outros > 0 && <span>+{pr.outros} {pr.outros === 1 ? 'outro item' : 'outros itens'}</span>}
+                  </div>
+                </div>
+                <span className="aval-status" style={{ justifySelf: 'end', maxWidth: 300, textAlign: 'right' as const, fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, color: cor, background: `color-mix(in srgb, ${cor} 11%, transparent)`, border: `1px solid color-mix(in srgb, ${cor} 28%, transparent)`, borderRadius: 99, padding: '5px 11px' }}>{r.txt}</span>
               </div>
             )
           })}
+          <style>{`@media (max-width:760px){ .aval-linha{ grid-template-columns:52px minmax(0,1fr) !important; } .aval-linha .aval-status{ grid-column:2; justify-self:start !important; text-align:left !important; } }`}</style>
         </div>
       )}
       {e.ligado && e.pedidos.length === 0 && (
