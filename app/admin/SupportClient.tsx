@@ -8,12 +8,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 // (ver getClientsSession / clientsLevel). Componente separado do AdminClient de
 // propósito: isola o que essa pessoa pode tocar.
 
+// 05/10/2026: visual novo — mesma linguagem do site/login (obsidiana + ouro, Archivo/Instrument Sans).
 const C = {
-  bg: '#0A0A0F', card: '#13131F', line: 'rgba(255,255,255,0.08)', line2: 'rgba(255,255,255,0.16)',
-  t1: '#E2E8F0', t2: '#94A3B8', t3: '#64748B', gold: '#F0B429',
+  bg: '#05060A', card: '#0E0F0E', line: 'rgba(243,238,226,0.08)', line2: 'rgba(243,238,226,0.16)',
+  t1: '#F3EEE2', t2: '#B9B3A6', t3: '#7E796E', gold: '#FFC83D',
   green: '#34D399', amber: '#FBBF24', red: '#F87171',
 }
-const GOLD_GRAD = 'linear-gradient(135deg,#F5C842 0%,#C48F10 100%)'
+const GOLD_GRAD = 'linear-gradient(180deg,#FFE7A3 0%,#FFC83D 50%,#EBA31A 100%)'
+const FUNDO = 'radial-gradient(70vmax 55vmax at -10% -20%, rgba(255,200,61,0.13), transparent 60%), radial-gradient(55vmax 45vmax at 115% 120%, rgba(255,170,40,0.08), transparent 60%), linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px) 0 0 / 64px 64px, linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px) 0 0 / 64px 64px, #05060A'
+const DISPLAY = "var(--tg-display),'Archivo',sans-serif"
 const PLAN_LABEL: Record<string, string> = { free: 'Gratuito', monthly: 'Mensal', biannual: 'Semestral', annual: 'Anual', lifetime: 'Vitalício' }
 const SITE = 'https://app.oraculojf.com.br'
 
@@ -97,7 +100,7 @@ export default function SupportClient({ name }: { name: string }) {
     return clients.filter(c => (c.name || '').toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || (c.phone || '').includes(q))
   }, [clients, busca])
 
-  const inputSt: React.CSSProperties = { background: '#0A0A0F', border: `1px solid ${C.line2}`, color: C.t1, fontSize: 13, padding: '10px 14px', borderRadius: 9, outline: 'none', fontFamily: 'inherit' }
+  const inputSt: React.CSSProperties = { background: 'rgba(255,255,255,0.035)', border: `1px solid ${C.line2}`, color: C.t1, fontSize: 13, padding: '10px 14px', borderRadius: 12, outline: 'none', fontFamily: 'inherit' }
   const th: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.t3, textAlign: 'left', padding: '8px 12px', borderBottom: `1px solid ${C.line}` }
   const td: React.CSSProperties = { padding: '10px 12px', borderBottom: `1px solid ${C.line}` }
 
@@ -106,13 +109,16 @@ export default function SupportClient({ name }: { name: string }) {
     : ''
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.t1, fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif", padding: '24px 22px' }}>
+    <div style={{ minHeight: '100vh', background: FUNDO, color: C.t1, fontFamily: "var(--tg-corpo),'Instrument Sans',system-ui,sans-serif", padding: '24px 22px', backgroundAttachment: 'fixed' }}>
       <div style={{ maxWidth: 1080, margin: '0 auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.14em' }}>ORÁCULO <span style={{ color: C.gold }}>SUPORTE</span></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <svg width="44" viewBox="0 0 1000 440" aria-hidden="true" style={{ filter: 'drop-shadow(0 0 10px rgba(255,200,61,0.45))', flexShrink: 0 }}><g fill="none" stroke="#FFC83D" strokeWidth="34" strokeLinejoin="round"><path d="M70 220Q500-90 930 220Q500 530 70 220Z" /><path d="M70 220Q500-20 930 220Q500 460 70 220Z" strokeWidth="26" /><circle cx="500" cy="220" r="105" strokeWidth="26" /></g><circle cx="500" cy="220" r="40" fill="#FFE7A3" /></svg>
+            <div>
+            <div style={{ fontFamily: DISPLAY, fontStretch: '125%', fontSize: 15, fontWeight: 600, letterSpacing: '0.3em' }}>ORÁCULO <span style={{ color: C.gold }}>SUPORTE</span></div>
             <div style={{ fontSize: 11, color: C.t3, marginTop: 2 }}>{name} · <span style={{ color: C.gold, textTransform: 'uppercase', fontWeight: 700 }}>suporte</span> · reenvio de senha</div>
+            </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <a href="/dashboard" style={{ background: 'transparent', border: `1px solid ${C.gold}55`, color: C.gold, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'none' }}>Painel do cliente ↗</a>
@@ -129,8 +135,8 @@ export default function SupportClient({ name }: { name: string }) {
 
         {/* Card da senha gerada */}
         {gerado && (
-          <div style={{ marginBottom: 20, background: C.card, border: `1px solid rgba(240,180,41,0.3)`, borderRadius: 14, padding: '18px 20px' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.gold, marginBottom: 4 }}>✓ Dados de acesso</div>
+          <div style={{ marginBottom: 20, background: 'linear-gradient(180deg,rgba(20,20,16,0.92),rgba(10,11,14,0.92))', border: '1px solid rgba(255,200,61,0.3)', borderRadius: 18, padding: '18px 20px' }}>
+            <div style={{ fontFamily: DISPLAY, fontStretch: '106%', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', color: C.gold, marginBottom: 4 }}>✓ Dados de acesso</div>
             <div style={{ fontSize: 12, color: C.t3, marginBottom: 14 }}>O e-mail já foi enviado para <strong style={{ color: C.t2 }}>{gerado.email}</strong>. Se preferir, copie e mande você mesmo:</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
               {[['E-mail', gerado.email], ['Senha', gerado.password], ['Chave da extensão', gerado.licenseKey]].map(([lbl, val]) => (

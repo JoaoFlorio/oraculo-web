@@ -4,13 +4,16 @@ import { useEffect, useMemo, useState } from 'react'
 /* ─── Tokens premium (grafite + ouro, identidade Oráculo) ─────────────────── */
 import CancelarNaGreenn from './CancelarNaGreenn'
 
+// 05/10/2026: visual novo — mesma linguagem do site oraculojf.com e do login (obsidiana + ouro, Archivo/Instrument Sans).
 const C = {
-  bg: '#07080D', card: '#10121B', cardHov: '#161925', line: 'rgba(255,255,255,0.06)',
-  lineG: 'rgba(240,180,41,0.30)', gold: '#F0B429', green: '#34D399', red: '#F87171',
-  amber: '#FBBF24', violet: '#8B78FF', blue: '#5E9BE0',
-  t1: '#F3F3FB', t2: '#9DA2BC', t3: '#666B85',
+  bg: '#05060A', card: '#0E0F0E', cardHov: '#15160F', line: 'rgba(243,238,226,0.08)',
+  lineG: 'rgba(255,200,61,0.38)', gold: '#FFC83D', green: '#34D399', red: '#F87171',
+  amber: '#FBBF24', violet: '#A78BFA', blue: '#6EA8E8',
+  t1: '#F3EEE2', t2: '#B9B3A6', t3: '#7E796E',
 }
-const GOLD_GRAD = 'linear-gradient(135deg,#F5C842,#C48F10)'
+const GOLD_GRAD = 'linear-gradient(180deg,#FFE7A3 0%,#FFC83D 50%,#EBA31A 100%)'
+const FUNDO = 'radial-gradient(70vmax 55vmax at -10% -20%, rgba(255,200,61,0.13), transparent 60%), radial-gradient(55vmax 45vmax at 115% 120%, rgba(255,170,40,0.08), transparent 60%), linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px) 0 0 / 64px 64px, linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px) 0 0 / 64px 64px, #05060A'
+const DISPLAY = "var(--tg-display),'Archivo',sans-serif"
 const PLAN_LABEL: Record<string, string> = { free: 'Gratuito', monthly: 'Mensal', biannual: 'Semestral', annual: 'Anual', lifetime: 'Vitalício' }
 const PLAN_COLOR: Record<string, string> = { free: C.t3, monthly: C.blue, biannual: C.gold, annual: C.green, lifetime: C.violet }
 const PLANS = ['monthly', 'biannual', 'annual', 'lifetime']
@@ -24,15 +27,19 @@ const fmtDM = (d: string | Date) => new Date(d).toLocaleDateString('pt-BR', { da
 const fmtDMY = (d: string | Date) => new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 const isoDM = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}` // 'YYYY-MM-DD' sem fuso
 
-const num = { fontFamily: "'JetBrains Mono',monospace", fontVariantNumeric: 'tabular-nums' as const }
+const num = { fontFamily: "var(--tg-mono),'JetBrains Mono',monospace", fontVariantNumeric: 'tabular-nums' as const }
 const upLabel = { fontSize: 10, fontWeight: 700 as const, color: C.t3, letterSpacing: '0.1em', textTransform: 'uppercase' as const }
-const card = { background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, boxShadow: '0 1px 2px rgba(0,0,0,0.4)' }
-const inputSt = { width: '100%', background: C.bg, border: `1px solid ${C.line}`, borderRadius: 9, color: C.t1, padding: '10px 14px', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' as const, transition: 'border-color .15s' }
+const card = { background: 'linear-gradient(180deg,rgba(20,20,16,0.92),rgba(10,11,14,0.92))', border: '1px solid rgba(255,200,61,0.13)', borderRadius: 18, boxShadow: '0 30px 60px -34px rgba(0,0,0,0.9), inset 0 1px 0 rgba(255,231,163,0.05)', backdropFilter: 'blur(6px)' }
+const inputSt = { width: '100%', background: 'rgba(255,255,255,0.035)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: C.t1, padding: '10px 14px', fontSize: 13, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' as const, transition: 'border-color .15s' }
 
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap');
+/* fontes: next/font no page.tsx (Archivo, Instrument Sans, JetBrains Mono) */
+::selection { background: rgba(255,200,61,0.3); color: #fff; }
+.orc-tab[data-on="0"]:hover { border-color: rgba(255,200,61,0.4) !important; color: #F3EEE2 !important; }
+@media (max-width: 760px) { .orc-scope .orc-2col { grid-template-columns: minmax(0,1fr) !important } }
+.orc-in:focus, .orc-scope input:focus, .orc-scope select:focus, .orc-scope textarea:focus { border-color: rgba(255,200,61,0.6) !important; box-shadow: 0 0 0 3px rgba(255,200,61,0.12); }
+.orc-scope ::-webkit-scrollbar { height: 8px; width: 8px } .orc-scope ::-webkit-scrollbar-thumb { background: rgba(255,200,61,0.25); border-radius: 8px }
 .orc-row:hover td { background: rgba(255,255,255,0.02); }
-.orc-in:focus { border-color: ${C.lineG} !important; }
 .orc-gold:hover:not(:disabled) { filter: brightness(1.07); }
 .orc-gold:disabled { opacity: .55; cursor: default; }
 .orc-ghost:hover { border-color: rgba(255,255,255,0.16); color: ${C.t1}; }
@@ -42,11 +49,7 @@ const CSS = `
 
 /* ─── Peças de UI ─────────────────────────────────────────────────────────── */
 function Logo() {
-  return (
-    <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(240,180,41,0.08)', border: `1px solid ${C.lineG}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <svg width="20" height="20" viewBox="0 0 32 32" fill="none"><path d="M3 16 Q16 4 29 16" stroke={C.gold} strokeWidth="1.5" strokeLinecap="round" /><path d="M3 16 Q16 28 29 16" stroke={C.gold} strokeWidth="1.5" strokeLinecap="round" /><circle cx="16" cy="16" r="5.2" stroke={C.gold} strokeWidth="1.2" /><circle cx="16" cy="16" r="1.7" fill="#F6D89B" /></svg>
-    </div>
-  )
+  return <svg width="44" viewBox="0 0 1000 440" aria-hidden="true" style={{ filter: 'drop-shadow(0 0 10px rgba(255,200,61,0.45))', flexShrink: 0 }}><g fill="none" stroke="#FFC83D" strokeWidth="34" strokeLinejoin="round"><path d="M70 220Q500-90 930 220Q500 530 70 220Z" /><path d="M70 220Q500-20 930 220Q500 460 70 220Z" strokeWidth="26" /><circle cx="500" cy="220" r="105" strokeWidth="26" /></g><circle cx="500" cy="220" r="40" fill="#FFE7A3" /></svg>
 }
 
 function PlanBadge({ plan }: { plan: string }) {
@@ -342,7 +345,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   )
   const licByEmail = (email: string) => licenses.find(l => l.email?.toLowerCase() === email?.toLowerCase())
 
-  const chip = (on: boolean, col = C.gold): any => ({ padding: '7px 14px', borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', border: `1px solid ${on ? C.lineG : C.line}`, background: on ? 'rgba(240,180,41,0.10)' : 'transparent', color: on ? col : C.t2, fontFamily: 'inherit', transition: 'border-color .15s,color .15s' })
+  const chip = (on: boolean, _col = C.gold): any => ({ padding: '8px 16px', borderRadius: 999, fontSize: 12.5, fontWeight: on ? 700 : 600, cursor: 'pointer', border: `1px solid ${on ? 'transparent' : C.line}`, background: on ? GOLD_GRAD : 'rgba(255,255,255,0.03)', color: on ? '#1a1204' : C.t2, fontFamily: 'inherit', boxShadow: on ? '0 8px 22px -10px rgba(255,200,61,0.7)' : 'none', transition: 'border-color .15s,color .15s,background .2s' })
   const fieldLabel = { ...upLabel, display: 'block', marginBottom: 6 }
   const cellB = { borderBottom: '1px solid rgba(255,255,255,0.03)' }
 
@@ -362,7 +365,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   /* ── Card de credenciais geradas (compartilhado admin/staff) ── */
   const credentialsCard = created && (
     <div style={{ marginBottom: 16, padding: '16px 20px', borderRadius: 12, background: 'rgba(52,211,153,0.06)', border: '1px solid rgba(52,211,153,0.3)' }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: C.green, marginBottom: 12 }}>
+      <div style={{ fontFamily: DISPLAY, fontStretch: '106%', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', color: C.green, marginBottom: 12 }}>
         {created.action === 'resent' ? `Nova senha gerada e e-mail reenviado para ${created.email}` : created.action === 'updated' ? 'Acesso atualizado com sucesso' : 'Acesso criado com sucesso'}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
@@ -475,26 +478,26 @@ export default function AdminClient({ role, name, previewData }: { role: string;
           {PLANS.filter(p => isAdmin || p !== 'lifetime').map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
         </select>
       </div>
-      <button type="submit" disabled={loading} className="orc-gold" style={{ background: GOLD_GRAD, color: '#1a1305', fontWeight: 800, fontSize: 13, padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginTop: 4, transition: 'filter .15s' }}>{loading ? 'Criando…' : 'Criar acesso'}</button>
+      <button type="submit" disabled={loading} className="orc-gold" style={{ background: GOLD_GRAD, color: '#1a1204', fontWeight: 800, fontSize: 13.5, padding: '13px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginTop: 4, transition: 'filter .15s' }}>{loading ? 'Criando…' : 'Criar acesso'}</button>
     </form>
   )
 
   /* ═══ TELA DO FUNCIONÁRIO (staff): só cadastro, sem dados do negócio ═══ */
   if (!isAdmin) {
     return (
-      <div style={{ minHeight: '100vh', background: C.bg, color: C.t1, fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif", padding: '24px 22px' }}>
+      <div style={{ minHeight: '100vh', background: FUNDO, color: C.t1, fontFamily: "var(--tg-corpo),'Instrument Sans',system-ui,sans-serif", padding: '24px 22px', backgroundAttachment: 'fixed' }} className="orc-scope">
         <style>{CSS}</style>
         <div style={{ maxWidth: 620, margin: '0 auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 40 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Logo />
-              <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.14em' }}>ORÁCULO <span style={{ color: C.gold }}>EQUIPE</span></div>
+              <div style={{ fontFamily: DISPLAY, fontStretch: '125%', fontSize: 14, fontWeight: 600, letterSpacing: '0.3em' }}>ORÁCULO <span style={{ color: C.gold }}>EQUIPE</span></div>
             </div>
             <button onClick={logout} className="orc-ghost" style={{ background: 'transparent', border: `1px solid ${C.line}`, color: C.t2, fontSize: 12, padding: '8px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', transition: 'color .15s,border-color .15s' }}>Sair</button>
           </div>
 
           <div style={{ marginBottom: 28 }}>
-            <div style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.01em', marginBottom: 4 }}>Olá, {name}</div>
+            <div style={{ fontFamily: DISPLAY, fontStretch: '110%', fontSize: 34, fontWeight: 800, letterSpacing: '-0.03em', lineHeight: 1.05, marginBottom: 6 }}>Olá, <span style={{ background: 'linear-gradient(180deg,#FFE7A3,#FFC83D 50%,#F0A81C)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{name}</span></div>
             <div style={{ fontSize: 13.5, color: C.t2 }}>Cadastre novos clientes do Oráculo</div>
           </div>
 
@@ -513,7 +516,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
 
   /* ═══ PAINEL DO ADMIN ═══ */
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.t1, fontFamily: "'Plus Jakarta Sans',system-ui,sans-serif", padding: '24px 22px' }}>
+    <div style={{ minHeight: '100vh', background: FUNDO, color: C.t1, fontFamily: "var(--tg-corpo),'Instrument Sans',system-ui,sans-serif", padding: '24px 22px', backgroundAttachment: 'fixed' }} className="orc-scope">
       <style>{CSS}</style>
 
       <div style={{ maxWidth: 1180, margin: '0 auto' }}>
@@ -522,7 +525,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Logo />
             <div>
-              <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: '0.14em', color: C.t1 }}>ORÁCULO <span style={{ color: C.gold }}>ADMIN</span></div>
+              <div style={{ fontFamily: DISPLAY, fontStretch: '125%', fontSize: 15, fontWeight: 600, letterSpacing: '0.3em', color: C.t1 }}>ORÁCULO <span style={{ color: C.gold }}>ADMIN</span></div>
               <div style={{ fontSize: 11, color: C.t3 }}>{name} · <span style={{ color: C.gold, textTransform: 'uppercase', fontWeight: 700 }}>{role}</span>{isPreview && ' · PREVIEW'}</div>
             </div>
           </div>
@@ -533,10 +536,15 @@ export default function AdminClient({ role, name, previewData }: { role: string;
           </div>
         </div>
 
+        <div style={{ margin: '6px 0 22px' }}>
+          <div style={{ fontFamily: "var(--tg-mono),monospace", fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#FFE7A3' }}>Painel do negócio</div>
+          <div style={{ fontFamily: DISPLAY, fontStretch: '110%', fontSize: 'clamp(28px,3.2vw,40px)', fontWeight: 800, letterSpacing: '-0.035em', lineHeight: 1.02, marginTop: 8 }}>Olá, <span style={{ background: 'linear-gradient(180deg,#FFE7A3,#FFC83D 50%,#F0A81C)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>{(name || '').split(' ')[0]}</span>. Aqui está o Oráculo.</div>
+        </div>
+
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           {([['overview', 'Visão geral'], ['clients', 'Clientes'], ['new', 'Novo cliente'], ['team', 'Equipe'], ['demo', 'Conta Demo'], ['custo', 'Custo IA'], ['assinaturas', 'Cancelar na Greenn']] as const).map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} style={chip(tab === id)}>{label}</button>
+            <button key={id} onClick={() => setTab(id)} className="orc-tab" data-on={tab === id ? '1' : '0'} style={chip(tab === id)}>{label}</button>
           ))}
         </div>
 
@@ -565,28 +573,28 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                 { label: 'Vitalícios', value: k ? String(k.lifetime) : '—', col: C.violet },
               ].map((kpi: any) => (
                 <div key={kpi.label} style={{ ...card, padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', top: 0, left: 0, height: 2, width: '100%', background: `linear-gradient(90deg,${kpi.col},transparent)` }} />
+                  <div style={{ position: 'absolute', top: 0, left: 0, height: 2, width: '100%', background: `linear-gradient(90deg,${kpi.col},transparent)` }} /><div style={{ position: 'absolute', top: -40, right: -40, width: 110, height: 110, borderRadius: '50%', background: `radial-gradient(circle,${kpi.col}22,transparent 70%)`, pointerEvents: 'none' }} />
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6, marginBottom: 8, minHeight: 18 }}>
                     <div style={{ ...upLabel, letterSpacing: '0.08em' }}>{kpi.label}</div>
                     {kpi.badge}
                   </div>
-                  <div style={{ ...num, fontSize: kpi.money ? 17 : 22, fontWeight: 700, color: C.t1 }}>{kpi.value}</div>
+                  <div style={{ fontFamily: DISPLAY, fontStretch: '106%', fontVariantNumeric: 'tabular-nums', fontSize: kpi.money ? 21 : 28, fontWeight: 800, letterSpacing: '-0.02em', color: C.t1, lineHeight: 1.1 }}>{kpi.value}</div>
                 </div>
               ))}
             </div>
 
             {/* Gráfico + planos */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 14, marginBottom: 14 }}>
+            <div className="orc-2col" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 14, marginBottom: 14 }}>
               <div style={{ ...card, padding: '16px 18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>Faturamento por dia</span>
+                  <span style={{ fontFamily: DISPLAY, fontStretch: '106%', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>Faturamento por dia</span>
                   <span style={{ ...num, fontSize: 11, color: C.t3 }}>{days === 365 ? '1 ano' : `${days} dias`}</span>
                 </div>
                 <RevChart series={data?.revenueSeries || []} days={days} />
               </div>
 
               <div style={{ ...card, padding: '16px 18px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Assinantes por plano</div>
+                <div style={{ fontFamily: DISPLAY, fontStretch: '106%', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', marginBottom: 14 }}>Assinantes por plano</div>
                 {(data?.byPlan || []).length === 0 && <Empty>Sem assinantes ativos ainda.</Empty>}
                 {[...(data?.byPlan || [])].sort((a: any, b: any) => b.count - a.count).map((p: any) => {
                   const max = Math.max(1, ...(data?.byPlan || []).map((x: any) => x.count))
@@ -609,9 +617,9 @@ export default function AdminClient({ role, name, previewData }: { role: string;
             </div>
 
             {/* Radar de ação + vendas recentes */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 14 }}>
+            <div className="orc-2col" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 14 }}>
               <div style={{ ...card, padding: '16px 18px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Radar de ação</div>
+                <div style={{ fontFamily: DISPLAY, fontStretch: '106%', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', marginBottom: 14 }}>Radar de ação</div>
 
                 <div style={{ ...upLabel, marginBottom: 8 }}>Renovações em 7 dias</div>
                 {(data?.expiringSoon || []).length === 0
@@ -652,7 +660,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
               </div>
 
               <div style={{ ...card, padding: '16px 18px' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Vendas recentes</div>
+                <div style={{ fontFamily: DISPLAY, fontStretch: '106%', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', marginBottom: 14 }}>Vendas recentes</div>
                 {(data?.recentSales || []).length === 0
                   ? <Empty>As vendas da Greenn aparecem aqui em tempo real.</Empty>
                   : (data?.recentSales || []).map((s: any) => {
@@ -754,7 +762,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
             {/* Lista de membros */}
             <div style={{ ...card, padding: '16px 18px' }}>
-              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Membros da equipe</div>
+              <div style={{ fontFamily: DISPLAY, fontStretch: '106%', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', marginBottom: 14 }}>Membros da equipe</div>
               {team.length === 0
                 ? <Empty>Nenhum membro ainda. Adicione o primeiro funcionário ao lado.</Empty>
                 : (
@@ -818,7 +826,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                     <option value="support">Suporte — clientes + reenviar senha</option>
                   </select>
                 </div>
-                <button type="submit" disabled={teamLoading} className="orc-gold" style={{ background: GOLD_GRAD, color: '#1a1305', fontWeight: 800, fontSize: 13, padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginTop: 4, transition: 'filter .15s' }}>{teamLoading ? 'Criando…' : 'Criar acesso da equipe'}</button>
+                <button type="submit" disabled={teamLoading} className="orc-gold" style={{ background: GOLD_GRAD, color: '#1a1204', fontWeight: 800, fontSize: 13.5, padding: '13px', borderRadius: 999, border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginTop: 4, transition: 'filter .15s' }}>{teamLoading ? 'Criando…' : 'Criar acesso da equipe'}</button>
               </form>
 
               {teamCreated && (
@@ -900,7 +908,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                     <div style={{ fontSize: 10.5, color: C.t3, marginTop: 8, lineHeight: 1.5 }}>A margem final ({demoCfg.marginPct}%) é a MÉDIA — o custo dos produtos é fixado por ela (comissão + FBA + ads + margem = 100%), e cada período OSCILA em torno dela (ads, ACoS e TACoS variam, como numa loja real). As participações somam ~1.</div>
                   </div>
 
-                  <button type="submit" disabled={demoLoading} className="orc-gold" style={{ alignSelf: 'flex-start', background: GOLD_GRAD, color: '#02020A', border: 'none', borderRadius: 10, padding: '11px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: demoLoading ? 0.6 : 1 }}>{demoLoading ? 'Salvando…' : 'Salvar conta demo'}</button>
+                  <button type="submit" disabled={demoLoading} className="orc-gold" style={{ alignSelf: 'flex-start', background: GOLD_GRAD, color: '#1a1204', border: 'none', borderRadius: 999, padding: '11px 24px', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', opacity: demoLoading ? 0.6 : 1 }}>{demoLoading ? 'Salvando…' : 'Salvar conta demo'}</button>
                 </form>
               )}
 
@@ -956,7 +964,7 @@ function CustoTab() {
     fetch(`/api/agent/uso?dias=${dias}&limite=15`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(setD)
       .catch(e => setErro(`não consegui ler o uso (${e})`))
   }, [dias])
-  const chipC = (on: boolean): any => ({ padding: '7px 14px', borderRadius: 9, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', border: `1px solid ${on ? C.lineG : C.line}`, background: on ? 'rgba(240,180,41,0.10)' : 'transparent', color: on ? C.gold : C.t2, fontFamily: 'inherit' })
+  const chipC = (on: boolean): any => ({ padding: '8px 16px', borderRadius: 999, fontSize: 12.5, fontWeight: on ? 700 : 600, cursor: 'pointer', border: `1px solid ${on ? 'transparent' : C.line}`, background: on ? GOLD_GRAD : 'rgba(255,255,255,0.03)', color: on ? '#1a1204' : C.t2, fontFamily: 'inherit', boxShadow: on ? '0 8px 22px -10px rgba(255,200,61,0.7)' : 'none' })
   const th: any = { ...upLabel, textAlign: 'left', padding: '8px 10px', borderBottom: `1px solid ${C.line}` }
   const td: any = { padding: '8px 10px', fontSize: 13, borderBottom: `1px solid ${C.line}22`, verticalAlign: 'top' }
   const tdN: any = { ...td, ...num, textAlign: 'right', whiteSpace: 'nowrap' }
