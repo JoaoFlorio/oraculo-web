@@ -68,5 +68,8 @@ export const config = {
     '/api/auth/forgot-password',
     '/api/auth/reset-password',
     '/api/user/change-password',
+    '/api/teste/iniciar',      // 05/10: teste grátis (dispara WhatsApp + e-mail — custo)
+    '/api/teste/reenviar',
+    '/api/teste/confirmar',    // bcrypt + chute de código
   ],
 }

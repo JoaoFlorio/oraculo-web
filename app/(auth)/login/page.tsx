@@ -374,6 +374,8 @@ export default function LoginPage() {
 
             <p style={{ textAlign: 'center', fontSize: 12.5, color: t2 }}>
               Ainda não tem acesso?{' '}
+              <Link href="/teste-gratis" className="og-link-gold">Teste grátis 7 dias</Link>
+              <span style={{ color: t3 }}> · </span>
               <Link href="/planos" className="og-link-gold">Conheça os planos</Link>
             </p>
           </div>

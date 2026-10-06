@@ -472,7 +472,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
       <div>
         <label style={fieldLabel}>Plano</label>
         <select value={form.plan} onChange={e => setForm({ ...form, plan: e.target.value })} className="orc-in" style={{ ...inputSt, cursor: 'pointer' }}>
-          {PLANS.map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
+          {PLANS.filter(p => isAdmin || p !== 'lifetime').map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
         </select>
       </div>
       <button type="submit" disabled={loading} className="orc-gold" style={{ background: GOLD_GRAD, color: '#1a1305', fontWeight: 800, fontSize: 13, padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', fontFamily: 'inherit', marginTop: 4, transition: 'filter .15s' }}>{loading ? 'Criando…' : 'Criar acesso'}</button>

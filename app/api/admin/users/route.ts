@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'
 import bcrypt from 'bcryptjs'
 import { Resend } from 'resend'
 import { prisma } from '@/lib/db'
-import { getStaffSession, getAdminSession, getClientsSession } from '@/lib/auth'
+import { getSession, getAdminSession, getClientsSession } from '@/lib/auth'
 
 const ADMIN_KEY    = process.env.INTERNAL_KEY  || ''
 const ADMIN_SECRET = process.env.ADMIN_SECRET  || ''
@@ -13,12 +13,21 @@ const FRONTEND_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.oraculojf.c
 const resend       = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 
 // POST (criar cliente): admin OU funcionário (staff) OU SUPORTE OU backend interno.
-// O suporte (Marli) cria clientes igual o admin — sempre role='client' (o POST não
-// aceita `role`), então não há risco de escalonamento por aqui.
-async function checkAuth(req: NextRequest) {
-  if (segredoIgual(req.headers.get('x-admin-key'), ADMIN_KEY)) return true  // backend interno (timing-safe)
-  return !!(await getStaffSession()) || !!(await getClientsSession())          // admin/staff/support logado
+// O suporte (Marli) e o staff criam cliente NOVO — sempre role='client' (o POST não
+// aceita `role`). 05/10 (pentest): o POST também ATUALIZAVA quem já existia (plano,
+// +dias, active=true) — era um bypass do PATCH (admin-only): suporte/staff davam
+// vitalício e desfaziam reembolso. Agora só 'internal' (webhook) e 'admin' alteram
+// conta existente; 'restrito' (staff/support) só cria, e com plano da lista fechada.
+async function postLevel(req: NextRequest): Promise<'internal' | 'admin' | 'restrito' | null> {
+  if (segredoIgual(req.headers.get('x-admin-key'), ADMIN_KEY)) return 'internal'  // backend interno (timing-safe)
+  const s = await getSession()
+  if (!s) return null
+  if (s.role === 'admin') return 'admin'
+  if (s.role === 'staff' || s.role === 'support') return 'restrito'
+  return null
 }
+// Planos que staff/support podem dar na CRIAÇÃO. Vitalício (e qualquer outro) = só admin.
+const PLANOS_RESTRITO = new Set(['monthly', 'biannual', 'annual'])
 // PATCH (mudar plano / desativar): só admin OU backend interno.
 async function checkAdmin(req: NextRequest) {
   if (segredoIgual(req.headers.get('x-admin-key'), ADMIN_KEY)) return true
@@ -143,24 +152,34 @@ export async function GET(req: NextRequest) {
 
 // POST /api/admin/users → cria ou atualiza usuário + gera licença
 export async function POST(req: NextRequest) {
-  if (!(await checkAuth(req))) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const nivel = await postLevel(req)
+  if (!nivel) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const restrito = nivel === 'restrito'
 
-  const { email, name, plan, phone, skipLicense, licenseKey: providedKey, password: senhaDoChamador, expiresAt: validadeDoChamador, teste: testeDoChamador } = await req.json()
-  if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
+  const { email, name, plan, phone, skipLicense: skipDoChamador, licenseKey: providedKey, password: senhaDoChamador, expiresAt: validadeDoChamador, teste: testeDoChamador } = await req.json()
+  if (!email || typeof email !== 'string') return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
   // 23/09 (achado 41): o webhook da Greenn manda a senha que vai no e-mail de acesso, mas esta
   // rota gerava OUTRA e gravava a sua — o cliente recebia uma senha que não abria. Só o chamador
   // INTERNO (x-admin-key) pode fornecer a senha; painel/suporte continuam com a gerada aqui.
-  const nivel = await clientsLevel(req)
   const senhaFornecida = nivel === 'internal' && typeof senhaDoChamador === 'string' && senhaDoChamador.length >= 8 ? senhaDoChamador : null
+  // skipLicense/licenseKey são do webhook: staff/support sempre geram licença + mandam o e-mail.
+  const skipLicense = restrito ? false : skipDoChamador
 
   const phoneVal = phone ? String(phone).trim() : null
   const targetPlan = plan || 'monthly'
+  // 05/10 (pentest): staff/support só escolhem plano da lista fechada — vitalício é do admin.
+  if (restrito && !PLANOS_RESTRITO.has(targetPlan))
+    return NextResponse.json({ error: 'Plano não permitido — vitalício só o admin libera.' }, { status: 400 })
   const exists     = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
+  // 05/10 (pentest): staff/support NÃO alteram conta existente (plano, dias, reativação) — isso é
+  // o PATCH, admin-only. Antes o POST virava o atalho: vitalício + active=true desfazia reembolso.
+  if (exists && restrito)
+    return NextResponse.json({ error: 'Cliente já existe — peça ao admin pra alterar o plano/acesso.' }, { status: 409 })
   // 01/10 — TESTE GRÁTIS (webhook da Greenn, só chamador INTERNO): validade exata (7 dias) e a marca
   // `metadata.teste` (a tela troca "renove" por "teste até dd/mm"). Venda paga do webhook vem SEM teste → limpa a marca.
   const interno = nivel === 'internal'
   const validadeTeste = interno && typeof validadeDoChamador === 'string' && !isNaN(Date.parse(validadeDoChamador)) ? new Date(validadeDoChamador) : null
-  const marcaTeste = interno && testeDoChamador && typeof testeDoChamador.ate === 'string' ? { ate: testeDoChamador.ate, creditos: Number(testeDoChamador.creditos) || 10 } : null
+  const marcaTeste = interno && testeDoChamador && typeof testeDoChamador.ate === 'string' ? { ate: testeDoChamador.ate, creditos: Number(testeDoChamador.creditos) || 10, ...(testeDoChamador.origem === 'oraculo' ? { origem: 'oraculo' } : {}) } : null
   const expiry     = validadeTeste ?? calcExpiry(targetPlan, exists && exists.plan !== 'lifetime' ? exists.expiresAt : null)
   const metaBase   = (exists?.metadata && typeof exists.metadata === 'object' ? exists.metadata : {}) as Record<string, unknown>
   const metadataNova = interno ? (() => { const m = { ...metaBase }; if (marcaTeste) m.teste = marcaTeste; else delete m.teste; return m })() : undefined

@@ -17,12 +17,17 @@ export default async function DashboardPage() {
   if (!user) redirect('/login')
   // 01/10: sem acesso pago (vencido, bloqueado, sem plano) → SÓ a tela de pagamento. Nada do painel é renderizado
   // (nem termos, nem app, nem assistente) — "se não pagar, não acessa nada".
-  if (motivo) return (
-    <>
-      <VersionGuard v={process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'dev'} />
-      <Paywall email={user.email} plan={user.plan ?? null} expiresAt={user.expiresAt ? new Date(user.expiresAt).toISOString() : null} motivo={motivo} />
-    </>
-  )
+  if (motivo) {
+    // 05/10: quem terminou o TESTE GRÁTIS vê "seu teste terminou" (não "seu plano venceu").
+    const m = (await prisma.user.findUnique({ where: { id: user.id }, select: { metadata: true } }).catch(() => null))?.metadata as Record<string, any> | null
+    const foiTeste = motivo === 'expired' && !!m?.teste?.ate
+    return (
+      <>
+        <VersionGuard v={process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'dev'} />
+        <Paywall email={user.email} plan={user.plan ?? null} expiresAt={user.expiresAt ? new Date(user.expiresAt).toISOString() : null} motivo={motivo} foiTeste={foiTeste} />
+      </>
+    )
+  }
   // Gate da Gestão: LIBERADO PARA TODOS (19/07/2026). O gate existia enquanto o
   // app SP-API estava em Draft; com as aprovações da Amazon saídas e sem plano
   // grátis no produto (quem não pagou nem chega aqui — ver accessDenied), todo
@@ -40,12 +45,12 @@ export default async function DashboardPage() {
   // em metadata.terms via /api/user/accept-terms). Admin/staff/demo são isentos (equipe
   // e conta de apresentação — não são consumidores do contrato de adesão).
   let needsTerms = false
-  let teste: { ate: string; creditos: number } | null = null   // 01/10: teste grátis de 7 dias (Greenn)
+  let teste: { ate: string; creditos: number; origem?: string } | null = null   // teste grátis de 7 dias (05/10: origem 'oraculo' = sem cartão)
   if (!user.role || user.role === 'client') {
     const u = await prisma.user.findUnique({ where: { id: user.id }, select: { metadata: true } })
     const meta = (u?.metadata ?? {}) as Record<string, any>
     needsTerms = meta.terms?.version !== TERMS_VERSION
-    if (meta.teste?.ate && Date.parse(meta.teste.ate) > Date.now()) teste = { ate: String(meta.teste.ate), creditos: Number(meta.teste.creditos) || 10 }
+    if (meta.teste?.ate && Date.parse(meta.teste.ate) > Date.now()) teste = { ate: String(meta.teste.ate), creditos: Number(meta.teste.creditos) || 10, ...(meta.teste.origem ? { origem: String(meta.teste.origem) } : {}) }
   }
 
   return (

@@ -168,7 +168,7 @@ export default function SupportClient({ name }: { name: string }) {
             <div>
               <label style={{ fontSize: 10, color: C.t3, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Plano</label>
               <select value={form.plan} onChange={e => setForm({ ...form, plan: e.target.value })} style={{ ...inputSt, width: '100%', boxSizing: 'border-box' }}>
-                {(['monthly', 'biannual', 'annual', 'lifetime'] as const).map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
+                {(['monthly', 'biannual', 'annual'] as const).map(p =>  /* vitalício = só admin (POST barra, 05/10) */ <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}
               </select>
             </div>
             <button type="submit" disabled={criando} style={{ background: GOLD_GRAD, color: '#1a1305', fontWeight: 800, fontSize: 13, padding: '11px 18px', borderRadius: 10, border: 'none', cursor: criando ? 'default' : 'pointer', fontFamily: 'inherit', opacity: criando ? 0.6 : 1, whiteSpace: 'nowrap' }}>{criando ? 'Criando…' : 'Criar acesso'}</button>

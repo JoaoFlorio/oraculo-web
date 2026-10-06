@@ -1381,7 +1381,7 @@ function CompetitorPanel({user,isFree,onUpgrade}:{user:any;isFree:boolean;onUpgr
 }
 
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
-export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{user:any;gestaoEnabled?:boolean;teste?:{ate:string;creditos:number}|null}){
+export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{user:any;gestaoEnabled?:boolean;teste?:{ate:string;creditos:number;origem?:string}|null}){
   const router = useRouter()
   // Aba de entrada. Gestão primeiro pra quem tem acesso: é a tela de trabalho
   // do dia (os números da operação), e assim o painel abre SEM disparar a
@@ -1405,6 +1405,8 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
   // Deep link ?nav=planos (push/e-mail de renovação): abre direto na aba pedida, se ela existir.
   useEffect(()=>{
     try{ const q=new URLSearchParams(window.location.search).get('nav'); if(q&&NAV.some(n=>n.id===q)) setNav(q) }catch{}
+    // 05/10: loja (Amazon/ML) que já passou por outro teste grátis ou está ligada a outro cadastro — o backend recusou.
+    try{ if(new URLSearchParams(window.location.search).get('reason')==='teste-vendedor') setTimeout(()=>alert('Essa conta de vendedor já usou o teste grátis ou está ligada a outro cadastro do Oráculo. Para conectá-la, escolha um plano.'),300) }catch{}
   },[])
   // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
   const navGroups = NAV_GROUPS
@@ -2216,7 +2218,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
           {emTeste&&teste&&(()=>{const ate=new Date(teste.ate);const d=Math.max(0,Math.ceil((ate.getTime()-Date.now())/86400000));return(
             <div style={{background:`linear-gradient(90deg, ${tint(T.gold,12)} 0%, ${tint(T.gold,6)} 100%)`,borderBottom:`1px solid ${tint(T.gold,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:10,flexShrink:0,flexWrap:'wrap' as const}}>
               <span style={{fontSize:11,color:T.t1,flex:1,minWidth:220}}>
-                🎁 <strong style={{color:T.gold}}>Teste grátis</strong> — {d<=0?'termina hoje':<>termina em <strong className="ora-num" style={{color:T.gold}}>{d} {d===1?'dia':'dias'}</strong></>} ({ate.toLocaleDateString('pt-BR')}). Depois disso, o Mensal (R$ 97/mês) é cobrado no cartão que você cadastrou, sem precisar fazer nada. No teste você tem <strong>{teste.creditos} créditos</strong> pra gerar imagens e anúncios com o NEO.
+                🎁 <strong style={{color:T.gold}}>Teste grátis</strong> — {d<=0?'termina hoje':<>termina em <strong className="ora-num" style={{color:T.gold}}>{d} {d===1?'dia':'dias'}</strong></>} ({ate.toLocaleDateString('pt-BR')}). {teste.origem==='oraculo'?<>No teste você tem <strong>{teste.creditos} créditos para usar em 7 dias</strong> (imagens, anúncios e vídeos com o NEO). Quando o teste terminar, o acesso fica travado até você escolher um plano — <a href="/dashboard?nav=planos" style={{color:T.gold,fontWeight:700}}>ver os planos</a>.</>:<>Depois disso, o Mensal (R$ 97/mês) é cobrado no cartão que você cadastrou, sem precisar fazer nada. No teste você tem <strong>{teste.creditos} créditos</strong> pra gerar imagens e anúncios com o NEO.</>}
               </span>
             </div>)})()}
           {/* Aviso de vencimento — 5 dias, âmbar→dourado, com atalho pro Anual */}

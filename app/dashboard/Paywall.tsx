@@ -8,16 +8,18 @@ import { PLANOS, fmt, checkout, type PlanoId } from '@/lib/planos'
 const WA = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Sou%20cliente%20do%20Or%C3%A1culo%20e%20preciso%20de%20ajuda%20com%20o%20pagamento.'
 const NOME: Record<string, string> = { monthly: 'Mensal', biannual: 'Semestral', annual: 'Anual', lifetime: 'Fundador Vitalício' }
 
-export default function Paywall({ email, plan, expiresAt, motivo }: {
-  email: string; plan: string | null; expiresAt: string | null; motivo: 'expired' | 'inactive' | 'free'
+export default function Paywall({ email, plan, expiresAt, motivo, foiTeste = false }: {
+  email: string; plan: string | null; expiresAt: string | null; motivo: 'expired' | 'inactive' | 'free'; foiTeste?: boolean
 }) {
   const mensal = PLANOS.find(p => p.id === 'monthly')!
   const anual = PLANOS.find(p => p.id === 'annual')!
   const vit = PLANOS.find(p => p.id === 'lifetime')!
   const economiaAno = mensal.preco * 12 - anual.preco
   const venceu = expiresAt ? new Date(expiresAt).toLocaleDateString('pt-BR') : null
-  const titulo = motivo === 'expired' ? 'Seu plano venceu' : motivo === 'inactive' ? 'Seu acesso está bloqueado' : 'Escolha seu plano'
-  const sub = motivo === 'expired'
+  const titulo = foiTeste ? 'Seu teste grátis terminou' : motivo === 'expired' ? 'Seu plano venceu' : motivo === 'inactive' ? 'Seu acesso está bloqueado' : 'Escolha seu plano'
+  const sub = foiTeste
+    ? <>Os 7 dias de teste acabaram{venceu ? <> em <b style={{ color: 'var(--gold)' }}>{venceu}</b></> : null}. Escolha um plano pra continuar usando o Oráculo — tudo o que você configurou continua aqui esperando.</>
+    : motivo === 'expired'
     ? <>O plano <b style={{ color: 'var(--t1)' }}>{NOME[plan || ''] || 'atual'}</b>{venceu ? <> venceu em <b style={{ color: 'var(--gold)' }}>{venceu}</b></> : null} e a renovação não foi paga.</>
     : motivo === 'inactive' ? <>Sua assinatura foi cancelada ou o pagamento foi estornado.</>
     : <>Sua conta ainda não tem um plano ativo.</>
@@ -71,9 +73,17 @@ export default function Paywall({ email, plan, expiresAt, motivo }: {
           })}
         </div>
 
-        <p style={{ textAlign: 'center' as const, fontSize: 12.5, color: 'var(--t3)', marginTop: 14 }}>
-          Prefere nunca mais pagar mensalidade? <a href={checkout('lifetime', email)} target="_blank" rel="noreferrer" style={{ color: 'var(--gold)', fontWeight: 700 }}>{vit.nome} por {fmt(vit.preco)}</a>.
-        </p>
+        {/* 05/10 (João): o Fundador é OPÇÃO de verdade na tela de planos (antes era só uma linha de texto). */}
+        <a href={checkout('lifetime', email)} target="_blank" rel="noreferrer"
+          style={{ display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', justifyContent: 'space-between', gap: 14, marginTop: 12, textDecoration: 'none',
+            borderRadius: 16, padding: '18px 20px', background: 'var(--card)', border: '1px solid var(--lineG)', color: 'var(--t1)' }}>
+          <div style={{ minWidth: 220, flex: '1 1 300px' }}>
+            <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.12em', color: 'var(--gold)' }}>FAÇA PARTE PRA SEMPRE</span>
+            <div style={{ fontSize: 17, fontWeight: 800, marginTop: 4 }}>{vit.nome} — {fmt(vit.preco)} <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--t3)' }}>{vit.ciclo}</span></div>
+            <div style={{ fontSize: 12.5, color: 'var(--t2)', marginTop: 4, lineHeight: 1.55 }}>{vit.frase} {vit.destaques.slice(1, 3).join(' · ')}.</div>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 800, padding: '11px 16px', borderRadius: 10, background: 'var(--goldSub)', color: 'var(--gold)', border: '1px solid var(--lineG)', whiteSpace: 'nowrap' as const }}>Quero ser Fundador</span>
+        </a>
         <p style={{ textAlign: 'center' as const, fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>
           Use o e-mail <b style={{ color: 'var(--t2)' }}>{email}</b> no pagamento — é por ele que o acesso volta sozinho.
         </p>

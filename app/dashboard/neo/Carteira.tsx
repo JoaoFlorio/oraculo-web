@@ -27,6 +27,7 @@ interface Status {
   custos: { anuncio: number; imagem: number }
   precisaCadastro: boolean
   pagamentoConfigurado: boolean
+  teste?: boolean   // 05/10: no teste grátis não tem recarga (só depois de assinar)
 }
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: n % 1 ? 2 : 0 })
@@ -212,6 +213,15 @@ function ModalRecarga({ status, onFechar, onCreditou }: {
             )}
             <a className="rcInvoice" href={pix.invoiceUrl} target="_blank" rel="noopener noreferrer">Abrir a página de pagamento</a>
             <div className="rcWaiting"><span className="rcDot" />Aguardando o pagamento…</div>
+          </>
+        ) : status.teste ? (
+          <>
+            <div className="rcHead"><span className="rcEyebrow">Teste grátis</span><h3>Recarga liberada ao assinar</h3></div>
+            <p className="rcLead">
+              No teste grátis você usa os créditos do teste{status.franquia ? <> — restam <strong>{status.franquia.restante.toLocaleString('pt-BR')}</strong> de {status.franquia.limite.toLocaleString('pt-BR')}</> : ''}.
+              Para recarregar créditos, escolha um plano.
+            </p>
+            <a className="rcPrimary" href="/dashboard?nav=planos" style={{ display: 'inline-block', textAlign: 'center', textDecoration: 'none' }}>Ver os planos</a>
           </>
         ) : (
           <>
