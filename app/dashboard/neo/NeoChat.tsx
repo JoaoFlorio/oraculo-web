@@ -1080,7 +1080,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
               <div className={`${o.coluna} ${o.fio}`}>
                 {vazio && !loading && (
                   <div className={o.vazio}>
-                    <VazioOuro icone={IcOuro.brilho} titulo="Sem rodeio. Olha o número."
+                    <VazioOuro icone={<span aria-hidden="true" style={{ fontFamily: 'var(--tg-display),Archivo,sans-serif', fontStretch: '112%', fontWeight: 800, fontSize: 40, lineHeight: 1, letterSpacing: '-0.02em', background: 'var(--ou-grad-txt)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', position: 'relative' }}>N</span>} titulo="Sem rodeio. Olha o número."
                       texto="Eu leio a sua operação de verdade — DRE, estoque, anúncios, histórico — e te aponto a decisão. Pergunta."
                       acao={
                         <div className={o.sugestoes}>
