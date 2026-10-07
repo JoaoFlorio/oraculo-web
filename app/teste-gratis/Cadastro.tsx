@@ -145,6 +145,8 @@ export default function Cadastro() {
 
   async function iniciar(e: React.FormEvent) {
     e.preventDefault(); setErro(null)
+    // 07/10: nome E sobrenome (o servidor confere de novo — e, no CNPJ, se o nome é de um sócio na Receita)
+    if (nome.trim().split(/\s+/).filter(p => p.replace(/[^\p{L}]/gu, '').length >= 2).length < 2) { setErro('Informe seu nome completo (nome e sobrenome).'); return }
     if (senha.length < 8) { setErro('A senha precisa ter pelo menos 8 caracteres.'); return }
     if (!aceite) { setErro('Aceite os termos para continuar.'); return }
     if (TURNSTILE_SITE_KEY && !tsToken) { setErro('Confirme que você não é um robô (caixinha acima do botão).'); return }
@@ -228,12 +230,12 @@ export default function Cadastro() {
                   <h2 className={s.cartaoTitulo}>Crie seu acesso grátis</h2>
                   <p className={s.cartaoSub}><b>30 créditos</b> para usar em <b>7 dias</b>, sem cartão e sem pagar nada.</p>
                   <form onSubmit={iniciar} className={s.form}>
-                    <Campo label="Nome completo" icone={Ic.user}><input className={s.entrada} value={nome} onChange={e => setNome(e.target.value)} autoComplete="name" required maxLength={80} placeholder="Seu nome" /></Campo>
+                    <Campo label="Nome completo" icone={Ic.user}><input className={s.entrada} value={nome} onChange={e => setNome(e.target.value)} autoComplete="name" required maxLength={80} placeholder="Nome e sobrenome" /></Campo>
                     <div className={s.duas}>
                       <Campo label="E-mail" icone={Ic.mail} dica="Vamos mandar um código pra ele."><input className={s.entrada} type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required maxLength={120} placeholder="voce@email.com" /></Campo>
                       <Campo label="WhatsApp (com DDD)" icone={Ic.zap} dica="Vamos mandar o outro código no WhatsApp."><input className={s.entrada} inputMode="tel" value={tel} onChange={e => setTel(mascaraTel(e.target.value))} placeholder="(11) 91234-5678" autoComplete="tel" required /></Campo>
                     </div>
-                    <Campo label="CPF ou CNPJ" icone={Ic.doc} dica="1 teste por CPF/CNPJ. Guardamos só uma marca embaralhada, nunca o número."><input className={s.entrada} inputMode="numeric" value={doc} onChange={e => setDoc(mascaraDoc(e.target.value))} required placeholder="000.000.000-00" /></Campo>
+                    <Campo label="CPF ou CNPJ" icone={Ic.doc} dica={doc.replace(/\D/g, '').length > 11 ? 'CNPJ: conferimos na Receita Federal — precisa estar ativo e o seu nome tem que ser de um sócio. 1 teste por CNPJ.' : '1 teste por CPF/CNPJ. Guardamos só uma marca embaralhada, nunca o número.'}><input className={s.entrada} inputMode="numeric" value={doc} onChange={e => setDoc(mascaraDoc(e.target.value))} required placeholder="000.000.000-00" /></Campo>
                     <Campo label="Crie uma senha" icone={Ic.cadeado} dica="Mínimo de 8 caracteres.">
                       <input className={s.entrada} type={verSenha ? 'text' : 'password'} value={senha} onChange={e => setSenha(e.target.value)} autoComplete="new-password" required minLength={8} maxLength={128} placeholder="••••••••" style={{ paddingRight: 50 }} />
                       <button type="button" className={s.olho} onClick={() => setVerSenha(v => !v)} aria-label={verSenha ? 'Esconder senha' : 'Mostrar senha'}>{verSenha ? Ic.olhoFechado : Ic.olho}</button>
