@@ -5,9 +5,20 @@ import { NextRequest } from 'next/server'
 
 export const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
 
+// 07/10 (bug de produção): o ÚLTIMO hop do X-Forwarded-For é um proxy INTERNO do Railway — os 7 primeiros testes
+// caíram em só 2 "conexões" e, depois de 3, todo mundo que passava por aquele proxy levava "vários testes a partir
+// desta conexão". O Railway documenta o X-Real-IP como a fonte do IP de quem conecta (e o 1º valor do XFF como o real).
+// IP privado/interno (100.64/10 do Railway, 10/8, 172.16/12, 192.168/16, loopback) nunca é aceito como "o cliente".
+const privado = (ip: string) => /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1$|fc|fd|fe80)/i.test(ip)
 export function ipReal(req: NextRequest): string {
+  const real = (req.headers.get('x-real-ip') || '').trim()
+  if (real && !privado(real)) return real
   const hops = (req.headers.get('x-forwarded-for') || '').split(',').map(s => s.trim()).filter(Boolean)
-  return hops[hops.length - 1] || req.headers.get('x-real-ip') || 'desconhecido'
+  return hops.find(h => !privado(h)) || real || hops[0] || 'desconhecido'
+}
+/** Diagnóstico temporário (07/10): o que chega de IP — só os do PRÓPRIO chamador. */
+export function cabecalhosIp(req: NextRequest) {
+  return { xRealIp: req.headers.get('x-real-ip'), xForwardedFor: req.headers.get('x-forwarded-for'), escolhido: ipReal(req) }
 }
 
 export async function chamarBackend(caminho: string, corpo?: unknown, metodo: 'POST' | 'GET' = 'POST'): Promise<{ status: number; json: any }> {
