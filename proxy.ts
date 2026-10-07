@@ -24,16 +24,14 @@ interface Balde { count: number; resetAt: number }
 const baldes = new Map<string, Balde>()
 
 function ipDe(req: NextRequest): string {
-  // ⚠️ SEGURANÇA (pentest 06/08/2026): o IP real é o ÚLTIMO hop do X-Forwarded-For,
-  // não o primeiro. O Envoy do Railway ANEXA o IP do cliente à DIREITA — o que
-  // vem à esquerda é controlado pelo atacante (ele manda `X-Forwarded-For: <fake>`
-  // e o Envoy vira `<fake>, <ip-real>`). Ler o [0] deixava o atacante trocar de
-  // "IP" a cada requisição e furar o limite. Ler o último bate com o backend
-  // (`trust proxy: 1`, que lê o hop da direita). Sem hop, x-real-ip (setado pelo
-  // proxy, não pelo cliente).
-  const xff = req.headers.get('x-forwarded-for') || ''
-  const hops = xff.split(',').map(s => s.trim()).filter(Boolean)
-  return hops[hops.length - 1] || req.headers.get('x-real-ip') || 'desconhecido'
+  // 07/10/2026 (bug de produção, MEDIDO): no Railway o XFF chega "<cliente>, <borda 46.151.x.x>" e a borda DESCARTA
+  // XFF/X-Real-IP forjados pelo navegador (testado mandando valores falsos). O ÚLTIMO hop é a BORDA — compartilhada
+  // por muita gente: este balde de 10/min virava um só pra vários clientes (login e cadastro do teste davam "Muitas
+  // tentativas" num pico). O cliente é o 1º hop público. (O comentário antigo, de 06/08, supunha que o Envoy anexava.)
+  const privado = (ip: string) => /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1$|fc|fd|fe80)/i.test(ip)
+  const hops = (req.headers.get('x-forwarded-for') || '').split(',').map(s => s.trim()).filter(Boolean)
+  const real = (req.headers.get('x-real-ip') || '').trim()
+  return hops.find(h => !privado(h)) || (real && !privado(real) ? real : '') || hops[0] || real || 'desconhecido'
 }
 
 export function proxy(req: NextRequest) {

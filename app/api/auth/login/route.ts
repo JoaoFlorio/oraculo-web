@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       try {
         const { Resend } = await import('resend')
         const hops = (req.headers.get('x-forwarded-for') || '').split(',').map(s => s.trim()).filter(Boolean)
-        const ip = hops[hops.length - 1] || req.headers.get('x-real-ip') || 'desconhecido'
+        const ip = hops[0] || req.headers.get('x-real-ip') || 'desconhecido'   // 07/10: 1º hop = cliente (o último é a borda do Railway)
         const ua = (req.headers.get('user-agent') || '').slice(0, 160)
         if (process.env.RESEND_API_KEY) await new Resend(process.env.RESEND_API_KEY).emails.send({
           from: 'ORÁCULO <noreply@oraculojf.com.br>', to: user.email,
