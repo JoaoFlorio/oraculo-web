@@ -2,36 +2,21 @@
 
 /**
  * Planos — Acesso Fundador (vitalício, destaque de lançamento) + 3 recorrentes.
- *
- * ⚠️ TODO GREENN: os links abaixo são das OFERTAS ANTIGAS (79,90/397/597).
- * Antes de commitar/deployar, criar as 4 ofertas novas na Greenn
- * (127 mensal · 597 semestral · 997 anual · 1.497 Fundador VITALÍCIO — o nome
- * do produto precisa conter "vitalício" p/ o webhook mapear como lifetime)
- * e trocar os hrefs.
+ * PREÇO E LINK vêm de lib/planos.ts (fonte única: 97 · 497 · 897 · 1.497). Nunca escreva valor aqui.
+ * O nome do produto na Greenn define o plano no backend (mensal / semestral / anual / vitalício).
  */
 
+import { GREENN_LINKS, planoDe } from '@/lib/planos'
 import { Check, Crown, Infinity as InfinityIcon, Sparkles } from 'lucide-react'
 import Reveal from './Reveal'
 import { SectionHead } from './Section'
 import { RunWhenVisible } from './ui'
 
-/**
- * Checkouts Greenn — conferidos ao vivo em 18/07/2026:
- *   B0febG → "Oráculo - Mensal"                     R$ 127,00 / mês
- *   rpgHFd → "Oráculo - Semestral"                  R$ 597,00 / semestre
- *   WBkId3 → "Oráculo - Anual"                      R$ 997,00 / ano
- *   b2s4g9x → "Oráculo - Acesso fundador VITALÍCIO" R$ 1.497,00 (único)
- *
- * O nome do produto na Greenn é o que define o plano no backend (o webhook
- * mapeia por palavra-chave: mensal / semestral / anual / vitalício).
- * Ao renomear uma oferta lá, confira se a palavra-chave continua no nome.
- */
-const LINKS = {
-  mensal: 'https://payfast.greenn.com.br/pm36pq4/offer/B0febG',
-  semestral: 'https://payfast.greenn.com.br/pm36pq4/offer/rpgHFd',
-  anual: 'https://payfast.greenn.com.br/pm36pq4/offer/WBkId3',
-  fundador: 'https://payfast.greenn.com.br/b2s4g9x',
-}
+const P = (id: 'monthly' | 'biannual' | 'annual' | 'lifetime') => planoDe(id)!
+const brl = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 })
+/** Economia real vs pagar o Mensal pelo mesmo período (%). */
+const economia = (preco: number, meses: number) => Math.round((1 - preco / (P('monthly').preco * meses)) * 100)
+const LINKS = { mensal: GREENN_LINKS.monthly, semestral: GREENN_LINKS.biannual, anual: GREENN_LINKS.annual, fundador: GREENN_LINKS.lifetime }
 
 const FOUNDER_FEATURES = [
   'Tudo do Oráculo, para sempre: DRE real, Gestão, Mineração, Calculadora, Extensão e Agente IA',
@@ -47,7 +32,7 @@ const FOUNDER_FEATURES = [
 const PLANS = [
   {
     name: 'Mensal',
-    price: '127',
+    price: brl(P('monthly').preco),
     per: '/mês',
     desc: 'Para começar agora e enxergar sua operação com mais controle.',
     cta: 'Começar no mensal',
@@ -56,25 +41,25 @@ const PLANS = [
   },
   {
     name: 'Semestral',
-    price: '597',
+    price: brl(P('biannual').preco),
     per: '/6 meses',
-    note: 'equivale a R$ 99,50/mês',
+    note: `equivale a R$ ${brl(P('biannual').porMes!)}/mês`,
     parcela: 'ou em até 6x no cartão',
     desc: 'Para usar com consistência e acompanhar sua evolução por mais tempo.',
     cta: 'Garantir semestral',
     href: LINKS.semestral,
-    features: ['Tudo do plano mensal', 'Acesso por 6 meses', 'Economia de 22% vs mensal', 'Acompanhamento de evolução', 'Suporte via WhatsApp'],
+    features: ['Tudo do plano mensal', 'Acesso por 6 meses', `Economia de ${economia(P('biannual').preco, 6)}% vs mensal`, 'Acompanhamento de evolução', 'Suporte via WhatsApp'],
   },
   {
     name: 'Anual',
-    price: '997',
+    price: brl(P('annual').preco),
     per: '/ano',
-    note: 'equivale a R$ 83,08/mês',
+    note: `equivale a R$ ${brl(P('annual').porMes!)}/mês`,
     parcela: 'ou em até 12x no cartão',
     desc: 'Para manter a operação guiada por dados o ano inteiro.',
     cta: 'Garantir anual',
     href: LINKS.anual,
-    features: ['Tudo do plano mensal', 'Acesso por 12 meses', 'Economia de 35% vs mensal', 'Ideal para escalar com consistência', 'Prioridade no suporte'],
+    features: ['Tudo do plano mensal', 'Acesso por 12 meses', `Economia de ${economia(P('annual').preco, 12)}% vs mensal`, 'Ideal para escalar com consistência', 'Prioridade no suporte'],
   },
 ]
 
@@ -172,12 +157,12 @@ export default function Planos() {
                     <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
                       <span style={{ fontSize: 17, color: 'var(--tx2)', fontWeight: 600 }}>R$</span>
                       <span className="ora-num ora-display ora-goldtext" style={{ fontSize: 'clamp(52px, 6vw, 68px)', fontWeight: 800, lineHeight: 1 }}>
-                        1.497
+                        {brl(P('lifetime').preco)}
                       </span>
                     </div>
                     <div style={{ fontSize: 12.5, color: 'var(--tx3)', marginTop: 6 }}>pagamento único · sem mensalidade</div>
                     <div className="ora-num" style={{ fontSize: 12, color: 'var(--emerald)', fontWeight: 700, marginTop: 8 }}>
-                      menos de 12 meses do mensal — pra sempre
+                      o preço de ~{Math.round(P('lifetime').preco / P('monthly').preco)} meses do mensal — pra sempre
                     </div>
                     <a href={LINKS.fundador} className="ora-cta" style={{
                       marginTop: 20, justifyContent: 'center', width: '100%', boxSizing: 'border-box',

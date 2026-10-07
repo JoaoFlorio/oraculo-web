@@ -66,7 +66,7 @@ const PLAN_PRICE: Record<string,string> = {
   annual:   'R$ 897/ano',
   lifetime: 'R$ 1.497 (única vez)',
 }
-// Economia REAL do Anual vs 12× Mensal: 12×79,90 = R$ 958,80 − R$ 597 = R$ 361,80 (38%)
+// Economia REAL do Anual vs 12× Mensal: 12×97 = R$ 1.164 − R$ 897 = R$ 267 (23%)
 const ANNUAL_ECON     = 12*97 - 897
 const ANNUAL_ECON_PCT = Math.round((ANNUAL_ECON/(12*97))*100)
 const ANNUAL_ECON_FMT = ANNUAL_ECON.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})
