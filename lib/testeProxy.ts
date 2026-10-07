@@ -10,15 +10,13 @@ export const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-produ
 // desta conexão". O Railway documenta o X-Real-IP como a fonte do IP de quem conecta (e o 1º valor do XFF como o real).
 // IP privado/interno (100.64/10 do Railway, 10/8, 172.16/12, 192.168/16, loopback) nunca é aceito como "o cliente".
 const privado = (ip: string) => /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|::1$|fc|fd|fe80)/i.test(ip)
+// Medido em produção 07/10: XFF = "<cliente>, <borda do Railway 46.151.x.x>"; X-Real-IP = cliente; cabeçalhos
+// forjados pelo navegador (XFF/X-Real-IP falsos) são DESCARTADOS pela borda — o 1º do XFF é confiável. Fica como 1ª
+// escolha (o fórum do Railway relata X-Real-IP virando IP da Fastly em algumas rotas; o 1º do XFF segue o cliente).
 export function ipReal(req: NextRequest): string {
-  const real = (req.headers.get('x-real-ip') || '').trim()
-  if (real && !privado(real)) return real
   const hops = (req.headers.get('x-forwarded-for') || '').split(',').map(s => s.trim()).filter(Boolean)
-  return hops.find(h => !privado(h)) || real || hops[0] || 'desconhecido'
-}
-/** Diagnóstico temporário (07/10): o que chega de IP — só os do PRÓPRIO chamador. */
-export function cabecalhosIp(req: NextRequest) {
-  return { xRealIp: req.headers.get('x-real-ip'), xForwardedFor: req.headers.get('x-forwarded-for'), escolhido: ipReal(req) }
+  const real = (req.headers.get('x-real-ip') || '').trim()
+  return hops.find(h => !privado(h)) || (real && !privado(real) ? real : '') || hops[0] || real || 'desconhecido'
 }
 
 export async function chamarBackend(caminho: string, corpo?: unknown, metodo: 'POST' | 'GET' = 'POST'): Promise<{ status: number; json: any }> {
