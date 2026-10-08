@@ -25,7 +25,7 @@ const ITENS: Array<{ icone: string; titulo: string; texto: string; ir?: { nav: s
   },
   {
     icone: '📄', titulo: 'Minerador de catálogo de fornecedor',
-    texto: 'Envie o PDF do seu fornecedor: o NEO lê todas as páginas, entende preço por unidade e por caixa e cruza com a Amazon pra mostrar só o que dá margem. Cada leitura de catálogo usa 10 créditos; a varredura na Amazon não consome crédito.',
+    texto: 'Envie o PDF do seu fornecedor: o NEO lê todas as páginas, entende preço por unidade e por caixa e cruza com a Amazon pra mostrar só o que dá margem. A leitura do catálogo usa créditos conforme o tamanho (até 100 páginas, 10; até 600 páginas, 60) e a 1ª varredura de cada catálogo é grátis.',
     ir: { nav: 'catalogo', label: 'Analisar um catálogo' },
   },
   {
@@ -94,10 +94,10 @@ export default function Novidades({ onIr }: { onIr: (nav: string) => void }) {
         <div style={{ margin: '12px 22px 0', padding: '16px 18px', borderRadius: 14, border: `1px solid ${C.lineG}`, background: C.goldSub }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.t1, marginBottom: 6 }}>💬 Sobre os seus créditos mensais</div>
           <div style={{ fontSize: 12.8, color: C.t2, lineHeight: 1.65 }}>
-            O novo NEO pensa mais em cada resposta — e isso tem um custo maior de IA pra nós. Mesmo assim, <strong style={{ color: C.t1 }}>conversar com o NEO continua sem gastar nenhum crédito</strong>, quantas vezes você quiser.
+            O novo NEO pensa mais em cada resposta — e isso tem um custo maior de IA pra nós. Mesmo assim, <strong style={{ color: C.t1 }}>conversar com o NEO continua sem gastar nenhum crédito</strong> (até 300 mensagens por dia).
             Pra manter tudo isso <strong style={{ color: C.t1 }}>sem mudar o valor da sua assinatura</strong>, a franquia mensal passou de <strong style={{ color: C.t1 }}>150 para 100 créditos</strong>, renovada todo mês.
             <br /><br />
-            Os créditos são usados só nas entregas prontas: imagem (2), anúncio completo com 5 imagens (8), Conteúdo A+ (4), leitura de catálogo (10) e vídeo (a partir de 20). Com 100 créditos dá, por exemplo, pra montar 12 anúncios completos no mês.
+            Os créditos são usados só nas entregas prontas: imagem (2), anúncio completo com 5 imagens (8), Conteúdo A+ (4), leitura de catálogo (a partir de 10, conforme as páginas) e vídeo (a partir de 25; o completo de 3 takes, 85). Com 100 créditos dá, por exemplo, pra montar 12 anúncios completos no mês.
             Precisa de mais? Recarregue na hora pela <strong style={{ color: C.t1 }}>Carteira, dentro do NEO</strong>, via PIX.
           </div>
         </div>

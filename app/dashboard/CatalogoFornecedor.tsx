@@ -17,6 +17,23 @@ const tint = (v: string, pct: number) => `color-mix(in srgb, ${v} ${pct}%, trans
 type Cat = any
 type Resultado = any
 
+/* 08/10: a leitura é cobrada POR PÁGINAS (contadas no upload, antes de cobrar) — mesma tabela do backend
+   (oraculo-backend src/lib/catalogoCusto.ts FAIXAS_PRECO_LEITURA). Falhou a leitura → créditos voltam. */
+const TABELA_PRECO_LEITURA = 'até 100 págs 10 créditos · 101–200 20 · 201–300 30 · 301–500 50 · 501–600 60'
+const NOTA_LIMITES = 'Máximo 600 páginas por PDF (teste grátis: até 60). A 1ª varredura de cada catálogo é grátis; as seguintes custam 5 créditos. Se a leitura falhar, os créditos voltam.'
+/** "N páginas · X créditos cobrados" do envio/catálogo atual (ou null). */
+function linhaCobranca(cat: Cat | null, envio: { creditos: number; paginas: number; reaproveitado: boolean } | null): string | null {
+  const paginas = Number(envio?.paginas ?? cat?.paginas_total) || 0
+  // Revisão 08/10: terminada a leitura vale o que FICOU cobrado no registro (parcial cobra menos; erro devolve tudo) —
+  // o valor do envio (reservado) só aparece enquanto lê.
+  const terminou = cat && cat.status && cat.status !== 'extraindo'
+  const creditos = terminou ? (cat!.status === 'erro' ? 0 : Number(cat!.custo_creditos)) : envio ? envio.creditos : Number(cat?.custo_creditos)
+  const reap = envio ? envio.reaproveitado : !!cat?.reaproveitado
+  if (!paginas || (!envio && !cat)) return null
+  const preco = Number.isFinite(creditos) ? (creditos > 0 ? `${creditos} créditos cobrados` : 'sem custo') : null
+  return `${paginas} página${paginas === 1 ? '' : 's'}${preco ? ` · ${preco}` : ''}${reap ? ' (esse mesmo PDF já tinha sido lido — reaproveitado na hora)' : ''}`
+}
+
 const VEREDITO: Record<string, { rot: string; cor: string; ic: string }> = {
   'oportunidade':    { rot: 'Oportunidade', cor: 'var(--g)',    ic: '🎯' },
   'margem-apertada': { rot: 'Margem apertada', cor: 'var(--gold)', ic: '⚠️' },
@@ -30,7 +47,7 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
   const [resultados, setResultados] = useState<Resultado[]>([])
   const [enviando, setEnviando] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
-  const [cobrado, setCobrado] = useState<number | null>(null)   // créditos cobrados no último upload
+  const [cobrado, setCobrado] = useState<{ creditos: number; paginas: number; reaproveitado: boolean } | null>(null)   // último upload (preço real, depois de contar as páginas)
   const [filtro, setFiltro] = useState<'todos' | 'oportunidade'>('oportunidade')
   const fileRef = useRef<HTMLInputElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -71,18 +88,26 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
 
   async function subir(f: File) {
     if (!/\.pdf$/i.test(f.name) && f.type !== 'application/pdf') { setErro('Envie o catálogo em PDF.'); return }
-    setErro(null); setEnviando(true); setResultados([])
+    setErro(null); setEnviando(true); setResultados([]); setCobrado(null)
     try {
       const r = await fetch(`/api/agent/fornecedor?nome=${encodeURIComponent(f.name)}`, { method: 'POST', body: f })
       const d = await r.json().catch(() => null)
+      // Erros novos (08/10) já vêm prontos do backend: páginas demais ("divida o PDF"), sem crédito ("tem N páginas
+      // e custa X; você tem Y"), PDF que não abre ("exporte como PDF otimizado"), limite diário.
       if (!r.ok || d?.error) setErro(d?.error || 'falha ao enviar o catálogo')
-      else { setCobrado(Number(d?.creditos) || null); await carregarStatus() }
+      else { setCobrado({ creditos: Number(d?.creditos) || 0, paginas: Number(d?.paginas) || 0, reaproveitado: !!d?.reaproveitado }); await carregarStatus() }
     } catch { setErro('falha de rede ao enviar') }
     finally { setEnviando(false); if (fileRef.current) fileRef.current.value = '' }
   }
   async function varrer() {
     setErro(null)
-    try { await fetch(`/api/agent/fornecedor?op=varrer&marketplace=${marketplace}`, { method: 'POST' }); await carregarStatus() }
+    try {
+      const r = await fetch(`/api/agent/fornecedor?op=varrer&marketplace=${marketplace}`, { method: 'POST' })
+      const d = await r.json().catch(() => null)
+      // 08/10: a 2ª varredura em diante custa 5 créditos — sem saldo (ou no teto diário) o motivo aparece aqui.
+      if (!r.ok || d?.ok === false) setErro(d?.erro || d?.error || 'não consegui iniciar a varredura')
+      await carregarStatus()
+    }
     catch { setErro('falha ao iniciar a varredura') }
   }
 
@@ -98,10 +123,11 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
     .slice().sort((a, b) => (b.margemPct ?? -99) - (a.margemPct ?? -99))
 
   const card = { background: 'var(--card)', border: '1px solid var(--line)', borderRadius: 14 }
+  const cobranca = linhaCobranca(cat, cobrado)
 
   if (novo) return (
     <CatalogoOuro marketplace={marketplace} cat={cat} vr={vr} st={st} resultados={resultados} oportunidades={oportunidades}
-      mostrados={mostrados} filtro={filtro} setFiltro={setFiltro} erro={erro} cobrado={cobrado} enviando={enviando}
+      mostrados={mostrados} filtro={filtro} setFiltro={setFiltro} erro={erro} cobranca={cobranca} enviando={enviando}
       extraindo={extraindo} pl={pl} pt={pt} pctExtra={pctExtra} pctVarr={pctVarr} fileRef={fileRef} subir={subir} varrer={varrer} />
   )
 
@@ -117,8 +143,9 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
               Suba o PDF do fornecedor — o NEO lê, cruza cada produto na {marketplace === 'ml' ? 'Mercado Livre' : 'Amazon'} e te devolve os que valem a pena: <b style={{ color: 'var(--t2)' }}>demanda, preço e margem</b> já prontos.
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--gold)', marginTop: 6, fontWeight: 700 }}>
-              💳 A leitura do catálogo custa <b>10 créditos</b> da sua franquia (a varredura na Amazon não cobra).{cobrado ? <span style={{ color: 'var(--t2)', fontWeight: 600 }}> ✅ {cobrado} créditos cobrados neste envio.</span> : null}
+              💳 A leitura é cobrada por páginas: <b>{TABELA_PRECO_LEITURA}</b>.{cobranca ? <span style={{ color: 'var(--t2)', fontWeight: 600 }}> ✅ Este catálogo: {cobranca}.</span> : null}
             </div>
+            <div style={{ fontSize: 10.5, color: 'var(--t3)', marginTop: 3 }}>{NOTA_LIMITES}</div>
           </div>
           <input ref={fileRef} type="file" accept="application/pdf,.pdf" hidden onChange={e => e.target.files?.[0] && subir(e.target.files[0])} />
           <button onClick={() => fileRef.current?.click()} disabled={extraindo}
@@ -138,7 +165,8 @@ export default function CatalogoFornecedor({ marketplace = 'amazon' }: { marketp
             {pctExtra != null && <Barra pct={pctExtra} />}
           </div>
         )}
-        {cat && st === 'erro' && <div style={{ marginTop: 10, fontSize: 12, color: 'var(--r)' }}>❌ {cat.erro || 'não consegui ler esse catálogo'}</div>}
+        {cat && st === 'erro' && <div style={{ marginTop: 10, fontSize: 12, color: 'var(--r)' }}>❌ {cat.erro || 'não consegui ler esse catálogo'} <span style={{ color: 'var(--t3)' }}>(os créditos voltaram pra você)</span></div>}
+        {cat && st === 'pronto' && cat.aviso && <div style={{ marginTop: 10, fontSize: 12, color: 'var(--gold)' }}>⚠️ {cat.aviso}</div>}
 
         {/* Catálogo pronto → varrer / progresso da varredura */}
         {cat && st === 'pronto' && (
@@ -268,10 +296,10 @@ const COR_VEREDITO_OURO: Record<string, string> = {
   'margem-apertada': 'var(--ou-ouro)',
 }
 
-function CatalogoOuro({ marketplace, cat, vr, st, resultados, oportunidades, mostrados, filtro, setFiltro, erro, cobrado, enviando,
+function CatalogoOuro({ marketplace, cat, vr, st, resultados, oportunidades, mostrados, filtro, setFiltro, erro, cobranca, enviando,
   extraindo, pl, pt, pctExtra, pctVarr, fileRef, subir, varrer }: {
   marketplace: 'amazon' | 'ml'; cat: Cat | null; vr: any; st: any; resultados: Resultado[]; oportunidades: Resultado[]; mostrados: Resultado[]
-  filtro: 'todos' | 'oportunidade'; setFiltro: (f: 'todos' | 'oportunidade') => void; erro: string | null; cobrado: number | null; enviando: boolean
+  filtro: 'todos' | 'oportunidade'; setFiltro: (f: 'todos' | 'oportunidade') => void; erro: string | null; cobranca: string | null; enviando: boolean
   extraindo: boolean; pl: number; pt: number; pctExtra: number | null; pctVarr: number | null
   fileRef: React.RefObject<HTMLInputElement | null>; subir: (f: File) => void; varrer: () => void
 }) {
@@ -300,8 +328,8 @@ function CatalogoOuro({ marketplace, cat, vr, st, resultados, oportunidades, mos
       <div className={o.custo}>
         <span className={o.custoIc} aria-hidden="true">{IcOuro.moeda}</span>
         <div>
-          A leitura do catálogo custa <b>10 créditos</b> da sua franquia (a varredura na Amazon não cobra).
-          {cobrado ? <span className={o.cobrado}>{cobrado} créditos cobrados neste envio.</span> : null}
+          A leitura é cobrada por páginas: <b>{TABELA_PRECO_LEITURA}</b>. {NOTA_LIMITES}
+          {cobranca ? <span className={o.cobrado}>Este catálogo: {cobranca}.</span> : null}
         </div>
       </div>
 
@@ -351,7 +379,8 @@ function CatalogoOuro({ marketplace, cat, vr, st, resultados, oportunidades, mos
               {pctExtra != null && <BarraOuro pct={pctExtra} />}
             </div>
           )}
-          {st === 'erro' && <div className={o.erro}>{cat.erro || 'não consegui ler esse catálogo'}</div>}
+          {st === 'erro' && <div className={o.erro}>{cat.erro || 'não consegui ler esse catálogo'} (os créditos voltaram pra você)</div>}
+          {st === 'pronto' && cat.aviso && <div className={o.erro}>{cat.aviso}</div>}
 
           {/* Contadores */}
           {st === 'pronto' && (
