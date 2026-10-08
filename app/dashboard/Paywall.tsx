@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { PLANOS, fmt, checkout, fundadorAberto, FUNDADOR_ATE, type PlanoId } from '@/lib/planos'
 import { NAV, NAV_GROUPS } from './navItens'
 
+const WA_REEMBOLSO = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Pedi%20o%20reembolso%20do%20Or%C3%A1culo%20e%20queria%20conversar.'
 const WA = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Sou%20cliente%20do%20Or%C3%A1culo%20e%20preciso%20de%20ajuda%20com%20o%20pagamento.'
 const NOME: Record<string, string> = { monthly: 'Mensal', biannual: 'Semestral', annual: 'Anual', lifetime: 'Fundador Vitalício' }
 
@@ -31,8 +32,10 @@ function Cadeado({ size = 13 }: { size?: number }) {
   )
 }
 
-export default function Paywall({ email, nome, plan, expiresAt, motivo, foiTeste = false }: {
+export default function Paywall({ email, nome, plan, expiresAt, motivo, foiTeste = false, reembolsoPedidoEm = null }: {
   email: string; nome?: string | null; plan: string | null; expiresAt: string | null; motivo: 'expired' | 'inactive' | 'free'; foiTeste?: boolean
+  /** 08/10: abriu pedido de reembolso (reclamação na Greenn) — acesso suspenso na hora. ISO da abertura. */
+  reembolsoPedidoEm?: string | null
 }) {
   const [aviso, setAviso] = useState<string | null>(null)
   const [agora] = useState(() => Date.now())
@@ -44,13 +47,18 @@ export default function Paywall({ email, nome, plan, expiresAt, motivo, foiTeste
   const fundador = fundadorAberto(agora)
   const fundadorAte = new Date(FUNDADOR_ATE).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
   const primeiroNome = (nome || '').trim().split(' ')[0] || ''
-  const estado = foiTeste ? 'Teste encerrado' : motivo === 'expired' ? 'Plano vencido' : motivo === 'inactive' ? 'Acesso bloqueado' : 'Sem plano'
+  const reembolso = motivo === 'inactive' && !!reembolsoPedidoEm
+  const pedidoEm = reembolsoPedidoEm ? new Date(reembolsoPedidoEm).toLocaleDateString('pt-BR') : null
+  const estado = reembolso ? 'Reembolso solicitado' : foiTeste ? 'Teste encerrado' : motivo === 'expired' ? 'Plano vencido' : motivo === 'inactive' ? 'Acesso bloqueado' : 'Sem plano'
 
-  const titulo = foiTeste ? <>Seu teste de 7 dias <span style={{ background: C.grad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>acabou.</span></>
+  const titulo = reembolso ? <>Você pediu o reembolso. Seu acesso foi <span style={{ color: C.verm }}>suspenso.</span></>
+    : foiTeste ? <>Seu teste de 7 dias <span style={{ background: C.grad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>acabou.</span></>
     : motivo === 'expired' ? <>Seu plano {NOME[plan || ''] || ''} <span style={{ color: C.verm }}>venceu.</span></>
     : motivo === 'inactive' ? <>Seu acesso está <span style={{ color: C.verm }}>bloqueado.</span></>
     : <>Escolha seu <span style={{ background: C.grad, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>plano.</span></>
-  const sub = foiTeste
+  const sub = reembolso
+    ? <>{primeiroNome ? `${primeiroNome}, recebemos` : 'Recebemos'} seu pedido de reembolso{pedidoEm ? <> em <b style={{ color: C.t1 }}>{pedidoEm}</b></> : null} e o Oráculo e a extensão foram travados. Se aconteceu algum problema ou você mudou de ideia, <a href={WA_REEMBOLSO} target="_blank" rel="noopener noreferrer" style={{ color: C.ouroClaro, fontWeight: 700 }}>fale com a gente no WhatsApp</a> — a gente resolve e libera de novo. Ou escolha um plano abaixo pra voltar a usar.</>
+    : foiTeste
     ? <>{primeiroNome ? `${primeiroNome}, os` : 'Os'} 7 dias grátis terminaram{venceu ? <> em <b style={{ color: C.t1 }}>{venceu}</b></> : null} e o Oráculo está travado. {fundador
         ? <>A partir de agora você tem a oportunidade de assinar o <b style={{ color: C.ouroClaro }}>Plano Fundador</b> e ter <b style={{ color: C.t1 }}>acesso vitalício</b> — são <b style={{ color: C.t1 }}>pouquíssimas vagas</b> e só até <b style={{ color: C.t1 }}>{fundadorAte}</b>. Ou, se preferir, assine o Mensal, o Semestral ou o Anual.</>
         : <>Pra continuar, assine o Mensal, o Semestral ou o Anual.</>}</>

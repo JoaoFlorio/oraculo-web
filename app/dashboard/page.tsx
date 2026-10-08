@@ -27,11 +27,13 @@ export default async function DashboardPage() {
     // 05/10: quem terminou o TESTE GRÁTIS vê "seu teste terminou" (não "seu plano venceu").
     const m = (await prisma.user.findUnique({ where: { id: user.id }, select: { metadata: true } }).catch(() => null))?.metadata as Record<string, any> | null
     const foiTeste = motivo === 'expired' && !!m?.teste?.ate
+    // 08/10: pedido de reembolso aberto na Greenn (o backend marca metadata.reclamacao e suspende) → aviso próprio.
+    const reembolsoPedidoEm = motivo === 'inactive' && typeof m?.reclamacao?.aberta_em === 'string' ? m.reclamacao.aberta_em : null
     // 06/10: com o visual do painel (variáveis --ou-* e fontes) — o menu aparece inteiro, travado com cadeado.
     return (
       <div className={`ora-visual ${classeFontesPainel}`} style={{ display: 'contents' }}>
         <VersionGuard v={process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'dev'} />
-        <Paywall email={user.email} nome={user.name ?? null} plan={user.plan ?? null} expiresAt={user.expiresAt ? new Date(user.expiresAt).toISOString() : null} motivo={motivo} foiTeste={foiTeste} />
+        <Paywall email={user.email} nome={user.name ?? null} plan={user.plan ?? null} expiresAt={user.expiresAt ? new Date(user.expiresAt).toISOString() : null} motivo={motivo} foiTeste={foiTeste} reembolsoPedidoEm={reembolsoPedidoEm} />
       </div>
     )
   }

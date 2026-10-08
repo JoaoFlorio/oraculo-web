@@ -214,7 +214,8 @@ export async function POST(req: NextRequest) {
   const marcaTeste = interno && testeDoChamador && typeof testeDoChamador.ate === 'string' ? { ate: testeDoChamador.ate, creditos: Number(testeDoChamador.creditos) || 10, ...(testeDoChamador.origem === 'oraculo' ? { origem: 'oraculo' } : {}) } : null
   const expiry     = validadeTeste ?? calcExpiry(targetPlan, exists && exists.plan !== 'lifetime' ? exists.expiresAt : null)
   const metaBase   = (exists?.metadata && typeof exists.metadata === 'object' ? exists.metadata : {}) as Record<string, unknown>
-  const metadataNova = interno ? (() => { const m = { ...metaBase }; if (marcaTeste) m.teste = marcaTeste; else delete m.teste; return m })() : undefined
+  // 08/10: compra nova/renovação limpa a marca de "pediu reembolso" (voltou a pagar).
+  const metadataNova = interno ? (() => { const m = { ...metaBase }; if (marcaTeste) m.teste = marcaTeste; else delete m.teste; delete m.reclamacao; return m })() : undefined
 
   if (exists) {
     // Atualiza plano do usuário existente. Reativa a conta (active=true): uma
@@ -301,6 +302,11 @@ export async function PATCH(req: NextRequest) {
     if (emTeste) { const m = { ...meta }; delete m.teste; data.metadata = m }
   }
   if (typeof active === 'boolean') data.active = active
+  // 08/10: desbloquear quem tinha pedido reembolso (desistiu) apaga a marca — senão um bloqueio futuro mostraria "você pediu reembolso".
+  if (active === true) {
+    const meta = (data.metadata ?? (target.metadata && typeof target.metadata === 'object' ? target.metadata : {})) as Record<string, unknown>
+    if (meta.reclamacao) { const m = { ...meta }; delete m.reclamacao; data.metadata = m }
+  }
 
   const user = await prisma.user.update({ where: { email: target.email }, data })
   // converter=true só quando o admin DEU um plano (tira do teste grátis); bloquear/desbloquear não converte
