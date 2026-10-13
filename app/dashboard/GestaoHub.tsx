@@ -3420,6 +3420,11 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
 
   return(
     <div style={{...card,padding:'20px 22px'}}>
+      {/* 13/10: relatório da Amazon chegou VAZIO (conta sem anúncio rodando no período) — antes a tela ficava em
+          "Baixando seus dados…" pra sempre. */}
+      {d.semAtividade&&<div style={{padding:'12px 14px',borderRadius:12,marginBottom:14,background:tint(t.gold,8),border:`1px solid ${tint(t.gold,30)}`,color:t.t2,fontSize:12.5,lineHeight:1.55}}>
+        <b style={{color:t.t1}}>Seus dados da Amazon já chegaram — mas não há anúncio com movimento nos últimos 30 dias.</b> {d.msg||''}
+      </div>}
       {/* ═══ NEO NO COMANDO — um painel, um botão ═══ */}
       <div style={{padding:'16px 18px',borderRadius:16,marginBottom:16,background:ligado?tint(t.grn,6):(t.dark?'rgba(255,255,255,0.02)':'#FCFCFD'),border:`1.5px solid ${ligado?tint(t.grn,35):t.line}`}}>
         <div style={{display:'flex',alignItems:'center',gap:14,flexWrap:'wrap' as const}}>
