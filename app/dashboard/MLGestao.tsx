@@ -62,6 +62,11 @@ const T = {
 const tint = (v: string, pct: number) => `color-mix(in srgb, ${v} ${pct}%, transparent)`
 const brl = (n: number) => (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const pc = (n: number) => (Number(n) || 0).toFixed(1).replace('.', ',') + '%'
+// 14/10: o Mercado Ads mostra a meta como ROAS OBJETIVO (100 ÷ ACOS): ACOS 9% = ROAS 11,1x. Falamos a língua da tela dele.
+const roasTxt = (roas?: number | null, acos?: number | null): string => {
+  const r = roas != null && roas > 0 ? roas : (acos != null && acos > 0 ? 100 / acos : null)
+  return r == null ? '—' : `${(Math.round(r * 10) / 10).toLocaleString('pt-BR')}x`
+}
 
 // ── Série diária (gráfico): preenche cada dia do intervalo com 0 onde não houve venda.
 const fmtDM = (d: string) => { const [, m, dd] = d.split('-'); return `${dd}/${m}` }
@@ -486,7 +491,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
     const acao = c.acao as string
     const valor = acao === 'baixar-meta' ? c.sugestao?.acosAlvoNovo : acao === 'subir-orcamento' ? c.sugestao?.orcamentoNovo : undefined
     const desc = acao === 'pausar' ? `PAUSAR a campanha "${c.nome}"`
-      : acao === 'baixar-meta' ? `baixar a meta de ACOS de "${c.nome}" de ${pc(c.acosAlvo)} para ${pc(valor)}`
+      : acao === 'baixar-meta' ? `subir o ROAS objetivo de "${c.nome}" de ${roasTxt(c.roasAlvo, c.acosAlvo)} para ${roasTxt(c.sugestao?.roasAlvoNovo, valor)} (meta de ACOS ${pc(c.acosAlvo)} → ${pc(valor)})`
       : acao === 'subir-orcamento' ? `subir o orçamento de "${c.nome}" de ${brl(c.orcamentoDiario)} para ${brl(valor)}/dia`
       : ''
     if (!desc || !confirm(`Confirmar: ${desc}?`)) return
@@ -1361,7 +1366,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                                   <b>{a.lbl}</b>
                                   {(c.sugestao?.acosAlvoNovo != null || c.sugestao?.orcamentoNovo != null) && (
                                     <small>
-                                      {c.sugestao.acosAlvoNovo != null && <>meta {c.acosAlvo != null ? pc(c.acosAlvo) : '—'} → <b>{pc(c.sugestao.acosAlvoNovo)}</b></>}
+                                      {c.sugestao.acosAlvoNovo != null && <>ROAS objetivo {roasTxt(c.roasAlvo, c.acosAlvo)} → <b>{roasTxt(c.sugestao.roasAlvoNovo, c.sugestao.acosAlvoNovo)}</b> <span style={{ opacity: .75 }}>(ACOS {c.acosAlvo != null ? pc(c.acosAlvo) : '—'} → {pc(c.sugestao.acosAlvoNovo)})</span></>}
                                       {c.sugestao.orcamentoNovo != null && <>orç {c.orcamentoDiario != null ? brl(c.orcamentoDiario) : '—'} → <b>{brl(c.sugestao.orcamentoNovo)}</b></>}
                                     </small>
                                   )}
@@ -1369,7 +1374,7 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                               </div>
                               <div className={oc.campLado}>
                                 {!pilotoMl.podeAplicar && aplicavel && (
-                                  <span style={{ fontSize: 11.5, color: T.t3, textAlign: 'right' as const }}>ajuste no painel do Mercado Ads</span>
+                                  <span style={{ fontSize: 11.5, color: T.t3, textAlign: 'right' as const }}>{c.acao === 'baixar-meta' ? <>no Mercado Ads: lápis do <b>ROAS Objetivo</b> → {roasTxt(c.sugestao?.roasAlvoNovo, c.sugestao?.acosAlvoNovo)}</> : 'ajuste no painel do Mercado Ads'}</span>
                                 )}
                                 {pilotoMl.podeAplicar && aplicavel && (
                                   <>
@@ -1521,14 +1526,14 @@ export default function MLGestao({ soAds = false }: { soAds?: boolean } = {}) {
                                   <div style={{ fontSize: 12, fontWeight: 800, color: a.cor, textTransform: 'capitalize' as const }}>{a.lbl}</div>
                                   {(c.sugestao?.acosAlvoNovo != null || c.sugestao?.orcamentoNovo != null) && (
                                     <div style={{ fontSize: 10, color: T.t3 }}>
-                                      {c.sugestao.acosAlvoNovo != null && <>meta {c.acosAlvo != null ? pc(c.acosAlvo) : '—'} → <b style={{ color: T.t2 }}>{pc(c.sugestao.acosAlvoNovo)}</b></>}
+                                      {c.sugestao.acosAlvoNovo != null && <>ROAS objetivo {roasTxt(c.roasAlvo, c.acosAlvo)} → <b style={{ color: T.t2 }}>{roasTxt(c.sugestao.roasAlvoNovo, c.sugestao.acosAlvoNovo)}</b> (ACOS {c.acosAlvo != null ? pc(c.acosAlvo) : '—'} → {pc(c.sugestao.acosAlvoNovo)})</>}
                                       {c.sugestao.orcamentoNovo != null && <>orç {c.orcamentoDiario != null ? brl(c.orcamentoDiario) : '—'} → <b style={{ color: T.t2 }}>{brl(c.sugestao.orcamentoNovo)}</b></>}
                                     </div>
                                   )}
                                 </div>
                               </div>
                               {!pilotoMl.podeAplicar && ['pausar', 'baixar-meta', 'subir-orcamento'].includes(c.acao) && (
-                                <span style={{ fontSize: 10.5, color: T.t3, maxWidth: 160, textAlign: 'right' as const }}>ajuste no painel do Mercado Ads</span>
+                                <span style={{ fontSize: 10.5, color: T.t3, maxWidth: 160, textAlign: 'right' as const }}>{c.acao === 'baixar-meta' ? <>no Mercado Ads: lápis do <b>ROAS Objetivo</b> → {roasTxt(c.sugestao?.roasAlvoNovo, c.sugestao?.acosAlvoNovo)}</> : 'ajuste no painel do Mercado Ads'}</span>
                               )}
                               {pilotoMl.podeAplicar && ['pausar', 'baixar-meta', 'subir-orcamento'].includes(c.acao) && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
