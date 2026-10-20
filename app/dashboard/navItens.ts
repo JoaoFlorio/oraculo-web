@@ -6,6 +6,7 @@ export const NAV = [
   { id:'ads-ml',      label:'Ads Mercado Livre' },
   { id:'bestsellers', label:'Mais Vendidos'     },
   { id:'catalogo',    label:'Analisar Catálogo' },
+  { id:'fornecedores', label:'Fornecedores'     },
   { id:'saved',       label:'Salvos'            },
   { id:'competitor',  label:'Análise Rival'     },
   { id:'ml-minera',   label:'Mineração ML'      },
@@ -23,7 +24,7 @@ export const NAV = [
 export const NAV_GROUPS = [
   { group:'Gestão',      ids:['financeiro'] },
   { group:'Ads',         ids:['ads','ads-ml'] },
-  { group:'Mineração',   ids:['bestsellers','catalogo','saved','competitor'] },
+  { group:'Mineração',   ids:['bestsellers','catalogo','fornecedores','saved','competitor'] },
   { group:'Mercado Livre', ids:['ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc'] },
   { group:'Ferramentas', ids:['agente','extension'] },
   { group:'Ajuda',       ids:['tutoriais'] },

@@ -14,6 +14,7 @@ const Planos = dynamic(()=>import('./Planos'),{ssr:false,loading:()=><div style=
 import { GREENN_LINKS } from '@/lib/planos'
 const Novidades = dynamic(()=>import('./Novidades'),{ssr:false})
 const CatalogoFornecedor = dynamic(()=>import('./CatalogoFornecedor'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando…</div>})
+const Fornecedores = dynamic(()=>import('./Fornecedores'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando…</div>})
 const MLCalculator = dynamic(()=>import('./MLCalculator'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Carregando calculadora…</div>})
 const MLMineracao = dynamic(()=>import('./MLMineracao'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando o garimpo…</div>})
 const MLRival = dynamic(()=>import('./MLRival'),{ssr:false,loading:()=><div style={{padding:40,textAlign:'center',color:'#686890'}}>Preparando a análise…</div>})
@@ -51,10 +52,10 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
   free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','tutoriais','planos','perfil'],                                                        modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 // 24/09: fonte única em lib/planos.ts (a landing e o painel divergiam: 127/597/997 × 79,90/397/597)
@@ -281,6 +282,8 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     'ml-rival':  <><circle cx="16" cy="10" r="4" stroke="currentColor" strokeWidth="1.5"/><circle cx="10" cy="20" r="3" stroke="currentColor" strokeWidth="1.5"/><circle cx="22" cy="20" r="3" stroke="currentColor" strokeWidth="1.5"/><path d="M13 13l-1.5 4M19 13l1.5 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></>,
     // Catálogo do fornecedor (PDF lido pelo NEO): caderno + lupa. Mesmo glifo pra Amazon e ML.
     catalogo:     <><rect x="6" y="4" width="13" height="18" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M9 9h7M9 12.5h7M9 16h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><circle cx="18.5" cy="18.5" r="3.2" stroke="currentColor" strokeWidth="1.5"/><path d="M20.8 20.8 24 24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></>,
+    // 20/10: vitrine dos 150 fornecedores do João — fachada de loja (toldo + porta).
+    fornecedores: <><path d="M5 12V25a1 1 0 0 0 1 1h20a1 1 0 0 0 1-1V12" stroke="currentColor" strokeWidth="1.5"/><path d="M4 12l2.5-6h19L28 12c0 1.7-1.3 3-3 3s-3-1.3-3-3c0 1.7-1.3 3-3 3s-3-1.3-3-3c0 1.7-1.3 3-3 3s-3-1.3-3-3c0 1.7-1.3 3-3 3s-3-1.3-3-3z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M13 26v-6h6v6" stroke="currentColor" strokeWidth="1.5"/></>,
     'catalogo-ml':<><rect x="6" y="4" width="13" height="18" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M9 9h7M9 12.5h7M9 16h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><circle cx="18.5" cy="18.5" r="3.2" stroke="currentColor" strokeWidth="1.5"/><path d="M20.8 20.8 24 24" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></>,
   }
   return(
@@ -1794,7 +1797,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
     setNav(id); setPage(1)
     setQuery(''); setSearchInput(''); queryRef.current=''  // trocar de aba sai da busca
     setSortBy('default')  // cada aba tem semântica própria — não herda ordenação
-    if(id==='competitor'||id==='saved'||id==='perfil'||id==='planos'||id==='ml-calc'||id==='ml-minera'||id==='catalogo'||id==='catalogo-ml'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
+    if(id==='competitor'||id==='saved'||id==='perfil'||id==='planos'||id==='ml-calc'||id==='ml-minera'||id==='catalogo'||id==='catalogo-ml'||id==='fornecedores'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
     if(id==='extension'){
       loadIdRef.current++;setLoading(false)
       setProds([]);setDone(false)
@@ -2833,6 +2836,13 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
               </div>
             )}
 
+            {/* Fornecedores — os 150 fornecedores do João em cards (20/10; assinante vê tudo, teste/demo vê amostra) */}
+            {nav==='fornecedores'&&(
+              <div style={{padding:'0 4px'}}>
+                <Fornecedores irPlanos={()=>goNav('planos')}/>
+              </div>
+            )}
+
             {/* Analisar Catálogo ML — mesmo catálogo cruzado contra os rankings do Mercado Livre (liberado 01/10) */}
             {nav==='catalogo-ml'&&(
               <div style={{padding:'0 4px'}}>
@@ -2917,7 +2927,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
             )}
 
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='ads'&&nav!=='ads-ml'&&nav!=='catalogo'&&nav!=='catalogo-ml'&&nav!=='saved'&&nav!=='perfil'&&nav!=='planos'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-minera'&&nav!=='ml-salvos'&&nav!=='ml-rival'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='ads'&&nav!=='ads-ml'&&nav!=='catalogo'&&nav!=='catalogo-ml'&&nav!=='fornecedores'&&nav!=='saved'&&nav!=='perfil'&&nav!=='planos'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-minera'&&nav!=='ml-salvos'&&nav!=='ml-rival'&&<>
             {novo&&(
               <div style={{marginBottom:22}}>
                 <CabecalhoOuro grupo="Mineração · Amazon" titulo={curNav?.label==='Mais Vendidos'?'Mais':(curNav?.label||'')} destaque={curNav?.label==='Mais Vendidos'?'vendidos':undefined}
