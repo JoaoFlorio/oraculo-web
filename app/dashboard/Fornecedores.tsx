@@ -18,7 +18,7 @@ interface Fornecedor {
   estado: string | null; ufs: string[]; vendeCpf: boolean; site: string | null; instagram: string | null
   contatos: Contato[]; dica: string | null; temLogo: boolean; logoClara: boolean; produtos?: number
 }
-interface Produto { titulo: string; url: string | null; imagem: string | null; preco: number | null }
+interface Produto { titulo: string; url: string | null; imagem: string | null; preco: number | null; sku?: string | null; fonte?: string }
 interface Resp { liberado: boolean; total: number; fornecedores: Fornecedor[] }
 
 const MENSAGEM = 'Olá! Vim pelo Oráculo, do João Florio, e gostaria de receber o catálogo de produtos de vocês.'
@@ -133,18 +133,25 @@ function ModalProdutos({ f, fechar }: { f: Fornecedor; fechar: () => void }) {
           </div>
           <button type="button" className={`${o.btSec} ${o.btIcone}`} onClick={fechar} aria-label="Fechar">✕</button>
         </div>
-        <p className={o.modalNota}>Lidos do site público do fornecedor. Preço de site pode ser de varejo; o preço de atacado e o pedido mínimo você confirma com ele.</p>
+        <p className={o.modalNota}>{ps?.some(p => p.fonte === 'pdf')
+          ? <>Do <b>catálogo de atacado</b> que o fornecedor mandou (preço por unidade) e do site dele. Pedido mínimo e condições você confirma com ele.</>
+          : 'Lidos do site público do fornecedor. Preço de site pode ser de varejo; o preço de atacado e o pedido mínimo você confirma com ele.'}</p>
         {!ps && !erro && <div className={o.modalNota}>Carregando…</div>}
         {erro && <div className="ouro-erro">Não consegui carregar os produtos agora.</div>}
         {ps && (
           <div className={o.prods}>
-            {ps.map((p, i) => (
-              <a key={i} className={o.prod} href={p.url || f.site || '#'} target="_blank" rel="noopener noreferrer" onClick={() => registrar(f.id, 'site')}>
-                <span className={o.prodImg}>{p.imagem ? <img src={p.imagem} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }} /> : null}</span>
+            {ps.map((p, i) => {
+              const miolo = <>
+                {p.imagem
+                  ? <span className={o.prodImg}><img src={p.imagem} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }} /></span>
+                  : p.fonte === 'pdf' && <span className={o.prodSelo}>Catálogo{p.sku ? ` · cód. ${p.sku}` : ''}</span>}
                 <span className={o.prodTit}>{p.titulo}</span>
-                {p.preco != null && <b className={o.prodPreco}>{brl(p.preco)}</b>}
-              </a>
-            ))}
+                {p.preco != null && <b className={o.prodPreco}>{brl(p.preco)}{p.fonte === 'pdf' && <small> atacado</small>}</b>}
+              </>
+              return p.url
+                ? <a key={i} className={o.prod} href={p.url} target="_blank" rel="noopener noreferrer" onClick={() => registrar(f.id, 'site')}>{miolo}</a>
+                : <div key={i} className={o.prod}>{miolo}</div>
+            })}
           </div>
         )}
         {whats && (

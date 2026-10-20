@@ -91,6 +91,8 @@
 .prodImg img { width: 100%; height: 100%; object-fit: contain; }
 .prodTit { font-size: 12px; line-height: 1.35; color: var(--ou-t1b); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .prodPreco { font-size: 13px; color: var(--ou-ouro); font-variant-numeric: tabular-nums; }
+.prodPreco small { font-weight: 500; font-size: 10.5px; color: var(--ou-t3); }
+.prodSelo { align-self: flex-start; padding: 3px 8px; border-radius: 999px; font-family: var(--tg-mono), monospace; font-size: 10px; letter-spacing: .06em; color: var(--ou-ouro); background: rgba(255, 200, 61, .08); border: 1px solid rgba(255, 200, 61, .25); }
 .modalRodape { display: flex; justify-content: flex-end; }
 .modalRodape .btWhats { flex: 0 0 auto; padding: 0 22px; }
 
