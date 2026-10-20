@@ -202,14 +202,14 @@ export default function Fornecedores({ irPlanos }: { irPlanos?: () => void }) {
 
   if (erro) return (
     <div className="ouro-pagina">
-      <CabecalhoOuro grupo="Mineração · Amazon" titulo="Fornecedores" destaque="nacionais" sub={sub} />
+      <CabecalhoOuro grupo="Ferramentas" titulo="Fornecedores" destaque="nacionais" sub={sub} />
       <div className="ouro-erro">{erro}</div>
     </div>
   )
 
   return (
     <div className="ouro-pagina">
-      <CabecalhoOuro grupo="Mineração · Amazon" titulo="Fornecedores" destaque="nacionais" sub={sub} />
+      <CabecalhoOuro grupo="Ferramentas" titulo="Fornecedores" destaque="nacionais" sub={sub} />
 
       {!dados && <VazioOuro icone={IcOuro.caixa || IcOuro.catalogo} titulo="Carregando os fornecedores…" />}
 

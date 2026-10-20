@@ -1409,6 +1409,11 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
     // 05/10: loja (Amazon/ML) que já passou por outro teste grátis ou está ligada a outro cadastro — o backend recusou.
     try{ if(new URLSearchParams(window.location.search).get('reason')==='teste-vendedor') setTimeout(()=>alert('Essa conta de vendedor já usou o teste grátis ou está ligada a outro cadastro do Oráculo. Para conectá-la, escolha um plano.'),300) }catch{}
   },[])
+  // 20/10: grupos que recolhem (Amazon, Mercado Livre) — fechados por padrão; o do item aberto sempre aparece aberto.
+  // Lembra a escolha no aparelho (localStorage é só conveniência; sem ele, tudo começa fechado).
+  const [gruposAbertos,setGruposAbertos]=useState<Record<string,boolean>>({})
+  useEffect(()=>{ try{ const g=JSON.parse(localStorage.getItem('ora-nav-grupos')||'{}'); if(g&&typeof g==='object') setGruposAbertos(g) }catch{} },[])
+  const alternarGrupo=(g:string,aberto:boolean)=>setGruposAbertos(prev=>{ const n={...prev,[g]:!aberto}; try{ localStorage.setItem('ora-nav-grupos',JSON.stringify(n)) }catch{}; return n })
   // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
   const navGroups = NAV_GROUPS
     .map(g=>({...g, ids: g.ids.filter(id=>
@@ -2070,10 +2075,24 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
 
           {/* Nav */}
           <nav style={{flex:1,overflowY:'auto',overflowX:'hidden',padding:'8px',display:'flex',flexDirection:'column',gap:2,position:'relative' as const}}>
-            {navGroups.map(g=>(
+            {navGroups.map(g=>{
+              // Recolhido só com a lateral aberta (fechada, sem rótulo, não teria como reabrir). O grupo do item atual fica aberto.
+              const temAtual=g.ids.includes(nav)
+              const aberto=!g.recolhe||!sideOpen||temAtual||!!gruposAbertos[g.group]
+              return(
               <React.Fragment key={g.group}>
-                {sideOpen&&<Lbl style={{padding:'14px 8px 6px',marginBottom:2,color:T.t2,fontSize:10}}>{g.group}</Lbl>}
-                {g.ids.map(id=>{
+                {sideOpen&&(g.recolhe
+                  ?<button type="button" onClick={()=>{ if(!temAtual) alternarGrupo(g.group,aberto) }} aria-expanded={aberto} className="ora-nav"
+                      title={temAtual?undefined:(aberto?'Recolher':'Mostrar tudo')}
+                      style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'14px 8px 6px',marginBottom:2,border:'none',background:'none',cursor:temAtual?'default':'pointer',fontFamily:'inherit',textAlign:'left' as const,outline:'none'}}>
+                      <Lbl style={{color:aberto?T.t2:T.t1,fontSize:10,flex:1}}>{g.group}</Lbl>
+                      {!aberto&&<span style={{fontSize:10,color:T.t3,fontWeight:600}}>{g.ids.length}</span>}
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden style={{flexShrink:0,transition:'transform .2s',transform:aberto?'rotate(180deg)':'none',opacity:temAtual?.35:1}}>
+                        <path d="M3 4.5l3 3 3-3" style={{stroke:aberto?T.t3:T.gold}} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </button>
+                  :<Lbl style={{padding:'14px 8px 6px',marginBottom:2,color:T.t2,fontSize:10}}>{g.group}</Lbl>)}
+                {aberto&&g.ids.map(id=>{
                   const n = NAV.find(x=>x.id===id)!
                   const active = nav===id
                   const locked = !cfg.tabs.includes(id)
@@ -2098,7 +2117,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                   )
                 })}
               </React.Fragment>
-            ))}
+            )})}
 
             {/* App & Avisos — entrada PERMANENTE pro guia de instalação + push.
                 O banner some por 30 dias quando dispensado; sem esta porta o
