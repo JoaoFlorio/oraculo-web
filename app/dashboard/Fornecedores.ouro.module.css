@@ -75,6 +75,25 @@
 .contato a:hover { text-decoration: underline; }
 .mais { align-self: flex-start; margin: -6px 16px 14px; padding: 0; border: 0; background: none; cursor: pointer; font-size: 12px; color: var(--ou-t3); text-decoration: underline; }
 
+.verProdutos { align-self: flex-start; margin-top: 2px; padding: 0; border: 0; background: none; cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--ou-ouro); }
+.verProdutos:hover { text-decoration: underline; }
+
+/* ── modal de produtos do site ── */
+.modalFundo { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(3, 4, 7, .72); backdrop-filter: blur(6px); }
+.modal { width: min(980px, 100%); max-height: min(86vh, 900px); display: flex; flex-direction: column; gap: 12px; padding: 20px; border-radius: 22px; overflow: hidden;
+  background: var(--ou-card), var(--ou-fundo); border: 1px solid rgba(255, 200, 61, .25); box-shadow: 0 40px 90px -30px rgba(0, 0, 0, .9); }
+.modalCab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.modalNota { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--ou-t3); }
+.prods { overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; padding-right: 4px; }
+.prod { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 14px; text-decoration: none; background: var(--ou-sup1); border: 1px solid var(--ou-linha); transition: border-color .2s; }
+.prod:hover { border-color: rgba(255, 200, 61, .45); }
+.prodImg { aspect-ratio: 1; border-radius: 10px; background: #fff; display: grid; place-items: center; overflow: hidden; }
+.prodImg img { width: 100%; height: 100%; object-fit: contain; }
+.prodTit { font-size: 12px; line-height: 1.35; color: var(--ou-t1b); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.prodPreco { font-size: 13px; color: var(--ou-ouro); font-variant-numeric: tabular-nums; }
+.modalRodape { display: flex; justify-content: flex-end; }
+.modalRodape .btWhats { flex: 0 0 auto; padding: 0 22px; }
+
 /* ── bloqueio (teste grátis / demo) ── */
 .cadeado { position: relative; border-radius: 22px; overflow: hidden; padding: clamp(22px, 3vw, 36px); display: grid; grid-template-columns: minmax(0, 1fr) auto;
   gap: 22px; align-items: center; border: 1px solid rgba(255, 200, 61, .35);

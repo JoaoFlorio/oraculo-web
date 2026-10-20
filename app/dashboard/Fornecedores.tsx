@@ -16,8 +16,9 @@ interface Contato { numero: string; whats: boolean; nome?: string }
 interface Fornecedor {
   id: number; nome: string; tipo: string | null; categoria: string | null; tags: string[]
   estado: string | null; ufs: string[]; vendeCpf: boolean; site: string | null; instagram: string | null
-  contatos: Contato[]; dica: string | null; temLogo: boolean; logoClara: boolean
+  contatos: Contato[]; dica: string | null; temLogo: boolean; logoClara: boolean; produtos?: number
 }
+interface Produto { titulo: string; url: string | null; imagem: string | null; preco: number | null }
 interface Resp { liberado: boolean; total: number; fornecedores: Fornecedor[] }
 
 const MENSAGEM = 'Olá! Vim pelo Oráculo, do João Florio, e gostaria de receber o catálogo de produtos de vocês.'
@@ -44,7 +45,7 @@ const Ic = {
   lupa: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg>,
 }
 
-function Card({ f, travado, i }: { f: Fornecedor; travado: boolean; i: number }) {
+function Card({ f, travado, i, verProdutos }: { f: Fornecedor; travado: boolean; i: number; verProdutos: (f: Fornecedor) => void }) {
   const [abrir, setAbrir] = useState(false)
   const [logoOk, setLogoOk] = useState(f.temLogo)
   const whats = f.contatos.filter(c => c.whats)
@@ -66,6 +67,9 @@ function Card({ f, travado, i }: { f: Fornecedor; travado: boolean; i: number })
         {f.tags.length > 0 && <div className={o.tags}>{f.tags.slice(0, 3).map(t => <span key={t}>{t}</span>)}</div>}
         {f.categoria && <p className={o.cat} title={f.categoria}>{f.categoria}</p>}
         {f.dica && <p className={o.dica}><b>Dica do João:</b> {f.dica}</p>}
+        {!travado && (f.produtos || 0) > 0 && (
+          <button type="button" className={o.verProdutos} onClick={() => verProdutos(f)}>Ver {f.produtos} produtos do site →</button>
+        )}
       </div>
       <div className={o.acoes}>
         {principal && (
@@ -104,6 +108,55 @@ function Card({ f, travado, i }: { f: Fornecedor; travado: boolean; i: number })
   )
 }
 
+
+const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
+/** Produtos lidos do site do fornecedor (robô do backend, refeito a cada 14 dias). */
+function ModalProdutos({ f, fechar }: { f: Fornecedor; fechar: () => void }) {
+  const [ps, setPs] = useState<Produto[] | null>(null)
+  const [erro, setErro] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    fetch(`/api/fornecedores/${f.id}/produtos`, { cache: 'no-store' }).then(r => r.json()).then(j => { if (vivo) { if (Array.isArray(j?.produtos)) setPs(j.produtos); else setErro(true) } }).catch(() => { if (vivo) setErro(true) })
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') fechar() }
+    window.addEventListener('keydown', esc)
+    return () => { vivo = false; window.removeEventListener('keydown', esc) }
+  }, [f.id, fechar])
+  const whats = f.contatos.find(c => c.whats)
+  return (
+    <div className={o.modalFundo} onClick={fechar} role="dialog" aria-modal="true" aria-label={`Produtos de ${f.nome}`}>
+      <div className={o.modal} onClick={e => e.stopPropagation()}>
+        <div className={o.modalCab}>
+          <div>
+            <div className={o.meta}>Produtos do site</div>
+            <h3 className={o.nome}>{f.nome}</h3>
+          </div>
+          <button type="button" className={`${o.btSec} ${o.btIcone}`} onClick={fechar} aria-label="Fechar">✕</button>
+        </div>
+        <p className={o.modalNota}>Lidos do site público do fornecedor. Preço de site pode ser de varejo; o preço de atacado e o pedido mínimo você confirma com ele.</p>
+        {!ps && !erro && <div className={o.modalNota}>Carregando…</div>}
+        {erro && <div className="ouro-erro">Não consegui carregar os produtos agora.</div>}
+        {ps && (
+          <div className={o.prods}>
+            {ps.map((p, i) => (
+              <a key={i} className={o.prod} href={p.url || f.site || '#'} target="_blank" rel="noopener noreferrer" onClick={() => registrar(f.id, 'site')}>
+                <span className={o.prodImg}>{p.imagem ? <img src={p.imagem} alt="" loading="lazy" referrerPolicy="no-referrer" onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }} /> : null}</span>
+                <span className={o.prodTit}>{p.titulo}</span>
+                {p.preco != null && <b className={o.prodPreco}>{brl(p.preco)}</b>}
+              </a>
+            ))}
+          </div>
+        )}
+        {whats && (
+          <div className={o.modalRodape}>
+            <a className={o.btWhats} href={linkWhats(whats.numero)} target="_blank" rel="noopener noreferrer" onClick={() => registrar(f.id, 'whats')}>{Ic.whats} Pedir catálogo de atacado</a>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Fornecedores({ irPlanos }: { irPlanos?: () => void }) {
   const [dados, setDados] = useState<Resp | null>(null)
   const [erro, setErro] = useState<string | null>(null)
@@ -112,6 +165,7 @@ export default function Fornecedores({ irPlanos }: { irPlanos?: () => void }) {
   const [uf, setUf] = useState('')
   const [soCpf, setSoCpf] = useState(false)
   const [soSite, setSoSite] = useState(false)
+  const [vendo, setVendo] = useState<Fornecedor | null>(null)
 
   useEffect(() => {
     let vivo = true
@@ -197,9 +251,11 @@ export default function Fornecedores({ irPlanos }: { irPlanos?: () => void }) {
 
       {dados && filtrados.length > 0 && (
         <div className={o.grade}>
-          {filtrados.map((f, i) => <Card key={f.id} f={f} travado={travado} i={i} />)}
+          {filtrados.map((f, i) => <Card key={f.id} f={f} travado={travado} i={i} verProdutos={setVendo} />)}
         </div>
       )}
+
+      {vendo && <ModalProdutos f={vendo} fechar={() => setVendo(null)} />}
 
       {dados && !travado && (
         <p className="ouro-nota">Os contatos são dos próprios fornecedores; condições, pedido mínimo e preço são combinados direto com eles. A mensagem do WhatsApp já sai pronta, é só enviar.</p>
