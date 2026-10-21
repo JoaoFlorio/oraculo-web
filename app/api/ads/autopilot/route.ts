@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   try {
     const r = await fetch(`${BACKEND}/api/ads/autopilot`, {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-internal-key': KEY },
-      body: JSON.stringify({ email: user.email, objetivo: b?.objetivo, automatico: b?.automatico }), signal: AbortSignal.timeout(15_000) })
+      body: JSON.stringify({ email: user.email, objetivo: b?.objetivo, automatico: b?.automatico, ...(typeof b?.eventoBf === 'boolean' ? { eventoBf: b.eventoBf } : {}) }), signal: AbortSignal.timeout(15_000) })
     return NextResponse.json(await r.json().catch(() => ({})), { status: r.status })
   } catch { return NextResponse.json({ error: 'falha' }, { status: 502 }) }
 }

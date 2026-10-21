@@ -3276,6 +3276,8 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
   const [objetivo,setObjetivo]=useState<string>('equilibrar')
   const [gerencia,setGerencia]=useState<Record<string,boolean>>({})
   const [bot,setBot]=useState<any>(null)
+  // 21/10: Modo Black Friday (opt-in) — calendário e estado vêm do backend (GET /api/ads/autopilot → evento)
+  const [evento,setEvento]=useState<any>(null)
   const [criando,setCriando]=useState<Record<string,'indo'|'ok'|'erro'>>({})
   const [filtro,setFiltro]=useState<'acao'|'saudavel'|'estoque'|'todos'>('acao')
   const [abertos,setAbertos]=useState<Record<string,boolean>>({})
@@ -3299,6 +3301,14 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
       .then(r=>r.json()).then(x=>{ if(x&&typeof x.automatico==='boolean') setBot((b:any)=>({...b,automatico:x.automatico})); else setBot((b:any)=>({...b,automatico:!novo})) })
       .catch(()=>setBot((b:any)=>({...b,automatico:!novo})))
   }
+  function alternarEvento(){
+    if(!evento) return
+    const novo=!evento.ligado
+    setEvento((e:any)=>({...e,ligado:novo}))
+    fetch('/api/ads/autopilot',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({eventoBf:novo})})
+      .then(r=>r.json()).then(x=>{ if(typeof x?.eventoBf==='boolean') setEvento((e:any)=>({...e,ligado:x.eventoBf})); else setEvento((e:any)=>({...e,ligado:!novo})) })
+      .catch(()=>setEvento((e:any)=>({...e,ligado:!novo})))
+  }
   function alternarProduto(sku:string,valorAtual:boolean){
     const novo=!valorAtual
     setGerencia(g=>({...g,[sku]:novo}))
@@ -3315,7 +3325,7 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
     let vivo=true
     const url='/api/ads/copiloto'+(margem!=null&&isFinite(margem)?`?margem=${margem}`:'')
     fetch(url,{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo) setD(x) }).catch(()=>{}).finally(()=>{ if(vivo)setCarregando(false) })
-    fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo){ setObjetivo(x.objetivo); setBot({automatico:!!x.automatico,lastRunAt:x.lastRunAt||null,lastResult:x.lastResult||null}) } }).catch(()=>{})
+    fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo){ setObjetivo(x.objetivo); setBot({automatico:!!x.automatico,lastRunAt:x.lastRunAt||null,lastResult:x.lastResult||null}); if(x.evento) setEvento(x.evento) } }).catch(()=>{})
     fetch('/api/ads/neo-relatorio?dias=7',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x&&typeof x.acoes==='number') setRel(x) }).catch(()=>{})
     // Prévia REAL do motor (dry, não gasta) — vira uma linha discreta.
     fetch('/api/ads/autopilot/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({dry:true,margem})}).then(r=>r.json()).then(x=>{ if(vivo&&x&&typeof x.mudancas==='number') setSimReal(x) }).catch(()=>{})
@@ -3351,8 +3361,8 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
   const emHoras=(iso?:string|null)=>{ if(!iso) return null; const h=(Date.parse(iso)-Date.now())/3600000; return h<=0?'em instantes':h<1?`em ${Math.max(1,Math.round(h*60))} min`:`em ${Math.round(h)} h` }
   const pausadosPeloNeo=new Set<string>((rel?.pausasAtivas||[]).map((p:any)=>p.sku).filter(Boolean))
   const feitosPorSku:Record<string,any[]>={}; for(const a of (rel?.ultimasAcoes||[])) if(a?.sku) (feitosPorSku[a.sku]||(feitosPorSku[a.sku]=[])).push(a)
-  const TIPO_ROT:Record<string,string>={'pausar-produto':'pausou anúncio sem estoque','reativar-produto':'religou anúncio (estoque voltou)','pausar-campanha':'pausou campanha sem estoque','reativar-campanha':'religou campanha','pausar-palavra':'pausou palavra sem venda','pausar-alvo':'pausou segmentação sem venda','lance':'ajustou lance','orcamento':'ajustou orçamento diário','topo-busca':'ajustou o topo de busca','posicao':'ajustou o % por posição','reativar-palavra':'religou palavra com lance menor','reativar-alvo':'religou segmentação com lance menor','alerta':'avisou: precisa de você','negativar':'cortou termo que só gastava','promover':'promoveu termo que vende','criar-campanha':'criou campanha'}
-  const TIPO_ICON:Record<string,string>={'pausar-produto':'ti-player-pause','reativar-produto':'ti-player-play','pausar-campanha':'ti-player-pause','reativar-campanha':'ti-player-play','pausar-palavra':'ti-player-pause','pausar-alvo':'ti-player-pause','lance':'ti-adjustments','orcamento':'ti-wallet','topo-busca':'ti-arrow-bar-to-up','posicao':'ti-arrow-bar-to-up','reativar-palavra':'ti-player-play','reativar-alvo':'ti-player-play','alerta':'ti-alert-triangle','negativar':'ti-ban','promover':'ti-star','criar-campanha':'ti-rocket'}
+  const TIPO_ROT:Record<string,string>={'pausar-produto':'pausou anúncio sem estoque','reativar-produto':'religou anúncio (estoque voltou)','pausar-campanha':'pausou campanha sem estoque','reativar-campanha':'religou campanha','pausar-palavra':'pausou palavra sem venda','pausar-alvo':'pausou segmentação sem venda','lance':'ajustou lance','orcamento':'ajustou orçamento diário','topo-busca':'ajustou o topo de busca','posicao':'ajustou o % por posição','reativar-palavra':'religou palavra com lance menor','reativar-alvo':'religou segmentação com lance menor','alerta':'avisou: precisa de você','evento':'Black Friday: ajustou campanha','negativar':'cortou termo que só gastava','promover':'promoveu termo que vende','criar-campanha':'criou campanha'}
+  const TIPO_ICON:Record<string,string>={'pausar-produto':'ti-player-pause','reativar-produto':'ti-player-play','pausar-campanha':'ti-player-pause','reativar-campanha':'ti-player-play','pausar-palavra':'ti-player-pause','pausar-alvo':'ti-player-pause','lance':'ti-adjustments','orcamento':'ti-wallet','topo-busca':'ti-arrow-bar-to-up','posicao':'ti-arrow-bar-to-up','reativar-palavra':'ti-player-play','reativar-alvo':'ti-player-play','alerta':'ti-alert-triangle','evento':'ti-shopping-bag','negativar':'ti-ban','promover':'ti-star','criar-campanha':'ti-rocket'}
 
   const Acao=({r,cor,rotulo,acaoTxt}:{r:any;cor:string;rotulo:string;acaoTxt:string})=>{
     const st=feitos[chave(r)]
@@ -3452,6 +3462,33 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
             </button>)})}
           <span style={{fontSize:11,color:t.t3,marginLeft:'auto'}}>{OBJS.find(o=>o.id===objetivo)?.sub}</span>
         </div>
+
+        {/* ═══ MODO BLACK FRIDAY (21/10, opt-in) — material da Amazon: +59% de vendas pra quem anunciou na BF 2025 ═══ */}
+        {evento && (()=>{
+          const hoje=new Date(Date.now()-3*3600_000).toISOString().slice(0,10)
+          if(hoje>evento.depoisAte) return null
+          const dm=(d:string)=>`${d.slice(8,10)}/${d.slice(5,7)}`
+          const somaDia=(d:string,n:number)=>{ const x=new Date(d+'T12:00:00Z'); x.setUTCDate(x.getUTCDate()+n); return x.toISOString().slice(0,10) }
+          const faseTxt=evento.fase==='antes'?'preparação em andamento':evento.fase==='durante'?'evento em andamento':evento.fase==='depois'?'evento acabou — devolvendo ao normal':`começa ${dm(evento.antesDe)}`
+          const on=!!evento.ligado
+          return <div style={{marginTop:12,padding:'12px 14px',borderRadius:12,background:on?tint(t.gold,9):'transparent',border:`1px solid ${on?tint(t.gold,45):t.line}`}}>
+            <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap' as const}}>
+              <i className="ti ti-shopping-bag" style={{fontSize:18,color:t.gold}} aria-hidden="true"/>
+              <div style={{flex:1,minWidth:200}}>
+                <div style={{fontSize:13.5,fontWeight:800,color:t.t1,fontFamily:FH}}>Modo Black Friday {on?<span style={{color:t.gold}}>· ligado</span>:null} <span style={{fontSize:11,fontWeight:600,color:t.t3}}>· {faseTxt}</span></div>
+                <div style={{fontSize:12,color:t.t2,marginTop:3,lineHeight:1.5}}>
+                  A Amazon mediu <b style={{color:t.t1}}>+59% de vendas</b> para quem anunciou na Black Friday de 2025. Ligado, eu preparo só as campanhas que já vendem:
+                  de <b style={{color:t.t1}}>{dm(evento.antesDe)}</b> a {dm(somaDia(evento.duranteDe,-1))} orçamento +30%;
+                  de <b style={{color:t.t1}}>{dm(evento.duranteDe)} a {dm(evento.duranteAte)}</b> orçamento em dobro, lance que sobe quando a chance de venda é alta e mais topo de pesquisa.
+                  No dia <b style={{color:t.t1}}>{dm(somaDia(evento.duranteAte,1))}</b> eu devolvo tudo exatamente como estava.
+                  {!ligado&&<> <span style={{color:t.gold}}>Precisa do NEO ligado.</span></>}
+                </div>
+              </div>
+              {evento.fase!=='depois'&&<button onClick={alternarEvento} style={{flexShrink:0,padding:'8px 14px',borderRadius:10,cursor:'pointer',fontFamily:'inherit',fontSize:12.5,fontWeight:800,
+                color:on?t.t2:(t.dark?'#1c1606':'#3a2a05'),background:on?'transparent':t.gold,border:on?`1px solid ${t.line}`:'none'}}>{on?'Desligar (volta ao normal)':'Ligar Modo Black Friday'}</button>}
+            </div>
+          </div>
+        })()}
 
         {/* ═══ O QUE O NEO FEZ (7 dias) — números reais do livro de rodadas ═══ */}
         {ligado && <div style={{marginTop:14,paddingTop:14,borderTop:`1px solid ${t.line}`}}>
