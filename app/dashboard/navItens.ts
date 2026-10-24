@@ -21,14 +21,15 @@ export const NAV = [
   { id:'perfil',      label:'Meu Perfil'        },
 ]
 
-// 20/10 (pedido do João): "Mineração" virou "Amazon"; Amazon e Mercado Livre RECOLHEM (setinha no título, abre/fecha)
+// 20/10 (pedido do João): "Mineração" virou "Amazon"; Amazon e Mercado Livre RECOLHEM (setinha no título, abre/fecha).
+// 24/10: Ads, Ferramentas, Ajuda e Conta também recolhem (só a Gestão fica sempre aberta).
 // pra caber tudo numa tela só; Fornecedores mora em Ferramentas.
 export const NAV_GROUPS: { group: string; ids: string[]; recolhe?: boolean }[] = [
   { group:'Gestão',      ids:['financeiro'] },
-  { group:'Ads',         ids:['ads','ads-ml'] },
+  { group:'Ads',         ids:['ads','ads-ml'], recolhe:true },
   { group:'Amazon',      ids:['bestsellers','catalogo','saved','competitor'], recolhe:true },
   { group:'Mercado Livre', ids:['ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc'], recolhe:true },
-  { group:'Ferramentas', ids:['agente','fornecedores','extension'] },
-  { group:'Ajuda',       ids:['tutoriais'] },
-  { group:'Conta',       ids:['planos','perfil'] },
+  { group:'Ferramentas', ids:['agente','fornecedores','extension'], recolhe:true },
+  { group:'Ajuda',       ids:['tutoriais'], recolhe:true },
+  { group:'Conta',       ids:['planos','perfil'], recolhe:true },
 ]
