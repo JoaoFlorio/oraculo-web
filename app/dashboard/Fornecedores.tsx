@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CabecalhoOuro, VazioOuro, IcOuro } from './ouro/Ouro'
 import o from './Fornecedores.ouro.module.css'
 
@@ -123,7 +124,10 @@ function ModalProdutos({ f, fechar }: { f: Fornecedor; fechar: () => void }) {
     return () => { vivo = false; window.removeEventListener('keydown', esc) }
   }, [f.id, fechar])
   const whats = f.contatos.find(c => c.whats)
-  return (
+  // 24/10: a janela vai direto pro <body> (portal). Dentro da página ela ficava presa no container que rola
+  // (ou num ancestral com transform) e abria fora da tela — o João clicava e "não aparecia nada".
+  if (typeof document === 'undefined') return null
+  return createPortal(
     <div className={o.modalFundo} onClick={fechar} role="dialog" aria-modal="true" aria-label={`Produtos de ${f.nome}`}>
       <div className={o.modal} onClick={e => e.stopPropagation()}>
         <div className={o.modalCab}>
@@ -160,7 +164,8 @@ function ModalProdutos({ f, fechar }: { f: Fornecedor; fechar: () => void }) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

@@ -79,7 +79,7 @@
 .verProdutos:hover { text-decoration: underline; }
 
 /* ── modal de produtos do site ── */
-.modalFundo { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 16px; background: rgba(3, 4, 7, .72); backdrop-filter: blur(6px); }
+.modalFundo { position: fixed; inset: 0; z-index: 99999; font-family: var(--tg-body, 'Instrument Sans', system-ui, sans-serif); display: grid; place-items: center; padding: 16px; background: rgba(3, 4, 7, .72); backdrop-filter: blur(6px); }
 .modal { width: min(980px, 100%); max-height: min(86vh, 900px); display: flex; flex-direction: column; gap: 12px; padding: 20px; border-radius: 22px; overflow: hidden;
   background: var(--ou-card), var(--ou-fundo); border: 1px solid rgba(255, 200, 61, .25); box-shadow: 0 40px 90px -30px rgba(0, 0, 0, .9); }
 .modalCab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
