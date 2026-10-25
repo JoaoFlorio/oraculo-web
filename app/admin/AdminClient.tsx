@@ -196,7 +196,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
   // Funcionário (staff) só cadastra cliente; admin vê o centro de decisão completo.
   const isAdmin = role === 'admin'
   // 27/09: ?aba=assinaturas (link do push "troca de plano") abre direto a lista "Cancelar na Greenn".
-  const [tab, setTab] = useState<'overview' | 'clients' | 'new' | 'team' | 'demo' | 'custo' | 'assinaturas'>(isAdmin ? 'overview' : 'new')
+  const [tab, setTab] = useState<'overview' | 'clients' | 'new' | 'team' | 'demo' | 'custo' | 'procura' | 'assinaturas'>(isAdmin ? 'overview' : 'new')
   useEffect(() => {
     const t = setTimeout(() => { try { if (isAdmin && new URLSearchParams(window.location.search).get('aba') === 'assinaturas') setTab('assinaturas') } catch { /* ok */ } }, 0)
     return () => clearTimeout(t)
@@ -543,7 +543,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
 
         {/* Tabs */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {([['overview', 'Visão geral'], ['clients', 'Clientes'], ['new', 'Novo cliente'], ['team', 'Equipe'], ['demo', 'Conta Demo'], ['custo', 'Custo IA'], ['assinaturas', 'Cancelar na Greenn']] as const).map(([id, label]) => (
+          {([['overview', 'Visão geral'], ['clients', 'Clientes'], ['new', 'Novo cliente'], ['team', 'Equipe'], ['demo', 'Conta Demo'], ['custo', 'Custo IA'], ['procura', 'O que procuram'], ['assinaturas', 'Cancelar na Greenn']] as const).map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} className="orc-tab" data-on={tab === id ? '1' : '0'} style={chip(tab === id)}>{label}</button>
           ))}
         </div>
@@ -937,6 +937,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
 
         {/* ═══ CUSTO IA (22/09) — o que a Google cobra, por dia / tipo / seller ═══ */}
         {tab === 'custo' && <CustoTab />}
+        {tab === 'procura' && <ProcuraTab />}
         {tab === 'assinaturas' && <CancelarNaGreenn C={C} />}
         {tab === 'overview' && isAdmin && <CancelarNaGreenn C={C} compacto />}
       </div>
@@ -959,6 +960,76 @@ const TIPO_LABEL: Record<string, string> = {
 }
 type Falha = { agente: string; status: string; n: number; usd: number; semMedicao: number }
 const STATUS_LABEL: Record<string, string> = { erro: 'conversa que quebrou no meio', 'sem-imagem': 'imagem que voltou sem figura', 'sem-video': 'vídeo que voltou sem vídeo', timeout: 'tempo esgotado (custo desconhecido)' }
+/* 25/10: O QUE OS ALUNOS PROCURAM — aba Fornecedores + "quem vende X?" do NEO. Buscas sem resultado = fornecedor que vale
+   trazer pra lista ou produto que vale aula. Catálogos dos alunos: só agregado (categoria com 2+ contas, nunca por conta). */
+function ProcuraTab() {
+  const [dias, setDias] = useState(30)
+  const [d, setD] = useState<any>(null)
+  const [erro, setErro] = useState('')
+  useEffect(() => {
+    setD(null); setErro('')
+    fetch(`/api/admin/fornecedores?dias=${dias}`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(setD).catch(e => setErro(`não consegui ler (${e})`))
+  }, [dias])
+  const chipC = (on: boolean): any => ({ padding: '8px 16px', borderRadius: 999, fontSize: 12.5, fontWeight: on ? 700 : 600, cursor: 'pointer', border: `1px solid ${on ? 'transparent' : C.line}`, background: on ? GOLD_GRAD : 'rgba(255,255,255,0.03)', color: on ? '#1a1204' : C.t2, fontFamily: 'inherit' })
+  const th: any = { ...upLabel, textAlign: 'left', padding: '8px 10px', borderBottom: `1px solid ${C.line}` }
+  const td: any = { padding: '8px 10px', fontSize: 13, borderBottom: `1px solid ${C.line}22`, verticalAlign: 'top' }
+  const tdN: any = { ...td, ...num, textAlign: 'right', whiteSpace: 'nowrap' }
+  const kpi = (label: string, valor: string, sub?: string) => (
+    <div style={{ ...card, padding: '16px 18px', minWidth: 170, flex: '1 1 170px' }}>
+      <div style={upLabel}>{label}</div>
+      <div style={{ ...num, fontSize: 24, fontWeight: 800, marginTop: 6 }}>{valor}</div>
+      {sub && <div style={{ fontSize: 11.5, color: C.t3, marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+  const vazio = (txt: string) => <div style={{ padding: '10px 12px', fontSize: 12.5, color: C.t3 }}>{txt}</div>
+  const tabela = (titulo: string, sub: string, cab: string[], linhas: any[][], seVazio: string) => (
+    <div style={{ ...card, padding: '14px 6px' }}>
+      <div style={{ ...upLabel, padding: '0 10px 2px' }}>{titulo}</div>
+      <div style={{ fontSize: 11.5, color: C.t3, padding: '0 10px 8px' }}>{sub}</div>
+      {linhas.length ? (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead><tr>{cab.map((c, i) => <th key={c} style={i ? { ...th, textAlign: 'right' } : th}>{c}</th>)}</tr></thead>
+          <tbody>{linhas.map((l, k) => <tr key={k}>{l.map((v, i) => <td key={i} style={i ? tdN : td}>{v}</td>)}</tr>)}</tbody>
+        </table>
+      ) : vazio(seVazio)}
+    </div>
+  )
+  const r = d?.resumo || {}
+  const ca = d?.catalogosAlunos || {}
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 12.5, color: C.t2, maxWidth: 720 }}>O que os alunos procuram na aba <b>Fornecedores</b> e no NEO ("quem vende…?"). As buscas <b>sem resultado</b> mostram fornecedor que vale trazer pra lista. Equipe e conta demo não entram na conta.</div>
+        <div style={{ display: 'flex', gap: 6 }}>{[7, 30, 90].map(n => <button key={n} onClick={() => setDias(n)} style={chipC(dias === n)}>{n} dias</button>)}</div>
+      </div>
+      {erro && <div style={{ ...card, padding: 14, color: C.red || '#F87171', marginBottom: 12 }}>{erro}</div>}
+      {!d && !erro && <div style={{ color: C.t3, fontSize: 13 }}>Lendo…</div>}
+      {d && (
+        <>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+            {kpi('Buscas', Number(r.buscas || 0).toLocaleString('pt-BR'), `${r.contas_buscando || 0} aluno(s) buscando`)}
+            {kpi('Sem resultado', String((d.semResultado || []).length), 'termos que não acharam fornecedor')}
+            {kpi('Cliques em fornecedor', Number(r.cliques || 0).toLocaleString('pt-BR'), `${r.contas_clicando || 0} aluno(s) — WhatsApp, site, produtos`)}
+            {kpi('Catálogos dos alunos', Number(ca.catalogos || 0).toLocaleString('pt-BR'), `${ca.contas || 0} contas · ${Number(ca.produtos || 0).toLocaleString('pt-BR')} produtos lidos (desde o início)`)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 12, marginBottom: 12 }}>
+            {tabela('Buscas sem resultado', 'Ninguém da lista atende — candidatos a fornecedor novo', ['Termo', 'Buscas', 'Alunos', 'No NEO'],
+              (d.semResultado || []).map((t: any) => [t.exemplo || t.termo, t.buscas, t.contas, t.no_neo]), 'Nenhuma busca sem resultado no período.')}
+            {tabela('Mais buscados', 'Aba Fornecedores + NEO', ['Termo', 'Buscas', 'Alunos', 'Achou'],
+              (d.termos || []).map((t: any) => [t.exemplo || t.termo, t.buscas, t.contas, t.max_resultados ?? '—']), 'Ainda sem buscas no período.')}
+            {tabela('Fornecedores mais procurados', 'Cliques por tipo', ['Fornecedor', 'WhatsApp', 'Site', 'Produtos', 'Alunos'],
+              (d.fornecedores || []).map((f: any) => [f.nome, f.whats, f.site, f.produtos, f.contas]), 'Ainda sem cliques no período.')}
+            {tabela('Filtros usados', 'Categoria e estado escolhidos na aba', ['Filtro', 'Vezes', 'Alunos'],
+              (d.filtros || []).map((f: any) => [`${f.tipo === 'estado' ? 'Estado' : 'Categoria'}: ${f.valor}`, f.vezes, f.contas]), 'Ainda sem filtros no período.')}
+            {tabela('O que os alunos garimpam (catálogos que sobem)', 'Só agregado: categoria aparece com 2+ alunos; nenhum fornecedor ou custo individual', ['Categoria', 'Produtos', 'Alunos'],
+              (ca.categorias || []).map((c: any) => [c.categoria, Number(c.produtos).toLocaleString('pt-BR'), c.contas]), 'Sem catálogos suficientes.')}
+          </div>
+        </>
+      )}
+    </>
+  )
+}
+
 function CustoTab() {
   const [dias, setDias] = useState(7)
   const [d, setD] = useState<any>(null)

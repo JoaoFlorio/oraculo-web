@@ -34,7 +34,7 @@ const iniciais = (nome: string) => nome.replace(/\b(importadora|distribuidora|at
   .split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase() || nome.slice(0, 2).toUpperCase()
 const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-function registrar(id: number, acao: 'site' | 'whats' | 'insta' | 'tel') {
+function registrar(id: number, acao: 'site' | 'whats' | 'insta' | 'tel' | 'produtos') {
   fetch('/api/fornecedores', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, acao }) }).catch(() => {})
 }
 
@@ -202,6 +202,19 @@ export default function Fornecedores({ irPlanos }: { irPlanos?: () => void }) {
       (!q || semAcento(`${f.nome} ${f.categoria || ''} ${f.tags.join(' ')} ${f.dica || ''}`).includes(q)))
   }, [lista, busca, tag, uf, soCpf, soSite])
 
+  // 25/10: o que o aluno procura (termo ≥3 letras, categoria ou estado) vai pro painel admin — 1,5 s depois de parar de
+  // digitar, com quantos fornecedores apareceram (0 = lacuna da lista). Só quem vê a lista completa conta.
+  useEffect(() => {
+    if (!dados?.liberado) return
+    const termo = busca.trim()
+    if (termo.length < 3 && !tag && !uf) return
+    const t = setTimeout(() => {
+      fetch('/api/fornecedores', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ tipo: 'busca', termo: termo.length >= 3 ? termo : '', tag, uf, resultados: filtrados.length }) }).catch(() => {})
+    }, 1500)
+    return () => clearTimeout(t)
+  }, [busca, tag, uf, dados?.liberado])   // eslint-disable-line react-hooks/exhaustive-deps
+
   const travado = !!dados && !dados.liberado
   const sub = <>Importadoras e distribuidoras selecionadas pelo <strong>João Florio</strong>. Escolha pela categoria, toque em <strong>Pedir catálogo</strong> e a conversa abre no WhatsApp com a mensagem pronta.</>
 
@@ -263,7 +276,7 @@ export default function Fornecedores({ irPlanos }: { irPlanos?: () => void }) {
 
       {dados && filtrados.length > 0 && (
         <div className={o.grade}>
-          {filtrados.map((f, i) => <Card key={f.id} f={f} travado={travado} i={i} verProdutos={setVendo} />)}
+          {filtrados.map((f, i) => <Card key={f.id} f={f} travado={travado} i={i} verProdutos={x => { registrar(x.id, 'produtos'); setVendo(x) }} />)}
         </div>
       )}
 

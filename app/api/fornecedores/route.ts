@@ -27,6 +27,18 @@ export async function POST(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   const body = await req.json().catch(() => ({}))
+  // 25/10: { tipo:'busca', termo, tag, uf, resultados } → o que o aluno procurou (painel admin "O que os alunos procuram")
+  if (body?.tipo === 'busca') {
+    try {
+      const r = await fetch(`${BACKEND}/api/fornecedores/busca`, {
+        method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(8_000),
+        headers: { 'x-internal-key': KEY, 'content-type': 'application/json' },
+        body: JSON.stringify({ email: user.email, termo: String(body.termo || '').slice(0, 80), tag: body.tag ? String(body.tag).slice(0, 40) : null,
+          uf: body.uf ? String(body.uf).slice(0, 2) : null, resultados: Number(body.resultados) || 0 }),
+      })
+      return NextResponse.json(await r.json().catch(() => ({})), { status: r.status })
+    } catch { return NextResponse.json({ error: 'backend indisponível' }, { status: 502 }) }
+  }
   try {
     const r = await fetch(`${BACKEND}/api/fornecedores/clique`, {
       method: 'POST', cache: 'no-store', signal: AbortSignal.timeout(8_000),
