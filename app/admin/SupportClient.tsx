@@ -108,7 +108,7 @@ export default function SupportClient({ name }: { name: string }) {
   const td: React.CSSProperties = { padding: '10px 12px', borderBottom: `1px solid ${C.line}` }
 
   const msgSend = gerado
-    ? `Olá! Seu acesso ao ORÁCULO 🔮\n\nSite: ${SITE}\nE-mail: ${gerado.email}\nSenha: ${gerado.password}\nChave da extensão: ${gerado.licenseKey}`
+    ? `Olá! Seu acesso ao ORÁCULO 🔮\n\nSite: ${SITE}/login\nE-mail: ${gerado.email}\nSenha: ${gerado.password}\nChave da extensão: ${gerado.licenseKey}`
     : ''
 
   return (

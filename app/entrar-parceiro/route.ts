@@ -54,5 +54,6 @@ export async function GET(req: NextRequest) {
   await prisma.$executeRaw`UPDATE partner_login SET used_at = now() WHERE token_hash = ${hash}`
 
   const token = await createToken(user.id)
-  return redirect('/', { value: token })
+  // direto pro painel: a raiz do app agora leva pra página de vendas (oraculojf.com)
+  return redirect('/dashboard', { value: token })
 }

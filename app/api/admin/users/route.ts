@@ -110,7 +110,7 @@ async function sendAccessEmail(opts: {
       <div style="font-size:12px;font-weight:700;color:#10B981;letter-spacing:0.06em;margin-bottom:14px;">🖥️ ACESSO AO PAINEL WEB</div>
       <div style="background:#0A0A0F;border-radius:8px;padding:12px 16px;margin-bottom:10px;">
         <div style="font-size:10px;color:#475569;margin-bottom:3px;">URL</div>
-        <a href="${FRONTEND_URL}" style="color:#10B981;font-weight:700;font-size:13px;">${FRONTEND_URL}</a>
+        <a href="${FRONTEND_URL}/login" style="color:#10B981;font-weight:700;font-size:13px;">${FRONTEND_URL}/login</a>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div style="background:#0A0A0F;border-radius:8px;padding:10px 14px;">

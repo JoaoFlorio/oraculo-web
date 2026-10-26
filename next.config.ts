@@ -34,6 +34,17 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
+  // 26/10/2026: a página de vendas oficial é a de oraculojf.com (repo oraculo-site). A raiz do app
+  // leva pra lá (temporário, com os parâmetros da URL) em vez de manter uma 2ª landing que desatualiza.
+  // Login, teste grátis, dashboard e o resto do app continuam aqui.
+  async redirects() {
+    return [
+      // logado (cookie de sessão): direto pro painel
+      { source: "/", has: [{ type: "cookie", key: "oraculo_session" }], destination: "/dashboard", permanent: false },
+      // visitante: a página de vendas
+      { source: "/", missing: [{ type: "cookie", key: "oraculo_session" }], destination: "https://oraculojf.com/", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;
