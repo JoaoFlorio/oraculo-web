@@ -10,10 +10,12 @@ export async function POST(req: NextRequest) {
   try {
     const sessionUser = await getSession()
     if (!sessionUser) return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
+    // 28/10 (varredura): a demo é usada em apresentação ao vivo (senha conhecida) — trocar a senha dela tranca a equipe.
+    if (sessionUser.role === 'demo') return NextResponse.json({ error: 'A senha da conta demo é definida pelo admin.' }, { status: 403 })
 
     const { currentPassword, newPassword } = await req.json()
 
-    if (!currentPassword || !newPassword)
+    if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || !currentPassword || !newPassword)
       return NextResponse.json({ error: 'Preencha todos os campos' }, { status: 400 })
 
     if (newPassword.length < 8)

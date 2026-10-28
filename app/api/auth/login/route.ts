@@ -25,7 +25,10 @@ async function registrarFalhaLogin(userId: string): Promise<void> {
        RETURNING (metadata->'loginLock'->>'n')::int AS n`
     const n = Number(rows?.[0]?.n || 0)
     if (n >= 5) {
-      const until = String(Date.now() + Math.min(24 * 3600_000, 15 * 60_000 * Math.pow(2, n - 5)))
+      // 28/10 (varredura): teto de 1 h (era 24 h). Qualquer um que soubesse o e-mail mantinha a conta do dono — admin e
+      // demo inclusive — trancada o dia inteiro com ~1 tentativa/dia. 1 h ainda limita a força bruta a ~5 senhas/hora
+      // por conta (fora o limite por IP do proxy), e o "esqueci a senha" agora destrava.
+      const until = String(Date.now() + Math.min(3600_000, 15 * 60_000 * Math.pow(2, n - 5)))
       await prisma.$executeRaw`UPDATE "User" SET metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('loginLock', jsonb_build_object('n', ${n}::int, 'until', ${until}::bigint)) WHERE id = ${userId}`
     }
   } catch (e) { console.error('[login] trava por conta falhou:', e) }
@@ -35,7 +38,9 @@ export async function POST(req: NextRequest) {
   try {
     const { email, password, code } = await req.json()
 
-    if (!email || !password)
+    // 28/10 (varredura): password não-string ({} ou 123) fazia o bcrypt do caminho REAL lançar (500) enquanto o caminho
+    // de e-mail inexistente respondia 401 — enumerava clientes sem acionar a trava. Tipo errado = mesma resposta de campo vazio.
+    if (typeof email !== 'string' || typeof password !== 'string' || !email || !password)
       return NextResponse.json({ error: 'Preencha todos os campos' }, { status: 400 })
 
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })

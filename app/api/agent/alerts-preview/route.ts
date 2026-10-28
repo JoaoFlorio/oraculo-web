@@ -13,6 +13,9 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams
   const dry = sp.get('dry') === '0' ? '0' : '1'
+  // 28/10 (varredura): o envio real (dry=0) é GET — um link de fora clicado pelo admin logado (cookie Lax vai junto)
+  // disparava os alertas pra base toda. Envio real só do próprio painel (same-origin) ou digitado na barra (none).
+  if (dry === '0' && !['same-origin', 'none'].includes(req.headers.get('sec-fetch-site') || '')) return NextResponse.json({ error: 'Envio real só pelo painel.' }, { status: 403 })
   const email = (sp.get('email') || '').trim()
   const buybox = sp.get('buybox') === '1' ? '1' : ''
   // Buy Box é LENTO (API de preços por seller). Só inclui com buybox=1, e de

@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   try {
     const { token, password } = await req.json()
 
-    if (!token || !password)
+    if (typeof token !== 'string' || typeof password !== 'string' || !token || !password)
       return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
 
     if (password.length < 8)
@@ -31,6 +31,8 @@ export async function POST(req: NextRequest) {
 
     // Invalida todas as sessões ativas por segurança
     await prisma.session.deleteMany({ where: { userId: user.id } })
+    // 28/10 (varredura): quem provou ser dono pelo e-mail sai da trava de login (antes só mexendo no banco). O 2FA fica.
+    await prisma.$executeRaw`UPDATE "User" SET metadata = COALESCE(metadata, '{}'::jsonb) - 'loginLock' WHERE id = ${user.id}`.catch(() => {})
 
     return NextResponse.json({ ok: true })
   } catch (e: any) {

@@ -267,7 +267,9 @@ function exportCSV(produtos: Produto[], catNome: string) {
       p.concorrencia ? String(p.concorrencia.vendedores) : '', p.permalink || '',
     ]),
   ]
-  const csv = '﻿' + linhas.map(l => l.map(c => `"${c}"`).join(';')).join('\n')
+  // 28/10 (varredura): célula que começa com = + @ vira fórmula no Excel (título de concorrente) — prefixa ' ; aspas dobradas
+  const cel = (c: any) => { const s = String(c ?? ''); return `"${(/^[=+@\t\r]|^-[^\d.,\s]/.test(s) ? "'" + s : s).replace(/"/g, '""')}"` }
+  const csv = '﻿' + linhas.map(l => l.map(cel).join(';')).join('\n')
   const a = document.createElement('a')
   a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
   a.download = `mineracao-ml-${catNome.toLowerCase().replace(/\s+/g, '-')}.csv`

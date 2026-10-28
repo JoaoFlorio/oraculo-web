@@ -15,14 +15,18 @@ export async function POST(req: NextRequest) {
   // clássico de host-header injection — o atacante forja o Host, a vítima recebe
   // um link pro domínio dele e entrega o token ao clicar.
   const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.oraculojf.com.br'
+  // 28/10 (varredura): e-mail inexistente respondia na hora e o existente esperava o banco + o Resend (centenas de ms) —
+  // o tempo dizia quem é cliente. Agora as duas respostas saem no mesmo piso de tempo e o envio vai em segundo plano.
+  const inicio = Date.now()
+  const piso = () => new Promise(r => setTimeout(r, Math.max(0, 700 - (Date.now() - inicio))))
   try {
     const { email } = await req.json()
-    if (!email) return NextResponse.json({ error: 'E-mail obrigatório' }, { status: 400 })
+    if (typeof email !== 'string' || !email) return NextResponse.json({ error: 'E-mail obrigatório' }, { status: 400 })
 
     const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
 
     // Sempre retorna sucesso para não revelar se o email existe
-    if (!user) return NextResponse.json({ ok: true })
+    if (!user) { await piso(); return NextResponse.json({ ok: true }) }
 
     // Gera token único com validade de 1 hora
     const token = crypto.randomBytes(32).toString('hex')
@@ -35,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const resetUrl = `${BASE_URL}/reset-password?token=${token}`
 
-    await resend.emails.send({
+    resend.emails.send({
       from: 'ORÁCULO <noreply@oraculojf.com.br>',
       to: user.email,
       subject: '🔮 Redefinição de senha — ORÁCULO',
@@ -96,13 +100,15 @@ export async function POST(req: NextRequest) {
 </body>
 </html>
       `,
-    })
+    }).catch((e: any) => console.error('[forgot-password] envio:', e?.message || e))
 
+    await piso()
     return NextResponse.json({ ok: true })
   } catch (e: any) {
     // Sempre responde {ok:true} — um 500 no caminho "existe" (ex.: falha no envio do
     // e-mail) confirmaria que a conta existe. Loga internamente sem revelar nada.
     console.error('[forgot-password]', e)
+    await piso()
     return NextResponse.json({ ok: true })
   }
 }

@@ -15,7 +15,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     })
     if (!r.ok) return new NextResponse(null, { status: r.status })
     return new NextResponse(Buffer.from(await r.arrayBuffer()), {
-      headers: { 'content-type': r.headers.get('content-type') || 'image/webp', 'cache-control': 'private, max-age=604800' },
+      // 28/10 (varredura): o tipo vinha do banco sem filtro — um SVG ali viraria script rodando no domínio do app.
+      headers: { 'content-type': /^image\/(webp|png|jpeg|gif)$/i.test(r.headers.get('content-type') || '') ? r.headers.get('content-type')! : 'image/webp',
+                 'x-content-type-options': 'nosniff', 'cache-control': 'private, max-age=604800' },
     })
   } catch {
     return new NextResponse(null, { status: 502 })

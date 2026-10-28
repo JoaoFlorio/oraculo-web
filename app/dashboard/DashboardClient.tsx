@@ -169,7 +169,8 @@ function asinToAge(asin:string):string{
 function exportCSV(products: any[], category: string) {
   // Escapa qualquer célula com vírgula/aspas/quebra de linha (evita desalinhar colunas)
   const esc = (v: any) => {
-    const s = String(v ?? '')
+    const s0 = String(v ?? '')
+    const s = /^[=+@\t\r]|^-[^\d.,\s]/.test(s0) ? "'" + s0 : s0   // 28/10: anti-fórmula (título de concorrente)
     return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s
   }
   const rows = [

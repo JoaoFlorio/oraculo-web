@@ -252,6 +252,7 @@ function csvMl(headers: string[], rows: Array<Array<string | number | null>>): s
   const esc = (v: string | number | null) => {
     if (v == null) return ''
     if (typeof v === 'number') return String(v).replace('.', ',')
+    if (/^[=+@\t\r]|^-[^\d.,\s]/.test(v)) v = "'" + v   // 28/10: anti-fórmula (título de anúncio)
     return /[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
   }
   return [headers.map(esc).join(';'), ...rows.map(r => r.map(esc).join(';'))].join('\n')

@@ -34,7 +34,33 @@ function ipDe(req: NextRequest): string {
   return hops.find(h => !privado(h)) || (real && !privado(real) ? real : '') || hops[0] || real || 'desconhecido'
 }
 
+// 🔒 28/10 (varredura): CSRF. O cookie é SameSite=Lax, que deixa passar formulário de OUTRO site enviado como navegação
+// (ex.: <form enctype="text/plain"> fazendo POST em /api/auth/login → a vítima entra logada na conta do atacante e, se
+// conectar a Amazon dela ali, os dados vão pra ele). Pedido que MUDA estado só vale vindo do próprio painel: navegador
+// manda Sec-Fetch-Site/Origin; servidor-a-servidor (backend → /api/admin/record-sale, curl) não manda nenhum dos dois
+// e também não carrega cookie de ninguém, então segue.
+const ROTAS_RL = new Set([
+  '/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password',
+  '/api/user/change-password', '/api/auth/totp',
+  '/api/teste/iniciar', '/api/teste/reenviar', '/api/teste/confirmar',
+])
+const APP_HOST = (() => { try { return new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://app.oraculojf.com.br').host } catch { return 'app.oraculojf.com.br' } })()
+function origemEstranha(req: NextRequest): boolean {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return false
+  const site = req.headers.get('sec-fetch-site')
+  if (site && site !== 'same-origin' && site !== 'none') return true
+  const origin = req.headers.get('origin')
+  if (!origin) return false
+  // Sem Sec-Fetch-Site (navegador antigo): a origem tem que ser um dos nomes do próprio app.
+  let host = ''
+  try { host = new URL(origin).host } catch { return true }
+  const meus = [req.headers.get('x-forwarded-host'), req.headers.get('host'), req.nextUrl.host, APP_HOST].filter(Boolean)
+  return !meus.includes(host)
+}
+
 export function proxy(req: NextRequest) {
+  if (origemEstranha(req)) return NextResponse.json({ error: 'Origem não permitida' }, { status: 403 })
+  if (!ROTAS_RL.has(req.nextUrl.pathname.replace(/\/+$/, ''))) return NextResponse.next()
   const ip = ipDe(req)
   const agora = Date.now()
   const b = baldes.get(ip)
@@ -58,16 +84,8 @@ export function proxy(req: NextRequest) {
   return NextResponse.next()
 }
 
-// Só as rotas que fazem bcrypt/envio de e-mail — o resto do app não paga o custo.
+// Rate limit: só as rotas de ROTAS_RL (bcrypt/envio de e-mail/WhatsApp/código 2FA — teste grátis desde 05/10, 2FA desde
+// 28/10). A checagem de origem (CSRF) vale pra toda a /api.
 export const config = {
-  matcher: [
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/auth/forgot-password',
-    '/api/auth/reset-password',
-    '/api/user/change-password',
-    '/api/teste/iniciar',      // 05/10: teste grátis (dispara WhatsApp + e-mail — custo)
-    '/api/teste/reenviar',
-    '/api/teste/confirmar',    // bcrypt + chute de código
-  ],
+  matcher: ['/api/:path*'],
 }

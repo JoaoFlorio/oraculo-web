@@ -4512,7 +4512,7 @@ function Fulfillment({inv,realDre,connected,mockM,costs={},hide}:{inv?:any;realD
   return <ConnectEmpty/>   // não conectado → vazio (sem mock)
 }
 function toCSV(headers:string[],rows:(string|number)[][]):string{
-  const esc=(v:any)=>{const s=String(v??'');return /[",;\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
+  const esc=(v:any)=>{const s0=String(v??'');const s=typeof v==='string'&&/^[=+@\t\r]|^-[^\d.,\s]/.test(s0)?"'"+s0:s0;return /[",;\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s}
   return [headers.map(esc).join(';'),...rows.map(r=>r.map(esc).join(';'))].join('\n')
 }
 function downloadCSV(filename:string,content:string){

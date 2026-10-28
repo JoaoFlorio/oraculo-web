@@ -32,6 +32,9 @@ export async function POST(req: NextRequest) {
   const metadata = { demo: config, gestao_cmv: demoCosts(config) }
 
   const existing = await prisma.user.findUnique({ where: { email } })
+  // 28/10 (varredura): aceitava QUALQUER e-mail — transformava conta real (até admin) em demo, trocava a senha e
+  // substituía o metadata inteiro (2FA, consentimentos, CMV). Só cria e-mail novo ou mexe em conta que já é demo.
+  if (existing && existing.role !== 'demo') return NextResponse.json({ error: 'Esse e-mail é de uma conta real — a demo precisa de um e-mail próprio.' }, { status: 409 })
   let plainPassword: string | null = null
   const data: any = { role: 'demo', active: true, plan: 'lifetime', name: config.name || 'João Florio', metadata }
 

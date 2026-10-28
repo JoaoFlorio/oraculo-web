@@ -28,6 +28,9 @@ async function postLevel(req: NextRequest): Promise<'internal' | 'admin' | 'rest
 }
 // Planos que staff/support podem dar na CRIAÇÃO. Vitalício (e qualquer outro) = só admin.
 const PLANOS_RESTRITO = new Set(['monthly', 'biannual', 'annual'])
+// 28/10 (varredura): nome/e-mail entravam crus no HTML do e-mail de acesso — staff/support montava link falso
+// ("<a href=…>Ative aqui</a>") saindo de noreply@oraculojf.com.br.
+const escHtml = (t: string) => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c])
 // PATCH (mudar plano / desativar): só admin OU backend interno.
 async function checkAdmin(req: NextRequest) {
   if (segredoIgual(req.headers.get('x-admin-key'), ADMIN_KEY)) return true
@@ -104,7 +107,7 @@ async function sendAccessEmail(opts: {
     <div style="font-size:10px;color:#64748B;letter-spacing:0.15em;margin-top:2px;">AMAZON INTELLIGENCE</div>
   </div>
   <div style="padding:28px 32px;">
-    <p style="font-size:16px;color:#CBD5E1;margin:0 0 6px;">Olá, <strong style="color:#E2E8F0;">${name.split(' ')[0]}</strong>! 🎉</p>
+    <p style="font-size:16px;color:#CBD5E1;margin:0 0 6px;">Olá, <strong style="color:#E2E8F0;">${escHtml(name.split(' ')[0])}</strong>! 🎉</p>
     <p style="font-size:14px;color:#94A3B8;margin:0 0 24px;line-height:1.6;">Aqui estão seus dados de acesso ao <strong style="color:#F0B429;">ORÁCULO ${label}</strong>. Guarde este e-mail!</p>
     <div style="background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-radius:12px;padding:20px;margin-bottom:16px;">
       <div style="font-size:12px;font-weight:700;color:#10B981;letter-spacing:0.06em;margin-bottom:14px;">🖥️ ACESSO AO PAINEL WEB</div>
@@ -115,7 +118,7 @@ async function sendAccessEmail(opts: {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div style="background:#0A0A0F;border-radius:8px;padding:10px 14px;">
           <div style="font-size:10px;color:#475569;margin-bottom:3px;">E-MAIL</div>
-          <div style="font-size:12px;font-weight:700;color:#E2E8F0;">${to}</div>
+          <div style="font-size:12px;font-weight:700;color:#E2E8F0;">${escHtml(to)}</div>
         </div>
         <div style="background:#0A0A0F;border-radius:8px;padding:10px 14px;">
           <div style="font-size:10px;color:#475569;margin-bottom:3px;">SENHA</div>
