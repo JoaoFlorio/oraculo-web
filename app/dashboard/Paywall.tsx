@@ -10,6 +10,7 @@
 import { useState } from 'react'
 import { PLANOS, fmt, checkout, fundadorAberto, FUNDADOR_ATE, type PlanoId } from '@/lib/planos'
 import { NAV, NAV_GROUPS } from './navItens'
+import { sairDaConta } from '@/lib/sairDaConta'
 
 const WA_REEMBOLSO = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Pedi%20o%20reembolso%20do%20Or%C3%A1culo%20e%20queria%20conversar.'
 const WA = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Sou%20cliente%20do%20Or%C3%A1culo%20e%20preciso%20de%20ajuda%20com%20o%20pagamento.'
@@ -198,7 +199,7 @@ export default function Paywall({ email, nome, plan, expiresAt, motivo, foiTeste
               style={{ color: C.t2, border: `1px solid ${C.linha}`, borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}>
               Falar com o suporte
             </a>
-            <button onClick={async () => { await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {}); window.location.href = '/login' }}
+            <button onClick={async () => { await sairDaConta(); window.location.href = '/login' }}
               style={{ background: 'none', border: 'none', color: C.t3, fontSize: 12.5, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline', textUnderlineOffset: 3 }}>
               Sair da conta
             </button>

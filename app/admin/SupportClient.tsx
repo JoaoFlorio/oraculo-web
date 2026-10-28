@@ -1,9 +1,10 @@
 'use client'
 import CancelarNaGreenn from './CancelarNaGreenn'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { sairDaConta } from '@/lib/sairDaConta'
 
 // TELA DO SUPORTE — admin RESTRITO (role 'support'). Vê SÓ a lista de clientes e
-// reenvia a senha (que gera uma nova e mostra aqui pra copiar). Não vê vendas,
+// reenvia a senha (gera uma nova e manda SÓ pro e-mail do cliente — desde 28/10 o suporte não vê a senha). Não vê vendas,
 // faturamento, equipe nem conta demo — e o backend recusa qualquer outra ação
 // (ver getClientsSession / clientsLevel). Componente separado do AdminClient de
 // propósito: isola o que essa pessoa pode tocar.
@@ -55,7 +56,7 @@ export default function SupportClient({ name }: { name: string }) {
   }, [])
   useEffect(() => { carregar() }, [carregar])
 
-  async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login' }
+  async function logout() { await sairDaConta(); window.location.href = '/login' }
 
   async function reenviar(c: Cli) {
     if (!confirm(`Gerar uma NOVA senha para ${c.email} e reenviar o e-mail de acesso?\n\nA senha antiga deixa de funcionar.`)) return
@@ -63,7 +64,7 @@ export default function SupportClient({ name }: { name: string }) {
     try {
       const r = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: c.email }) })
       const d = await r.json()
-      if (r.ok) { setGerado({ email: c.email, password: d.password, licenseKey: d.licenseKey || '—' }); setMsg({ text: `Senha nova gerada e e-mail reenviado para ${c.email}.`, ok: true }) }
+      if (r.ok) { setGerado({ email: c.email, password: d.password || '', licenseKey: d.licenseKey || '—' }); setMsg({ text: `Senha nova enviada para o e-mail ${c.email}. ✓`, ok: true }) }
       else setMsg({ text: d.error || 'Erro ao reenviar.', ok: false })
     } catch { setMsg({ text: 'Falha de conexão.', ok: false }) }
     setEnviando(null)
@@ -77,7 +78,7 @@ export default function SupportClient({ name }: { name: string }) {
       const r = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
       const d = await r.json()
       if (r.ok) {
-        setGerado({ email: form.email, password: d.password || '(mantida)', licenseKey: d.licenseKey || '—' })
+        setGerado({ email: form.email, password: d.password || '', licenseKey: d.licenseKey || '—' })
         setMsg({
           text: d.action === 'updated'
             ? `Cliente já existia — plano atualizado para ${PLAN_LABEL[form.plan] || form.plan}.`
@@ -107,8 +108,11 @@ export default function SupportClient({ name }: { name: string }) {
   const th: React.CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.t3, textAlign: 'left', padding: '8px 12px', borderBottom: `1px solid ${C.line}` }
   const td: React.CSSProperties = { padding: '10px 12px', borderBottom: `1px solid ${C.line}` }
 
+  // 28/10: o suporte não vê mais a senha — ela vai só para o e-mail do cliente; a mensagem do WhatsApp avisa onde olhar.
   const msgSend = gerado
-    ? `Olá! Seu acesso ao ORÁCULO 🔮\n\nSite: ${SITE}/login\nE-mail: ${gerado.email}\nSenha: ${gerado.password}\nChave da extensão: ${gerado.licenseKey}`
+    ? (gerado.password
+      ? `Olá! Seu acesso ao ORÁCULO 🔮\n\nSite: ${SITE}/login\nE-mail: ${gerado.email}\nSenha: ${gerado.password}\nChave da extensão: ${gerado.licenseKey}`
+      : `Olá! Seu acesso ao ORÁCULO 🔮 acabou de ser enviado para o seu e-mail (${gerado.email}).\n\nProcure por "Acesso ORÁCULO" na caixa de entrada e também no spam/promoções. Lá estão a sua senha e a chave da extensão.\n\nSite: ${SITE}/login`)
     : ''
 
   return (
@@ -140,9 +144,9 @@ export default function SupportClient({ name }: { name: string }) {
         {gerado && (
           <div style={{ marginBottom: 20, background: 'linear-gradient(180deg,rgba(20,20,16,0.92),rgba(10,11,14,0.92))', border: '1px solid rgba(255,200,61,0.3)', borderRadius: 18, padding: '18px 20px' }}>
             <div style={{ fontFamily: DISPLAY, fontStretch: '106%', fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em', color: C.gold, marginBottom: 4 }}>✓ Dados de acesso</div>
-            <div style={{ fontSize: 12, color: C.t3, marginBottom: 14 }}>O e-mail já foi enviado para <strong style={{ color: C.t2 }}>{gerado.email}</strong>. Se preferir, copie e mande você mesmo:</div>
+            <div style={{ fontSize: 12, color: C.t3, marginBottom: 14 }}>O e-mail já foi enviado para <strong style={{ color: C.t2 }}>{gerado.email}</strong>. {gerado.password ? 'Se preferir, copie e mande você mesmo:' : 'A senha vai só para o e-mail do cliente (segurança). Mande a mensagem pronta no WhatsApp avisando onde olhar:'}</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-              {[['E-mail', gerado.email], ['Senha', gerado.password], ['Chave da extensão', gerado.licenseKey]].map(([lbl, val]) => (
+              {([['E-mail', gerado.email], ...(gerado.password ? [['Senha', gerado.password]] : []), ['Chave da extensão', gerado.licenseKey]] as string[][]).map(([lbl, val]) => (
                 <div key={lbl} style={{ flex: '1 1 200px', background: '#0A0A0F', borderRadius: 8, padding: '10px 14px', border: `1px solid ${C.line}` }}>
                   <div style={{ fontSize: 9, color: C.t3, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{lbl}</div>
                   <div style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: lbl === 'Chave da extensão' ? C.gold : C.green, wordBreak: 'break-all' }}>{val}</div>
@@ -150,7 +154,7 @@ export default function SupportClient({ name }: { name: string }) {
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={() => copiar('senha', gerado.password)} style={{ background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.35)', color: C.gold, fontSize: 11, fontWeight: 700, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>{copiado === 'senha' ? '✓ Copiado' : 'Copiar senha'}</button>
+              {gerado.password && <button onClick={() => copiar('senha', gerado.password)} style={{ background: 'rgba(240,180,41,0.1)', border: '1px solid rgba(240,180,41,0.35)', color: C.gold, fontSize: 11, fontWeight: 700, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>{copiado === 'senha' ? '✓ Copiado' : 'Copiar senha'}</button>}
               <button onClick={() => copiar('msg', msgSend)} style={{ background: GOLD_GRAD, border: 'none', color: '#1a1305', fontSize: 11, fontWeight: 800, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>{copiado === 'msg' ? '✓ Mensagem copiada' : 'Copiar mensagem pronta'}</button>
               <button onClick={() => setGerado(null)} style={{ background: 'transparent', border: `1px solid ${C.line2}`, color: C.t2, fontSize: 11, padding: '7px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}>Fechar</button>
             </div>

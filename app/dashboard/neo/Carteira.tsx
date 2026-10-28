@@ -170,11 +170,13 @@ function ModalRecarga({ status, onFechar, onCreditou }: {
   const custoNum = custom ? Math.round(parseFloat(custom.replace(',', '.')) * 100) / 100 : NaN
   const usandoCustom = custom.trim() !== '' && !Number.isNaN(custoNum)
   const valor = usandoCustom ? custoNum : valorSel
-  // Espelha o backend (creditosDeValor): pacote exato leva o bônus de volume;
-  // qualquer outro valor cai na taxa base. Assim o número exibido bate com o cobrado.
+  // Espelha o backend (creditosDeValor): pacote exato leva o bônus de volume; outro valor leva a taxa do MAIOR pacote
+  // que ele alcança (28/10: antes caía na taxa base e R$ 150 rendia menos que o pacote de R$ 120). Número exibido = cobrado.
   const creditosDe = (v: number) => {
     const p = status.pacotes.find(pk => pk.valor === v)
-    return p ? p.creditos : Math.round(v * status.creditosPorReal)
+    if (p) return p.creditos
+    const taxa = Math.max(status.creditosPorReal, ...status.pacotes.filter(pk => pk.valor <= v).map(pk => pk.creditos / pk.valor))
+    return Math.floor(v * taxa + 1e-9)
   }
   const creditos = valor && valor > 0 ? creditosDe(valor) : 0
 

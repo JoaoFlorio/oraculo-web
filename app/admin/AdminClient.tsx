@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 /* ─── Tokens premium (grafite + ouro, identidade Oráculo) ─────────────────── */
 import CancelarNaGreenn from './CancelarNaGreenn'
+import { sairDaConta } from '@/lib/sairDaConta'
 
 // 05/10/2026: visual novo — mesma linguagem do site oraculojf.com e do login (obsidiana + ouro, Archivo/Instrument Sans).
 const C = {
@@ -335,7 +336,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
     if (r.ok) { setMsg({ text: `Venda de ${email} marcada como teste — fora do faturamento`, ok: true }); await load() }
     else setMsg({ text: d.error || 'Erro', ok: false })
   }
-  async function logout() { await fetch('/api/auth/logout', { method: 'POST' }); window.location.href = '/login' }
+  async function logout() { await sairDaConta(); window.location.href = '/login' }
 
   const k = data?.kpis
   const clients: any[] = data?.clients || []

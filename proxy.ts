@@ -47,6 +47,7 @@ const ROTAS_RL = new Set([
 const APP_HOST = (() => { try { return new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://app.oraculojf.com.br').host } catch { return 'app.oraculojf.com.br' } })()
 function origemEstranha(req: NextRequest): boolean {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return false
+  if (req.nextUrl.pathname === '/api/csp-report') return false   // relatório do próprio navegador (sem cookie, não muda nada)
   const site = req.headers.get('sec-fetch-site')
   if (site && site !== 'same-origin' && site !== 'none') return true
   const origin = req.headers.get('origin')

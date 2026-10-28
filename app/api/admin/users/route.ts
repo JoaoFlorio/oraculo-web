@@ -270,7 +270,9 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true, action: 'created',
     user:       { email: user.email, plan: user.plan },
-    password,   // senha gerada automaticamente
+    // 28/10 (varredura, decisão do João): só o ADMIN vê a senha. Staff/suporte (restrito) não — a senha vai só pro
+    // e-mail do cliente; quem visse a senha podia entrar na conta e ver as vendas, o que esses papéis não podem.
+    password: restrito ? undefined : password,
     licenseKey: licKey,
     emailEnviado,
   })
@@ -354,6 +356,8 @@ export async function PUT(req: NextRequest) {
     where: { email: user.email },
     data:  { password: hash },
   })
+  // 28/10 (varredura): senha nova derruba as sessões abertas (inclusive a de quem tivesse a senha antiga).
+  await prisma.session.deleteMany({ where: { userId: user.id } }).catch(() => {})
 
   // Busca chave de licença no backend — se não existir, cria uma nova
   // 06/10: o header era x-admin-secret e o backend só aceita x-internal-key → a busca SEMPRE falhava e cada
@@ -383,5 +387,7 @@ export async function PUT(req: NextRequest) {
   await sendAccessEmail({ to: user.email, name: user.name || user.email, password, key: licKey, plan: user.plan })
 
   // 23/09: a senha nova vai pelo e-mail; a resposta só a devolve pra um humano logado (support/admin), nunca pro caminho interno.
-  return NextResponse.json({ ok: true, password: level === 'internal' ? undefined : password, licenseKey: licKey })
+  // 28/10 (varredura, decisão do João): o SUPORTE não recebe a senha — com ela entrava na conta do cliente e via vendas,
+  // o que o papel não pode. A senha vai só pro e-mail do cliente. Admin continua vendo; caminho interno nunca recebe.
+  return NextResponse.json({ ok: true, password: level === 'admin' ? password : undefined, licenseKey: licKey })
 }

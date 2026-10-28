@@ -8,15 +8,20 @@ import type { NextConfig } from "next";
 // Promover a `Content-Security-Policy` só depois de rodar limpa por uns dias.
 const CSP_REPORT_ONLY = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+  // 28/10 (varredura): faltavam a fonte de ícones Tabler (jsdelivr) e o Turnstile — a política reprovaria telas legítimas.
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+  "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net",
   "img-src 'self' data: blob: https:",
-  "media-src 'self' blob: https:",
+  "media-src 'self' blob: data: https:",                         // 28/10: vídeo do NEO chega como data:video/mp4
   "connect-src 'self' https:",
+  "frame-src https://*.tv.pandavideo.com.br https://challenges.cloudflare.com",   // 28/10: player Panda + Turnstile
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",
+  "object-src 'none'",
+  // 28/10: sem endpoint de report a Report-Only não coletava nada (só aparecia no DevTools de quem abrisse).
+  "report-uri /api/csp-report",
 ].join('; ')
 
 const securityHeaders = [

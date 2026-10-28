@@ -22,6 +22,7 @@ const MLRival = dynamic(()=>import('./MLRival'),{ssr:false,loading:()=><div styl
 import { useVisualNovo } from './ouro/useVisualNovo'
 import { NAV, NAV_GROUPS } from './navItens'
 import { CabecalhoOuro, BuscaOuro, RecursosOuro, VazioOuro, IcOuro } from './ouro/Ouro'
+import { sairDaConta } from '@/lib/sairDaConta'
 
 /* ─── Tokens ─────────────────────────────────────────────────────────────── */
 const T = {
@@ -1972,7 +1973,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                 style={{display:'inline-flex',alignItems:'center',gap:7,fontSize:11.5,fontWeight:600,color:T.g,textDecoration:'none'}}>
                 <WaIcon size={15} c={T.g}/> Dúvida no pagamento? Fale com o suporte
               </a>
-              <button onClick={async()=>{await fetch('/api/auth/logout',{method:'POST'});router.push('/login')}}
+              <button onClick={async()=>{await sairDaConta();router.push('/login')}}
                 style={{background:'none',border:'none',color:T.t4,cursor:'pointer',fontSize:10.5,fontFamily:'inherit',letterSpacing:'0.04em',textDecoration:'underline',textUnderlineOffset:3}}>
                 Sair da conta
               </button>
@@ -2194,7 +2195,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                     <div style={{fontSize:11,fontWeight:600,color:T.t1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' as const,letterSpacing:'-0.01em'}}>{displayName}</div>
                     <span style={{display:'inline-flex',alignItems:'center',gap:4,marginTop:3,fontSize:8,fontWeight:700,color:cfg.color,letterSpacing:'0.1em',textTransform:'uppercase' as const,background:tint(cfg.color,10),border:`1px solid ${tint(cfg.color,22)}`,borderRadius:99,padding:'2px 7px'}}>{cfg.label}</span>
                   </div>
-                  <button onClick={async()=>{await fetch('/api/auth/logout',{method:'POST'});router.push('/login')}} title="Sair" aria-label="Sair da conta"
+                  <button onClick={async()=>{await sairDaConta();router.push('/login')}} title="Sair" aria-label="Sair da conta"
                     style={{background:'none',border:`1px solid ${T.line}`,cursor:'pointer',color:T.t3,width:26,height:26,borderRadius:7,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,padding:0,transition:'all .15s'}}
                     onMouseEnter={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=tint(T.r,35);el.style.color=T.r}}
                     onMouseLeave={e=>{const el=e.currentTarget as HTMLElement;el.style.borderColor=T.line;el.style.color=T.t3}}>
