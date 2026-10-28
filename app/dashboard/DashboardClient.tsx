@@ -1409,6 +1409,17 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
     try{ const q=new URLSearchParams(window.location.search).get('nav'); if(q&&NAV.some(n=>n.id===q)) setNav(q) }catch{}
     // 05/10: loja (Amazon/ML) que já passou por outro teste grátis ou está ligada a outro cadastro — o backend recusou.
     try{ if(new URLSearchParams(window.location.search).get('reason')==='teste-vendedor') setTimeout(()=>alert('Essa conta de vendedor já usou o teste grátis ou está ligada a outro cadastro do Oráculo. Para conectá-la, escolha um plano.'),300) }catch{}
+    // 28/10: a conexão agora é presa ao navegador que clicou "Conectar" (lib/oauthVinculo.ts) — explica quando não fechou.
+    try{
+      const r=new URLSearchParams(window.location.search).get('reason')||''
+      const msg:Record<string,string>={
+        navegador:'A conexão não foi concluída porque a autorização foi aberta em outro navegador ou aparelho. Clique em "Conectar" de novo, neste mesmo navegador.',
+        'outra-conta':'A autorização foi iniciada por outra conta do Oráculo. Por segurança não conectamos. Se você recebeu esse link de alguém, não use — clique em "Conectar" dentro da sua própria conta.',
+        expirou:'A autorização demorou demais e expirou. Clique em "Conectar" de novo.',
+        sessao:'Sua sessão terminou no meio da conexão. Entre de novo e clique em "Conectar".',
+      }
+      if(msg[r]) setTimeout(()=>alert(msg[r]),300)
+    }catch{}
   },[])
   // 20/10: grupos que recolhem (Amazon, Mercado Livre) — fechados por padrão; o do item aberto sempre aparece aberto.
   // Lembra a escolha no aparelho (localStorage é só conveniência; sem ele, tudo começa fechado).

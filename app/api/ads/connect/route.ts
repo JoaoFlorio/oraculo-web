@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
+import { novoVinculo, gravarCookieOAuth } from '@/lib/oauthVinculo'
 
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
 
@@ -11,13 +12,14 @@ const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.u
 export async function GET(req: NextRequest) {
   const user = await getSession()
   if (!user) return NextResponse.redirect(new URL('/login', req.url))
+  const vinculo = novoVinculo()   // 28/10: conexão presa a este navegador (lib/oauthVinculo.ts)
   try {
     const r = await fetch(
-      `${BACKEND}/api/ads/connect?email=${encodeURIComponent(user.email)}&format=json`,
+      `${BACKEND}/api/ads/connect?email=${encodeURIComponent(user.email)}&format=json&vinculo=${vinculo.hash}`,
       { headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' }, cache: 'no-store' },
     )
     const data = await r.json().catch(() => null)
-    if (r.ok && data?.url) return NextResponse.redirect(data.url)
+    if (r.ok && data?.url) return gravarCookieOAuth(NextResponse.redirect(data.url), vinculo.segredo)
   } catch { /* cai no fallback abaixo */ }
   return NextResponse.redirect(new URL('/dashboard?ads=error&reason=connect', req.url))
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
+import { novoVinculo, gravarCookieOAuth } from '@/lib/oauthVinculo'
 
 const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.up.railway.app'
 
@@ -9,10 +10,11 @@ const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.u
 export async function GET() {
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
+  const vinculo = novoVinculo()   // 28/10: conexão presa a este navegador (lib/oauthVinculo.ts)
   try {
-    const r = await fetch(`${BACKEND}/api/ml/gestao/connect?email=${encodeURIComponent(user.email)}&format=json`,
+    const r = await fetch(`${BACKEND}/api/ml/gestao/connect?email=${encodeURIComponent(user.email)}&format=json&vinculo=${vinculo.hash}`,
       { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' } })
-    return NextResponse.json(await r.json(), { status: r.status })
+    return gravarCookieOAuth(NextResponse.json(await r.json(), { status: r.status }), vinculo.segredo)
   } catch {
     return NextResponse.json({ error: 'Erro ao iniciar conexão' }, { status: 500 })
   }
