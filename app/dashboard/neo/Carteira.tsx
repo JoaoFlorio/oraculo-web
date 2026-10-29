@@ -13,11 +13,13 @@ const OURO = '#f0b429'
 
 interface Evento { id: number; tipo: string; creditos: number; motivo: string; created_at: string }
 interface Pacote { valor: number; creditos: number }
-interface Franquia { usados: number; limite: number; restante: number }
+interface Franquia { usados: number; limite: number; restante: number; renovaEm?: string }
+// 29/10: a franquia renova no DIA DA ASSINATURA (não mais dia 1º) — o backend manda a data (AAAA-MM-DD).
+const ddmm = (iso?: string) => iso ? iso.split('-').reverse().slice(0, 2).join('/') : ''
 interface Status {
   ativa: boolean
   saldo: number
-  // Franquia mensal inclusa (créditos que zeram dia 1º). O chip soma com `saldo`.
+  // Franquia mensal inclusa (renova todo mês no dia da assinatura). O chip soma com `saldo`.
   franquia?: Franquia
   extrato: Evento[]
   // Pacotes com desconto por volume (os botões). O "outro valor" usa a taxa base.
@@ -80,7 +82,7 @@ export default function Carteira() {
             <button className={o.botaoSec} onClick={() => setAberto(true)}>Recarregar</button>
           </div>
           {st.franquia && st.franquia.limite > 0 && (
-            <div className={o.carteiraRenova}>{st.franquia.limite.toLocaleString('pt-BR')} créditos renovados todo mês</div>
+            <div className={o.carteiraRenova}>{st.franquia.limite.toLocaleString('pt-BR')} créditos renovados {st.franquia.renovaEm ? `em ${ddmm(st.franquia.renovaEm)}` : 'todo mês'}</div>
           )}
         </div>
 
@@ -105,7 +107,7 @@ export default function Carteira() {
           <button className="wBtn" onClick={() => setAberto(true)}>Recarregar</button>
         </div>
         {st.franquia && st.franquia.limite > 0 && (
-          <div className="wRenova">{st.franquia.limite.toLocaleString('pt-BR')} créditos renovados todo mês</div>
+          <div className="wRenova">{st.franquia.limite.toLocaleString('pt-BR')} créditos renovados {st.franquia.renovaEm ? `em ${ddmm(st.franquia.renovaEm)}` : 'todo mês'}</div>
         )}
       </div>
 
@@ -265,8 +267,8 @@ function ModalRecarga({ status, onFechar, onCreditou }: {
             </p>
             {status.franquia && (
               <p className="rcSaldo">
-                Você tem <strong>{status.franquia.restante.toLocaleString('pt-BR')}</strong> créditos do mês
-                <span className="rcSaldoDim"> (renovam dia 1º)</span>
+                Você tem <strong>{status.franquia.restante.toLocaleString('pt-BR')}</strong> créditos do plano
+                <span className="rcSaldoDim"> ({status.franquia.renovaEm ? `renovam em ${ddmm(status.franquia.renovaEm)}` : 'renovam todo mês'})</span>
                 {status.saldo > 0 && <> + <strong>{status.saldo.toLocaleString('pt-BR')}</strong> comprados</>}.
                 {' '}Recarregar adiciona créditos que <strong>não expiram</strong>.
               </p>
