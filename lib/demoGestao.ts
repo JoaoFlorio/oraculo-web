@@ -23,6 +23,9 @@ export type DemoConfig = {
   // SKU do produto-ESTRELA da apresentação: fica nítido; os outros a tela pode
   // BORRAR (nome/imagem) — pra plateia focar nele e não escrutinar os demais.
   featuredSku?: string
+  // 03/11/2026: faturamento MÉDIO por dia da operação simulada (o dia real fica entre ~0,6× e ~1,5× disto, BF acima).
+  // revToday/revYesterday/rev7d/rev30d ficaram só por compatibilidade — não mandam mais na série.
+  faturamentoDiaMedio?: number
 }
 
 export const DEFAULT_DEMO_CONFIG: DemoConfig = {
@@ -110,54 +113,97 @@ function mmdd(d: Date): string {
   return `${String(b.getUTCDate()).padStart(2, '0')}/${String(b.getUTCMonth() + 1).padStart(2, '0')}`
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   📈 03/11/2026 (pedido do João: "isso tem muita cara de fake") — OPERAÇÃO SIMULADA DIA A DIA.
+   Antes a série era montada pra TRÁS a partir de totais fixos (30 dias = R$ 800k sempre): qualquer janela de
+   30 dias, hoje ou daqui a 2 meses, dava o mesmo número. Agora CADA DIA DO CALENDÁRIO tem o seu faturamento,
+   gerado só pela data (determinístico: o dia 12/10 é sempre o mesmo valor, em qualquer tela, em qualquer dia),
+   e o total de um período é a SOMA dos dias dele. Ingredientes de loja de verdade:
+     · média configurável (faturamentoDiaMedio, padrão R$ 26,5k) e crescimento lento da operação (~1,5%/mês);
+     · dia da semana (segunda forte, sábado fraco), começo de mês (salário) e fim de mês mais fraco;
+     · datas do varejo: Black Friday (semana), dezembro, ressaca de janeiro, Dia das Mães, Prime Day;
+     · "momento" (o ruído de um dia puxa o dos próximos), dias de oferta relâmpago e dias de ruptura;
+     · TACoS e ROAS do Ads mudam por dia (dia de oferta gasta mais) → margem e ACoS variam por período;
+     · HOJE cresce ao longo do dia seguindo a curva de vendas por hora (madrugada fraca, pico à noite).
+   Nada a rodar todo dia: amanhã é um dia novo do calendário e entra sozinho.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const DIA_MS = 86400000
+const MEDIA_PADRAO = 26500
+const diaDoCalendario = (dayStartMs: number) => Math.floor((dayStartMs - BRT_OFFSET_MS) / DIA_MS)
+function hash01(n: number, salt: number): number {
+  let h = (Math.imul(n | 0, 374761393) + Math.imul(salt | 0, 668265263)) >>> 0
+  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296
+}
+// "Momento": o ruído de hoje carrega um pouco do de ontem e anteontem (vendas não pulam aleatórias dia a dia).
+const ruido = (d: number, salt: number) => hash01(d, salt) * 0.5 + hash01(d - 1, salt) * 0.3 + hash01(d - 2, salt) * 0.2
+const PESO_SEMANA = [0.96, 1.10, 1.07, 1.03, 0.99, 0.92, 0.85]   // Dom..Sáb
+function dataBR(d: number) { const x = new Date(d * DIA_MS); return { y: x.getUTCFullYear(), m: x.getUTCMonth(), dia: x.getUTCDate(), dow: x.getUTCDay() } }
+// Black Friday = 4ª sexta de novembro; Dia das Mães = 2º domingo de maio.
+function nEsimoDiaSemana(y: number, m: number, dow: number, n: number) { const d1 = new Date(Date.UTC(y, m, 1)).getUTCDay(); return 1 + ((dow - d1 + 7) % 7) + 7 * (n - 1) }
+function fatorVarejo(d: number): { f: number; evento: boolean } {
+  const { y, m, dia } = dataBR(d)
+  if (m === 10) {
+    const bf = nEsimoDiaSemana(y, 10, 5, 4), k = dia - bf
+    if (k === 0) return { f: 1.85, evento: true }
+    if (k === 3) return { f: 1.40, evento: true }                       // Cyber Monday
+    if (k >= -4 && k <= 2) return { f: 1.30 - 0.04 * Math.abs(k), evento: true }
+    if (dia >= bf - 12 && dia < bf - 4) return { f: 1.08, evento: false } // esquenta
+  }
+  if (m === 11) { if (dia <= 20) return { f: 1.17, evento: false }; if (dia >= 24) return { f: 0.84, evento: false } }
+  if (m === 0) return { f: dia <= 15 ? 0.86 : 0.93, evento: false }
+  if (m === 4) { const maes = nEsimoDiaSemana(y, 4, 0, 2); if (dia >= maes - 8 && dia < maes) return { f: 1.16, evento: true } }
+  if (m === 6 && (dia === 15 || dia === 16)) return { f: 1.45, evento: true }   // Prime Day
+  return { f: 1, evento: false }
+}
+// Crescimento da operação: ~1,5%/mês em torno de nov/2026 (antes era menor, depois maior), com teto.
+function fatorCrescimento(d: number): number {
+  const meses = (d - diaDoCalendario(Date.UTC(2026, 10, 1) + BRT_OFFSET_MS)) / 30.44
+  return Math.max(0.72, Math.min(1.45, 1 + 0.015 * meses))
+}
+type DiaDemo = { receita: number; tacos: number; roas: number }
+function diaDemo(cfg: DemoConfig, d: number): DiaDemo {
+  const media = cfg.faturamentoDiaMedio && cfg.faturamentoDiaMedio > 0 ? cfg.faturamentoDiaMedio : MEDIA_PADRAO
+  const { dia, dow } = dataBR(d)
+  const mes = dia <= 7 ? 1.06 : dia >= 20 && dia <= 27 ? 0.94 : 1
+  const varejo = fatorVarejo(d)
+  // Ondas lentas (semanas boas e semanas fracas, ±~12%): é o que faz um mês ser diferente do outro.
+  const onda = 1 + 0.08 * Math.sin(2 * Math.PI * d / 47 + 1.3) + 0.05 * Math.sin(2 * Math.PI * d / 19 + 0.4)
+  let f = PESO_SEMANA[dow] * mes * varejo.f * fatorCrescimento(d) * onda * (0.72 + 0.56 * ruido(d, 11))
+  const oferta = hash01(d, 7) < 0.05, ruptura = !oferta && hash01(d, 9) < 0.035
+  if (oferta) f *= 1.22 + 0.25 * hash01(d, 8)
+  if (ruptura) f *= 0.74 + 0.1 * hash01(d, 10)
+  // dia comum fica entre ~0,57× e ~1,5× da média (R$ 15k–40k com a média padrão); data de varejo pode passar
+  const teto = varejo.evento || oferta ? 2.2 : 1.5
+  const receita = r2(media * Math.max(0.57, Math.min(teto, f)))
+  const tacos = (cfg.tacosPct || 8.5) / 100 * (0.8 + 0.4 * ruido(d, 21)) * (oferta || varejo.evento ? 1.25 : 1)
+  const roas = (cfg.roas || 6.2) * (0.84 + 0.32 * ruido(d, 23)) * (oferta ? 1.1 : 1)
+  return { receita, tacos, roas }
+}
+// Curva de vendas por hora (BRT): madrugada fraca, manhã subindo, pico à noite. HOJE = dia cheio × fração já vendida.
+const PESO_HORA = [1.2, 0.7, 0.4, 0.3, 0.3, 0.4, 0.8, 1.6, 2.8, 4.0, 4.8, 5.2, 5.4, 5.3, 5.2, 5.3, 5.5, 5.7, 6.0, 6.4, 6.6, 6.3, 5.2, 3.2]
+const SOMA_HORA = PESO_HORA.reduce((s, v) => s + v, 0)
+function fracaoDoDia(agora: number): number {
+  const ms = agora - brtDayStartMs(agora), h = Math.floor(ms / 3600000), resto = (ms % 3600000) / 3600000
+  let acc = 0; for (let i = 0; i < h && i < 24; i++) acc += PESO_HORA[i]
+  if (h < 24) acc += PESO_HORA[h] * resto
+  return Math.min(1, acc / SOMA_HORA)
+}
+/** Faturamento (e Ads) de UM dia do calendário. Futuro = 0; hoje = parcial pela hora. */
+function diaEfetivo(cfg: DemoConfig, dayStartMs: number, agora = Date.now()): DiaDemo {
+  const hoje = brtDayStartMs(agora)
+  if (dayStartMs > hoje) return { receita: 0, tacos: 0, roas: 0 }
+  const x = diaDemo(cfg, diaDoCalendario(dayStartMs))
+  return dayStartMs === hoje ? { ...x, receita: r2(x.receita * fracaoDoDia(agora)) } : x
+}
+
 function seriesDates(): Date[] {
   const todayStart = brtDayStartMs(Date.now())          // meia-noite BRT de hoje
   return Array.from({ length: 30 }, (_, i) => new Date(todayStart - (29 - i) * 86400000))
 }
 
-// Peso diário determinístico: sazonalidade de dia-da-semana (fim de semana ~20% mais
-// fraco) + variação orgânica reproduzível. Faz cada dia ter um faturamento PRÓPRIO e
-// realista (não um valor chapado), sem quebrar os totais.
-function dayWeight(date: Date, i: number): number {
-  const dow = new Date(date.getTime() - BRT_OFFSET_MS).getUTCDay() // dia da semana em BRT (0=Dom..6=Sáb)
-  const week = (dow === 0 || dow === 6) ? 0.80 : 1.05    // dia útil > fim de semana
-  const wobble = 0.90 + 0.20 * Math.abs(Math.sin(i * 2.3 + 1.1))
-  return week * wobble
-}
-
-// Série de faturamento dos últimos 30 dias ([29] = hoje). Respeita: hoje=revToday,
-// soma dos últimos 7 = rev7d, soma dos 30 = rev30d — com valor DIA A DIA realista.
-// Fator determinístico por DIA do calendário (±14%). Faz "hoje" e "ontem"
-// mudarem a cada dia — senão toda apresentação mostra o MESMO faturamento de hoje
-// e de ontem, e a plateia percebe que é fake. Estável dentro do dia (refresh não
-// muda); os totais de 7d/30d ficam fixos (os outros dias absorvem a diferença).
-function fatorDoDia(dayMs: number): number {
-  const dia = Math.floor(dayMs / 86400000)
-  const s = (Math.abs(dia * 2654435 + 12345) % 9973) / 9973
-  return 0.86 + 0.28 * s
-}
-
 function dailyValues(cfg: DemoConfig): number[] {
-  const dates = seriesDates()
-  const arr = new Array(30).fill(0)
-  const todayStart = brtDayStartMs(Date.now())
-  arr[29] = r2(cfg.revToday * fatorDoDia(todayStart))    // hoje (dia em andamento), varia por dia
-  // ontem (dia 28): valor PRÓPRIO, também varia por dia. Clampado ao que sobra dos
-  // 7 dias (rev7d - hoje) pra nunca estourar o total do período de 7 dias.
-  const yestBase = (cfg.revYesterday || 0) * fatorDoDia(todayStart - 86400000)
-  const yest = Math.max(0, Math.min(yestBase, Math.max(0, cfg.rev7d - arr[29])))
-  arr[28] = r2(yest)
-  // 5 dias anteriores a ontem (23..27): somam rev7d - hoje - ontem, ponderados por
-  // dia da semana. ⚠️ Usa arr[29]/arr[28] REAIS (já variados por fatorDoDia), não
-  // os valores-base do config — senão o total de 7 dias derivava.
-  const rest5 = Math.max(0, cfg.rev7d - arr[29] - yest)
-  let w5 = 0; for (let i = 23; i <= 27; i++) w5 += dayWeight(dates[i], i)
-  for (let i = 23; i <= 27; i++) arr[i] = r2(rest5 * dayWeight(dates[i], i) / (w5 || 1))
-  // dias 0..22: somam rev30d - rev7d
-  const rest23 = Math.max(0, cfg.rev30d - cfg.rev7d)
-  let w23 = 0; for (let i = 0; i <= 22; i++) w23 += dayWeight(dates[i], i)
-  for (let i = 0; i <= 22; i++) arr[i] = r2(rest23 * dayWeight(dates[i], i) / (w23 || 1))
-  return arr
+  return seriesDates().map(d => diaEfetivo(cfg, d.getTime()).receita)
 }
 
 function avgTicket(cfg: DemoConfig): number {
@@ -166,26 +212,30 @@ function avgTicket(cfg: DemoConfig): number {
   return cfg.products.reduce((s, p) => s + p.price * p.share, 0) / w
 }
 
-// Soma o faturamento do período [from,to] a partir da série diária + devolve o daily.
-// Usa OFFSET de dias (nº de dias no período + quantos dias atrás termina) em vez de
-// casar datas — evita o bug de fronteira em que "7 dias" pegava 8 dias de calendário.
-function periodRevenue(cfg: DemoConfig, from: string, to: string): { revenue: number; daily: { date: string; receita: number; pedidos: number }[] } {
-  const vals = dailyValues(cfg), dates = seriesDates(), MS = 86400000, ticket = avgTicket(cfg) || 1
+type Periodo = { revenue: number; daily: { date: string; receita: number; pedidos: number }[]; ads: number; adsSales: number; semente: number }
+// Período [from,to] = SOMA dos dias dele. Conta os dias pelo tamanho do período (nº de dias) terminando no dia do
+// `to` — evita o bug de fronteira em que "7 dias" pegava 8 dias de calendário. Dias futuros valem 0.
+function periodo(cfg: DemoConfig, from: string, to: string): Periodo {
+  const ticket = avgTicket(cfg) || 1
   const fromMs = new Date(from).getTime(), toMs = new Date(to).getTime()
-  // Tudo ancorado à meia-noite BRT (não ao TZ do servidor) — ver brtDayStartMs.
-  const t0 = brtDayStartMs(Date.now())                                          // meia-noite BRT de hoje
-  const toDay = brtDayStartMs(toMs)                                             // meia-noite BRT do fim do período
-  const nDays = Math.max(1, Math.round((toMs - fromMs) / MS))                   // quantos dias o período cobre
-  const endOffset = Math.max(0, Math.round((t0 - toDay) / MS))                  // termina quantos dias atrás (0 = hoje)
-  const endIdx = 29 - endOffset
-  const startIdx = Math.max(0, endIdx - (nDays - 1))
-  let revenue = 0
-  const daily: { date: string; receita: number; pedidos: number }[] = []
-  for (let i = startIdx; i <= endIdx && i >= 0 && i <= 29; i++) {
-    revenue += vals[i]
-    daily.push({ date: mmdd(dates[i]), receita: vals[i], pedidos: Math.max(1, Math.round(vals[i] / ticket)) })
+  const nDays = Math.max(1, Math.min(800, Math.round((toMs - fromMs) / DIA_MS)))
+  const fimDia = brtDayStartMs(toMs)   // dia futuro vale 0 (diaEfetivo)
+  let revenue = 0, ads = 0, adsSales = 0
+  const daily: Periodo['daily'] = []
+  for (let k = nDays - 1; k >= 0; k--) {
+    const dia = fimDia - k * DIA_MS
+    const x = diaEfetivo(cfg, dia)
+    revenue += x.receita
+    const gasto = x.receita * x.tacos
+    ads += gasto; adsSales += gasto * x.roas
+    daily.push({ date: mmdd(new Date(dia)), receita: x.receita, pedidos: Math.max(x.receita > 0 ? 1 : 0, Math.round(x.receita / ticket)) })
   }
-  return { revenue: r2(revenue), daily }
+  return { revenue: r2(revenue), daily, ads: r2(ads), adsSales: r2(adsSales), semente: diaDoCalendario(fimDia) * 31 + nDays }
+}
+// Compat (ML demo usa): só faturamento + série.
+function periodRevenue(cfg: DemoConfig, from: string, to: string): { revenue: number; daily: { date: string; receita: number; pedidos: number }[] } {
+  const p = periodo(cfg, from, to)
+  return { revenue: p.revenue, daily: p.daily }
 }
 
 // Núcleo da DRE demo p/ um faturamento R: produtos, taxas, CMV e o ADS que faz a
@@ -208,11 +258,15 @@ function dreTilt(R: number) {
   }
 }
 
-function coreDre(cfg: DemoConfig, R: number) {
+function coreDre(cfg: DemoConfig, R: number, per?: Pick<Periodo, 'ads' | 'adsSales' | 'semente'>) {
   const costs = demoCosts(cfg)
   const t = dreTilt(R)
-  const produtos = cfg.products.map(p => {
-    const receita = r2(p.share * R)
+  // 03/11: o MIX de produtos varia por período (o mais vendido de uma semana não é sempre igual); a estrela fica estável.
+  const sem = per?.semente ?? Math.round(R)
+  const pesos = cfg.products.map((p, i) => p.share * (cfg.featuredSku === p.sku ? 0.95 + 0.1 * hash01(sem, 60 + i) : 0.8 + 0.4 * hash01(sem, 60 + i)))
+  const somaShare = cfg.products.reduce((s, p) => s + p.share, 0) || 1, somaPesos = pesos.reduce((s, v) => s + v, 0) || 1
+  const produtos = cfg.products.map((p, i) => {
+    const receita = r2(pesos[i] / somaPesos * somaShare * R)
     const units = Math.max(0, Math.round(receita / p.price))
     // ⭐ Comissão e FBA POR PRODUTO (mesmo % e mesmo tilt do agregado, então
     // somam no total). `feeMedido: true` é o que faz o painel COMPLETAR o cálculo
@@ -238,8 +292,9 @@ function coreDre(cfg: DemoConfig, R: number) {
   // ⭐ ADS AGORA VARIA (não é mais calculado pra trás pra travar a margem): é o
   // TACoS-alvo × tilt do período. A margem final vira o RESULTADO e oscila em
   // torno do alvo — como numa loja de verdade. A DRE fecha dentro do período.
-  const ads = Math.max(0, r2(R * cfg.tacosPct / 100 * t.ads))
-  const roasEff = r2(cfg.roas * t.roas)   // eficiência do ads NESTE período
+  // 03/11: com o período vindo da série diária, o Ads é a SOMA dos dias (TACoS/ROAS de cada dia); sem ele, a régua antiga.
+  const ads = per ? per.ads : Math.max(0, r2(R * cfg.tacosPct / 100 * t.ads))
+  const roasEff = per ? (per.ads > 0 ? r2(per.adsSales / per.ads) : r2(cfg.roas)) : r2(cfg.roas * t.roas)   // eficiência do ads NESTE período
   return { produtos, vendas, unidades, comissao, fba, liqMarketplace, cmv, ads, roasEff }
 }
 
@@ -251,8 +306,9 @@ export function demoFinance(cfg: DemoConfig, from: string, to: string, daily: bo
     const series = vals.map((v, i) => ({ date: mmdd(dates[i]), receita: v, principal: v, pedidos: Math.max(1, Math.round(v / ticket)) }))
     return { connected: true, period: { from, to }, daily: series, receita: r2(vals.reduce((s, v) => s + v, 0)) }
   }
-  const { revenue: R, daily: dailyArr } = periodRevenue(cfg, from, to)
-  const c = coreDre(cfg, R)
+  const per = periodo(cfg, from, to)
+  const { revenue: R, daily: dailyArr } = per
+  const c = coreDre(cfg, R, per)
   // DEVOLUÇÕES realistas: ~1,3–2,3% das unidades dos mais vendidos voltam. Loja de
   // milhares de pedidos com ZERO devolução é tell. Determinístico, pequeno.
   const precoDoSku: Record<string, number> = {}
@@ -288,8 +344,8 @@ export function demoFinance(cfg: DemoConfig, from: string, to: string, daily: bo
 // isso, "Ontem"/calendário caíam em '30d' e mostravam o gasto de 30 dias (R$160k) num dia.
 export function demoAdsReport(cfg: DemoConfig, window: string, from?: string, to?: string): any {
   const range = (from && to) ? { from, to } : windowRange(window)
-  const { revenue } = periodRevenue(cfg, range.from, range.to)
-  const core = coreDre(cfg, revenue)
+  const per = periodo(cfg, range.from, range.to)
+  const core = coreDre(cfg, per.revenue, per)
   const spend = core.ads              // MESMO gasto da DRE (Resumo e Ads batem)
   const sales = r2(spend * core.roasEff)   // eficiência VARIÁVEL do período → ACoS varia
   const acos = sales > 0 ? r2(spend / sales * 100) : 0
@@ -325,7 +381,7 @@ export function demoAdsReport(cfg: DemoConfig, window: string, from?: string, to
 // × uma cobertura determinística de ~3 a 7 semanas, + a caminho e reservado
 // proporcionais. Assim o Estoque FBA e a Curva ABC batem com o faturamento.
 export function demoInventory(cfg: DemoConfig): any {
-  const R = cfg.rev30d || 0
+  const R = dailyValues(cfg).reduce((s, v) => s + v, 0)   // 03/11: últimos 30 dias reais da série
   const itens = cfg.products.map((p, i) => {
     const unidadesMes = Math.max(1, Math.round((p.share * R) / (p.price || 1)))
     // cobertura determinística por SKU: 0,8 a 1,7 mês de estoque (~3-7 semanas)
@@ -356,8 +412,8 @@ function demoOrderId(seed: number): string {
 // e desconto. Coerente com o faturamento do período; determinístico. Um teto de
 // exibição (não faz sentido listar milhares) — os recentes, como no real.
 export function demoOrders(cfg: DemoConfig, from: string, to: string, sku?: string): any {
-  const { revenue: R } = periodRevenue(cfg, from, to)
-  const core = coreDre(cfg, R)
+  const per = periodo(cfg, from, to)
+  const core = coreDre(cfg, per.revenue, per)
   const prods = sku ? core.produtos.filter((p: any) => p.sku === sku) : core.produtos
   if (!prods.length) return { available: true, period: { from, to }, pedidos: [] }
 
@@ -444,9 +500,8 @@ export function demoRepasses(config: any, meses = 3): any {
   for (let i = 0; i < nCiclos; i++) {
     const fimMs = now - (i * CICLO + 6) * DAY                     // fechou ~6 dias após o fim do ciclo
     const iniMs = fimMs - CICLO * DAY
-    let h = ((i + 1) * 2654435761) >>> 0                          // variação determinística ±10%
-    const varia = 0.9 + (h % 21) / 100
-    const receita = r2(rev15 * varia)
+    // 03/11: o repasse é o faturamento REAL do ciclo na série diária (não mais metade de um total fixo)
+    const receita = periodo(cfg, new Date(iniMs).toISOString(), new Date(fimMs).toISOString()).revenue || r2(rev15)
     const valor = r2(receita - receita * comPct - receita * fbaPct - receita * devPct)
     const iniISO = new Date(iniMs).toISOString().slice(0, 10)
     const fimISO = new Date(fimMs).toISOString().slice(0, 10)
