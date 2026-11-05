@@ -6288,7 +6288,7 @@ export default function GestaoHub({promoActive=false,promoType=null,theme,isAdmi
             <span style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:11.5,fontWeight:600,color:t.grn,background:t.pillGrn[0],padding:'5px 11px',borderRadius:20}}>
               <i className="ti ti-circle-check" style={{fontSize:14}} aria-hidden="true"/>Conta Amazon conectada
             </span>
-            <button onClick={()=>{ fetch('/api/amazon/disconnect',{method:'POST'}).then(()=>location.reload()) }} style={{background:'none',border:'none',color:t.t3,fontSize:11,cursor:'pointer',fontFamily:'inherit',textDecoration:'underline'}}>desconectar</button>
+            <button onClick={()=>{ if (!confirm('Desconectar apaga do Oráculo os pedidos e o financeiro desta loja, e ao reconectar tudo é baixado de novo (pode levar horas). Use só se for trocar de loja. Desconectar mesmo?')) return; fetch('/api/amazon/disconnect',{method:'POST'}).then(()=>location.reload()) }} style={{background:'none',border:'none',color:t.t3,fontSize:11,cursor:'pointer',fontFamily:'inherit',textDecoration:'underline'}}>desconectar</button>
             {adsConnected===true && (<>
               <span style={{display:'inline-flex',alignItems:'center',gap:6,fontSize:11.5,fontWeight:600,color:t.grn,background:t.pillGrn[0],padding:'5px 11px',borderRadius:20}}>
                 <i className="ti ti-speakerphone" style={{fontSize:13}} aria-hidden="true"/>Ads conectado
