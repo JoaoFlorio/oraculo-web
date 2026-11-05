@@ -38,7 +38,17 @@ export type Produto = {
   concorrencia: { ofertas: number; vendedores: number; precoMin: number; precoMax: number; lojasOficiais: number; usandoFull: number; amostra: number } | null
   sinais: string[]
   marca: string | null; revendavel: boolean; fonteNome?: string
+  fechado?: boolean   // 05/11: o ML não liberou os dados deste anúncio — só a posição no ranking
 }
+
+// 05/11 (caso tantacoisavendas: 1º, 3º e 6º lugar em branco). ~1/3 do ranking do ML é anúncio de outro vendedor que a
+// API não abre (MLBU/user product). Antes o card saía "GENÉRICO" + score + "líquido não medido" de um produto que
+// ninguém leu (e ainda contava como oportunidade). Sem nome = card FECHADO, com o link pro ML. Vale pro cache antigo.
+function normalizarProduto(p: Produto): Produto {
+  return p.nome ? p : { ...p, fechado: true, revendavel: false, sinais: [] }
+}
+const linkFechado = (p: Produto) => p.permalink
+  || (/^MLBU/i.test(p.id) ? `https://www.mercadolivre.com.br/up/${p.id}` : `https://www.mercadolivre.com.br/p/${p.id}`)
 
 // Score do card (0-100), espelhando o espírito do cardScore da Amazon (demanda +
 // margem + genérico): aqui é margem real (peso maior), posição no ranking (giro
@@ -70,6 +80,50 @@ export function CardProduto({ p, onOpen, saved, onToggleSave }: { p: Produto; on
   const score = mlScore(p)
   const dem = mInfo(p.margemPct)
   const mCor = p.margemPct == null ? T.t3 : p.margemPct >= 70 ? T.g : p.margemPct >= 55 ? T.gold : T.a
+  if (p.fechado || !p.nome) {
+    const abrir = () => window.open(linkFechado(p), '_blank', 'noopener,noreferrer')
+    const seta = <svg width="11" height="11" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 5h6M5.5 2.5L8 5l-2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    const aviso = 'O Mercado Livre não libera os dados deste anúncio de outro vendedor. Dá para ver direto no ML.'
+    if (novo) return (
+      <div onClick={abrir} className={o.card} role="link" tabIndex={0} aria-label={`Ver o ${p.pos}º lugar no Mercado Livre`}
+        onKeyDown={e => { if (e.key === 'Enter') abrir() }}>
+        <div className={o.foto}><span className={o.fotoVazia} aria-hidden="true">{IcOuro.caixa}</span></div>
+        <div className={o.corpo}>
+          <span className={o.kicker}>Dados fechados pelo ML</span>
+          <p className={o.nome}>{aviso}</p>
+          {p.pos > 0 && (
+            <dl className={o.dados}>
+              <div className={o.dado}>
+                <dt className={o.kicker}>Ranking</dt>
+                <dd title={p.fonteNome || undefined}>{p.pos}º <small>{p.fonteNome || 'no ranking'}</small></dd>
+              </div>
+            </dl>
+          )}
+          <div className={o.rodape}>
+            <div className={o.ver}><span>Ver no Mercado Livre</span><span className={o.verSeta}>{seta}</span></div>
+          </div>
+        </div>
+      </div>
+    )
+    return (
+      <div onClick={abrir} role="link" tabIndex={0} aria-label={`Ver o ${p.pos}º lugar no Mercado Livre`}
+        onKeyDown={e => { if (e.key === 'Enter') abrir() }}
+        style={{ background: T.card, border: `1px solid ${T.line}`, borderRadius: 14, overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column' as const }}>
+        <div style={{ background: '#F8F8FC', height: 162, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 44, height: 44, background: '#e8e8f0', borderRadius: 8 }} />
+        </div>
+        <div style={{ padding: '14px 14px 16px', flex: 1, display: 'flex', flexDirection: 'column' as const }}>
+          <div style={{ fontSize: 11, color: T.t4, marginBottom: 8 }}>Dados fechados pelo ML</div>
+          <p style={{ fontSize: 12, color: T.t2, lineHeight: 1.58, flex: 1, marginBottom: 10 }}>{aviso}</p>
+          {p.pos > 0 && <span style={{ fontSize: 10, color: T.t3, marginBottom: 12 }}>{p.pos}º <strong style={{ color: T.t2, fontWeight: 600 }}>{p.fonteNome || 'no ranking'}</strong></span>}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: `1px solid ${T.line}`, paddingTop: 11, color: T.gold }}>
+            <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase' as const }}>Ver no Mercado Livre</span>
+            {seta}
+          </div>
+        </div>
+      </div>
+    )
+  }
   if (novo) {
     return (
       <div onClick={onOpen} className={o.card}
@@ -725,7 +779,7 @@ export default function MLMineracao({ view = 'garimpo' }: { view?: 'garimpo' | '
       const r = await fetch(`/api/ml/mineracao?category=${encodeURIComponent(categoria)}&page=${page}${bust ? '&bust=1' : ''}`)
       const d = await r.json()
       if (!r.ok || d.error) { if (page === 0) { setErro(d.error || 'Não foi possível garimpar agora.'); setProdutos([]) } return false }
-      const lista: Produto[] = d.produtos || []
+      const lista: Produto[] = (d.produtos || []).map(normalizarProduto)
       if (d.premissas) setPremissas(d.premissas)
       const novos = lista.filter(p => !vistosRef.current.has(p.id))
       novos.forEach(p => vistosRef.current.add(p.id))
