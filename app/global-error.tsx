@@ -4,9 +4,14 @@
 // pega). Precisa renderizar <html>/<body> porque substitui o layout inteiro.
 // Sem isto, um erro no root = tela branca total pro cliente.
 import { useEffect } from 'react'
+import { ehErroDeCarga, recarregarUmaVez, reportarErroDeTela } from '@/lib/erroDeTela'
 
-export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  useEffect(() => { console.error('[global-error]', error) }, [error])
+export default function GlobalError({ error }: { error: Error & { digest?: string }; reset: () => void }) {
+  useEffect(() => {
+    console.error('[global-error]', error)
+    reportarErroDeTela('global', error)        // 05/11: o erro chega ao servidor (client_errors)
+    if (ehErroDeCarga(error)) recarregarUmaVez()
+  }, [error])
 
   return (
     <html lang="pt-BR">
@@ -25,7 +30,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
             <p style={{ fontSize: 13.5, color: 'rgba(245,239,223,.6)', lineHeight: 1.5, margin: '0 0 18px' }}>
               Recarregue a página. Se continuar, fale com o suporte — seus dados estão a salvo.
             </p>
-            <button onClick={reset} style={{
+            <button onClick={() => location.reload()} style={{
               background: '#f0b429', color: '#1a1204', border: 'none', borderRadius: 11,
               padding: '11px 22px', fontWeight: 700, fontSize: 14, cursor: 'pointer',
             }}>Recarregar</button>

@@ -3,10 +3,19 @@
 // Rede de segurança do dashboard (auditoria de lançamento, 23/07). Se qualquer
 // painel quebrar no render, o cliente vê ESTE card ("tentar de novo") em vez de
 // uma tela branca sem saída. Isola a falha no segmento — o resto do app segue.
-import { useEffect } from 'react'
+// 05/11: o reset() re-renderizava a falha guardada (Gestão que não baixou) → agora recarrega de verdade, recarrega
+// sozinho em erro de carga, manda o erro pro servidor e deixa SAIR (o menu com o "Sair" fica atrás deste card).
+import { useEffect, useState } from 'react'
+import { sairDaConta } from '@/lib/sairDaConta'
+import { ehErroDeCarga, recarregarUmaVez, reportarErroDeTela } from '@/lib/erroDeTela'
 
-export default function DashboardError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  useEffect(() => { console.error('[dashboard/error]', error) }, [error])
+export default function DashboardError({ error }: { error: Error & { digest?: string }; reset: () => void }) {
+  const [saindo, setSaindo] = useState(false)
+  useEffect(() => {
+    console.error('[dashboard/error]', error)
+    reportarErroDeTela('dashboard', error)
+    if (ehErroDeCarga(error)) recarregarUmaVez()
+  }, [error])
 
   return (
     <div style={{
@@ -23,10 +32,14 @@ export default function DashboardError({ error, reset }: { error: Error & { dige
         <p style={{ fontSize: 13.5, color: 'rgba(245,239,223,.6)', lineHeight: 1.5, margin: '0 0 18px' }}>
           Foi um soluço, não os seus dados. Tente de novo — se persistir, recarregue a página ou fale com o suporte.
         </p>
-        <button onClick={reset} style={{
+        <button onClick={() => location.reload()} style={{
           background: '#f0b429', color: '#1a1204', border: 'none', borderRadius: 11,
           padding: '11px 22px', fontWeight: 700, fontSize: 14, cursor: 'pointer',
         }}>Tentar de novo</button>
+        <button disabled={saindo} onClick={async () => { setSaindo(true); await sairDaConta(); location.href = '/login' }} style={{
+          display: 'block', margin: '14px auto 0', background: 'none', border: 'none', color: 'rgba(245,239,223,.55)',
+          fontSize: 13, textDecoration: 'underline', cursor: 'pointer',
+        }}>{saindo ? 'Saindo…' : 'Sair da conta'}</button>
       </div>
     </div>
   )
