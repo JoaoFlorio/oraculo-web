@@ -19,10 +19,51 @@ const T = {
 }
 const tint = (v: string, pct: number) => `color-mix(in srgb, ${v} ${pct}%, transparent)`
 
+// 06/11 (caso da Marli: "tentei MLB, MLBU e o link e continua a mensagem"): anúncio de OUTRO vendedor o ML não
+// abre pro nosso servidor — /items e /user-products dão 403, para qualquer link de terceiro (medido em produção).
+// Só o catálogo (/p/MLB…) abre. Em vez do aviso sem saída, a tela mostra os 2 caminhos que funcionam: abrir o
+// anúncio no ML com a extensão (ela lê a página no navegador do cliente) ou colar o link /p/ do catálogo.
+const EXTENSAO = 'https://chromewebstore.google.com/detail/or%C3%A1culo-amazon-intelligen/jggkabmggnkaobhjmhhcikipbhhnoapp'
+function linkDoAnuncio(alvo: string): string {
+  const t = alvo.trim()
+  try {
+    const u = new URL(/^https?:\/\//i.test(t) ? t : 'https://' + t)
+    if (/(^|\.)mercadolivre\.com\.br$/i.test(u.hostname)) return u.href
+  } catch { /* não é link — monta pelo código */ }
+  const up = t.match(/MLBU\d+/i)
+  if (up) return `https://www.mercadolivre.com.br/up/${up[0].toUpperCase()}`
+  const n = t.match(/MLB-?(\d+)/i)
+  return n ? `https://produto.mercadolivre.com.br/MLB-${n[1]}` : 'https://www.mercadolivre.com.br'
+}
+
+function BloqueadoPeloML({ link, novo }: { link: string; novo: boolean }) {
+  const passo = { margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.6, color: novo ? 'var(--ou-t2)' : T.t2 }
+  const botao = (href: string, txt: string, principal: boolean) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={novo && principal ? 'ouro-botao' : undefined}
+      style={novo && principal ? { textDecoration: 'none', height: 42, fontSize: 13.5 } : {
+        display: 'inline-flex', alignItems: 'center', height: 40, padding: '0 18px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+        textDecoration: 'none', color: principal ? '#1a1200' : (novo ? 'var(--ou-t1)' : T.t1),
+        background: principal ? T.goldG : 'transparent', border: principal ? 'none' : `1px solid ${novo ? 'rgba(255,200,61,.3)' : T.lineG}` }}>{txt}</a>
+  )
+  return (
+    <div className={novo ? 'ouro-cartao' : undefined} style={novo ? { maxWidth: 760 } : { padding: 20, background: T.card, border: `1px solid ${T.lineG}`, borderRadius: 16, maxWidth: 640 }}>
+      <div style={{ fontSize: 15.5, fontWeight: 700, color: novo ? 'var(--ou-t1)' : T.t1 }}>O Mercado Livre fecha este anúncio para sistemas de fora</div>
+      <p style={passo}>É anúncio de outro vendedor, e o ML não deixa nenhum sistema ler esse tipo de anúncio (vale para qualquer link de terceiro, trocar o link não resolve). Dá para analisar de dois jeitos:</p>
+      <p style={passo}><strong>1.</strong> Abra o anúncio no Mercado Livre com a <strong>extensão do Oráculo</strong>: a análise completa (taxas, frete, concorrência e vendas) aparece ali mesmo, na página.</p>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' as const, marginTop: 12 }}>
+        {botao(link, 'Abrir o anúncio no Mercado Livre', true)}
+        {botao(EXTENSAO, 'Instalar a extensão', false)}
+      </div>
+      <p style={passo}><strong>2.</strong> Se o anúncio tiver página de produto (link com <strong>/p/MLB…</strong>), copie esse link e cole aqui: ele abre.</p>
+    </div>
+  )
+}
+
 export default function MLRival() {
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
+  const [bloqueio, setBloqueio] = useState<string | null>(null)   // link do anúncio que o ML fechou
   const [produto, setProduto] = useState<Produto | null>(null)
   const [modal, setModal] = useState(false)
   const novo = useVisualNovo()
@@ -30,10 +71,11 @@ export default function MLRival() {
   const analisar = async () => {
     const alvo = q.trim()
     if (!alvo || loading) return
-    setLoading(true); setErro(null); setProduto(null)
+    setLoading(true); setErro(null); setBloqueio(null); setProduto(null)
     try {
       const r = await fetch(`/api/ml/mineracao/analisar?q=${encodeURIComponent(alvo)}`)
       const d = await r.json()
+      if (d.bloqueadoPeloML) { setBloqueio(linkDoAnuncio(alvo)); return }
       if (!r.ok || d.error) { setErro(d.error || 'Não foi possível analisar este anúncio.'); return }
       setProduto(d.produto)
       setModal(true)   // já abre a análise completa, que é o que o cliente veio buscar
@@ -50,12 +92,13 @@ export default function MLRival() {
         <BuscaOuro valor={q} onValor={setQ} onEnviar={analisar} carregando={loading} placeholder="Cole o link do anúncio ou o código MLB…" />
         <div className="ouro-chips"><span>Exemplos que funcionam:</span>{exemplos.map(e => <button key={e} type="button" className="ouro-chip" onClick={() => setQ(e)}>{e}</button>)}</div>
         {erro && <div className="ouro-erro">{erro}</div>}
+        {bloqueio && <BloqueadoPeloML link={bloqueio} novo />}
         {produto && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14, maxWidth: 520 }}>
             <div className="ora-card-in"><CardProduto p={produto} onOpen={() => setModal(true)} /></div>
           </div>
         )}
-        {!produto && !erro && !loading && (
+        {!produto && !erro && !bloqueio && !loading && (
           <>
             <RecursosOuro itens={[
               { icone: IcOuro.moeda, titulo: 'Taxas e envio reais', texto: 'Comissão da categoria e frete calculados pelo próprio Mercado Livre.' },
@@ -101,6 +144,7 @@ export default function MLRival() {
         </div>
       </div>
 
+      {bloqueio && <div style={{ marginBottom: 14 }}><BloqueadoPeloML link={bloqueio} novo={false} /></div>}
       {erro && <div style={{ padding: '13px 16px', color: T.r, fontSize: 12.5, background: tint(T.r, 8), border: `1px solid ${tint(T.r, 25)}`, borderRadius: 12, marginBottom: 14, maxWidth: 640, lineHeight: 1.55 }}>{erro}</div>}
 
       {produto && (
@@ -111,7 +155,7 @@ export default function MLRival() {
         </div>
       )}
 
-      {!produto && !erro && !loading && (
+      {!produto && !erro && !bloqueio && !loading && (
         <div style={{ padding: '44px 24px', textAlign: 'center' as const, background: T.card, border: `1px dashed ${T.line}`, borderRadius: 16, color: T.t3, fontSize: 13, maxWidth: 640, lineHeight: 1.7 }}>
           Exemplos que funcionam:<br />
           <span style={{ color: T.t4, fontSize: 11.5 }}>mercadolivre.com.br/p/MLB63904966 · produto.mercadolivre.com.br/MLB-123… · MLB63904966</span>
