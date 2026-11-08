@@ -14,6 +14,7 @@ import { sairDaConta } from '@/lib/sairDaConta'
 
 const WA_REEMBOLSO = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Pedi%20o%20reembolso%20do%20Or%C3%A1culo%20e%20queria%20conversar.'
 const WA = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Sou%20cliente%20do%20Or%C3%A1culo%20e%20preciso%20de%20ajuda%20com%20o%20pagamento.'
+const WA_RENOVACAO = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Quero%20pagar%20o%20PIX%20da%20renova%C3%A7%C3%A3o%20do%20Or%C3%A1culo.'
 const NOME: Record<string, string> = { monthly: 'Mensal', biannual: 'Semestral', annual: 'Anual', lifetime: 'Fundador Vitalício' }
 
 // Cores do visual novo (variáveis --ou-* do painel), com fallback se a página abrir sem elas.
@@ -33,10 +34,12 @@ function Cadeado({ size = 13 }: { size?: number }) {
   )
 }
 
-export default function Paywall({ email, nome, plan, expiresAt, motivo, foiTeste = false, reembolsoPedidoEm = null }: {
+export default function Paywall({ email, nome, plan, expiresAt, motivo, foiTeste = false, reembolsoPedidoEm = null, renovacaoPendente = false }: {
   email: string; nome?: string | null; plan: string | null; expiresAt: string | null; motivo: 'expired' | 'inactive' | 'free'; foiTeste?: boolean
   /** 08/10: abriu pedido de reembolso (reclamação na Greenn) — acesso suspenso na hora. ISO da abertura. */
   reembolsoPedidoEm?: string | null
+  /** 08/11: a assinatura recorrente ainda está aberta na Greenn — o certo é pagar o PIX da renovação, não assinar de novo. */
+  renovacaoPendente?: boolean
 }) {
   const [aviso, setAviso] = useState<string | null>(null)
   const [agora] = useState(() => Date.now())
@@ -148,6 +151,23 @@ export default function Paywall({ email, nome, plan, expiresAt, motivo, foiTeste
           </div>
 
           {aviso && <div role="status" style={{ margin: '0 0 14px', padding: '11px 14px', borderRadius: 12, fontSize: 13, color: C.t1, background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)', textAlign: 'center' }}>🔒 {aviso}</div>}
+
+          {/* 08/11: renovação pendente — pagar o PIX da MESMA assinatura vem antes de qualquer compra nova */}
+          {renovacaoPendente && (
+            <div style={{ borderRadius: 20, padding: '22px 22px', marginBottom: 22, background: 'linear-gradient(135deg, rgba(255,200,61,0.16), rgba(255,200,61,0.04))', border: '1px solid rgba(255,200,61,0.55)' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.14em', color: C.ouro }}>CONTINUE NO MESMO PLANO</div>
+              <div style={{ fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, marginTop: 6, letterSpacing: '-0.02em' }}>Pague o PIX da renovação</div>
+              <div style={{ fontSize: 13.5, color: C.t2, marginTop: 8, lineHeight: 1.6 }}>
+                A Greenn já gerou a cobrança da renovação e mandou o PIX para <b style={{ color: C.t1 }}>{email}</b>. Pagando por ela, o acesso volta sozinho e você continua na mesma assinatura.
+                Assinar de novo pelos planos abaixo abre uma assinatura nova, e a antiga continua mandando cobrança todo dia.
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14 }}>
+                <a href={WA_RENOVACAO} target="_blank" rel="noopener noreferrer" style={{ fontSize: 14, fontWeight: 800, padding: '12px 18px', borderRadius: 12, background: C.grad, color: '#1a1204', textDecoration: 'none' }}>Pedir o código PIX no WhatsApp</a>
+                <button onClick={() => window.location.reload()} style={{ background: C.card, color: C.t1, border: `1px solid ${C.linha}`, borderRadius: 12, padding: '12px 18px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Já paguei — liberar meu acesso</button>
+              </div>
+            </div>
+          )}
+          {renovacaoPendente && <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.14em', textTransform: 'uppercase', color: C.t3, margin: '0 0 14px', textAlign: 'center' }}>Ou troque de plano</div>}
 
           <div id="planos-bloqueio" />
           {/* FUNDADOR — em destaque, primeiro (até FUNDADOR_ATE) */}

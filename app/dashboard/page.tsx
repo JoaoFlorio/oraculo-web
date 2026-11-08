@@ -29,11 +29,21 @@ export default async function DashboardPage() {
     const foiTeste = motivo === 'expired' && !!m?.teste?.ate
     // 08/10: pedido de reembolso aberto na Greenn (o backend marca metadata.reclamacao e suspende) → aviso próprio.
     const reembolsoPedidoEm = motivo === 'inactive' && typeof m?.reclamacao?.aberta_em === 'string' ? m.reclamacao.aberta_em : null
+    // 08/11 (PIX fantasma): vencido com assinatura recorrente ainda aberta na Greenn → a tela manda pagar o PIX da
+    // renovação (mesma assinatura). Comprar de novo abre um contrato novo e o antigo segue gerando 1 PIX por dia
+    // (Alarico e Diovana, nov/2026). Só até 15 dias depois de vencer. Tabela do backend (lib/greennAssinaturas.ts); se falhar, a tela segue como antes.
+    let renovacaoPendente = false
+    const vencidoHa = user.expiresAt ? Date.now() - new Date(user.expiresAt).getTime() : Infinity
+    if (motivo === 'expired' && !foiTeste && vencidoHa < 15 * 86_400_000) {   // a Greenn recobra por ~10 dias
+      const r = await prisma.$queryRaw<{ n: number }[]>`SELECT count(*)::int AS n FROM greenn_assinaturas
+        WHERE lower(email) = lower(${user.email}) AND status = 'ativa' AND plan IN ('monthly', 'biannual', 'annual')`.catch(() => [])
+      renovacaoPendente = (r[0]?.n ?? 0) > 0
+    }
     // 06/10: com o visual do painel (variáveis --ou-* e fontes) — o menu aparece inteiro, travado com cadeado.
     return (
       <div className={`ora-visual ${classeFontesPainel}`} style={{ display: 'contents' }}>
         <VersionGuard v={process.env.RAILWAY_GIT_COMMIT_SHA || process.env.RAILWAY_DEPLOYMENT_ID || 'dev'} />
-        <Paywall email={user.email} nome={user.name ?? null} plan={user.plan ?? null} expiresAt={user.expiresAt ? new Date(user.expiresAt).toISOString() : null} motivo={motivo} foiTeste={foiTeste} reembolsoPedidoEm={reembolsoPedidoEm} />
+        <Paywall email={user.email} nome={user.name ?? null} plan={user.plan ?? null} expiresAt={user.expiresAt ? new Date(user.expiresAt).toISOString() : null} motivo={motivo} foiTeste={foiTeste} reembolsoPedidoEm={reembolsoPedidoEm} renovacaoPendente={renovacaoPendente} />
       </div>
     )
   }
