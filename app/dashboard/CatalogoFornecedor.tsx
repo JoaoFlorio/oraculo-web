@@ -17,9 +17,10 @@ const tint = (v: string, pct: number) => `color-mix(in srgb, ${v} ${pct}%, trans
 type Cat = any
 type Resultado = any
 
-/* 08/10: a leitura é cobrada POR PÁGINAS (contadas no upload, antes de cobrar) — mesma tabela do backend
-   (oraculo-backend src/lib/catalogoCusto.ts FAIXAS_PRECO_LEITURA). Falhou a leitura → créditos voltam. */
-const TABELA_PRECO_LEITURA = 'até 100 págs 10 créditos · 101–200 20 · 201–300 30 · 301–500 50 · 501–600 60'
+/* 08/10: a leitura é cobrada POR PÁGINAS (contadas no upload, antes de cobrar) — mesma regra do backend
+   (oraculo-backend src/lib/catalogoCusto.ts precoLeituraPorPaginas). 09/11: 1 crédito a cada 3 páginas, mínimo 10
+   (antes: faixas 10/20/30/50/60, que empatavam com o custo do Google). Falhou a leitura → créditos voltam. */
+const TABELA_PRECO_LEITURA = '1 crédito a cada 3 páginas, mínimo 10 (ex.: 30 págs = 10 · 100 págs = 34 · 300 págs = 100)'
 const NOTA_LIMITES = 'Máximo 600 páginas por PDF (teste grátis: até 60). A 1ª varredura de cada catálogo é grátis; as seguintes custam 5 créditos. Se a leitura falhar, os créditos voltam.'
 /** "N páginas · X créditos cobrados" do envio/catálogo atual (ou null). */
 function linhaCobranca(cat: Cat | null, envio: { creditos: number; paginas: number; reaproveitado: boolean } | null): string | null {

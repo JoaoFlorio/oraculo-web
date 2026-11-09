@@ -1192,7 +1192,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
                     {catalogo.status === 'enviando' && (
                       <div className={o.catalogoLinha}>
                         <span className={o.catalogoIc} aria-hidden="true">{IcOuro.pdf}</span>
-                        <span>Enviando <b>{catalogo.nome_arquivo}</b>… <span className={o.catalogoDim}>(catálogo grande leva um minuto)</span> <span className={o.catalogoOuro}>· a leitura custa 10 créditos</span></span>
+                        <span>Enviando <b>{catalogo.nome_arquivo}</b>… <span className={o.catalogoDim}>(catálogo grande leva um minuto)</span> <span className={o.catalogoOuro}>· a leitura custa 1 crédito a cada 3 páginas (mín. 10)</span></span>
                       </div>
                     )}
                     {catalogo.status === 'extraindo' && (() => {
@@ -1860,7 +1860,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
             {catalogo && (
               <div style={{ margin: '0 0 8px', padding: '10px 12px', borderRadius: 12, border: '1px solid rgba(255,183,3,.25)', background: 'rgba(255,183,3,.06)', fontSize: 12, color: '#CFCFE8', position: 'relative' as const }}>
                 <button onClick={() => setCatalogo(null)} aria-label="fechar" style={{ position: 'absolute', top: 6, right: 8, background: 'transparent', border: 'none', color: '#8B8BAC', cursor: 'pointer', fontSize: 13 }}>×</button>
-                {catalogo.status === 'enviando' && <>📦 Enviando <b>{catalogo.nome_arquivo}</b>… (catálogo grande leva um minuto) <span style={{ color: '#FFB703' }}>· a leitura custa 10 créditos</span></>}
+                {catalogo.status === 'enviando' && <>📦 Enviando <b>{catalogo.nome_arquivo}</b>… (catálogo grande leva um minuto) <span style={{ color: '#FFB703' }}>· a leitura custa 1 crédito a cada 3 páginas (mín. 10)</span></>}
                 {catalogo.status === 'extraindo' && (() => {
                   const pt = Number(catalogo.paginas_total) || 0, pl = Number(catalogo.paginas_lidas) || 0
                   const pct = pt > 0 ? Math.min(100, Math.round((pl / pt) * 100)) : null
