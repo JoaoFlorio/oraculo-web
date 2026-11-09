@@ -1,4 +1,5 @@
 'use client'
+import BannerConclave from './BannerConclave'
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -2358,6 +2359,9 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
 
           {/* Content */}
           <main key={nav} ref={mainRef} className={`ora-tab-in${nav==='competitor'||nav==='agente'?'':' ora-main-pad'}`} style={{flex:1,overflowY:nav==='agente'?'hidden':'auto',padding:nav==='competitor'||nav==='agente'?'0':'28px 28px 40px',position:'relative' as const,display:'flex',flexDirection:'column'}}>
+
+            {/* 09/11: banner do Conclave (23/11, 20h) — se programa sozinho (BannerConclave.tsx). Fora do NEO e da Análise de concorrente (tela sem margem). */}
+            {nav!=='agente'&&nav!=='competitor'&&<BannerConclave/>}
 
             {/* Competitor Panel */}
             {nav==='competitor'&&(
