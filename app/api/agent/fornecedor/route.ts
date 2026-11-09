@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 import { getSession } from '@/lib/auth'
+import { origemEstranha } from '@/lib/origem'
 
 // Proxy do CATÁLOGO DE FORNECEDOR do NEO (minerador). 24/09: LIBERADO pra todos os
 // clientes na Amazon (pedido do João). 01/10: o cruzamento no Mercado Livre também.
@@ -10,7 +11,9 @@ const BACKEND = process.env.BACKEND_URL || 'https://oraculo-backend-production.u
 const KEY = process.env.INTERNAL_KEY || ''
 
 // POST /api/agent/fornecedor  (body = PDF)  → sobe o catálogo e dispara a extração
+// 09/11: esta rota fica FORA do proxy.ts (o proxy cortava o PDF em 10 MB) — a checagem de origem (CSRF) é feita aqui.
 export async function POST(req: NextRequest) {
+  if (origemEstranha(req)) return NextResponse.json({ error: 'Origem não permitida' }, { status: 403 })
   const user = await getSession()
   if (!user) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   // Conta demo (credencial pública do lançamento) não gasta Gemini nem o token compartilhado.
