@@ -4,6 +4,8 @@
 // No computador é a faixa larga (2400×600); no celular, a quadrada (1080×1080). Arte em public/conclave/,
 // fonte em ~/Documents/banner-conclave (fundo do Codex + foto real do site + texto em HTML).
 // O X esconde só nesta sessão do navegador: na próxima entrada ele volta.
+// 10/11: flexShrink 0 — o <main> é coluna flex com rolagem; com overflow:hidden a caixa encolhia até ALTURA 0 (medido no
+// painel do João: imagem 1130×282, caixa 1130×0) e o banner não aparecia.
 import { useEffect, useState } from 'react'
 
 const INICIO = Date.parse('2026-11-09T20:00:00-03:00')
@@ -31,7 +33,7 @@ export default function BannerConclave() {
   }
 
   return (
-    <div style={{ position: 'relative', marginBottom: 20, borderRadius: 16, overflow: 'hidden', boxShadow: '0 18px 44px -24px rgba(123,59,230,.7)' }}>
+    <div style={{ position: 'relative', flexShrink: 0, marginBottom: 20, borderRadius: 16, overflow: 'hidden', boxShadow: '0 18px 44px -24px rgba(123,59,230,.7)' }}>
       <a href={LINK} target="_blank" rel="noopener noreferrer" aria-label="Conclave: segunda, 23/11, às 20h, online e gratuito. Garanta sua cadeira." style={{ display: 'block', lineHeight: 0 }}>
         <picture>
           <source media="(max-width: 700px)" srcSet="/conclave/banner-cel.webp" width={1080} height={1080} />
