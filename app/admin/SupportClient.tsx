@@ -70,6 +70,22 @@ export default function SupportClient({ name }: { name: string }) {
     setEnviando(null)
   }
 
+  // 11/11: cliente digitou o e-mail errado na compra → corrige e já manda o acesso (senha nova) pro e-mail certo.
+  async function trocarEmail(c: Cli) {
+    const novo = (prompt(`E-mail CERTO de ${c.name || c.email}:\n(atual: ${c.email})`) || '').trim().toLowerCase()
+    if (!novo) return
+    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(novo)) { setMsg({ text: 'Esse e-mail não parece válido.', ok: false }); return }
+    if (!confirm(`Trocar o e-mail da conta:\n\n${c.email}\n→ ${novo}\n\nO acesso (com senha nova) vai para o e-mail novo. Confira letra por letra.`)) return
+    setEnviando(c.email); setMsg(null); setGerado(null)
+    try {
+      const r = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: c.email, novoEmail: novo }) })
+      const d = await r.json()
+      if (r.ok) { setMsg({ text: `E-mail trocado para ${d.email || novo} e acesso enviado. ✓`, ok: true }); await carregar() }
+      else setMsg({ text: d.error || 'Erro ao trocar o e-mail.', ok: false })
+    } catch { setMsg({ text: 'Falha de conexão.', ok: false }) }
+    setEnviando(null)
+  }
+
   async function criarCliente(e: React.FormEvent) {
     e.preventDefault()
     if (!form.email.trim()) return
@@ -216,6 +232,10 @@ export default function SupportClient({ name }: { name: string }) {
                           style={{ background: 'rgba(240,180,41,0.08)', border: '1px solid rgba(240,180,41,0.3)', color: C.gold, fontSize: 11, padding: '5px 12px', borderRadius: 7, cursor: enviando === c.email ? 'default' : 'pointer', fontFamily: 'inherit', fontWeight: 600, opacity: enviando === c.email ? 0.5 : 1 }}>
                           {enviando === c.email ? 'Enviando…' : 'Reenviar senha'}
                         </button>
+                        <button onClick={() => trocarEmail(c)} disabled={enviando === c.email} title="O cliente digitou o e-mail errado na compra"
+                          style={{ marginLeft: 6, background: 'rgba(94,155,224,0.08)', border: '1px solid rgba(94,155,224,0.3)', color: '#5E9BE0', fontSize: 11, padding: '5px 12px', borderRadius: 7, cursor: enviando === c.email ? 'default' : 'pointer', fontFamily: 'inherit', fontWeight: 600, opacity: enviando === c.email ? 0.5 : 1 }}>
+                          Trocar e-mail
+                        </button>
                       </td>
                     </tr>
                   )
@@ -224,7 +244,7 @@ export default function SupportClient({ name }: { name: string }) {
             </table>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: C.t3, marginTop: 14, textAlign: 'center' }}>Você pode criar clientes e reenviar senha. Vendas e faturamento ficam só com o admin.</div>
+        <div style={{ fontSize: 11, color: C.t3, marginTop: 14, textAlign: 'center' }}>Você pode criar clientes, reenviar senha e corrigir e-mail digitado errado. Vendas e faturamento ficam só com o admin.</div>
       </div>
     </div>
   )

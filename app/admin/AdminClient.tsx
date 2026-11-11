@@ -288,6 +288,18 @@ export default function AdminClient({ role, name, previewData }: { role: string;
     if (r.ok) setCreated({ email, action: 'resent', password: d.password, licenseKey: d.licenseKey })
     else setMsg({ text: d.error || 'Erro', ok: false })
   }
+  // 11/11: e-mail digitado errado na compra → troca em todo o sistema e manda o acesso (senha nova) pro certo.
+  async function trocarEmail(email: string) {
+    const novo = (prompt(`E-mail CERTO desta conta:\n(atual: ${email})`) || '').trim().toLowerCase()
+    if (!novo) return
+    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(novo)) { setMsg({ text: 'Esse e-mail não parece válido.', ok: false }); return }
+    if (!confirm(`Trocar o e-mail da conta:\n\n${email}\n→ ${novo}\n\nO acesso (com senha nova) vai para o e-mail novo.`)) return
+    setMsg(null); setCreated(null)
+    const r = await fetch('/api/admin/users', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, novoEmail: novo }) })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok) { setCreated({ email: d.email || novo, action: 'resent', password: d.password, licenseKey: d.licenseKey }); setMsg({ text: `E-mail trocado: ${email} → ${d.email || novo}`, ok: true }); await load() }
+    else setMsg({ text: d.error || 'Erro ao trocar o e-mail', ok: false })
+  }
   async function addStaff(e: React.FormEvent) {
     e.preventDefault(); setTeamLoading(true); setTeamMsg(null); setTeamCreated(null)
     const r = await fetch('/api/admin/team', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(teamForm) })
@@ -732,6 +744,7 @@ export default function AdminClient({ role, name, previewData }: { role: string;
                         <td style={{ padding: '10px 12px', ...cellB }}>
                           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                             <button onClick={() => resend(c.email)} className="orc-mini" style={{ background: 'rgba(240,180,41,0.08)', border: '1px solid rgba(240,180,41,0.3)', color: C.gold, fontSize: 10, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Reenviar</button>
+                            <button onClick={() => trocarEmail(c.email)} className="orc-mini" title="Cliente digitou o e-mail errado na compra" style={{ background: 'rgba(94,155,224,0.08)', border: '1px solid rgba(94,155,224,0.3)', color: C.blue, fontSize: 10, padding: '3px 9px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>E-mail</button>
                             <select defaultValue="" onChange={e => { if (e.target.value) changePlan(c.email, e.target.value); (e.target as HTMLSelectElement).value = '' }} style={{ background: 'rgba(94,155,224,0.08)', border: '1px solid rgba(94,155,224,0.3)', color: C.blue, fontSize: 10, padding: '3px 8px', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
                               <option value="" disabled>Plano…</option>
                               {PLANS.map(p => <option key={p} value={p}>{PLAN_LABEL[p]}</option>)}

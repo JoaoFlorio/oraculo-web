@@ -331,11 +331,32 @@ export async function PATCH(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const level = await clientsLevel(req)
   if (!level) return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
-  const { email } = await req.json()
+  const { email, novoEmail } = await req.json()
   if (!email) return NextResponse.json({ error: 'email obrigatório' }, { status: 400 })
 
-  const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
+  let user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } })
   if (!user) return NextResponse.json({ error: 'Usuário não encontrado' }, { status: 404 })
+
+  // 11/11: TROCAR E-MAIL (cliente digitou errado na compra) — admin e suporte, SÓ de cliente. O backend troca em todas as
+  // tabelas numa transação + guarda o apelido antigo→novo (a Greenn segue mandando o antigo na renovação) e avisa o João.
+  // Depois segue o fluxo normal: senha nova + e-mail de acesso no endereço NOVO.
+  if (novoEmail !== undefined) {
+    if (level === 'internal') return NextResponse.json({ error: 'Troca de e-mail só por uma pessoa logada.' }, { status: 403 })
+    if (user.role !== 'client') return NextResponse.json({ error: 'Só dá para trocar o e-mail de cliente.' }, { status: 403 })
+    const quem = await getClientsSession()
+    let r: Response
+    try {
+      r = await fetch(`${BACKEND_URL}/api/license/admin-trocar-email`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-internal-key': process.env.INTERNAL_KEY || '' },
+        body: JSON.stringify({ antigo: user.email, novo: String(novoEmail || ''), por: `${level}:${quem?.email || '?'}`, soCliente: true }),
+        signal: AbortSignal.timeout(30_000),
+      })
+    } catch { return NextResponse.json({ error: 'Falha ao falar com o servidor. Nada foi trocado.' }, { status: 502 }) }
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok || !d?.ok) return NextResponse.json({ error: d?.error || 'Não consegui trocar o e-mail.' }, { status: r.status >= 400 ? r.status : 500 })
+    user = await prisma.user.findUnique({ where: { id: user.id } })
+    if (!user) return NextResponse.json({ error: 'Conta não encontrada depois da troca.' }, { status: 500 })
+  }
 
   // 🔒 ANTI-ESCALONAMENTO: support só reseta senha de CLIENTE. Sem isso, ele
   // poderia resetar a senha do admin por email e tomar a conta.
@@ -389,5 +410,5 @@ export async function PUT(req: NextRequest) {
   // 23/09: a senha nova vai pelo e-mail; a resposta só a devolve pra um humano logado (support/admin), nunca pro caminho interno.
   // 28/10 (varredura, decisão do João): o SUPORTE não recebe a senha — com ela entrava na conta do cliente e via vendas,
   // o que o papel não pode. A senha vai só pro e-mail do cliente. Admin continua vendo; caminho interno nunca recebe.
-  return NextResponse.json({ ok: true, password: level === 'admin' ? password : undefined, licenseKey: licKey })
+  return NextResponse.json({ ok: true, email: user.email, password: level === 'admin' ? password : undefined, licenseKey: licKey })
 }
