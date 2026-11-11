@@ -92,9 +92,11 @@ function computeRange(key:string, custom:{from:Date;to:Date}|null):{from:string;
     case 'ontem':   {const y=new Date(now);y.setDate(y.getDate()-1);return {from:startOf(y),to:endOf(y)}}
     // 30/09: DIAS INTEIROS (meia-noite de N dias atrás até agora), igual à aba "Tudo". Janela rolante
     // (agora − 168h) tirava venda do começo da janela hora a hora: o 7d/30d mudava sem venda nova.
-    case '7d':      return {from:startOf(new Date(now.getTime()-7*86400000)),to}
-    case '15d':     return {from:startOf(new Date(now.getTime()-15*86400000)),to}
-    case '30d':     return {from:startOf(new Date(now.getTime()-30*86400000)),to}
+    // 11/11: "N dias" = HOJE + os N−1 anteriores (igual ao console da Amazon Ads). Antes era hoje−N … hoje = N+1 dias
+    // (7d somava 8 dias: o cliente viu R$ 762 aqui contra R$ 608 na Amazon). Mesma regra em ads.ts/resolveWindow.
+    case '7d':      return {from:startOf(new Date(now.getTime()-6*86400000)),to}
+    case '15d':     return {from:startOf(new Date(now.getTime()-14*86400000)),to}
+    case '30d':     return {from:startOf(new Date(now.getTime()-29*86400000)),to}
     case 'mes':     return {from:new Date(now.getFullYear(),now.getMonth(),1).toISOString(),to}
     case 'mespass': return {from:new Date(now.getFullYear(),now.getMonth()-1,1).toISOString(),to:new Date(now.getFullYear(),now.getMonth(),0,23,59,59).toISOString()}
     case 'ano':     return {from:new Date(now.getFullYear(),0,1).toISOString(),to}

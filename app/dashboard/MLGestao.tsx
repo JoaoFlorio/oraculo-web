@@ -320,9 +320,10 @@ function janela(id: string, custom?: { from: string; to: string }): { from: stri
   switch (id) {
     case 'hoje':    return { from: meiaNoiteBR.toISOString(), to }
     case 'ontem':   return { from: menosDias(1), to: new Date(meiaNoiteBR.getTime() - 1).toISOString() }
-    case '7d':      return { from: menosDias(7), to }
-    case '15d':     return { from: menosDias(15), to }
-    case '30d':     return { from: menosDias(30), to }
+    // 11/11: N dias = hoje + N−1 anteriores (mesma regra da Amazon/Gestão; antes somava N+1 dias).
+    case '7d':      return { from: menosDias(6), to }
+    case '15d':     return { from: menosDias(14), to }
+    case '30d':     return { from: menosDias(29), to }
     case 'mes':     return { from: inicioMesBR(y, m).toISOString(), to }
     case 'mespass': return { from: inicioMesBR(y, m - 1).toISOString(), to: new Date(inicioMesBR(y, m).getTime() - 1).toISOString() }
     case 'ano':     return { from: new Date(Date.UTC(y, 0, 1, 3, 0, 0)).toISOString(), to }
@@ -330,8 +331,8 @@ function janela(id: string, custom?: { from: string; to: string }): { from: stri
     // Sem as duas datas ainda, cai nos últimos 7 dias (não quebra a tela).
     case 'custom':  return (custom?.from && custom?.to)
       ? { from: new Date(`${custom.from}T00:00:00-03:00`).toISOString(), to: new Date(`${custom.to}T23:59:59-03:00`).toISOString() }
-      : { from: menosDias(7), to }
-    default:        return { from: menosDias(7), to }
+      : { from: menosDias(6), to }
+    default:        return { from: menosDias(6), to }
   }
 }
 

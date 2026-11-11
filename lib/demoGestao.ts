@@ -470,11 +470,11 @@ function windowRange(window: string): { from: string; to: string } {
   switch (window) {
     case 'today':     return { from: startOf(now), to }
     case 'yesterday': return { from: startOf(y), to: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59).toISOString() }
-    case '7d':        return { from: new Date(now.getTime() - 7 * 86400000).toISOString(), to }
-    case '15d':       return { from: new Date(now.getTime() - 15 * 86400000).toISOString(), to }
+    case '7d':        return { from: startOf(new Date(now.getTime() - 6 * 86400000)), to }   // 11/11: hoje + 6 (regra da Gestão)
+    case '15d':       return { from: startOf(new Date(now.getTime() - 14 * 86400000)), to }
     case 'month':     return { from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(), to }
     case 'year':      return { from: new Date(now.getFullYear(), 0, 1).toISOString(), to }
-    default:          return { from: new Date(now.getTime() - 30 * 86400000).toISOString(), to } // 30d
+    default:          return { from: startOf(new Date(now.getTime() - 29 * 86400000)), to } // 30d
   }
 }
 

@@ -129,7 +129,8 @@ export default function GestaoConsolidada() {
     const agora = new Date()
     const brMs = agora.getTime() - 3 * 3600_000
     const meiaNoiteBR = new Date(Math.floor(brMs / 86400_000) * 86400_000 + 3 * 3600_000)
-    const from = d === 0 ? meiaNoiteBR : new Date(meiaNoiteBR.getTime() - d * 86400_000)
+    // 11/11: N dias = hoje + N−1 anteriores (igual Amazon Ads e GestaoHub).
+    const from = d === 0 ? meiaNoiteBR : new Date(meiaNoiteBR.getTime() - (d - 1) * 86400_000)
     const fromISO = from.toISOString(), toISO = agora.toISOString()
     const win = PER.find(p => p.d === d)?.w || '30d'
     const [a, m, ad] = await Promise.all([
