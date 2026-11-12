@@ -44,6 +44,11 @@ const nextConfig: NextConfig = {
   // Login, teste grátis, dashboard e o resto do app continuam aqui.
   async redirects() {
     return [
+      // 12/11/2026: oraculojf.com.br e www (sem o "app.") davam erro de certificado pra todo mundo — cliente com atalho
+      // salvo assim via "Não foi possível se conectar ao site". Os dois domínios agora estão no serviço web do Railway
+      // e mandam pro app, mantendo o caminho. Fica ANTES das regras da raiz (senão "/" iria pra página de vendas).
+      { source: "/:path*", has: [{ type: "host", value: "oraculojf.com.br" }], destination: "https://app.oraculojf.com.br/:path*", permanent: false },
+      { source: "/:path*", has: [{ type: "host", value: "www.oraculojf.com.br" }], destination: "https://app.oraculojf.com.br/:path*", permanent: false },
       // logado (cookie de sessão): direto pro painel
       { source: "/", has: [{ type: "cookie", key: "oraculo_session" }], destination: "/dashboard", permanent: false },
       // visitante: a página de vendas
