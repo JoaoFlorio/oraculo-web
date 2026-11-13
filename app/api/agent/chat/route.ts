@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
   let body: any = {}
   try { body = await req.json() } catch { /* corpo vazio */ }
   const messages = Array.isArray(body?.messages) ? body.messages : []
-  const agent = body?.agent === 'suporte' ? 'suporte' : 'neo'
+  const agent = body?.agent === 'suporte' ? 'suporte' : body?.agent === 'rota' ? 'rota' : 'neo'
 
   // Conta demo: o NEO funciona NORMALMENTE — o backend serve os números
   // fictícios coerentes (ver getDemoConfig no backend). Antes bloqueávamos aqui,
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
         planoVenceEm: (user as any).expiresAt ? new Date((user as any).expiresAt).toISOString() : null,
         // ⭐ Nome do seller pra o NEO tratar pela pessoa (parceiro, não robô).
         // Vem da sessão (autoritativo), o backend usa só o primeiro nome.
-        ...(agent === 'neo' && user.name ? { nome: user.name } : {}),
+        ...((agent === 'neo' || agent === 'rota') && user.name ? { nome: user.name } : {}),   // 13/11: o assistente da Rota também trata pelo nome
         // Multi-chat: qual conversa está ativa (o backend grava o turno e injeta
         // os resumos das anteriores). Só no NEO; ausente = comportamento antigo.
         ...(agent === 'neo' && body?.conversaId ? { conversaId: String(body.conversaId) } : {}),

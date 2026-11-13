@@ -16,6 +16,7 @@ export const NAV = [
   { id:'ml-calc',     label:'Calculadora ML'    },
   { id:'agente',      label:'Agente NEO'        },
   { id:'extension',   label:'Extensão'          },
+  { id:'treinamentos', label:'Treinamentos'     },
   { id:'tutoriais',   label:'Tutoriais'         },
   { id:'planos',      label:'Planos'            },
   { id:'perfil',      label:'Meu Perfil'        },
@@ -30,6 +31,8 @@ export const NAV_GROUPS: { group: string; ids: string[]; recolhe?: boolean }[] =
   { group:'Amazon',      ids:['bestsellers','catalogo','saved','competitor'], recolhe:true },
   { group:'Mercado Livre', ids:['ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc'], recolhe:true },
   { group:'Ferramentas', ids:['agente','fornecedores','extension'], recolhe:true },
+  // 13/11 (pedido do João): Rota 10K dentro do Oráculo — vitrine pra quem não comprou, porta da área de membros pra quem comprou.
+  { group:'Treinamentos', ids:['treinamentos'] },
   { group:'Ajuda',       ids:['tutoriais'], recolhe:true },
   { group:'Conta',       ids:['planos','perfil'], recolhe:true },
 ]

@@ -22,6 +22,7 @@ const MLRival = dynamic(()=>import('./MLRival'),{ssr:false,loading:()=><div styl
 
 import { useVisualNovo } from './ouro/useVisualNovo'
 import { NAV, NAV_GROUPS } from './navItens'
+import Treinamentos from './Treinamentos'
 import { CabecalhoOuro, BuscaOuro, RecursosOuro, VazioOuro, IcOuro } from './ouro/Ouro'
 import { sairDaConta } from '@/lib/sairDaConta'
 
@@ -53,11 +54,11 @@ const tint = (v:string, pct:number)=>`color-mix(in srgb, ${v} ${pct}%, transpare
 /* ─── Plan config ────────────────────────────────────────────────────────── */
 const PLAN_CFG: Record<string,{label:string;color:string;glow:string;limit:number;tabs:string[];modal:boolean;export:boolean}> = {
   // limit sincronizado com PLAN_LIMIT.free em app/api/products/route.ts (única fonte: server)
-  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','tutoriais','planos','perfil'],                                                        modal:false, export:false },
-  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:false },
-  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
-  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
-  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','tutoriais','planos','perfil'], modal:true,  export:true  },
+  free:     { label:'Gratuito',  color:T.t3,  glow:'rgba(104,104,144,0.3)', limit:6,    tabs:['bestsellers','ml-minera','ml-salvos','ml-rival','ml-calc','extension','agente','treinamentos','tutoriais','planos','perfil'],                                                        modal:false, export:false },
+  monthly:  { label:'Mensal',    color:T.pur, glow:'rgba(139,120,255,0.3)', limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','treinamentos','tutoriais','planos','perfil'], modal:true,  export:false },
+  biannual: { label:'Semestral', color:T.gold,glow:'rgba(240,180,41,0.3)',  limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','treinamentos','tutoriais','planos','perfil'], modal:true,  export:true  },
+  annual:   { label:'Anual',     color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','treinamentos','tutoriais','planos','perfil'], modal:true,  export:true  },
+  lifetime: { label:'Vitalício', color:T.g,   glow:'rgba(34,197,94,0.3)',   limit:9999, tabs:['bestsellers','catalogo','fornecedores','saved','competitor','ml-minera','catalogo-ml','ml-salvos','ml-rival','ml-calc','extension','agente','financeiro','ads','ads-ml','treinamentos','tutoriais','planos','perfil'], modal:true,  export:true  },
 }
 // Links Greenn — plataforma de pagamento ativa
 // 24/09: fonte única em lib/planos.ts (a landing e o painel divergiam: 127/597/997 × 79,90/397/597)
@@ -279,6 +280,7 @@ function NavIcon({id,active}:{id:string,active:boolean}){
     planos:     <><path d="M5 21h5v-6H5zM11.5 21h5V9h-5zM18 21h5V4h-5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></>,
     perfil:     <><circle cx="14" cy="10.5" r="4.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5.5 23c1.3-4.4 4.7-6.8 8.5-6.8s7.2 2.4 8.5 6.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     tutoriais:  <><rect x="4" y="7" width="20" height="15" rx="3" stroke="currentColor" strokeWidth="1.5"/><path d="M12 11.5l5 3-5 3z" fill="currentColor"/></>,
+    treinamentos: <><path d="M4 11l10-5 10 5-10 5z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/><path d="M8 13v5c0 1.5 2.7 3 6 3s6-1.5 6-3v-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M24 11v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></>,
     'ml-calc':  <><rect x="6" y="4" width="16" height="20" rx="2.5" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="7" width="10" height="4" rx="1" stroke="currentColor" strokeWidth="1.3"/><path d="M10 15h.01M14 15h.01M18 15h.01M10 19h.01M14 19h.01M18 19h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></>,
     'ml-minera': <><path d="M7 21l6-6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><path d="M12 6c3-2 8-2 10 1-2 0-4 .5-5.5 2M12 6c-2 3-2 8 1 10 0-2 .5-4 2-5.5M12 6l4.5 4.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></>,
     'ml-salvos': <><path d="M9 6.5A1.5 1.5 0 0 1 10.5 5h11A1.5 1.5 0 0 1 23 6.5V26l-7-4.2L9 26z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></>,
@@ -1816,7 +1818,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
     setNav(id); setPage(1)
     setQuery(''); setSearchInput(''); queryRef.current=''  // trocar de aba sai da busca
     setSortBy('default')  // cada aba tem semântica própria — não herda ordenação
-    if(id==='competitor'||id==='saved'||id==='perfil'||id==='planos'||id==='ml-calc'||id==='ml-minera'||id==='catalogo'||id==='catalogo-ml'||id==='fornecedores'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
+    if(id==='competitor'||id==='saved'||id==='perfil'||id==='planos'||id==='treinamentos'||id==='ml-calc'||id==='ml-minera'||id==='catalogo'||id==='catalogo-ml'||id==='fornecedores'){loadIdRef.current++;setLoading(false);setProds([]);setDone(false);return}
     if(id==='extension'){
       loadIdRef.current++;setLoading(false)
       setProds([]);setDone(false)
@@ -2540,6 +2542,9 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
               </div>
             )}
 
+            {/* Treinamentos (13/11) — Rota 10K: vitrine/porta da área de membros + assistente da Rota. Todos os planos. */}
+            {nav==='treinamentos'&&(<Treinamentos email={user.email}/>)}
+
             {/* Meu Perfil */}
             {/* Planos — onde a pessoa está e o próximo degrau (upsell inteligente; checkout na Greenn) */}
             {nav==='planos'&&(
@@ -2963,7 +2968,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
             )}
 
             {/* Page header + product content (hidden when competitor tab active) */}
-            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='ads'&&nav!=='ads-ml'&&nav!=='catalogo'&&nav!=='catalogo-ml'&&nav!=='fornecedores'&&nav!=='saved'&&nav!=='perfil'&&nav!=='planos'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-minera'&&nav!=='ml-salvos'&&nav!=='ml-rival'&&<>
+            {nav!=='competitor'&&nav!=='extension'&&nav!=='agente'&&nav!=='financeiro'&&nav!=='ads'&&nav!=='ads-ml'&&nav!=='catalogo'&&nav!=='catalogo-ml'&&nav!=='fornecedores'&&nav!=='saved'&&nav!=='perfil'&&nav!=='planos'&&nav!=='treinamentos'&&nav!=='tutoriais'&&nav!=='ml-calc'&&nav!=='ml-minera'&&nav!=='ml-salvos'&&nav!=='ml-rival'&&<>
             {novo&&(
               <div style={{marginBottom:22}}>
                 <CabecalhoOuro grupo="Mineração · Amazon" titulo={curNav?.label==='Mais Vendidos'?'Mais':(curNav?.label||'')} destaque={curNav?.label==='Mais Vendidos'?'vendidos':undefined}
