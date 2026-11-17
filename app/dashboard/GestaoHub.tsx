@@ -3280,6 +3280,8 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
   const [bot,setBot]=useState<any>(null)
   // 21/10: Modo Black Friday (opt-in) — calendário e estado vêm do backend (GET /api/ads/autopilot → evento)
   const [evento,setEvento]=useState<any>(null)
+  // 17/11 (v5): freio da conta — ACoS maduro de 14 dias acima de 1,5× o alvo → o NEO só corta.
+  const [contencao,setContencao]=useState<any>(null)
   const [criando,setCriando]=useState<Record<string,'indo'|'ok'|'erro'>>({})
   const [filtro,setFiltro]=useState<'acao'|'saudavel'|'estoque'|'todos'>('acao')
   const [abertos,setAbertos]=useState<Record<string,boolean>>({})
@@ -3337,7 +3339,7 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
       setD(x)
     }).catch(()=>{ if(vivo&&tent<3) setTimeout(()=>{ if(vivo) carregarCop(tent+1) },8000) }).finally(()=>{ if(vivo)setCarregando(false) })
     carregarCop(1)
-    fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo){ setObjetivo(x.objetivo); setBot({automatico:!!x.automatico,lastRunAt:x.lastRunAt||null,lastResult:x.lastResult||null}); if(x.evento) setEvento(x.evento) } }).catch(()=>{})
+    fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo){ setObjetivo(x.objetivo); setBot({automatico:!!x.automatico,lastRunAt:x.lastRunAt||null,lastResult:x.lastResult||null}); if(x.evento) setEvento(x.evento); setContencao(x.contencao||null) } }).catch(()=>{})
     fetch('/api/ads/neo-relatorio?dias=7',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x&&typeof x.acoes==='number') setRel(x) }).catch(()=>{})
     // Prévia REAL do motor (dry, não gasta) — vira uma linha discreta.
     fetch('/api/ads/autopilot/run',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({dry:true,margem})}).then(r=>r.json()).then(x=>{ if(vivo&&x&&typeof x.mudancas==='number') setSimReal(x) }).catch(()=>{})
@@ -3456,7 +3458,7 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
             <div style={{fontSize:12,color:t.t2,marginTop:3,lineHeight:1.45}}>
               {ligado
                 ? <>Todo dia eu reviso suas campanhas e <b style={{color:t.t1}}>mexo sozinho na sua Amazon</b>: pauso produto sem estoque (e religo quando volta), corto termo que só gasta, acerto o lance de palavra, segmentação automática, categoria e produto, ajusto orçamento e topo de busca, promovo o que vende e crio campanha pra quem tem estoque e não anuncia. Você não precisa fazer nada.</>
-                : <>Desligado, eu só observo e recomendo. Ligue e eu passo a executar sozinho, todo dia, dentro dos tetos de segurança (lance até R$10, no máximo 50 ajustes, 20 cortes e 2 campanhas novas por dia). Produto que você marcar "eu cuido" eu não toco.</>}
+                : <>Desligado, eu só observo e recomendo. Ligue e eu passo a executar sozinho, todo dia, dentro dos tetos de segurança (lance até R$1, no máximo 50 ajustes, 20 cortes e 2 campanhas novas por dia). Produto que você marcar "eu cuido" eu não toco. Se você me desligar, eu religo o que pausei por falta de estoque.</>}
             </div>
           </div>
           <button onClick={alternarBot} style={{flexShrink:0,display:'flex',alignItems:'center',gap:9,padding:'10px 16px',borderRadius:12,cursor:'pointer',fontFamily:'inherit',fontSize:13,fontWeight:800,
@@ -3464,6 +3466,15 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
             <i className={`ti ${ligado?'ti-power':'ti-player-play'}`} style={{fontSize:16}} aria-hidden="true"/>{ligado?'Desligar o NEO':'Ligar o NEO'}
           </button>
         </div>
+        {/* 17/11 (v5): freio da conta — o cliente precisa VER por que o NEO parou de subir lance */}
+        {ligado&&contencao?.ativa&&(
+          <div style={{display:'flex',gap:10,alignItems:'flex-start',marginTop:12,padding:'10px 12px',borderRadius:12,background:tint(t.gold,8),border:`1px solid ${tint(t.gold,35)}`}}>
+            <i className="ti ti-shield" style={{fontSize:18,color:t.gold,marginTop:1}} aria-hidden="true"/>
+            <div style={{fontSize:12,color:t.t2,lineHeight:1.5}}>
+              <b style={{color:t.t1}}>Modo contenção ligado.</b> Seu ACoS dos últimos 14 dias está em <b style={{color:t.t1}}>{contencao.acosPct!=null?`${String(contencao.acosPct).replace('.',',')}%`:'— (gastou sem vender)'}</b>, acima do limite de {String(contencao.limitePct).replace('.',',')}% da estratégia. Até baixar, eu <b style={{color:t.t1}}>só corto gasto</b>: baixo o lance do que não vende, não subo lance, não aumento orçamento e não crio campanha nova.
+            </div>
+          </div>
+        )}
         {/* Objetivo — inline, 3 chips */}
         <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap' as const,marginTop:12}}>
           <span style={{fontSize:11.5,color:t.t3}}>Estratégia:</span>
