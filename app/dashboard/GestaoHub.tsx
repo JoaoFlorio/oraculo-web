@@ -3326,7 +3326,17 @@ function PilotoNeo({hide,isAdmin,margem,fotos}:{hide:boolean;isAdmin?:boolean;ma
   useEffect(()=>{
     let vivo=true
     const url='/api/ads/copiloto'+(margem!=null&&isFinite(margem)?`?margem=${margem}`:'')
-    fetch(url,{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo) setD(x) }).catch(()=>{}).finally(()=>{ if(vivo)setCarregando(false) })
+    // 17/11 (caso gtacessorios): resposta com erro/timeout deixava a tela em "Preparando sua análise…" PRA SEMPRE (sem msg,
+    // sem nova tentativa). Agora tenta de novo 3× e, se não der, diz o que houve.
+    const carregarCop=(tent:number)=>fetch(url,{cache:'no-store'}).then(r=>r.json()).then(x=>{
+      if(!vivo) return
+      if(x&&x.error&&!x.pronto){
+        if(tent<3){ setD({pronto:false,msg:'A Amazon está demorando pra responder — tentando de novo…'}); setTimeout(()=>{ if(vivo) carregarCop(tent+1) },8000); return }
+        setD({...x,pronto:false,msg:'Não consegui carregar a análise agora (a Amazon está lenta). Volte nesta aba em alguns minutos.'}); return
+      }
+      setD(x)
+    }).catch(()=>{ if(vivo&&tent<3) setTimeout(()=>{ if(vivo) carregarCop(tent+1) },8000) }).finally(()=>{ if(vivo)setCarregando(false) })
+    carregarCop(1)
     fetch('/api/ads/autopilot',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x?.objetivo){ setObjetivo(x.objetivo); setBot({automatico:!!x.automatico,lastRunAt:x.lastRunAt||null,lastResult:x.lastResult||null}); if(x.evento) setEvento(x.evento) } }).catch(()=>{})
     fetch('/api/ads/neo-relatorio?dias=7',{cache:'no-store'}).then(r=>r.json()).then(x=>{ if(vivo&&x&&typeof x.acoes==='number') setRel(x) }).catch(()=>{})
     // Prévia REAL do motor (dry, não gasta) — vira uma linha discreta.

@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   try {
     const res = await fetch(
       `${BACKEND}/api/ads/copiloto?email=${encodeURIComponent(user.email)}${margem ? `&margem=${encodeURIComponent(margem)}` : ''}`,
-      { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' }, signal: AbortSignal.timeout(30_000) },
+      { cache: 'no-store', headers: { 'x-internal-key': process.env.INTERNAL_KEY || '' }, signal: AbortSignal.timeout(90_000) },   // 17/11: 30 s estourava com a Amazon lenta (medido 21 s numa conta grande)
     )
     return NextResponse.json(await res.json().catch(() => ({ error: 'resposta inválida' })), { status: res.status })
   } catch {
