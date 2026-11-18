@@ -33,7 +33,7 @@ export default function BannerConclave() {
   }
 
   return (
-    <div style={{ position: 'relative', flexShrink: 0, marginBottom: 20, borderRadius: 16, overflow: 'hidden', boxShadow: '0 18px 44px -24px rgba(123,59,230,.7)' }}>
+    <div data-venda="1" style={{ position: 'relative', flexShrink: 0, marginBottom: 20, borderRadius: 16, overflow: 'hidden', boxShadow: '0 18px 44px -24px rgba(123,59,230,.7)' }}>
       <a href={LINK} target="_blank" rel="noopener noreferrer" aria-label="Conclave: segunda, 23/11, às 20h, online e gratuito. Garanta sua cadeira." style={{ display: 'block', lineHeight: 0 }}>
         <picture>
           <source media="(max-width: 700px)" srcSet="/conclave/banner-cel.webp" width={1080} height={1080} />
