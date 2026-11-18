@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "br.com.oraculojf.app",
+        "sha256_cert_fingerprints": ["E9:C0:9D:CD:DB:24:32:FA:7A:1F:67:D8:A8:99:C2:90:73:3A:A7:10:2D:BB:30:21:A6:EA:72:18:CA:7F:BA:FB"]
+      }
+    }]
