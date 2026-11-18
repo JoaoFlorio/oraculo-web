@@ -16,11 +16,16 @@ import { classeFontesPainel } from './fontesPainel'
 // 06/10/2026 ~meio-dia (BRT): visual novo liberado pra todos. Conta criada depois disso já nasce nele.
 const LIBERACAO_VISUAL_NOVO = Date.parse('2026-10-06T12:00:00-03:00')
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   // Vencido ENTRA (pra ver o overlay "venceu + pagar") em vez de ir pro /login;
   // sem conta/inativo/sem plano → login. As APIs seguem barrando o vencido (401).
   const { user, motivo } = await getSessionOrExpired()
-  if (!user) redirect('/login')
+  // 18/11: o app da loja abre em /dashboard?app=android|ios — sem login, a marca segue pro /login (senão o revisor
+  // da Apple/Google via "Teste grátis" e "planos" na 1ª tela). Ver lib/appLoja.ts.
+  if (!user) {
+    const app = (await searchParams)?.app
+    redirect(app === 'android' || app === 'ios' ? `/login?app=${app}` : '/login')
+  }
   // 01/10: sem acesso pago (vencido, bloqueado, sem plano) → SÓ a tela de pagamento. Nada do painel é renderizado
   // (nem termos, nem app, nem assistente) — "se não pagar, não acessa nada".
   if (motivo) {

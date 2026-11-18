@@ -192,7 +192,7 @@ export default function Entrar() {
 
             <Link href="/forgot-password" className={s.esqueci}>Esqueci minha senha</Link>
 
-            <div className={s.ou} aria-hidden="true">ainda não tem acesso?</div>
+            <div className={s.ou} aria-hidden="true" data-venda="1">ainda não tem acesso?</div>
 
             <Link href="/teste-gratis" className={s.novo}>
               <span className={s.novoIc}>{Ic.presente}</span>
