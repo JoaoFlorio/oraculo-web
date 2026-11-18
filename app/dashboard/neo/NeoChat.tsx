@@ -6,6 +6,7 @@ import { salvarGeradas, carregarGeradas, limparGeradas } from './idbGeradas'
 import { useVisualNovo } from '../ouro/useVisualNovo'
 import { VazioOuro, IcOuro } from '../ouro/Ouro'
 import o from './NeoChat.ouro.module.css'
+import { emAppLoja } from '@/lib/appLoja'
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * AGENTE NEO — ambiente premium
@@ -800,6 +801,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
       }
       const corpo = JSON.stringify({
         agent: 'neo',
+        ...(emAppLoja() ? { appLoja: true } : {}),   // 18/11: app da loja → o NEO não oferece compra
         ...(isAdmin && motor ? { provider: motor } : {}),
         ...(cid ? { conversaId: cid } : {}),
         messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })),
@@ -906,7 +908,7 @@ export default function NeoChat({ isAdmin = false, userEmail = '' }: { isAdmin?:
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: AbortSignal.timeout(180_000),
-        body: JSON.stringify({ agent: 'neo', messages: h.map((m) => ({ role: m.role, content: toApiContent(m) })) }),
+        body: JSON.stringify({ agent: 'neo', ...(emAppLoja() ? { appLoja: true } : {}), messages: h.map((m) => ({ role: m.role, content: toApiContent(m) })) }),
       })
       const data = await res.json().catch(() => null)
       if (!data || data?.error) setErro(data?.error || 'Ainda sem resposta. Aguarde alguns segundos e tente outra vez.')

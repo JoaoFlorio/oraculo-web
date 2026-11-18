@@ -22,6 +22,8 @@ const MLRival = dynamic(()=>import('./MLRival'),{ssr:false,loading:()=><div styl
 
 import { useVisualNovo } from './ouro/useVisualNovo'
 import { NAV, NAV_GROUPS } from './navItens'
+import { useAppLoja, emAppLoja } from '@/lib/appLoja'
+import ExcluirConta from '../excluir-conta/ExcluirConta'
 import Treinamentos from './Treinamentos'
 import { CabecalhoOuro, BuscaOuro, RecursosOuro, VazioOuro, IcOuro } from './ouro/Ouro'
 import { sairDaConta } from '@/lib/sairDaConta'
@@ -1410,7 +1412,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
   const [nav,      setNav]      = useState(podeGestao ? 'financeiro' : 'bestsellers')
   // Deep link ?nav=planos (push/e-mail de renovação): abre direto na aba pedida, se ela existir.
   useEffect(()=>{
-    try{ const q=new URLSearchParams(window.location.search).get('nav'); if(q&&NAV.some(n=>n.id===q)) setNav(q) }catch{}
+    try{ const q=new URLSearchParams(window.location.search).get('nav'); if(q&&NAV.some(n=>n.id===q)&&!(emAppLoja()&&(q==='planos'||q==='treinamentos'))) setNav(q) }catch{}
     // 05/10: loja (Amazon/ML) que já passou por outro teste grátis ou está ligada a outro cadastro — o backend recusou.
     try{ if(new URLSearchParams(window.location.search).get('reason')==='teste-vendedor') setTimeout(()=>alert('Essa conta de vendedor já usou o teste grátis ou está ligada a outro cadastro do Oráculo. Para conectá-la, escolha um plano.'),300) }catch{}
     // 28/10: a conexão agora é presa ao navegador que clicou "Conectar" (lib/oauthVinculo.ts) — explica quando não fechou.
@@ -1431,8 +1433,11 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
   useEffect(()=>{ try{ const g=JSON.parse(localStorage.getItem('ora-nav-grupos')||'{}'); if(g&&typeof g==='object') setGruposAbertos(g) }catch{} },[])
   const alternarGrupo=(g:string,aberto:boolean)=>setGruposAbertos(prev=>{ const n={...prev,[g]:!aberto}; try{ localStorage.setItem('ora-nav-grupos',JSON.stringify(n)) }catch{}; return n })
   // Gate da Gestão (app SP-API ainda em Draft): esconde a aba p/ quem não está na allowlist.
+  // 18/11: dentro do app da Play Store / App Store não tem venda (aba Planos e a vitrine da Rota somem). Ver lib/appLoja.ts.
+  const appLoja = useAppLoja()
   const navGroups = NAV_GROUPS
     .map(g=>({...g, ids: g.ids.filter(id=>
+      !(appLoja && (id==='planos' || id==='treinamentos')) &&
       ((id!=='financeiro' && id!=='ads') || gestaoEnabled)      // Ads Amazon usa a conta de seller
       && ((!id.startsWith('ml-') && id!=='ads-ml') || mlEnabled) // Ads Mercado Livre só com ML ligado
       // Analisar Catálogo (Amazon): liberado pra todos em 24/09
@@ -1814,7 +1819,8 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
 
   function goNav(id:string){
     setMobileNav(false) // fecha o menu off-canvas ao navegar (mobile)
-    if(!cfg.tabs.includes(id)){setUpgrade(true);return}
+    if(appLoja&&(id==='planos'||id==='treinamentos')) return   // 18/11: app da loja não tem venda
+    if(!cfg.tabs.includes(id)){if(!appLoja)setUpgrade(true);return}
     setNav(id); setPage(1)
     setQuery(''); setSearchInput(''); queryRef.current=''  // trocar de aba sai da busca
     setSortBy('default')  // cada aba tem semântica própria — não herda ordenação
@@ -1941,13 +1947,15 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
               </div>
               <h2 style={{fontSize:21,fontWeight:800,color:T.t1,letterSpacing:'-0.03em',marginBottom:8}}>Sua assinatura venceu</h2>
               <p style={{fontSize:12.5,color:T.t2,lineHeight:1.65,maxWidth:400,margin:'0 auto'}}>
-                {teste?<>Seu <strong style={{color:T.t1}}>teste grátis de 7 dias</strong> terminou em <strong style={{color:T.a}}>{expiresAt?.toLocaleDateString('pt-BR')}</strong>. Escolha um plano pra continuar.</>
+                {teste?<>Seu <strong style={{color:T.t1}}>teste grátis de 7 dias</strong> terminou em <strong style={{color:T.a}}>{expiresAt?.toLocaleDateString('pt-BR')}</strong>.{appLoja?null:' Escolha um plano pra continuar.'}</>
                 :<>O plano <strong style={{color:T.t1}}>{cfg.label}</strong> venceu em <strong style={{color:T.a}}>{expiresAt?.toLocaleDateString('pt-BR')}</strong> e a renovação não foi paga.</>}
-                O acesso está <strong style={{color:T.a}}>bloqueado</strong> — <strong style={{color:T.t1}}>assine um plano abaixo para voltar a usar</strong> (seus produtos salvos continuam guardados). A liberação é automática assim que o pagamento cai.
+                {appLoja
+                  ? <>O acesso está <strong style={{color:T.a}}>bloqueado</strong>. Seus dados continuam guardados e voltam assim que a assinatura estiver ativa.</>
+                  : <>O acesso está <strong style={{color:T.a}}>bloqueado</strong> — <strong style={{color:T.t1}}>assine um plano abaixo para voltar a usar</strong> (seus produtos salvos continuam guardados). A liberação é automática assim que o pagamento cai.</>}
               </p>
             </div>
             {/* Os 3 planos — assinatura recorrente (mensal · semestral · anual). Escolha reabre o acesso quando o pagamento é aprovado. */}
-            <div style={{padding:'22px 28px 8px',display:'flex',flexDirection:'column',gap:10}}>
+            <div data-venda="1" style={{padding:'22px 28px 8px',display:'flex',flexDirection:'column',gap:10}}>
               {[
                 {id:'monthly', nome:'Mensal',    preco:'R$ 97',     ciclo:'/mês',       extra:'',                                                          melhor:false},
                 {id:'biannual',nome:'Semestral', preco:'R$ 497',    ciclo:'/semestre',  extra:'2 meses grátis vs mensal',                                  melhor:false},
@@ -2244,7 +2252,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
           {/* Vencido DENTRO da folga de 2 dias (GRACE_MS do servidor) — banner forte
               não-bloqueante: a renovação recorrente pode estar processando na Greenn */}
           {renewGrace&&(
-            <div style={{background:tint(T.r,8),borderBottom:`1px solid ${tint(T.r,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:12,flexShrink:0,flexWrap:'wrap' as const}}>
+            <div data-venda="1" style={{background:tint(T.r,8),borderBottom:`1px solid ${tint(T.r,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:12,flexShrink:0,flexWrap:'wrap' as const}}>
               <span style={{fontSize:11,color:T.t1,flex:1,minWidth:220}}>
                 Seu plano <strong style={{color:T.r}}>{cfg.label}</strong> venceu{expiresAt?<> em <strong className="ora-num" style={{color:T.r}}>{expiresAt.toLocaleDateString('pt-BR')}</strong></>:null}. Se você já renovou, a confirmação chega em instantes — caso contrário, renove agora para não perder o acesso.
               </span>
@@ -2257,14 +2265,14 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
 
           {/* 01/10: TESTE GRÁTIS — quanto falta e o que acontece depois (sem botão de comprar de novo) */}
           {emTeste&&teste&&(()=>{const ate=new Date(teste.ate);const d=Math.max(0,Math.ceil((ate.getTime()-Date.now())/86400000));return(
-            <div style={{background:`linear-gradient(90deg, ${tint(T.gold,12)} 0%, ${tint(T.gold,6)} 100%)`,borderBottom:`1px solid ${tint(T.gold,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:10,flexShrink:0,flexWrap:'wrap' as const}}>
+            <div data-venda="1" style={{background:`linear-gradient(90deg, ${tint(T.gold,12)} 0%, ${tint(T.gold,6)} 100%)`,borderBottom:`1px solid ${tint(T.gold,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:10,flexShrink:0,flexWrap:'wrap' as const}}>
               <span style={{fontSize:11,color:T.t1,flex:1,minWidth:220}}>
                 🎁 <strong style={{color:T.gold}}>Teste grátis</strong> — {d<=0?'termina hoje':<>termina em <strong className="ora-num" style={{color:T.gold}}>{d} {d===1?'dia':'dias'}</strong></>} ({ate.toLocaleDateString('pt-BR')}). {teste.origem==='oraculo'?<>No teste você tem <strong>{teste.creditos} créditos para usar em 7 dias</strong> (imagens, anúncios e vídeos com o NEO). Quando o teste terminar, o acesso fica travado até você escolher um plano — <a href="/dashboard?nav=planos" style={{color:T.gold,fontWeight:700}}>ver os planos</a>.</>:<>Depois disso, o Mensal (R$ 97/mês) é cobrado no cartão que você cadastrou, sem precisar fazer nada. No teste você tem <strong>{teste.creditos} créditos</strong> pra gerar imagens e anúncios com o NEO.</>}
               </span>
             </div>)})()}
           {/* Aviso de vencimento — 5 dias, âmbar→dourado, com atalho pro Anual */}
           {expiringSoon&&(
-            <div style={{background:`linear-gradient(90deg, ${tint(T.a,10)} 0%, ${tint(T.gold,10)} 100%)`,borderBottom:`1px solid ${tint(T.gold,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:12,flexShrink:0,flexWrap:'wrap' as const}}>
+            <div data-venda="1" style={{background:`linear-gradient(90deg, ${tint(T.a,10)} 0%, ${tint(T.gold,10)} 100%)`,borderBottom:`1px solid ${tint(T.gold,22)}`,padding:'8px 24px',display:'flex',alignItems:'center',gap:12,flexShrink:0,flexWrap:'wrap' as const}}>
               <span style={{fontSize:11,color:T.t1,flex:1,minWidth:220}}>
                 Seu plano <strong style={{color:T.a}}>{cfg.label}</strong> vence em <strong className="ora-num" style={{color:T.a}}>{daysLeft} {daysLeft===1?'dia':'dias'}</strong>{expiresAt?<> ({expiresAt.toLocaleDateString('pt-BR')})</>:null}. Renove para não perder o acesso.
               </span>
@@ -2307,7 +2315,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
             {/* 🔴 TAG DE RENOVAÇÃO (pedido do João, 24/09): ≤7 dias pro vencimento, em qualquer aba; clicar leva
                 pra aba Planos, que já induz o degrau de cima ("em vez de pagar por mês, que tal por ano?"). */}
             {nav!=='agente'&&!isLifetime&&!emTeste&&daysLeft!=null&&daysLeft>=0&&daysLeft<=7&&(
-              <button onClick={()=>goNav('planos')} title="Ver planos" aria-label={`Faltam ${daysLeft} dias para sua renovação — ver planos`}
+              <button data-venda="1" onClick={()=>goNav('planos')} title="Ver planos" aria-label={`Faltam ${daysLeft} dias para sua renovação — ver planos`}
                 style={{display:'inline-flex',alignItems:'center',gap:7,padding:'6px 11px',borderRadius:999,border:'1px solid rgba(248,113,113,.55)',background:'rgba(248,113,113,.12)',color:'#F87171',fontWeight:800,fontSize:11.5,cursor:'pointer',whiteSpace:'nowrap' as const,flexShrink:0,animation:'ora-tagpulse 2.6s ease-out infinite'}}>
                 <span style={{width:7,height:7,borderRadius:'50%',background:'#F87171',boxShadow:'0 0 0 3px rgba(248,113,113,.25)'}}/>
                 {daysLeft===0?'Sua renovação é hoje':daysLeft===1?'Falta 1 dia para sua renovação':`Faltam apenas ${daysLeft} dias para sua renovação`}
@@ -2624,12 +2632,12 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                       </div>
                     </div>
                     <div style={{display:'flex',flexDirection:'column',gap:18,minWidth:0}}>
-                      <div className="ouro-cartao">
+                      <div className="ouro-cartao" data-venda="1">
                         <div className="ouro-cartao-cab"><h3>Trocar de plano</h3></div>
                         {isLifetime?(
                           <div className="perfil-ouro-vit verde"><b>✓</b><div><strong>Você tem acesso vitalício</strong><span>Nada a renovar, nada a pagar. O Oráculo é seu.</span></div></div>
                         ):(
-                          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                          <div data-venda="1" style={{display:'flex',flexDirection:'column',gap:10}}>
                             {plans.map(p=>{
                               const isCurrent = !emTeste && user.plan===p.id   /* 06/10: no teste nenhum plano é o "atual" */
                               return(
@@ -2665,6 +2673,8 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                         {pwMsg&&<div style={{fontSize:12.5,fontWeight:600,color:pwMsg.ok?'var(--ou-verde)':'var(--ou-verm)',marginTop:10}}>{pwMsg.text}</div>}
                         <button className="ouro-botao" onClick={changePassword} disabled={pwBusy} style={{width:'100%',marginTop:14}}>{pwBusy?'Salvando…':'Alterar senha'}</button>
                       </div>
+                      {/* 18/11: exigência da App Store / Google Play (e LGPD) — ver app/excluir-conta */}
+                      <ExcluirConta/>
                     </div>
                   </div>
                 </div>
@@ -2766,7 +2776,7 @@ export default function DashboardClient({user,gestaoEnabled=false,teste=null}:{u
                   </div>
 
                   {/* Card trocar de plano */}
-                  <div style={cardStyle}>
+                  <div style={cardStyle} data-venda="1">
                     <Lbl style={{marginBottom:16}}>Trocar de Plano</Lbl>
                     {isLifetime?(
                       <div style={{display:'flex',alignItems:'center',gap:12,background:tint(T.g,5),border:`1px solid ${tint(T.g,18)}`,borderRadius:12,padding:'16px 18px'}}>

@@ -11,6 +11,28 @@ import { useState } from 'react'
 import { PLANOS, fmt, checkout, fundadorAberto, FUNDADOR_ATE, type PlanoId } from '@/lib/planos'
 import { NAV, NAV_GROUPS } from './navItens'
 import { sairDaConta } from '@/lib/sairDaConta'
+import { useAppLoja } from '@/lib/appLoja'
+
+/* 18/11: dentro do app da Play Store / App Store não pode haver venda nem caminho pra pagar (regra das lojas — ver
+   lib/appLoja.ts). A conta sem acesso vê só o estado, sair e excluir a conta. */
+function BloqueioApp({ email }: { email: string }) {
+  return (
+    <div style={{ minHeight: '100dvh', background: C.fundo, color: C.t1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div style={{ maxWidth: 420, width: '100%', background: C.card, border: `1px solid ${C.linha}`, borderRadius: 20, padding: '30px 24px', textAlign: 'center' as const }}>
+        <div style={{ display: 'flex', justifyContent: 'center', color: C.ouro, marginBottom: 14 }}><Cadeado size={28} /></div>
+        <h1 style={{ fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, margin: '0 0 10px' }}>Sua conta está sem acesso ativo</h1>
+        <p style={{ fontSize: 14, lineHeight: 1.6, color: C.t2, margin: '0 0 22px' }}>
+          A conta <b style={{ color: C.t1 }}>{email}</b> não tem uma assinatura ativa no momento. Seus dados continuam guardados e voltam assim que o acesso estiver ativo.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button onClick={async () => { await sairDaConta(); window.location.href = '/login' }}
+            style={{ fontSize: 14, fontWeight: 800, padding: '12px 18px', borderRadius: 12, border: 'none', background: C.grad, color: '#1a1204', cursor: 'pointer', fontFamily: 'inherit' }}>Sair da conta</button>
+          <a href="/excluir-conta" style={{ fontSize: 12.5, color: C.t3, textDecoration: 'underline' }}>Excluir minha conta</a>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const WA_REEMBOLSO = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Pedi%20o%20reembolso%20do%20Or%C3%A1culo%20e%20queria%20conversar.'
 const WA = 'https://wa.me/5541987474416?text=Ol%C3%A1!%20Sou%20cliente%20do%20Or%C3%A1culo%20e%20preciso%20de%20ajuda%20com%20o%20pagamento.'
@@ -43,6 +65,7 @@ export default function Paywall({ email, nome, plan, expiresAt, motivo, foiTeste
 }) {
   const [aviso, setAviso] = useState<string | null>(null)
   const [agora] = useState(() => Date.now())
+  const appLoja = useAppLoja()
   const mensal = PLANOS.find(p => p.id === 'monthly')!
   const anual = PLANOS.find(p => p.id === 'annual')!
   const vit = PLANOS.find(p => p.id === 'lifetime')!
@@ -79,6 +102,7 @@ export default function Paywall({ email, nome, plan, expiresAt, motivo, foiTeste
   }
   const ordem: PlanoId[] = ['monthly', 'biannual', 'annual']
 
+  if (appLoja) return <BloqueioApp email={email} />
   return (
     <div className="pw-raiz" style={{ minHeight: '100dvh', background: C.fundo, color: C.t1, display: 'flex' }}>
       <style>{`

@@ -106,6 +106,9 @@ export default function Entrar() {
         return
       }
       const role = data?.user?.role
+      // 18/11: volta pra página que pediu o login (ex.: /excluir-conta). Só caminho interno da lista — nada de redirecionar pra fora.
+      const volta = new URLSearchParams(window.location.search).get('next')
+      if (volta === '/excluir-conta') { router.push(volta); return }
       router.push(role === 'admin' || role === 'staff' ? '/admin' : '/dashboard')
     } catch {
       setError('Falha de conexão. Verifique sua internet e tente novamente.')

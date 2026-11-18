@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SCRIPT_APP_LOJA } from "@/lib/appLojaScript";
 
 export const metadata: Metadata = {
   // Copy sem marketplace fixo no nome: o Oráculo vai atender Mercado Livre além
@@ -39,6 +40,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
+        {/* 18/11: marca "app da loja" (Play Store / App Store) — esconde venda antes de pintar. Ver lib/appLoja.ts */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_APP_LOJA }} />
         <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('oraculo_theme');if(t)document.documentElement.setAttribute('data-theme',t);}catch(e){}if(location.pathname.indexOf('/dashboard')===0)document.documentElement.setAttribute('data-visual','ouro');" }} />
         {/* PWA: instalável no celular (ícone + tela cheia) — ver public/manifest.json e sw.js */}
         <link rel="manifest" href="/manifest.json" />

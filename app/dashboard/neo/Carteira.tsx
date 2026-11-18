@@ -79,7 +79,7 @@ export default function Carteira() {
               <b>{disponivel.toLocaleString('pt-BR')}</b>
               <span>crédito{disponivel === 1 ? '' : 's'}</span>
             </span>
-            <button className={o.botaoSec} onClick={() => setAberto(true)}>Recarregar</button>
+            <button data-venda="1" className={o.botaoSec} onClick={() => setAberto(true)}>Recarregar</button>
           </div>
           {st.franquia && st.franquia.limite > 0 && (
             <div className={o.carteiraRenova}>{st.franquia.limite.toLocaleString('pt-BR')} créditos renovados {st.franquia.renovaEm ? `em ${ddmm(st.franquia.renovaEm)}` : 'todo mês'}</div>
@@ -104,7 +104,7 @@ export default function Carteira() {
           <span className="wSpark" aria-hidden>◈</span>
           <span className="wNum">{disponivel.toLocaleString('pt-BR')}</span>
           <span className="wLbl">crédito{disponivel === 1 ? '' : 's'}</span>
-          <button className="wBtn" onClick={() => setAberto(true)}>Recarregar</button>
+          <button data-venda="1" className="wBtn" onClick={() => setAberto(true)}>Recarregar</button>
         </div>
         {st.franquia && st.franquia.limite > 0 && (
           <div className="wRenova">{st.franquia.limite.toLocaleString('pt-BR')} créditos renovados {st.franquia.renovaEm ? `em ${ddmm(st.franquia.renovaEm)}` : 'todo mês'}</div>

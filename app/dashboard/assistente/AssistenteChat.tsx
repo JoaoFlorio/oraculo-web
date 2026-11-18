@@ -1,5 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
+import { emAppLoja } from '@/lib/appLoja'
 
 type Img = { mediaType: string; data: string } // data = base64 sem prefixo
 type Msg = { role: 'user' | 'assistant'; text: string; images?: Img[] }
@@ -87,7 +88,7 @@ export default function AssistenteChat({ embedded = false, agent = 'neo' }: { em
       const res = await fetch('/api/agent/chat', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ agent, messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })) }),
+        body: JSON.stringify({ agent, ...(emAppLoja() ? { appLoja: true } : {}), messages: historico.map((m) => ({ role: m.role, content: toApiContent(m) })) }),
       })
       const data = await res.json()
       if (!res.ok || data?.error) setErro(data?.error || 'Falha ao consultar o assistente.')

@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
       // servidor (AGENT_PROVIDER).
       body: JSON.stringify({
         email: user.email, messages, agent,
+        ...(body?.appLoja === true ? { appLoja: true } : {}),   // 18/11: app da Play Store / App Store — sem venda na conversa
         ...(user.role === 'admin' && body?.provider ? { provider: body.provider } : {}),
         // `model` (variante específica do motor) segue a MESMA regra do provider:
         // só ADMIN, nunca cliente. Cliente comum ficaria exposto a um modelo

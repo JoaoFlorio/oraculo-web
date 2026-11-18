@@ -929,3 +929,15 @@ html[data-visual="ouro"][data-theme="light"] .calc-mod,
 html[data-visual="ouro"][data-theme="light"] .tut-ouro-item{ border-color:rgba(201,138,0,.22); }
 html[data-visual="ouro"][data-theme="light"] .ouro-entrada{ background:#FFFFFF; border-color:rgba(40,32,15,.16); }
 html[data-visual="ouro"][data-theme="light"] .ouro-busca{ background:#FFFFFF; }
+
+/* ═══ 18/11/2026 — APP DA LOJA (Play Store / App Store): só pra cliente, nada de venda dentro do app.
+   A marca html[data-app-loja] é ligada pelo script do <head> (lib/appLoja.ts). Esconde todo checkout, plano,
+   teste grátis e o que estiver marcado com data-venda. No site nada muda. ═══ */
+html[data-app-loja] a[href*="greenn.com.br"],
+html[data-app-loja] a[href*="payfast."],
+html[data-app-loja] a[href*="oraculojf.com/"],
+html[data-app-loja] a[href$="/planos"],
+html[data-app-loja] a[href*="/planos?"],
+html[data-app-loja] a[href*="nav=planos"],
+html[data-app-loja] a[href*="/teste-gratis"],
+html[data-app-loja] [data-venda] { display: none !important; }
