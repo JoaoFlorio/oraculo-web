@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { temPushNativo, ativarPushNativo, sincronizarPushNativo } from '@/lib/pushNativo'
 
 // Simulador de venda: chunk SEPARADO, baixado só quando isAdmin=true. Assim o
 // código não vai no bundle do cliente — ele não vê nem descobre no DevTools.
@@ -158,12 +159,16 @@ export default function AppInstall({ isAdmin = false }: { isAdmin?: boolean }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'fail'>('idle')
+  const [nativo, setNativo] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     // Service worker (push + instalabilidade)
-    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {})
-    const alone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true
+    // 18/11: app de iPhone da App Store — já é app (passo 1 pronto) e o aviso é nativo (lib/pushNativo.ts).
+    const nativo = temPushNativo()
+    setNativo(nativo)
+    if (!nativo && 'serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {})
+    const alone = nativo || window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true
     setStandalone(alone)
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent)
     setIsIOS(ios)
@@ -178,7 +183,9 @@ export default function AppInstall({ isAdmin = false }: { isAdmin?: boolean }) {
     // (Só a local não basta: se a sessão tinha caído na hora do "ativar", o servidor
     // nunca soube — e nenhum push sai. Era o "ativo ✓" que não notificava nada.)
     // SELF-HEAL: existe local? re-registra no servidor agora (upsert idempotente).
-    if ('serviceWorker' in navigator && 'PushManager' in window) {
+    if (nativo) {
+      sincronizarPushNativo().then(setPushOn).catch(() => setPushOn(false))
+    } else if ('serviceWorker' in navigator && 'PushManager' in window) {
       navigator.serviceWorker.ready
         .then(r => r.pushManager.getSubscription())
         .then(async (sub) => {
@@ -224,6 +231,13 @@ export default function AppInstall({ isAdmin = false }: { isAdmin?: boolean }) {
   async function enablePush() {
     if (busy) return
     setBusy(true); setMsg('')
+    if (nativo) {
+      const r = await ativarPushNativo()
+      if (r === 'ok') setPushOn(true)
+      else if (r === 'negado') setMsg('Notificações bloqueadas. Libere em Ajustes do iPhone → Oráculo → Notificações.')
+      else setMsg('Não foi possível ativar. Tente novamente.')
+      setBusy(false); return
+    }
     try {
       if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
         setMsg(isIOS ? 'No iPhone, primeiro instale o app (passo acima) e ative por dentro dele.' : 'Este navegador não suporta notificações.')
@@ -336,14 +350,14 @@ export default function AppInstall({ isAdmin = false }: { isAdmin?: boolean }) {
                 </>
               ) : (
                 <>
-                  <p style={p}>Receba <strong style={{ color: '#CBD5E1' }}>"💰 Nova venda!"</strong> com o valor do pedido, na hora, mesmo com o app fechado.{isIOS ? ' No iPhone, ative DEPOIS de instalar (abra pelo ícone da tela inicial).' : ''}</p>
+                  <p style={p}>Receba <strong style={{ color: '#CBD5E1' }}>"💰 Nova venda!"</strong> com o valor do pedido, na hora, mesmo com o app fechado.{isIOS && !nativo ? ' No iPhone, ative DEPOIS de instalar (abra pelo ícone da tela inicial).' : ''}</p>
                   <button onClick={enablePush} disabled={busy} style={{ ...btn, opacity: busy ? 0.7 : 1 }}>{busy ? 'Ativando…' : '🔔 Ativar notificações de venda'}</button>
                   {msg && <div style={{ fontSize: 11.5, color: '#FB7185', marginTop: 8 }}>{msg}</div>}
                 </>
               )}
             </div>
 
-            <p style={{ fontSize: 10.5, color: '#475569', textAlign: 'center', margin: '4px 0 0' }}>Sem cobrança extra — é o mesmo painel, em formato de app.</p>
+            <p data-venda="1" style={{ fontSize: 10.5, color: '#475569', textAlign: 'center', margin: '4px 0 0' }}>Sem cobrança extra — é o mesmo painel, em formato de app.</p>
           </div>
         </div>
       )}

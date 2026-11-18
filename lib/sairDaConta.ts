@@ -2,7 +2,11 @@
  * quando o João entrava na demo pelo celular), o aparelho seguia recebendo "R$ X na Amazon" da conta anterior até outro
  * login abrir o painel. Remove a inscrição no servidor ANTES do logout (a rota precisa da sessão); o próximo login
  * reinscreve sozinho (AppInstall). Nada aqui pode impedir o logout. */
+import { removerPushNativo } from './pushNativo'
+
 export async function sairDaConta(): Promise<void> {
+  // 18/11: no app de iPhone o aviso é nativo (APNs) — tira o token deste aparelho também.
+  await removerPushNativo().catch(() => {})
   try {
     const reg = typeof navigator !== 'undefined' ? await navigator.serviceWorker?.getRegistration() : undefined
     const sub = await reg?.pushManager?.getSubscription()
